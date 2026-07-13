@@ -1,0 +1,57 @@
+import { Matrix4, Vector3 } from 'three'
+import type { Panel, Vec2 } from './types'
+
+// พิกัดแผ่นคลี่ (x ขวา, y ลง, หน่วย mm) → พิกัด 3D (x ขวา, y ขึ้น, z ออกจากแผ่น)
+export const to3D = (p: Vec2) => new Vector3(p.x, -p.y, 0)
+
+// หน้าต่างเวลาของแต่ละ stage: พับลำตัว → ลิ้นกันฝุ่น → ฝาเสียบ → ลิ้นเสียบ
+const WINDOWS: [number, number][] = [
+  [0, 0.5],
+  [0.42, 0.68],
+  [0.62, 0.86],
+  [0.82, 1],
+]
+
+function stageProgress(stage: number, fold: number): number {
+  const [s, e] = WINDOWS[Math.min(stage, WINDOWS.length - 1)]
+  const u = Math.min(1, Math.max(0, (fold - s) / (e - s)))
+  return u * u * (3 - 2 * u)
+}
+
+// คำนวณ transform ของทุก panel ที่ค่าการพับ fold ∈ [0,1]
+// แต่ละ panel หมุนรอบเส้น crease ของตัวเอง (นิยามในพิกัดแผ่นคลี่)
+// แล้วส่งผ่าน transform ของ panel แม่แบบลูกโซ่
+export function computeMatrices(panels: Panel[], fold: number): Map<string, Matrix4> {
+  const byId = new Map(panels.map((p) => [p.id, p]))
+  const cache = new Map<string, Matrix4>()
+
+  const get = (id: string): Matrix4 => {
+    const hit = cache.get(id)
+    if (hit) return hit
+    const p = byId.get(id)
+    if (!p) throw new Error(`unknown panel: ${id}`)
+    const m = p.parentId ? get(p.parentId).clone() : new Matrix4()
+    const progress = stageProgress(p.stage, fold)
+    if (p.hingeA && p.hingeB && p.foldAngle !== undefined) {
+      const a = to3D(p.hingeA)
+      const b = to3D(p.hingeB)
+      const axis = b.clone().sub(a).normalize()
+      const theta = (p.foldAngle * Math.PI * progress) / 180
+      const local = new Matrix4()
+        .makeTranslation(a.x, a.y, a.z)
+        .multiply(new Matrix4().makeRotationAxis(axis, theta))
+        .multiply(new Matrix4().makeTranslation(-a.x, -a.y, -a.z))
+      m.multiply(local)
+    }
+    // ดันชั้นวัสดุที่ซ้อนกัน (ปีกทากาว/ลิ้นกันฝุ่น/ลิ้นเสียบ) ตามแนวแกน z
+    // ท้องถิ่นของ panel ซึ่งหลังพับจะชี้เข้าหากองชั้นวัสดุ — กัน z-fighting
+    if (p.zOffset) {
+      m.multiply(new Matrix4().makeTranslation(0, 0, p.zOffset * progress))
+    }
+    cache.set(id, m)
+    return m
+  }
+
+  panels.forEach((p) => get(p.id))
+  return cache
+}

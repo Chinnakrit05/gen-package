@@ -1,0 +1,479 @@
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import os from 'node:os'
+import Anthropic from '@anthropic-ai/sdk'
+import { MATERIALS } from '../src/core/materials'
+import { TEMPLATES } from '../src/core/templates'
+
+const execFileP = promisify(execFile)
+
+export interface CurrentSpec {
+  template: string
+  materialId: string
+  W: number
+  D: number
+  H: number
+  handle: boolean
+}
+
+export interface BoxSpecResult {
+  template: string
+  materialId: string
+  W: number
+  D: number
+  H: number
+  handle: boolean
+  assumptions: string[]
+  layoutNote: string
+  reasoning: string
+  mock: boolean
+}
+
+const LIMITS = { W: [30, 250], D: [20, 150], H: [30, 300] } as const
+const TEMPLATE_IDS = TEMPLATES.map((t) => t.id)
+
+const clamp = (v: number, [lo, hi]: readonly [number, number]) =>
+  Math.min(hi, Math.max(lo, Math.round(v * 2) / 2))
+
+// ตารางขนาดของที่พบบ่อย (มม.) — ใช้ทั้งใน system prompt และโหมดจำลอง
+// ลำดับสำคัญ: entry เฉพาะเจาะจง (ขวดซอส/น้ำพริก) ต้องมาก่อน entry กว้าง (ขวดน้ำ)
+const COMMON_ITEMS = [
+  { re: /แยม/, w: 65, d: 65, h: 110, label: 'ขวดแยม 200 มล. ≈ ⌀65×110 มม.', fragile: true },
+  { re: /ขวดซอส|น้ำพริก/, w: 60, d: 60, h: 160, label: 'ขวดซอส 250 มล. ≈ ⌀60×160 มม.', fragile: true },
+  { re: /ขวดน้ำ(?!พริก)|เครื่องดื่ม/, w: 65, d: 65, h: 210, label: 'ขวดน้ำ 500 มล. ≈ ⌀65×210 มม.', fragile: true },
+  { re: /สบู่/, w: 90, d: 60, h: 28, label: 'สบู่ก้อน ≈ 90×60×28 มม.', fragile: false },
+  { re: /แก้วมัค|แก้วกาแฟ|มัค/, w: 105, d: 85, h: 95, label: 'แก้วมัค ≈ ⌀85×95 มม. (รวมหูอีก 20)', fragile: true },
+  { re: /เทียน/, w: 70, d: 70, h: 85, label: 'เทียนหอมในแก้ว ≈ ⌀70×85 มม.', fragile: true },
+  { re: /ครีม|กระปุก/, w: 55, d: 55, h: 50, label: 'กระปุกครีม 50 มล. ≈ ⌀55×50 มม.', fragile: false },
+  { re: /คุกกี้|ขนม/, w: 120, d: 45, h: 180, label: 'ซองคุกกี้ ≈ 120×45×180 มม.', fragile: false },
+] as const
+
+const SYSTEM = `คุณคือวิศวกรบรรจุภัณฑ์ หน้าที่คือแปลงคำอธิบายของลูกค้า (ภาษาพูด) เป็นสเปกกล่องที่คำนวณแล้ว โดยเรียก tool box_spec เสมอ
+
+## รูปแบบกล่อง (template)
+${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} — ${t.detail}`).join('\n')}
+แนวการเลือก: ของชิ้นเดียว/แนวตั้ง/รีเทล → tuck-end; ส่งไปรษณีย์/ของหลายชิ้น/ของแบน/เปิดง่าย → mailer; แค่ปลอกรัดรอบสินค้าที่มีกล่องอยู่แล้ว → sleeve. สำหรับ mailer: H คือความสูงกล่อง (มักเตี้ย เช่น 40-80) ส่วน W×D คือ footprint
+
+## วัสดุที่มีในระบบ (materialId)
+${MATERIALS.map(
+  (m) =>
+    `- ${m.id}: ${m.nameTh} (${m.detail}) หนา ${m.thickness} มม. ${m.foldable ? 'พับได้' : 'พับไม่ได้ — ' + m.process}`,
+).join('\n')}
+
+## แนวการเลือกวัสดุจากสไตล์ที่ลูกค้าบอก
+- อีโค่ / รักษ์โลก / ธรรมชาติ → kraft-350
+- หรู / พรีเมียม / ของขวัญจริงจัง → carton-400
+- โชว์สินค้า / อยากให้มองเห็นข้างใน → pet-sheet
+- ส่งไปรษณีย์ / ขนส่ง / กันกระแทก / แข็งแรง → corrugated-b (และ template ควรเป็น mailer)
+- งานพิมพ์สวยแต่แข็งแรงเบา → corrugated-e
+- ประหยัด / ทั่วไป / ไม่ระบุ → carton-300
+- ถ้าลูกค้าต้องการ "กล่องใส่ขวด/แก้ว" ให้เลือกวัสดุกล่อง แต่ถ้าต้องการผลิตตัวขวด/กระป๋อง/โหลเอง → pet-bottle / aluminum / glass
+
+## ตารางขนาดของที่พบบ่อย (มม.)
+${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? ' (เปราะ)' : ''}`).join('\n')}
+
+## วิธีคำนวณขนาดด้านใน (หน่วย มม. ทั้งหมด)
+1. หา footprint ของแต่ละชิ้น (ทรงกระบอกใช้ ⌀ เป็นสี่เหลี่ยม)
+2. จัด layout แถว × คอลัมน์: W = คอลัมน์×กว้างชิ้น + ช่องไฟ, D = แถว×ลึกชิ้น + ช่องไฟ
+3. ช่องไฟระหว่างชิ้นและขอบ 3-5 มม. ของเปราะ (แก้ว เซรามิก ขวดแก้ว) เผื่อ 5-8 มม. ต่อด้านสำหรับวัสดุกันกระแทก
+4. H = ความสูงชิ้น + 4-6 มม. (tuck-end/sleeve) — สำหรับ mailer ของมักวางนอน H = ความหนาชิ้น + เผื่อ
+5. ขอบเขต: W 30-250, D 20-150, H 30-300 — ถ้าเกินให้จัด layout ใหม่ (เพิ่มแถว) จนอยู่ในช่วง
+
+## ความสามารถของระบบ (สำคัญมาก — ห้ามอ้างเกินนี้)
+สิ่งที่ระบบ gen ได้จริงมีเท่านี้: รูปแบบกล่อง 3 แบบข้างต้น, วัสดุจากรายการ, ขนาด W/D/H, และรูหิ้วเจาะ (handle=true — tuck-end เจาะบนฝาเสียบบน, mailer เจาะผนังข้างสองด้าน, sleeve ไม่รองรับ)
+สิ่งที่ยังทำไม่ได้: หูหิ้วเชือก/พลาสติก, หน้าต่างใส, พิมพ์ลาย/โลโก้, ตัวล็อกพิเศษ, แผ่นกั้นด้านใน ฯลฯ — ถ้าลูกค้าขอสิ่งเหล่านี้ ให้เลือกสิ่งใกล้เคียงที่มี (เช่น ขอหูหิ้ว/ที่จับ → handle=true) และเขียนใน reasoning ตรงๆ ว่าระบบยังไม่รองรับสิ่งที่ขอแบบเป๊ะๆ ห้ามอ้างใน assumptions ว่าทำสิ่งที่ทำไม่ได้ให้แล้ว
+
+## กติกาสำคัญ
+- ห้ามถามกลับ ตัดสินใจเสมอ — ทุกค่าที่เดา (ขนาดของ จำนวน การจัดวาง ช่องไฟ วัสดุ รูปแบบกล่อง) ต้องประกาศใน assumptions เป็นภาษาไทยสั้นๆ ทีละข้อ เพื่อให้ลูกค้ากดแก้ได้
+- ถ้ามี "สเปกปัจจุบัน" มาด้วย: ปกติคือลูกค้าขอปรับของเดิมต่อเนื่อง — แก้เฉพาะส่วนที่ข้อความเกี่ยวข้อง คงค่าที่เหลือ (รวม template) ไว้ตามเดิม แต่ถ้าข้อความชัดเจนว่าเป็นงานใหม่คนละชิ้น (เช่น สั่งกล่องใส่ของอย่างอื่นทั้งใบ) ให้คำนวณใหม่ทั้งหมดโดยไม่ยึดค่าเดิม
+- layoutNote สั้นๆ เช่น "วางเรียง 3 × 1" (ถ้าไม่เกี่ยวกับการวางของ ใส่ "-")
+- reasoning: 1-2 ประโยค ทำไมเลือกรูปแบบ/วัสดุ/ขนาดนี้`
+
+const TOOL: Anthropic.Tool = {
+  name: 'box_spec',
+  description: 'ส่งสเปกบรรจุภัณฑ์ที่คำนวณเสร็จแล้วให้ระบบ gen กล่อง',
+  strict: true,
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      template: { type: 'string', enum: TEMPLATE_IDS },
+      materialId: { type: 'string', enum: MATERIALS.map((m) => m.id) },
+      W: { type: 'number', description: 'กว้างด้านใน มม. (30-250)' },
+      D: { type: 'number', description: 'ลึกด้านใน มม. (20-150)' },
+      H: { type: 'number', description: 'สูงด้านใน มม. (30-300)' },
+      handle: {
+        type: 'boolean',
+        description: 'เจาะรูหิ้ว (tuck-end/mailer เท่านั้น; sleeve ต้องเป็น false)',
+      },
+      assumptions: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'ทุกค่าที่เดา ภาษาไทยสั้นๆ ทีละข้อ',
+      },
+      layoutNote: { type: 'string', description: 'การจัดวางของด้านใน เช่น "วางเรียง 3 × 1"' },
+      reasoning: { type: 'string', description: 'เหตุผลสั้นๆ ที่เลือกรูปแบบ/วัสดุ/ขนาดนี้' },
+    },
+    required: ['template', 'materialId', 'W', 'D', 'H', 'handle', 'assumptions', 'layoutNote', 'reasoning'],
+  },
+}
+
+function sanitize(raw: Record<string, unknown>, mock: boolean): BoxSpecResult {
+  const materialId = MATERIALS.some((m) => m.id === raw.materialId)
+    ? (raw.materialId as string)
+    : 'carton-300'
+  const template = TEMPLATE_IDS.includes(raw.template as string)
+    ? (raw.template as string)
+    : 'tuck-end'
+  return {
+    template,
+    materialId,
+    W: clamp(Number(raw.W) || 80, LIMITS.W),
+    D: clamp(Number(raw.D) || 50, LIMITS.D),
+    H: clamp(Number(raw.H) || 120, LIMITS.H),
+    handle: raw.handle === true && template !== 'sleeve',
+    assumptions: Array.isArray(raw.assumptions)
+      ? raw.assumptions.filter((a): a is string => typeof a === 'string').slice(0, 8)
+      : [],
+    layoutNote: typeof raw.layoutNote === 'string' ? raw.layoutNote : '-',
+    reasoning: typeof raw.reasoning === 'string' ? raw.reasoning : '',
+    mock,
+  }
+}
+
+// สร้าง CurrentSpec ใหม่จากค่า client แบบไม่เชื่ออะไรเลย — กัน bypass validation
+// (client ส่ง string อิสระมาใน current ไม่ได้ ทุก field ถูก rebuild)
+function parseCurrent(v: unknown): CurrentSpec | undefined {
+  if (typeof v !== 'object' || v === null) return undefined
+  const o = v as Record<string, unknown>
+  const W = Number(o.W)
+  const D = Number(o.D)
+  const H = Number(o.H)
+  if (!Number.isFinite(W) || !Number.isFinite(D) || !Number.isFinite(H)) return undefined
+  const materialId = MATERIALS.some((m) => m.id === o.materialId) ? (o.materialId as string) : undefined
+  const template = TEMPLATE_IDS.includes(o.template as string) ? (o.template as string) : undefined
+  if (!materialId || !template) return undefined
+  return {
+    template,
+    materialId,
+    W: clamp(W, LIMITS.W),
+    D: clamp(D, LIMITS.D),
+    H: clamp(H, LIMITS.H),
+    handle: o.handle === true,
+  }
+}
+
+// โหมดจำลอง: ใช้ตอนยังไม่ได้ตั้ง ANTHROPIC_API_KEY เพื่อให้ทดสอบ UX ได้ครบวงจร
+function mockSpec(prompt: string, current?: CurrentSpec): BoxSpecResult {
+  const assumptions: string[] = []
+  let materialId = current?.materialId ?? 'carton-300'
+  let template = current?.template ?? 'tuck-end'
+  let handle = current?.handle ?? false
+  if (/หิ้ว|ที่จับ|หูหิ้ว|มือจับ|ถือสะดวก/.test(prompt)) handle = true
+
+  if (/ไปรษณีย์|ส่งของ|ขนส่ง|พัสดุ/.test(prompt)) template = 'mailer'
+  else if (/ปลอก|สวม|แบนด์|รัด/.test(prompt)) template = 'sleeve'
+
+  if (/อีโค่|รักษ์โลก|ธรรมชาติ|คราฟท์/.test(prompt)) materialId = 'kraft-350'
+  else if (/หรู|พรีเมียม/.test(prompt)) materialId = 'carton-400'
+  else if (/ใส(?![่-๋])|โชว์|มองเห็น/.test(prompt)) materialId = 'pet-sheet'
+  else if (/ไปรษณีย์|ขนส่ง|กันกระแทก|แข็งแรง|พัสดุ/.test(prompt)) materialId = 'corrugated-b'
+  else if (/ถูก|ประหยัด/.test(prompt)) materialId = 'carton-300'
+
+  const mat = MATERIALS.find((m) => m.id === materialId)
+  assumptions.push(`วัสดุ: ${mat?.nameTh ?? materialId}`)
+  assumptions.push(`รูปแบบ: ${TEMPLATES.find((t) => t.id === template)?.nameTh ?? template}`)
+
+  let count = Math.max(1, Number(/(\d+)\s*(?:ขวด|ชิ้น|ก้อน|ใบ|กระปุก|อัน|เล่ม)/.exec(prompt)?.[1] ?? 1))
+  const item = COMMON_ITEMS.find((i) => i.re.test(prompt))
+
+  if (!item) {
+    if (current) {
+      assumptions.push('ไม่พบของชิ้นใหม่ในคำสั่ง — คงขนาดเดิมไว้')
+      return sanitize(
+        { ...current, materialId, template, handle, assumptions, layoutNote: '-', reasoning: 'ปรับตามคำสั่งโดยคงขนาดเดิม (โหมดจำลอง)' },
+        true,
+      )
+    }
+    assumptions.push('ไม่ทราบของด้านใน — ใช้ขนาดกล่องมาตรฐาน 80×50×120 มม.')
+    return sanitize(
+      { materialId, template, handle, W: 80, D: 50, H: 120, assumptions, layoutNote: '-', reasoning: 'ขนาดมาตรฐานเริ่มต้น (โหมดจำลอง)' },
+      true,
+    )
+  }
+
+  assumptions.push(item.label)
+  const gap = 5
+  const pad = item.fragile ? 8 : 4
+  if (item.fragile) assumptions.push(`ของเปราะ — เผื่อกันกระแทกด้านละ ${pad} มม.`)
+  assumptions.push(`ช่องไฟระหว่างชิ้น ${gap} มม.`)
+
+  // ความจุสูงสุดของกล่องเดียวตามลิมิตขนาด — ถ้าเกินให้คิดที่จำนวนที่ใส่ได้จริง
+  const maxCols = Math.max(1, Math.floor((LIMITS.W[1] - pad * 2 + gap) / (item.w + gap)))
+  const maxRows = Math.max(1, Math.floor((LIMITS.D[1] - pad * 2 + gap) / (item.d + gap)))
+  if (count > maxCols * maxRows) {
+    assumptions.push(`จำนวน ${count} ชิ้นเกินความจุกล่องเดียว — คำนวณสำหรับ ${maxCols * maxRows} ชิ้น`)
+    count = maxCols * maxRows
+  }
+
+  let rows = 1
+  let cols = count
+  while (cols > maxCols && rows < maxRows) {
+    rows += 1
+    cols = Math.ceil(count / rows)
+  }
+  const W = cols * item.w + (cols - 1) * gap + pad * 2
+  const D = rows * item.d + (rows - 1) * gap + pad * 2
+  const H = item.h + 6
+
+  return sanitize(
+    {
+      materialId,
+      template,
+      handle,
+      W,
+      D,
+      H,
+      assumptions,
+      layoutNote: `วางเรียง ${cols} × ${rows}`,
+      reasoning: `คำนวณจากของ ${count} ชิ้นพร้อมช่องไฟ (โหมดจำลอง — ยังไม่ได้ใช้ AI จริง)`,
+    },
+    true,
+  )
+}
+
+function buildUserContent(prompt: string, current?: CurrentSpec): string {
+  return current
+    ? `สเปกปัจจุบัน: template=${current.template}, วัสดุ=${current.materialId}, ด้านใน W×D×H = ${current.W}×${current.D}×${current.H} มม., รูหิ้ว=${current.handle ? 'มี' : 'ไม่มี'}\n\nข้อความล่าสุดจากลูกค้า: ${prompt}`
+    : prompt
+}
+
+let client: Anthropic | null = null
+
+async function askClaude(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  current?: CurrentSpec,
+): Promise<BoxSpecResult> {
+  client ??= new Anthropic({ apiKey })
+  const userContent = buildUserContent(prompt, current)
+
+  const msg = await client.messages.create({
+    model,
+    max_tokens: 2048,
+    system: SYSTEM,
+    tools: [TOOL],
+    tool_choice: { type: 'tool', name: 'box_spec' },
+    messages: [{ role: 'user', content: userContent }],
+  })
+
+  const block = msg.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'box_spec',
+  )
+  if (!block) throw new Error('ไม่พบผลลัพธ์จากโมเดล')
+  return sanitize(block.input as Record<string, unknown>, false)
+}
+
+// --- backend: claude CLI (ใช้ login ของ Claude Code ในเครื่อง ไม่ต้องมี API key) ---
+
+let cliAvailable: boolean | null = null
+
+async function hasClaudeCli(): Promise<boolean> {
+  if (cliAvailable !== null) return cliAvailable
+  try {
+    await execFileP('claude', ['--version'], { timeout: 10_000 })
+    cliAvailable = true
+  } catch {
+    cliAvailable = false
+  }
+  return cliAvailable
+}
+
+const JSON_INSTRUCTION =
+  `\n\n## รูปแบบคำตอบ (สำคัญมาก)\n` +
+  `ตอบเป็น JSON object เดียวเท่านั้น ห้ามมีข้อความอื่นหรือ markdown fence นำหน้า/ตามหลัง:\n` +
+  `{"template":"<${TEMPLATE_IDS.join('|')}>","materialId":"<id>","W":<number>,"D":<number>,"H":<number>,"handle":<true|false>,` +
+  `"assumptions":["..."],"layoutNote":"...","reasoning":"..."}`
+
+// ล้างตัวแปรแวดล้อมของ session อื่น (เช่น ANTHROPIC_BASE_URL จาก Claude Code
+// ที่รัน dev server อยู่) ไม่ให้ shadow login ปกติของเครื่อง
+// ถ้าผู้ใช้ตั้ง CLAUDE_CODE_OAUTH_TOKEN ใน .env (ได้จาก `claude setup-token`)
+// ให้ส่งเข้า child โดยตรง — ทางนี้ไม่พึ่ง Keychain เลย ใช้ได้ทุกบริบท
+function cliEnv(oauthToken?: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const [k, v] of Object.entries(process.env)) {
+    if (/^(ANTHROPIC_|CLAUDE)/i.test(k)) continue
+    env[k] = v
+  }
+  if (oauthToken) env.CLAUDE_CODE_OAUTH_TOKEN = oauthToken
+  return env
+}
+
+function extractJson(text: string): Record<string, unknown> | null {
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start === -1 || end <= start) return null
+  try {
+    return JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+async function askClaudeCli(
+  model: string | undefined,
+  oauthToken: string | undefined,
+  prompt: string,
+  current?: CurrentSpec,
+): Promise<BoxSpecResult> {
+  const full = `${SYSTEM}${JSON_INSTRUCTION}\n\n## คำขอลูกค้า\n${buildUserContent(prompt, current)}`
+  const args = ['-p', full, '--output-format', 'json']
+  if (model) args.push('--model', model)
+
+  // cwd เป็น tmp เพื่อไม่ให้ CLI โหลด CLAUDE.md/บริบทของโปรเจกต์เข้าไปปนใน prompt
+  const pending = execFileP('claude', args, {
+    timeout: 120_000,
+    maxBuffer: 4 * 1024 * 1024,
+    cwd: os.tmpdir(),
+    env: cliEnv(oauthToken),
+  })
+  pending.child.stdin?.end()
+  const { stdout } = await pending
+
+  const envelope = JSON.parse(stdout) as { is_error?: boolean; result?: string }
+  if (envelope.is_error || typeof envelope.result !== 'string') {
+    throw new Error('Claude CLI ตอบกลับผิดรูปแบบ')
+  }
+  const obj = extractJson(envelope.result)
+  if (!obj) throw new Error('แปลงคำตอบจาก Claude CLI เป็น JSON ไม่ได้')
+  return sanitize(obj, false)
+}
+
+async function readBody(req: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length
+    if (size > 64 * 1024) throw new Error('คำขอใหญ่เกินไป')
+    chunks.push(chunk as Buffer)
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
+function send(res: ServerResponse, status: number, body: unknown) {
+  res.statusCode = status
+  res.setHeader('content-type', 'application/json; charset=utf-8')
+  res.end(JSON.stringify(body))
+}
+
+export async function handleBoxSpec(
+  req: IncomingMessage,
+  res: ServerResponse,
+  env: Record<string, string | undefined>,
+): Promise<void> {
+  if (req.method !== 'POST') {
+    send(res, 405, { error: 'ต้องเป็น POST เท่านั้น' })
+    return
+  }
+
+  // กัน drive-by cross-site POST มาเผาโควต้า API: บังคับ same-origin + JSON เท่านั้น
+  // (POST แบบ text/plain เป็น simple request ที่ browser ส่งข้ามเว็บได้โดยไม่มี preflight)
+  const origin = req.headers.origin
+  const allowedOrigins = new Set(['http://localhost:5173', 'http://127.0.0.1:5173'])
+  if (req.headers['sec-fetch-site'] === 'cross-site' || (origin && !allowedOrigins.has(origin))) {
+    send(res, 403, { error: 'ต้องเรียกจากหน้าเว็บของแอปเท่านั้น' })
+    return
+  }
+  if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) {
+    send(res, 415, { error: 'content-type ต้องเป็น application/json' })
+    return
+  }
+
+  let prompt: string
+  let current: CurrentSpec | undefined
+  try {
+    const body = JSON.parse(await readBody(req)) as { prompt?: unknown; current?: unknown }
+    if (typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 2000) {
+      send(res, 400, { error: 'prompt ต้องเป็นข้อความ 1-2000 ตัวอักษร' })
+      return
+    }
+    prompt = body.prompt.trim()
+    current = parseCurrent(body.current)
+  } catch {
+    send(res, 400, { error: 'รูปแบบคำขอไม่ถูกต้อง' })
+    return
+  }
+
+  // ลำดับ backend: บังคับด้วย BOX_SPEC_BACKEND (api|cli|mock) หรืออัตโนมัติ:
+  // มี ANTHROPIC_API_KEY → API, ไม่มีแต่มี claude CLI ในเครื่อง → CLI, ไม่มีทั้งคู่ → จำลอง
+  const backend = env.BOX_SPEC_BACKEND
+  const apiKey = env.ANTHROPIC_API_KEY
+  const model = env.BOX_SPEC_MODEL
+
+  try {
+    if (backend === 'mock') {
+      send(res, 200, mockSpec(prompt, current))
+      return
+    }
+    if (backend === 'api' || (!backend && apiKey)) {
+      if (!apiKey) {
+        send(res, 500, { error: 'BOX_SPEC_BACKEND=api แต่ไม่ได้ตั้ง ANTHROPIC_API_KEY' })
+        return
+      }
+      send(res, 200, await askClaude(apiKey, model || 'claude-opus-4-8', prompt, current))
+      return
+    }
+    if (backend === 'cli' || !backend) {
+      if (await hasClaudeCli()) {
+        send(res, 200, await askClaudeCli(model, env.CLAUDE_CODE_OAUTH_TOKEN, prompt, current))
+        return
+      }
+      if (backend === 'cli') {
+        send(res, 500, { error: 'BOX_SPEC_BACKEND=cli แต่ไม่พบคำสั่ง claude ในเครื่อง' })
+        return
+      }
+    }
+    send(res, 200, mockSpec(prompt, current))
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError) {
+      send(res, 401, { error: 'ANTHROPIC_API_KEY ไม่ถูกต้อง — ตรวจไฟล์ .env' })
+    } else if (err instanceof Anthropic.RateLimitError) {
+      send(res, 429, { error: 'เรียกถี่เกินไป รอสักครู่แล้วลองใหม่' })
+    } else if (err instanceof Anthropic.APIError) {
+      send(res, 502, { error: `Claude API ขัดข้อง (${err.status ?? '?'}) ลองใหม่อีกครั้ง` })
+    } else if (isExecError(err)) {
+      let detail: string
+      if (err.killed) {
+        detail = 'ใช้เวลานานเกินไป (timeout 2 นาที)'
+      } else {
+        // CLI พิมพ์ envelope ลง stdout แม้ exit ไม่เป็นศูนย์ — ดึงข้อความจริงมาแสดง
+        const envelope = safeParseEnvelope(err.stdout)
+        detail = (envelope?.result ?? err.stderr ?? err.message).slice(0, 300)
+      }
+      const hint = /authenticate|401/i.test(detail)
+        ? ' — วิธีแก้: เปิด terminal รัน `claude setup-token` แล้วเอา token (sk-ant-oat01-…) ใส่ไฟล์ .env เป็น CLAUDE_CODE_OAUTH_TOKEN=… จากนั้นรีสตาร์ท dev server'
+        : ''
+      send(res, 502, { error: `เรียก Claude CLI ไม่สำเร็จ: ${detail}${hint}` })
+    } else {
+      send(res, 500, { error: 'เกิดข้อผิดพลาดภายใน ลองใหม่อีกครั้ง' })
+    }
+  }
+}
+
+function isExecError(
+  e: unknown,
+): e is Error & { killed?: boolean; stderr?: string; stdout?: string } {
+  return e instanceof Error && ('killed' in e || 'stderr' in e)
+}
+
+function safeParseEnvelope(text: string | undefined): { result?: string } | null {
+  if (!text) return null
+  try {
+    const v = JSON.parse(text) as { result?: unknown }
+    return typeof v.result === 'string' ? { result: v.result } : null
+  } catch {
+    return null
+  }
+}

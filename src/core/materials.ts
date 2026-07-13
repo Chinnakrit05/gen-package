@@ -1,0 +1,101 @@
+import type { Material } from './types'
+
+export const MATERIALS: Material[] = [
+  {
+    id: 'carton-300',
+    nameTh: 'กระดาษกล่องแป้ง 300 gsm',
+    detail: 'folding carton มาตรฐานกล่องเครื่องสำอาง/ยา',
+    thickness: 0.4,
+    foldable: true,
+    process: 'ไดคัท + พับ + ทากาว',
+    color: '#f0e9d8',
+    roughness: 0.85,
+  },
+  {
+    id: 'carton-400',
+    nameTh: 'กระดาษกล่องแป้ง 400 gsm',
+    detail: 'folding carton หนา แข็งแรงขึ้น',
+    thickness: 0.55,
+    foldable: true,
+    process: 'ไดคัท + พับ + ทากาว',
+    color: '#ece4d0',
+    roughness: 0.85,
+  },
+  {
+    id: 'kraft-350',
+    nameTh: 'กระดาษคราฟท์ 350 gsm',
+    detail: 'สีน้ำตาลธรรมชาติ สายอีโค่',
+    thickness: 0.5,
+    foldable: true,
+    process: 'ไดคัท + พับ + ทากาว',
+    color: '#b9905d',
+    roughness: 0.95,
+  },
+  {
+    id: 'corrugated-e',
+    nameTh: 'ลูกฟูกลอน E',
+    detail: 'micro flute ผิวเรียบ พิมพ์สวย',
+    thickness: 1.6,
+    foldable: true,
+    process: 'ไดคัท + พับ',
+    color: '#c9a06a',
+    roughness: 1,
+  },
+  {
+    id: 'corrugated-b',
+    nameTh: 'ลูกฟูกลอน B',
+    detail: 'กล่องไปรษณีย์/ขนส่ง',
+    thickness: 3,
+    foldable: true,
+    process: 'ไดคัท + พับ',
+    color: '#c39a63',
+    roughness: 1,
+  },
+  {
+    id: 'pet-sheet',
+    nameTh: 'แผ่น PET ใส 0.3 มม.',
+    detail: 'กล่องพลาสติกใสโชว์สินค้า',
+    thickness: 0.3,
+    foldable: true,
+    process: 'ไดคัท + รีดรอยพับ (crease) + พับ',
+    color: '#bdd9e6',
+    opacity: 0.35,
+    roughness: 0.15,
+  },
+  {
+    id: 'pet-bottle',
+    nameTh: 'ขวด PET',
+    detail: 'ขวดน้ำ/ขวดเครื่องดื่ม',
+    thickness: 0.25,
+    foldable: false,
+    process: 'เป่าขึ้นรูป (blow molding)',
+    color: '#9fc9dd',
+    note: 'วัสดุนี้พับไม่ได้ — ต้องขึ้นรูปด้วยการเป่า จะใช้เส้นทาง revolve profile + dieline ของฉลากแทน (เฟสถัดไป)',
+  },
+  {
+    id: 'glass',
+    nameTh: 'แก้ว',
+    detail: 'ขวด/โหลแก้ว',
+    thickness: 2,
+    foldable: false,
+    process: 'เป่า/หล่อขึ้นรูป',
+    color: '#cfe6dd',
+    note: 'วัสดุนี้พับไม่ได้ — ขึ้นรูปจากแม่พิมพ์ blueprint ที่มีความหมายคือ dieline ของฉลาก (เฟสถัดไป)',
+  },
+  {
+    id: 'aluminum',
+    nameTh: 'อะลูมิเนียม',
+    detail: 'กระป๋องเครื่องดื่ม',
+    thickness: 0.2,
+    foldable: false,
+    process: 'ดึงขึ้นรูป (draw & iron)',
+    color: '#c8ccd0',
+    note: 'วัสดุนี้พับไม่ได้ — ขึ้นรูปจากแผ่นด้วยแม่พิมพ์ จะใช้เส้นทาง revolve + ฉลากแทน (เฟสถัดไป)',
+  },
+]
+
+export function getMaterial(id: string): Material {
+  const m = MATERIALS.find((m) => m.id === id)
+  if (!m) throw new Error(`unknown material: ${id}`)
+  return m
+}
