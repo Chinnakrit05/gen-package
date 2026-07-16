@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { unlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -330,10 +331,29 @@ async function askClaude(
 
 let cliAvailable: boolean | null = null
 
+// บน Windows คำสั่ง `claude` คือ shim (.cmd/.ps1) หรือ native .exe ใน node_modules
+// execFile ไม่ผ่าน shell จึง resolve นามสกุลให้ไม่ได้เอง (จะ ENOENT) — ต้องหา path เต็ม
+// ของไฟล์ .exe ที่รันตรงได้ (เลี่ยง .cmd เพราะต้อง shell แล้ว argument ยาว ๆ จะโดน quote พัง)
+let claudeBinCache: string | undefined
+function resolveClaudeBin(): string {
+  if (claudeBinCache !== undefined) return claudeBinCache
+  if (process.platform !== 'win32') return (claudeBinCache = 'claude')
+  const dirs = (process.env.PATH || '').split(path.delimiter)
+  if (process.env.APPDATA) {
+    dirs.push(path.join(process.env.APPDATA, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'bin'))
+  }
+  for (const dir of dirs) {
+    if (!dir) continue
+    const exe = path.join(dir, 'claude.exe')
+    if (existsSync(exe)) return (claudeBinCache = exe)
+  }
+  return (claudeBinCache = 'claude')
+}
+
 async function hasClaudeCli(): Promise<boolean> {
   if (cliAvailable !== null) return cliAvailable
   try {
-    await execFileP('claude', ['--version'], { timeout: 10_000 })
+    await execFileP(resolveClaudeBin(), ['--version'], { timeout: 10_000 })
     cliAvailable = true
   } catch {
     cliAvailable = false
@@ -395,7 +415,7 @@ async function askClaudeCli(
 
   try {
     // cwd เป็น tmp เพื่อไม่ให้ CLI โหลด CLAUDE.md/บริบทของโปรเจกต์เข้าไปปนใน prompt
-    const pending = execFileP('claude', args, {
+    const pending = execFileP(resolveClaudeBin(), args, {
       timeout: 180_000,
       maxBuffer: 4 * 1024 * 1024,
       cwd: os.tmpdir(),
