@@ -43,6 +43,24 @@ export function obroundPts(
   ]
 }
 
+export function roundedRectPts(x0: number, y0: number, x1: number, y1: number, r: number): Vec2[] {
+  return [
+    P(x0 + r, y0),
+    ...arcPts(x1 - r, y0 + r, r, -Math.PI / 2, 0, 4),
+    ...arcPts(x1 - r, y1 - r, r, 0, Math.PI / 2, 4),
+    ...arcPts(x0 + r, y1 - r, r, Math.PI / 2, Math.PI, 4),
+    ...arcPts(x0 + r, y0 + r, r, Math.PI, Math.PI * 1.5, 4),
+  ]
+}
+
+export function roundedRectPath(x0: number, y0: number, x1: number, y1: number, r: number): string {
+  return (
+    `M ${x0 + r} ${y0} L ${x1 - r} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y0 + r} ` +
+    `L ${x1} ${y1 - r} A ${r} ${r} 0 0 1 ${x1 - r} ${y1} L ${x0 + r} ${y1} ` +
+    `A ${r} ${r} 0 0 1 ${x0} ${y1 - r} L ${x0} ${y0 + r} A ${r} ${r} 0 0 1 ${x0 + r} ${y0} Z`
+  )
+}
+
 export function obroundPath(
   cx: number,
   cy: number,

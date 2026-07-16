@@ -14,11 +14,11 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `src/core/materials.ts` — material registry: ความหนา t, foldable, สี — วัสดุกำหนดระยะเผื่อใน dieline ไม่ใช่แค่หน้าตา
 - `src/core/templates/index.ts` — template registry (BoxTemplate: defaults, tilt, supportsHandle, foldDepth, generate) — เพิ่มแบบกล่องใหม่ที่นี่
 - feature รูหิ้ว: `Panel.holes` (polygon rings → THREE.Shape.holes) + `obroundPts/obroundPath` ใน shared.ts; เพิ่ม feature ใหม่ต้องอัปเดต "ความสามารถของระบบ" ใน system prompt ของ server/boxSpec.ts ด้วย ไม่งั้น AI จะอ้างว่าทำได้ทั้งที่ engine ไม่มี
-- `src/core/templates/tuckEnd.ts` / `mailer.ts` / `sleeve.ts` — generators: รับ W/D/H "ด้านใน" แปลงเป็นระยะ score +2t ต่อแกน, ระยะหลบ flap สเกลตาม t, ผลิตทั้ง segments (SVG มี Q curve) และ panels (3D, polygonized) จาก geometry เดียวกัน; mailer ใช้ tilt หมุนโมเดลให้ฐานลงพื้นตามจังหวะพับ
+- `src/core/templates/tuckEnd.ts` / `mailer.ts` / `sleeve.ts` / `bottleCarrier.ts` — generators: รับ W/D/H "ด้านใน" แปลงเป็นระยะ score +2t ต่อแกน, ระยะหลบ flap สเกลตาม t, ผลิตทั้ง segments (SVG มี Q curve) และ panels (3D, polygonized) จาก geometry เดียวกัน; mailer ใช้ tilt หมุนโมเดลให้ฐานลงพื้นตามจังหวะพับ
 - `src/core/fold.ts` — fold engine: panel หมุนรอบ crease ในพิกัดแผ่นคลี่ คูณ matrix แม่เป็นลูกโซ่; ด้านในกล่อง = +z; stage 0-3 (ลำตัว→ลิ้นกันฝุ่น→ฝาเสียบ→ลิ้น); zOffset ดันชั้นวัสดุที่ซ้อนกันกัน z-fighting
 - `src/components/Viewer3D.tsx` — R3F viewer + FitCamera (วัดจากส่วนแผ่นที่ยื่นไกลสุดจากแผงหน้า ไม่ใช่ครึ่งแผ่น)
 - `src/components/DielineSVG.tsx` — blueprint preview + เส้นบอกขนาด (toggle ได้)
-- `src/components/PromptBar.tsx` + `src/core/ai.ts` — AI layer ฝั่ง client
+- `src/components/PromptBar.tsx` + `src/core/ai.ts` — AI layer ฝั่ง client; แนบรูปอ้างอิงได้ (ย่อเป็น JPEG ≤1024px ฝั่ง client → base64; backend api ส่งเป็น image block, backend cli เขียนไฟล์ tmp ให้ Claude เปิดอ่านเองแล้วลบทิ้ง)
 - `server/boxSpec.ts` — endpoint /api/box-spec (Vite middleware): Claude strict tool use → JSON spec; ไม่มี ANTHROPIC_API_KEY → โหมดจำลอง (mockSpec)
 
 ## Env / AI backend

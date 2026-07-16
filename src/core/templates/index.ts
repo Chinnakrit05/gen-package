@@ -2,6 +2,7 @@ import type { BoxParams, Dieline, Material } from '../types'
 import { generateTuckEndBox } from './tuckEnd'
 import { generateMailerBox } from './mailer'
 import { generateSleeve } from './sleeve'
+import { generateBottleCarrier } from './bottleCarrier'
 
 export interface BoxTemplate {
   id: string
@@ -34,6 +35,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: true,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateMailerBox,
+  },
+  {
+    id: 'bottle-carrier',
+    nameTh: 'กล่องหูหิ้วขวด (bottle carrier)',
+    detail: 'ตะกร้าเปิดบน หูหิ้วกลางเจาะรูมือ + หน้าต่างโชว์สินค้า สำหรับขวด 2-6 ขวด',
+    defaults: { W: 150, D: 150, H: 230 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b) => b.H + 55,
+    generate: generateBottleCarrier,
   },
   {
     id: 'sleeve',

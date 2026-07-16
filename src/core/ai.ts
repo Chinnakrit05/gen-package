@@ -20,11 +20,19 @@ export interface CurrentSpec {
   handle: boolean
 }
 
-export async function requestBoxSpec(prompt: string, current?: CurrentSpec): Promise<AiBoxSpec> {
+export async function requestBoxSpec(
+  prompt: string,
+  current?: CurrentSpec,
+  imageBase64?: string,
+): Promise<AiBoxSpec> {
   const res = await fetch('/api/box-spec', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ prompt, current }),
+    body: JSON.stringify({
+      prompt,
+      current,
+      image: imageBase64 ? { data: imageBase64, mediaType: 'image/jpeg' } : undefined,
+    }),
   })
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null

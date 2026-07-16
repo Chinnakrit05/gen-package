@@ -105,16 +105,45 @@ const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
   a.H === b.H &&
   a.handle === b.handle
 
-// --- บันทึกงาน + ประวัติเวอร์ชันลง localStorage ---
+// --- บันทึกหลายงาน (project) + ประวัติเวอร์ชันของแต่ละงานลง localStorage ---
 
-const STORAGE_KEY = 'gen-package-design-v1'
+const STORAGE_KEY = 'gen-package-projects-v1'
+const LEGACY_KEY = 'gen-package-design-v1'
 const MAX_HISTORY = 30
 
-interface PersistedState {
+interface Project {
+  id: string
+  name: string
+  updatedAt: number
+  live: CurrentSpec
   history: DesignVersion[]
   histIdx: number
-  live: CurrentSpec | null
+}
+
+interface Store {
+  projects: Project[]
+  activeId: string
   showDims: boolean
+}
+
+const DEFAULT_SPEC: CurrentSpec = {
+  template: 'tuck-end',
+  materialId: 'carton-300',
+  W: 80,
+  D: 50,
+  H: 120,
+  handle: false,
+}
+
+function freshProject(n: number): Project {
+  return {
+    id: crypto.randomUUID(),
+    name: `งาน ${n}`,
+    updatedAt: Date.now(),
+    live: { ...DEFAULT_SPEC },
+    history: [],
+    histIdx: -1,
+  }
 }
 
 function parseSpec(s: unknown): CurrentSpec | null {
@@ -138,48 +167,106 @@ function parseSpec(s: unknown): CurrentSpec | null {
   }
 }
 
-function loadPersisted(): PersistedState {
-  const empty: PersistedState = { history: [], histIdx: -1, live: null, showDims: true }
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return empty
-    const d = JSON.parse(raw) as Record<string, unknown>
-    const history: DesignVersion[] = Array.isArray(d.history)
-      ? d.history
-          .map((v: unknown): DesignVersion | null => {
-            const o = v as Record<string, unknown> | null
-            const spec = parseSpec(o?.spec)
-            if (!spec) return null
-            return { label: String(o?.label ?? 'เวอร์ชัน').slice(0, 120), spec }
-          })
-          .filter((v): v is DesignVersion => v !== null)
-          .slice(-MAX_HISTORY)
-      : []
-    const rawIdx = Number(d.histIdx)
-    const histIdx = Math.min(
-      Math.max(-1, Number.isInteger(rawIdx) ? rawIdx : history.length - 1),
-      history.length - 1,
-    )
-    return { history, histIdx, live: parseSpec(d.live), showDims: d.showDims !== false }
-  } catch {
-    return empty
+function parseHistory(v: unknown): DesignVersion[] {
+  if (!Array.isArray(v)) return []
+  return v
+    .map((item: unknown): DesignVersion | null => {
+      const o = item as Record<string, unknown> | null
+      const spec = parseSpec(o?.spec)
+      if (!spec) return null
+      return { label: String(o?.label ?? 'เวอร์ชัน').slice(0, 120), spec }
+    })
+    .filter((item): item is DesignVersion => item !== null)
+    .slice(-MAX_HISTORY)
+}
+
+function clampIdx(raw: unknown, len: number): number {
+  const n = Number(raw)
+  return Math.min(Math.max(-1, Number.isInteger(n) ? n : len - 1), len - 1)
+}
+
+function parseProject(v: unknown, idx: number): Project | null {
+  if (typeof v !== 'object' || v === null) return null
+  const o = v as Record<string, unknown>
+  const live = parseSpec(o.live)
+  if (!live) return null
+  const history = parseHistory(o.history)
+  return {
+    id: typeof o.id === 'string' && o.id ? o.id : crypto.randomUUID(),
+    name: String(o.name ?? `งาน ${idx + 1}`).slice(0, 60) || `งาน ${idx + 1}`,
+    updatedAt: Number(o.updatedAt) || Date.now(),
+    live,
+    history,
+    histIdx: clampIdx(o.histIdx, history.length),
   }
 }
 
-const persisted = loadPersisted()
+function loadStore(): Store {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const d = JSON.parse(raw) as Record<string, unknown>
+      const projects = Array.isArray(d.projects)
+        ? d.projects
+            .map((p: unknown, i: number) => parseProject(p, i))
+            .filter((p): p is Project => p !== null)
+        : []
+      if (projects.length > 0) {
+        const activeId = projects.some((p) => p.id === d.activeId)
+          ? (d.activeId as string)
+          : projects[0].id
+        return { projects, activeId, showDims: d.showDims !== false }
+      }
+    }
+  } catch {
+    // ตกไปเช็คข้อมูลรุ่นเก่า
+  }
+
+  // ย้ายข้อมูลรุ่นเก่า (งานเดียว) เข้าระบบหลายงาน
+  try {
+    const legacy = localStorage.getItem(LEGACY_KEY)
+    if (legacy) {
+      const d = JSON.parse(legacy) as Record<string, unknown>
+      const live = parseSpec(d.live)
+      if (live) {
+        const history = parseHistory(d.history)
+        const p: Project = {
+          id: crypto.randomUUID(),
+          name: 'งาน 1',
+          updatedAt: Date.now(),
+          live,
+          history,
+          histIdx: clampIdx(d.histIdx, history.length),
+        }
+        localStorage.removeItem(LEGACY_KEY)
+        return { projects: [p], activeId: p.id, showDims: d.showDims !== false }
+      }
+    }
+  } catch {
+    // ใช้ค่าเริ่มต้น
+  }
+
+  const p = freshProject(1)
+  return { projects: [p], activeId: p.id, showDims: true }
+}
+
+const store0 = loadStore()
+const active0 = store0.projects.find((p) => p.id === store0.activeId) ?? store0.projects[0]
 
 export default function App() {
-  const [templateId, setTemplateId] = useState(persisted.live?.template ?? 'tuck-end')
-  const [materialId, setMaterialId] = useState(persisted.live?.materialId ?? 'carton-300')
-  const [W, setW] = useState(persisted.live?.W ?? 80)
-  const [D, setD] = useState(persisted.live?.D ?? 50)
-  const [H, setH] = useState(persisted.live?.H ?? 120)
-  const [handle, setHandle] = useState(persisted.live?.handle ?? false)
+  const [projects, setProjects] = useState<Project[]>(store0.projects)
+  const [activeId, setActiveId] = useState(active0.id)
+  const [templateId, setTemplateId] = useState(active0.live.template)
+  const [materialId, setMaterialId] = useState(active0.live.materialId)
+  const [W, setW] = useState(active0.live.W)
+  const [D, setD] = useState(active0.live.D)
+  const [H, setH] = useState(active0.live.H)
+  const [handle, setHandle] = useState(active0.live.handle)
   const [fold, setFold] = useState(1)
-  const [showDims, setShowDims] = useState(persisted.showDims)
+  const [showDims, setShowDims] = useState(store0.showDims)
   const [aiBusy, setAiBusy] = useState(false)
-  const [history, setHistory] = useState<DesignVersion[]>(persisted.history)
-  const [histIdx, setHistIdx] = useState(persisted.histIdx)
+  const [history, setHistory] = useState<DesignVersion[]>(active0.history)
+  const [histIdx, setHistIdx] = useState(active0.histIdx)
   const raf = useRef(0)
 
   const template = getTemplate(templateId)
@@ -191,23 +278,34 @@ export default function App() {
 
   useEffect(() => () => cancelAnimationFrame(raf.current), [])
 
-  // save งาน + ประวัติอัตโนมัติ (หน่วงสั้นๆ กันเขียนถี่ตอนลาก slider)
+  // sync สถานะปัจจุบันเข้างานที่เปิดอยู่ (หน่วงสั้นๆ กันเขียนถี่ตอนลาก slider)
   useEffect(() => {
     const t = setTimeout(() => {
-      try {
-        const state: PersistedState = {
-          history,
-          histIdx,
-          live: { template: templateId, materialId, W, D, H, handle },
-          showDims,
-        }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-      } catch {
-        // storage เต็มหรือถูกปิดไว้ — ข้ามการ save เงียบๆ
-      }
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === activeId
+            ? {
+                ...p,
+                live: { template: templateId, materialId, W, D, H, handle },
+                history,
+                histIdx,
+                updatedAt: Date.now(),
+              }
+            : p,
+        ),
+      )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, showDims])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, activeId])
+
+  // save ทุกงานลง localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects, activeId, showDims }))
+    } catch {
+      // storage เต็มหรือถูกปิดไว้ — ข้ามการ save เงียบๆ
+    }
+  }, [projects, activeId, showDims])
 
   const play = () => {
     cancelAnimationFrame(raf.current)
@@ -252,6 +350,15 @@ export default function App() {
     setHistory(h)
     setHistIdx(h.length - 1)
 
+    // งานที่ยังใช้ชื่ออัตโนมัติ ("งาน N") ตั้งชื่อตาม prompt แรกให้เลย
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === activeId && /^งาน \d+$/.test(p.name) && label
+          ? { ...p, name: label.slice(0, 40) }
+          : p,
+      ),
+    )
+
     setSpec(applied)
     if (getMaterial(applied.materialId).foldable) play()
     else setFold(1)
@@ -271,6 +378,60 @@ export default function App() {
     if (!window.confirm('ลบประวัติเวอร์ชันทั้งหมด? (แบบปัจจุบันยังอยู่)')) return
     setHistory([])
     setHistIdx(-1)
+  }
+
+  // --- จัดการหลายงาน (navbar) ---
+
+  const flushInto = (list: Project[]): Project[] =>
+    list.map((p) =>
+      p.id === activeId
+        ? { ...p, live: liveSpec(), history, histIdx, updatedAt: Date.now() }
+        : p,
+    )
+
+  const openProject = (p: Project) => {
+    cancelAnimationFrame(raf.current)
+    setActiveId(p.id)
+    setSpec(p.live)
+    setHistory(p.history)
+    setHistIdx(p.histIdx)
+    setFold(1)
+  }
+
+  const switchProject = (id: string) => {
+    if (id === activeId || aiBusy) return
+    const target = projects.find((p) => p.id === id)
+    if (!target) return
+    setProjects((prev) => flushInto(prev))
+    openProject(target)
+  }
+
+  const newProject = () => {
+    if (aiBusy) return
+    const p = freshProject(projects.length + 1)
+    setProjects((prev) => [...flushInto(prev), p])
+    openProject(p)
+  }
+
+  const deleteProject = (id: string) => {
+    if (aiBusy) return
+    const victim = projects.find((p) => p.id === id)
+    if (!victim) return
+    if (!window.confirm(`ลบงาน "${victim.name}" ทั้งงานรวมประวัติ?`)) return
+    let rest = projects.filter((p) => p.id !== id)
+    if (rest.length === 0) rest = [freshProject(1)]
+    setProjects(rest)
+    if (id === activeId) openProject(rest[rest.length - 1])
+  }
+
+  const renameProject = () => {
+    if (aiBusy) return
+    const cur = projects.find((p) => p.id === activeId)
+    const name = window.prompt('ตั้งชื่องาน', cur?.name ?? '')?.trim()
+    if (!name) return
+    setProjects((prev) =>
+      prev.map((p) => (p.id === activeId ? { ...p, name: name.slice(0, 60) } : p)),
+    )
   }
 
   const changeTemplate = (id: string) => {
@@ -305,7 +466,42 @@ export default function App() {
     <div className="app">
       <header>
         <h1>gen-package</h1>
-        <span className="sub">สร้างบรรจุภัณฑ์ 3D พร้อม blueprint การพับ — เฟส 1</span>
+        <nav className="projects" aria-label="งานที่บันทึกไว้">
+          {projects.map((p) => (
+            <div key={p.id} className={`proj-tab${p.id === activeId ? ' active' : ''}`}>
+              <button
+                className="proj-name"
+                title={`${p.name} · แก้ล่าสุด ${new Date(p.updatedAt).toLocaleString('th-TH')}`}
+                aria-current={p.id === activeId ? 'true' : undefined}
+                aria-disabled={aiBusy}
+                onClick={() => switchProject(p.id)}
+              >
+                {p.name}
+              </button>
+              {p.id === activeId && (
+                <button
+                  className="proj-act"
+                  aria-label="ตั้งชื่องานนี้"
+                  title="ตั้งชื่องาน"
+                  onClick={renameProject}
+                >
+                  ✎
+                </button>
+              )}
+              <button
+                className="proj-act"
+                aria-label={`ลบงาน ${p.name}`}
+                title="ลบงานนี้"
+                onClick={() => deleteProject(p.id)}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <button className="proj-new" aria-disabled={aiBusy} onClick={newProject}>
+            + งานใหม่
+          </button>
+        </nav>
       </header>
       <div className="body">
         <aside>

@@ -35,11 +35,72 @@ header h1 {
   font-size: 17px;
   font-weight: 600;
   color: #0f6e56;
+  white-space: nowrap;
 }
 
-header .sub {
+.projects {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.proj-tab {
+  display: flex;
+  align-items: center;
+  border: 1px solid #d5cfc0;
+  border-radius: 8px;
+  background: #f7f5ef;
+  flex-shrink: 0;
+}
+
+.proj-tab.active {
+  border-color: #0f6e56;
+  background: #e7f2ee;
+}
+
+.proj-tab button {
+  width: auto;
+  border: none;
+  background: none;
+  border-radius: 0;
   font-size: 13px;
+}
+
+.proj-name {
+  padding: 6px 4px 6px 12px;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #5f5a4e;
+}
+
+.proj-tab.active .proj-name {
+  color: #0f6e56;
+  font-weight: 600;
+}
+
+.proj-act {
+  padding: 6px 8px;
   color: #8a8474;
+  font-size: 12px;
+}
+
+.proj-act:hover {
+  color: #a32d2d;
+}
+
+.proj-new {
+  width: auto;
+  padding: 6px 14px;
+  font-size: 13px;
+  white-space: nowrap;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .body {
@@ -236,9 +297,46 @@ main {
   border-color: #0f6e56;
 }
 
-.pb-go {
+.pb-go,
+.pb-attach {
   width: auto;
   white-space: nowrap;
+}
+
+.pb-imgrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pb-imgrow img {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #d5cfc0;
+}
+
+.pb-imgname {
+  font-size: 12.5px;
+  color: #5f5a4e;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pb-imgrow button {
+  width: auto;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  margin-left: auto;
+}
+
+.pb-chip.fromimg {
+  border-color: #185fa5;
+  color: #0c447c;
+  background: #e6f1fb;
 }
 
 .pb-quick {
@@ -300,6 +398,13 @@ main {
   font-size: 12.5px;
   color: #5f5a4e;
   background: #f7f5ef;
+}
+
+.pb-chip.limit {
+  border-color: #ba7517;
+  color: #854f0b;
+  background: #faeeda;
+  font-weight: 600;
 }
 
 .pb-reason {

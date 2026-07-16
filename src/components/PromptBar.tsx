@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { requestBoxSpec, type AiBoxSpec, type CurrentSpec } from '../core/ai'
 
 const QUICK_ADJUSTS = [
@@ -7,6 +7,29 @@ const QUICK_ADJUSTS = [
   { label: 'โชว์ของข้างใน', prompt: 'อยากให้มองเห็นสินค้าข้างในกล่อง' },
   { label: 'แข็งแรงส่งไปรษณีย์', prompt: 'ต้องส่งไปรษณีย์ ให้ทนแรงกระแทก' },
 ]
+
+interface RefImage {
+  base64: string
+  preview: string
+  name: string
+}
+
+// ย่อรูปฝั่ง client ให้เหลือด้านยาวสุด 1024px เป็น JPEG — payload เล็กและตัด EXIF ทิ้ง
+async function toRefImage(file: File): Promise<RefImage> {
+  const bmp = await createImageBitmap(file)
+  const scale = Math.min(1, 1024 / Math.max(bmp.width, bmp.height))
+  const w = Math.max(1, Math.round(bmp.width * scale))
+  const h = Math.max(1, Math.round(bmp.height * scale))
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('no canvas')
+  ctx.drawImage(bmp, 0, 0, w, h)
+  bmp.close()
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.82)
+  return { base64: dataUrl.split(',')[1], preview: dataUrl, name: file.name }
+}
 
 interface PromptBarProps {
   current: CurrentSpec
@@ -17,13 +40,27 @@ interface PromptBarProps {
 
 export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: PromptBarProps) {
   const [text, setText] = useState('')
+  const [image, setImage] = useState<RefImage | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<AiBoxSpec | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const setBusy = (v: boolean) => {
     setLoading(v)
     onLoadingChange(v)
+  }
+
+  const pickImage = async (file: File | undefined) => {
+    if (!file) return
+    try {
+      setError(null)
+      setImage(await toRefImage(file))
+    } catch {
+      setError('อ่านไฟล์รูปไม่ได้ — รองรับ JPG / PNG / WebP')
+    } finally {
+      if (fileRef.current) fileRef.current.value = ''
+    }
   }
 
   const run = async (prompt: string, withCurrent: boolean, label: string): Promise<boolean> => {
@@ -32,9 +69,10 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
     setError(null)
     setResult(null)
     try {
-      const spec = await requestBoxSpec(prompt, withCurrent ? current : undefined)
+      const spec = await requestBoxSpec(prompt, withCurrent ? current : undefined, image?.base64)
       setResult(spec)
       onApply(spec, label)
+      setImage(null)
       return true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด')
@@ -70,6 +108,25 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
           onChange={(e) => setText(e.target.value)}
         />
         <button
+          type="button"
+          className="pb-attach"
+          aria-disabled={loading}
+          title="แนบรูปสินค้า/กล่องตัวอย่างให้ AI ดูประกอบ"
+          onClick={() => {
+            if (!loading) fileRef.current?.click()
+          }}
+        >
+          แนบรูป
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          hidden
+          aria-label="แนบรูปอ้างอิง"
+          onChange={(e) => void pickImage(e.target.files?.[0])}
+        />
+        <button
           type="submit"
           className="primary pb-go"
           aria-disabled={loading || !text.trim()}
@@ -77,6 +134,17 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
           {loading ? 'กำลังคิด…' : 'สร้างกล่อง'}
         </button>
       </form>
+
+      {image && (
+        <div className="pb-imgrow">
+          <img src={image.preview} alt={`รูปอ้างอิง: ${image.name}`} />
+          <span className="pb-imgname">{image.name}</span>
+          <span className="hint">AI จะดูรูปนี้ประกอบการออกแบบ</span>
+          <button type="button" aria-label="ลบรูปอ้างอิง" onClick={() => setImage(null)}>
+            ✕ ลบรูป
+          </button>
+        </div>
+      )}
 
       <div className="pb-quick">
         <span className="hint">ปรับเร็ว:</span>
@@ -111,7 +179,10 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
               <div className="pb-chips">
                 <span className="hint">สิ่งที่ระบบเดา (แก้ได้ที่แถบซ้าย):</span>
                 {result.assumptions.map((a, i) => (
-                  <span key={i} className="pb-chip">
+                  <span
+                    key={i}
+                    className={`pb-chip${a.startsWith('ข้อจำกัด') ? ' limit' : ''}${a.startsWith('จากรูป') ? ' fromimg' : ''}`}
+                  >
                     {a}
                   </span>
                 ))}
