@@ -53,14 +53,31 @@ function DimField({ label, value, min, max, disabled, onChange }: DimFieldProps)
   )
 }
 
+// จัดเป็นเลเยอร์ตั้งชื่อ cut/crease/dims เพื่อให้เปิดใน Illustrator/CorelDRAW แล้วแยกชั้นได้
+// (โปรแกรมพวกนี้เอา id ของ <g> ไปเป็นชื่อเลเยอร์) ส่วน attribute inkscape:* ทำให้
+// Inkscape มองเป็นเลเยอร์จริงด้วย — สำคัญตรงที่เลเยอร์ dims ต้องปิด/ลบทิ้งได้ในคลิกเดียว
+// ก่อนส่งโรงงาน ไม่งั้นเสี่ยงโดนตัดตามเส้นบอกขนาด
+function svgLayer(id: string, attrs: string, body: string): string {
+  if (!body) return ''
+  return (
+    `  <g id="${id}" inkscape:groupmode="layer" inkscape:label="${id}" ${attrs}>\n` +
+    `${body}\n  </g>\n`
+  )
+}
+
 function dielineSVGString(d: Dieline, withDims: boolean): string {
-  const paths = d.segments
-    .map((s) =>
-      s.kind === 'cut'
-        ? `  <path d="${s.d}" fill="none" stroke="#e30613" stroke-width="0.35"/>`
-        : `  <path d="${s.d}" fill="none" stroke="#009640" stroke-width="0.35" stroke-dasharray="4 2.5"/>`,
-    )
-    .join('\n')
+  const pathsOf = (kind: 'cut' | 'crease') =>
+    d.segments
+      .filter((s) => s.kind === kind)
+      .map((s) => `    <path d="${s.d}"/>`)
+      .join('\n')
+
+  const cutLayer = svgLayer('cut', 'fill="none" stroke="#e30613" stroke-width="0.35"', pathsOf('cut'))
+  const creaseLayer = svgLayer(
+    'crease',
+    'fill="none" stroke="#009640" stroke-width="0.35" stroke-dasharray="4 2.5"',
+    pathsOf('crease'),
+  )
 
   let dimLayer = ''
   let pad = 5
@@ -80,16 +97,17 @@ function dielineSVGString(d: Dieline, withDims: boolean): string {
         return `    <line x1="${m.a.x}" y1="${m.a.y}" x2="${m.b.x}" y2="${m.b.y}"/>${ticks}${label}`
       })
       .join('\n')
-    dimLayer = `  <g stroke="#1b6ea8" stroke-width="0.25" font-family="sans-serif">\n${marks}\n  </g>\n`
+    dimLayer = svgLayer('dims', 'stroke="#1b6ea8" stroke-width="0.25" font-family="sans-serif"', marks)
   }
 
   const w = d.width + pad * 2
   const h = d.height + pad * 2
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="${-pad} ${-pad} ${w} ${h}">\n` +
-    `<!-- สเกลจริง 1:1 หน่วย mm | เส้นแดงทึบ = ตัด (cut) | เส้นเขียวประ = พับ (crease) | เส้นน้ำเงิน = ขนาด (ไม่ใช้ผลิต) -->\n` +
-    `${paths}\n${dimLayer}</svg>\n`
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"` +
+    ` width="${w}mm" height="${h}mm" viewBox="${-pad} ${-pad} ${w} ${h}">\n` +
+    `<!-- สเกลจริง 1:1 หน่วย mm | เลเยอร์ cut = เส้นตัด (แดงทึบ) | crease = เส้นพับ (เขียวประ) | dims = เส้นบอกขนาด (ห้ามใช้ผลิต ลบทิ้งก่อนส่งโรงงาน) -->\n` +
+    `${cutLayer}${creaseLayer}${dimLayer}</svg>\n`
   )
 }
 
