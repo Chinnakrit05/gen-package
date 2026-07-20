@@ -114,7 +114,8 @@ function flattenArc(
 }
 
 // แตก path เป็นชุด polyline (แต่ละเส้นคือ subpath ที่ต่อเนื่องกัน)
-function pathToPolylines(d: string): Vec2[][] {
+// export ให้ pdf.ts ใช้ซ้ำ — คณิตศาสตร์ arc/quad ต้องมีชุดเดียวเท่านั้น
+export function pathToPolylines(d: string): Vec2[][] {
   const t = tokenize(d)
   const polys: Vec2[][] = []
   let cur: Vec2[] = []

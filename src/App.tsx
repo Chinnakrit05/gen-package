@@ -4,6 +4,7 @@ import { TEMPLATES, getTemplate } from './core/templates'
 import type { Dieline } from './core/types'
 import type { AiBoxSpec, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
+import { dielinePDFString } from './core/pdf'
 import { Viewer3D } from './components/Viewer3D'
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
@@ -491,6 +492,12 @@ export default function App() {
     saveFile(dielineDXFString(dieline), 'application/dxf', 'dxf')
   }
 
+  // PDF สเกล 1:1 สำหรับพิมพ์ตรวจ/ส่งโรงงาน — เลเยอร์ปิด-เปิดได้ใน Acrobat
+  const downloadPDF = () => {
+    if (!dieline) return
+    saveFile(dielinePDFString(dieline, showDims), 'application/pdf', 'pdf')
+  }
+
   return (
     <div className="app">
       <header>
@@ -634,8 +641,11 @@ export default function App() {
                 </label>
                 <button onClick={downloadSVG}>ดาวน์โหลด dieline (.svg)</button>
                 <button onClick={downloadDXF}>ดาวน์โหลดไฟล์ผลิต (.dxf)</button>
+                <button onClick={downloadPDF}>ดาวน์โหลดแบบพิมพ์ (.pdf)</button>
                 <p className="hint">
                   .dxf สำหรับส่งโรงทำมีดไดคัท — เลเยอร์ CUT/CREASE แยกกัน หน่วย มม. ไม่มีเส้นบอกขนาด
+                  <br />
+                  .pdf สเกล 1:1 สั่งพิมพ์ตรวจได้ทันที — เลเยอร์ cut/crease/dims ปิด-เปิดได้ใน Acrobat
                 </p>
                 <p className="hint">
                   ขนาดแผ่น {Math.ceil(dieline.width)} × {Math.ceil(dieline.height)} มม. · สเกลจริง 1:1
