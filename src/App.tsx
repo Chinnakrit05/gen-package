@@ -3,6 +3,7 @@ import { MATERIALS, getMaterial } from './core/materials'
 import { TEMPLATES, getTemplate } from './core/templates'
 import type { Dieline } from './core/types'
 import type { AiBoxSpec, CurrentSpec } from './core/ai'
+import { dielineDXFString } from './core/dxf'
 import { Viewer3D } from './components/Viewer3D'
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
@@ -451,15 +452,25 @@ export default function App() {
     if (!getMaterial(id).foldable) setFold(1)
   }
 
-  const downloadSVG = () => {
-    if (!dieline) return
-    const blob = new Blob([dielineSVGString(dieline, showDims)], { type: 'image/svg+xml' })
+  const saveFile = (text: string, mime: string, ext: string) => {
+    const blob = new Blob([text], { type: mime })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${templateId}_${W}x${D}x${H}_${mat.id}.svg`
+    a.download = `${templateId}_${W}x${D}x${H}_${mat.id}.${ext}`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const downloadSVG = () => {
+    if (!dieline) return
+    saveFile(dielineSVGString(dieline, showDims), 'image/svg+xml', 'svg')
+  }
+
+  // DXF คือไฟล์ที่โรงทำมีดไดคัทใช้จริง — มีแต่เลเยอร์ CUT/CREASE ไม่มีเส้นบอกขนาด
+  const downloadDXF = () => {
+    if (!dieline) return
+    saveFile(dielineDXFString(dieline), 'application/dxf', 'dxf')
   }
 
   return (
@@ -604,6 +615,10 @@ export default function App() {
                   แสดงขนาดกำกับเส้น (มม.)
                 </label>
                 <button onClick={downloadSVG}>ดาวน์โหลด dieline (.svg)</button>
+                <button onClick={downloadDXF}>ดาวน์โหลดไฟล์ผลิต (.dxf)</button>
+                <p className="hint">
+                  .dxf สำหรับส่งโรงทำมีดไดคัท — เลเยอร์ CUT/CREASE แยกกัน หน่วย มม. ไม่มีเส้นบอกขนาด
+                </p>
                 <p className="hint">
                   ขนาดแผ่น {Math.ceil(dieline.width)} × {Math.ceil(dieline.height)} มม. · สเกลจริง 1:1
                 </p>
