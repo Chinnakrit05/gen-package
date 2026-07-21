@@ -112,6 +112,62 @@ function dielineSVGString(d: Dieline, withDims: boolean): string {
   )
 }
 
+const QTY_MIN = 1
+const QTY_MAX = 1_000_000
+const DEFAULT_QTY = 500
+
+const parseQty = (v: unknown): number => {
+  const n = Math.round(Number(v))
+  return Number.isFinite(n) ? clamp(n, QTY_MIN, QTY_MAX) : DEFAULT_QTY
+}
+
+// ช่องจำนวนเก็บข้อความที่กำลังพิมพ์ไว้ต่างหาก ไม่ผูกกับตัวเลขโดยตรง
+// ถ้า clamp ทุกครั้งที่พิมพ์ พอผู้ใช้ลบจนว่างช่องจะเด้งเป็นค่าต่ำสุดทันที
+// แล้วพิมพ์ต่อจะได้เลขปนกัน — จำนวนเป็นค่าที่แก้บ่อย ต้องพิมพ์ได้ลื่น
+// จึงยอมให้ค่าระหว่างพิมพ์ยังไม่ถูกต้องได้ แล้วค่อยจัดให้เข้าที่ตอนออกจากช่อง
+function QtyField({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: number
+  disabled?: boolean
+  onChange: (v: number) => void
+}) {
+  const [draft, setDraft] = useState(String(value))
+  useEffect(() => setDraft(String(value)), [value])
+
+  const type = (raw: string) => {
+    setDraft(raw)
+    const n = Math.round(Number(raw))
+    if (raw.trim() !== '' && Number.isFinite(n) && n >= QTY_MIN && n <= QTY_MAX) onChange(n)
+  }
+
+  const settle = () => {
+    if (draft.trim() === '' || !Number.isFinite(Number(draft))) {
+      setDraft(String(value)) // ปล่อยว่างแล้วออก = ไม่เปลี่ยนอะไร
+      return
+    }
+    const v = parseQty(draft)
+    onChange(v)
+    setDraft(String(v))
+  }
+
+  return (
+    <input
+      type="number"
+      min={QTY_MIN}
+      max={QTY_MAX}
+      step={50}
+      value={draft}
+      disabled={disabled}
+      aria-label="จำนวนที่จะสั่ง"
+      onChange={(e) => type(e.target.value)}
+      onBlur={settle}
+    />
+  )
+}
+
 interface DesignVersion {
   label: string
   spec: CurrentSpec
@@ -131,11 +187,14 @@ const STORAGE_KEY = 'gen-package-projects-v1'
 const LEGACY_KEY = 'gen-package-design-v1'
 const MAX_HISTORY = 30
 
+// qty คือจำนวนที่จะสั่งผลิต ไม่ใช่สเปกของแบบ จึงเก็บระดับงาน ไม่ใช่ใน CurrentSpec
+// (ไม่ส่งให้ AI และไม่สร้างเวอร์ชันใหม่เวลาแก้ — มันไม่เปลี่ยนรูปกล่องเลย)
 interface Project {
   id: string
   name: string
   updatedAt: number
   live: CurrentSpec
+  qty: number
   history: DesignVersion[]
   histIdx: number
 }
@@ -161,6 +220,7 @@ function freshProject(n: number): Project {
     name: `งาน ${n}`,
     updatedAt: Date.now(),
     live: { ...DEFAULT_SPEC },
+    qty: DEFAULT_QTY,
     history: [],
     histIdx: -1,
   }
@@ -216,6 +276,7 @@ function parseProject(v: unknown, idx: number): Project | null {
     name: String(o.name ?? `งาน ${idx + 1}`).slice(0, 60) || `งาน ${idx + 1}`,
     updatedAt: Number(o.updatedAt) || Date.now(),
     live,
+    qty: parseQty(o.qty),
     history,
     histIdx: clampIdx(o.histIdx, history.length),
   }
@@ -255,6 +316,7 @@ function loadStore(): Store {
           name: 'งาน 1',
           updatedAt: Date.now(),
           live,
+          qty: DEFAULT_QTY,
           history,
           histIdx: clampIdx(d.histIdx, history.length),
         }
@@ -282,6 +344,7 @@ export default function App() {
   const [D, setD] = useState(active0.live.D)
   const [H, setH] = useState(active0.live.H)
   const [handle, setHandle] = useState(active0.live.handle)
+  const [qty, setQty] = useState(active0.qty)
   const [fold, setFold] = useState(1)
   const [showDims, setShowDims] = useState(store0.showDims)
   const [aiBusy, setAiBusy] = useState(false)
@@ -307,6 +370,7 @@ export default function App() {
             ? {
                 ...p,
                 live: { template: templateId, materialId, W, D, H, handle },
+                qty,
                 history,
                 histIdx,
                 updatedAt: Date.now(),
@@ -316,7 +380,7 @@ export default function App() {
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, activeId])
 
   // save ทุกงานลง localStorage
   useEffect(() => {
@@ -405,7 +469,7 @@ export default function App() {
   const flushInto = (list: Project[]): Project[] =>
     list.map((p) =>
       p.id === activeId
-        ? { ...p, live: liveSpec(), history, histIdx, updatedAt: Date.now() }
+        ? { ...p, live: liveSpec(), qty, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -413,6 +477,7 @@ export default function App() {
     cancelAnimationFrame(raf.current)
     setActiveId(p.id)
     setSpec(p.live)
+    setQty(p.qty)
     setHistory(p.history)
     setHistIdx(p.histIdx)
     setFold(1)
@@ -627,6 +692,22 @@ export default function App() {
                     }}
                   />
                 </label>
+              </section>
+
+              <section>
+                <h2>จำนวนที่จะสั่ง</h2>
+                <div className="field">
+                  <span className="field-head">
+                    จำนวน
+                    <span className="field-num">
+                      <QtyField value={qty} disabled={aiBusy} onChange={setQty} />
+                      ใบ
+                    </span>
+                  </span>
+                </div>
+                <p className="hint">
+                  ใช้ตอนขอราคาจากโรงงาน — ไม่มีผลกับรูปกล่องหรือไฟล์ไดคัท
+                </p>
               </section>
 
               <section>
