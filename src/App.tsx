@@ -5,6 +5,7 @@ import type { Dieline } from './core/types'
 import type { AiBoxSpec, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
 import { dielinePDFString } from './core/pdf'
+import { specSheetPDFBytes } from './core/specSheet'
 import {
   loadImageFile,
   makeImageEl,
@@ -178,9 +179,18 @@ function QtyField({
   )
 }
 
+// สิ่งที่ AI สันนิษฐาน/ให้เหตุผลตอนสร้างเวอร์ชันนี้ — เก็บติดไว้เพื่อย้อนดูภายหลัง
+// และใช้พิมพ์ลงใบสเปกที่ส่งโรงงาน (assumptions คือจุดที่ต้องให้โรงงานทักท้วง)
+interface AiInfo {
+  assumptions: string[]
+  layoutNote: string
+  reasoning: string
+}
+
 interface DesignVersion {
   label: string
   spec: CurrentSpec
+  ai?: AiInfo
 }
 
 const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
@@ -259,6 +269,18 @@ function parseSpec(s: unknown): CurrentSpec | null {
   }
 }
 
+function parseAiInfo(v: unknown): AiInfo | undefined {
+  if (typeof v !== 'object' || v === null) return undefined
+  const o = v as Record<string, unknown>
+  const assumptions = Array.isArray(o.assumptions)
+    ? o.assumptions.filter((x): x is string => typeof x === 'string').map((x) => x.slice(0, 300))
+    : []
+  const layoutNote = typeof o.layoutNote === 'string' ? o.layoutNote.slice(0, 200) : ''
+  const reasoning = typeof o.reasoning === 'string' ? o.reasoning.slice(0, 600) : ''
+  if (!assumptions.length && !layoutNote && !reasoning) return undefined
+  return { assumptions, layoutNote, reasoning }
+}
+
 function parseHistory(v: unknown): DesignVersion[] {
   if (!Array.isArray(v)) return []
   return v
@@ -266,7 +288,7 @@ function parseHistory(v: unknown): DesignVersion[] {
       const o = item as Record<string, unknown> | null
       const spec = parseSpec(o?.spec)
       if (!spec) return null
-      return { label: String(o?.label ?? 'เวอร์ชัน').slice(0, 120), spec }
+      return { label: String(o?.label ?? 'เวอร์ชัน').slice(0, 120), spec, ai: parseAiInfo(o?.ai) }
     })
     .filter((item): item is DesignVersion => item !== null)
     .slice(-MAX_HISTORY)
@@ -446,7 +468,15 @@ export default function App() {
     const h = history.slice(0, histIdx + 1)
     if (h.length === 0) h.push({ label: 'แบบตั้งต้น', spec: live })
     else if (!sameSpec(h[h.length - 1].spec, live)) h.push({ label: 'ปรับเองด้วยมือ', spec: live })
-    h.push({ label, spec: applied })
+    h.push({
+      label,
+      spec: applied,
+      ai: {
+        assumptions: spec.assumptions,
+        layoutNote: spec.layoutNote,
+        reasoning: spec.reasoning,
+      },
+    })
     if (h.length > MAX_HISTORY) h.splice(0, h.length - MAX_HISTORY)
     setHistory(h)
     setHistIdx(h.length - 1)
@@ -555,8 +585,8 @@ export default function App() {
     if (!getMaterial(id).foldable) setFold(1)
   }
 
-  const saveFile = (text: string, mime: string, ext: string) => {
-    const blob = new Blob([text], { type: mime })
+  const saveFile = (data: BlobPart, mime: string, ext: string) => {
+    const blob = new Blob([data], { type: mime })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -583,6 +613,30 @@ export default function App() {
   }
 
   const selected = decos.find((d) => d.id === selectedId) ?? null
+  const currentAi = histIdx >= 0 ? history[histIdx]?.ai : undefined
+
+  const activeName = projects.find((p) => p.id === activeId)?.name ?? 'งาน'
+
+  // ใบสรุปสเปก 1 หน้า สำหรับส่งโรงงานขอราคา — รวมจำนวน + สิ่งที่ AI สันนิษฐาน
+  const downloadSpecSheet = () => {
+    if (!dieline) return
+    const bytes = specSheetPDFBytes({
+      projectName: activeName,
+      templateNameTh: template.nameTh,
+      materialNameTh: mat.nameTh,
+      materialThickness: mat.thickness,
+      W,
+      D,
+      H,
+      qty,
+      handle,
+      assumptions: currentAi?.assumptions ?? [],
+      layoutNote: currentAi?.layoutNote ?? '',
+      reasoning: currentAi?.reasoning ?? '',
+      dieline,
+    })
+    saveFile(bytes, 'application/pdf', 'spec.pdf')
+  }
 
   const addImage = async (file: File | undefined) => {
     if (!file || !dieline) return
@@ -877,10 +931,15 @@ export default function App() {
                 <button onClick={downloadSVG}>ดาวน์โหลด dieline (.svg)</button>
                 <button onClick={downloadDXF}>ดาวน์โหลดไฟล์ผลิต (.dxf)</button>
                 <button onClick={downloadPDF}>ดาวน์โหลดแบบพิมพ์ (.pdf)</button>
+                <button className="primary" onClick={downloadSpecSheet}>
+                  ดาวน์โหลดใบสเปกขอราคา (.pdf)
+                </button>
                 <p className="hint">
                   .dxf สำหรับส่งโรงทำมีดไดคัท — เลเยอร์ CUT/CREASE แยกกัน หน่วย มม. ไม่มีเส้นบอกขนาด
                   <br />
                   .pdf สเกล 1:1 สั่งพิมพ์ตรวจได้ทันที — เลเยอร์ cut/crease/dims ปิด-เปิดได้ใน Acrobat
+                  <br />
+                  ใบสเปก = สรุปขนาด/วัสดุ/จำนวน/ข้อสันนิษฐาน + แบบย่อ ส่งโรงงานขอราคาได้เลย
                 </p>
                 <p className="hint">
                   ขนาดแผ่น {Math.ceil(dieline.width)} × {Math.ceil(dieline.height)} มม. · สเกลจริง 1:1
@@ -937,6 +996,27 @@ export default function App() {
               <button className="ver-nav" aria-disabled={aiBusy} onClick={clearHistory}>
                 ล้างประวัติ
               </button>
+            </div>
+          )}
+          {currentAi && (
+            <div className="assume card" aria-label="สิ่งที่ AI สันนิษฐาน">
+              <span className="hint">สิ่งที่ AI สันนิษฐานในเวอร์ชันนี้ (ตรวจ/แก้ก่อนส่งโรงงาน):</span>
+              <ul>
+                {currentAi.assumptions.map((a, i) => (
+                  <li
+                    key={i}
+                    className={
+                      a.startsWith('ข้อจำกัด') ? 'limit' : a.startsWith('จากรูป') ? 'fromimg' : undefined
+                    }
+                  >
+                    {a}
+                  </li>
+                ))}
+                {currentAi.layoutNote && currentAi.layoutNote !== '-' && (
+                  <li className="layout">การจัดวาง: {currentAi.layoutNote}</li>
+                )}
+              </ul>
+              {currentAi.reasoning && <p className="assume-reason">{currentAi.reasoning}</p>}
             </div>
           )}
           <div className="panels">

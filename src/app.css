@@ -656,3 +656,36 @@ button[aria-disabled='true'] {
 .dieline-svg .deco.dragging {
   cursor: grabbing;
 }
+
+/* --- พาเนลสิ่งที่ AI สันนิษฐาน (ต่อเวอร์ชัน) --- */
+.assume {
+  padding: 12px 14px;
+}
+.assume ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.assume li {
+  font-size: 13px;
+  color: #4a4335;
+  line-height: 1.45;
+}
+.assume li.limit {
+  color: #a13a1c;
+  font-weight: 600;
+}
+.assume li.fromimg {
+  color: #1b6ea8;
+}
+.assume li.layout {
+  color: #6a5f49;
+}
+.assume-reason {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: #6a5f49;
+  font-style: italic;
+}
