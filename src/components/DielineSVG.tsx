@@ -1,7 +1,9 @@
-import { memo } from 'react'
+import { memo, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
+import { elW, elH, elCenter, type Deco } from '../core/artwork'
 
 const DIM_COLOR = '#1b6ea8'
+const SEL_COLOR = '#1b6ea8'
 
 function Dim({ d }: { d: DimMark }) {
   const vert = Math.abs(d.a.x - d.b.x) < 0.001
@@ -40,19 +42,136 @@ function Dim({ d }: { d: DimMark }) {
   )
 }
 
+// เนื้อขององค์ประกอบหนึ่งชิ้น (ยังไม่รวม transform หมุน — พาเรนต์เป็นคนครอบ <g rotate>)
+function DecoBody({ e }: { e: Deco }) {
+  const w = elW(e)
+  const h = elH(e)
+  if (e.type === 'image') {
+    return <image href={e.src} x={e.x} y={e.y} width={w} height={h} preserveAspectRatio="none" />
+  }
+  const c = elCenter(e)
+  return (
+    <text
+      x={c.x}
+      y={c.y}
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontSize={e.size}
+      fill={e.color}
+      stroke="none"
+      style={{ userSelect: 'none' }}
+    >
+      {e.text}
+    </text>
+  )
+}
+
+type Grab =
+  | { mode: 'move'; id: string; dx: number; dy: number }
+  | { mode: 'rotate'; id: string }
+
 export const DielineSVG = memo(function DielineSVG({
   dieline,
   showDims,
+  decos = [],
+  selectedId,
+  onSelect,
+  onMove,
+  onRotate,
 }: {
   dieline: Dieline
   showDims: boolean
+  decos?: Deco[]
+  selectedId?: string | null
+  onSelect?: (id: string | null) => void
+  onMove?: (id: string, x: number, y: number) => void
+  onRotate?: (id: string, deg: number) => void
 }) {
   const pad = showDims ? 26 : 12
+  const svgRef = useRef<SVGSVGElement>(null)
+  const grab = useRef<Grab | null>(null)
+  const [active, setActive] = useState(false)
+  const editable = !!(onMove && onRotate && onSelect)
+
+  // แปลงพิกัดหน้าจอเป็นพิกัดแผ่นคลี่ (มม.) — viewBox เป็นหน่วย มม. อยู่แล้ว
+  const toSheet = (clientX: number, clientY: number) => {
+    const svg = svgRef.current
+    const ctm = svg?.getScreenCTM()
+    if (!svg || !ctm) return null
+    const pt = svg.createSVGPoint()
+    pt.x = clientX
+    pt.y = clientY
+    return pt.matrixTransform(ctm.inverse())
+  }
+
+  const capture = (e: React.PointerEvent) => {
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      /* pointer อาจถูกปล่อยไปก่อน — ลากยังทำงานจาก pointermove */
+    }
+  }
+
+  const startMove = (e: React.PointerEvent, d: Deco) => {
+    if (!editable) return
+    onSelect?.(d.id)
+    const p = toSheet(e.clientX, e.clientY)
+    if (!p) return
+    grab.current = { mode: 'move', id: d.id, dx: p.x - d.x, dy: p.y - d.y }
+    setActive(true)
+    capture(e)
+    e.stopPropagation()
+    e.preventDefault()
+  }
+
+  const startRotate = (e: React.PointerEvent, d: Deco) => {
+    if (!editable) return
+    grab.current = { mode: 'rotate', id: d.id }
+    setActive(true)
+    capture(e)
+    e.stopPropagation()
+    e.preventDefault()
+  }
+
+  const onMoveEvt = (e: React.PointerEvent) => {
+    const g = grab.current
+    if (!g) return
+    const p = toSheet(e.clientX, e.clientY)
+    if (!p) return
+    const d = decos.find((x) => x.id === g.id)
+    if (!d) return
+    if (g.mode === 'move') {
+      const w = elW(d)
+      const h = elH(d)
+      // กันลากหลุดจนหาไม่เจอ แต่ยังให้เลยขอบได้ (งานจริงมักออกแบบให้ลายตกขอบ)
+      const x = Math.min(Math.max(p.x - g.dx, -w / 2), dieline.width - w / 2)
+      const y = Math.min(Math.max(p.y - g.dy, -h / 2), dieline.height - h / 2)
+      onMove?.(d.id, x, y)
+    } else {
+      const c = elCenter(d)
+      // handle อยู่เหนือกล่อง → ชี้ขึ้น = 0 องศา จึงบวก 90
+      const deg = (Math.atan2(p.y - c.y, p.x - c.x) * 180) / Math.PI + 90
+      onRotate?.(d.id, Math.round(deg))
+    }
+  }
+
+  const endDrag = (e: React.PointerEvent) => {
+    grab.current = null
+    setActive(false)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+
   return (
     <svg
+      ref={svgRef}
       className="dieline-svg"
       viewBox={`${-pad} ${-pad} ${dieline.width + pad * 2} ${dieline.height + pad * 2}`}
       preserveAspectRatio="xMidYMid meet"
+      onPointerMove={onMoveEvt}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      // คลิกที่ว่าง = ยกเลิกการเลือก
+      onPointerDown={() => editable && !grab.current && onSelect?.(null)}
     >
       {dieline.segments.map((s, i) => (
         <path
@@ -66,6 +185,54 @@ export const DielineSVG = memo(function DielineSVG({
           vectorEffect="non-scaling-stroke"
         />
       ))}
+
+      {decos.map((d) => {
+        const w = elW(d)
+        const h = elH(d)
+        const c = elCenter(d)
+        const sel = d.id === selectedId
+        const handleY = d.y - Math.max(8, h * 0.25) // ก้านหมุนเหนือกล่อง
+        return (
+          <g
+            key={d.id}
+            className={`deco${sel ? ' selected' : ''}${active && sel ? ' dragging' : ''}`}
+            transform={`rotate(${d.rot} ${c.x} ${c.y})`}
+            onPointerDown={(e) => startMove(e, d)}
+          >
+            <DecoBody e={d} />
+            {sel && (
+              <>
+                <rect
+                  x={d.x}
+                  y={d.y}
+                  width={w}
+                  height={h}
+                  fill="none"
+                  stroke={SEL_COLOR}
+                  strokeWidth={1}
+                  strokeDasharray="4 3"
+                  vectorEffect="non-scaling-stroke"
+                />
+                {editable && (
+                  <g className="rot-handle" onPointerDown={(e) => startRotate(e, d)}>
+                    <line
+                      x1={c.x}
+                      y1={d.y}
+                      x2={c.x}
+                      y2={handleY}
+                      stroke={SEL_COLOR}
+                      strokeWidth={1}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <circle cx={c.x} cy={handleY} r={3} fill="#fff" stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                  </g>
+                )}
+              </>
+            )}
+          </g>
+        )
+      })}
+
       {showDims && dieline.dims.map((d, i) => <Dim key={i} d={d} />)}
     </svg>
   )

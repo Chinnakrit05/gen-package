@@ -5,6 +5,16 @@ import type { Dieline } from './core/types'
 import type { AiBoxSpec, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
 import { dielinePDFString } from './core/pdf'
+import {
+  loadImageFile,
+  makeImageEl,
+  makeTextEl,
+  recenter,
+  withTextW,
+  parseDecos,
+  elW,
+  type Deco,
+} from './core/artwork'
 import { Viewer3D } from './components/Viewer3D'
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
@@ -195,6 +205,7 @@ interface Project {
   updatedAt: number
   live: CurrentSpec
   qty: number
+  decos: Deco[]
   history: DesignVersion[]
   histIdx: number
 }
@@ -221,6 +232,7 @@ function freshProject(n: number): Project {
     updatedAt: Date.now(),
     live: { ...DEFAULT_SPEC },
     qty: DEFAULT_QTY,
+    decos: [],
     history: [],
     histIdx: -1,
   }
@@ -277,6 +289,7 @@ function parseProject(v: unknown, idx: number): Project | null {
     updatedAt: Number(o.updatedAt) || Date.now(),
     live,
     qty: parseQty(o.qty),
+    decos: parseDecos(o.decos, o.artwork),
     history,
     histIdx: clampIdx(o.histIdx, history.length),
   }
@@ -317,6 +330,7 @@ function loadStore(): Store {
           updatedAt: Date.now(),
           live,
           qty: DEFAULT_QTY,
+          decos: [],
           history,
           histIdx: clampIdx(d.histIdx, history.length),
         }
@@ -345,6 +359,8 @@ export default function App() {
   const [H, setH] = useState(active0.live.H)
   const [handle, setHandle] = useState(active0.live.handle)
   const [qty, setQty] = useState(active0.qty)
+  const [decos, setDecos] = useState<Deco[]>(active0.decos)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [fold, setFold] = useState(1)
   const [showDims, setShowDims] = useState(store0.showDims)
   const [aiBusy, setAiBusy] = useState(false)
@@ -371,6 +387,7 @@ export default function App() {
                 ...p,
                 live: { template: templateId, materialId, W, D, H, handle },
                 qty,
+                decos,
                 history,
                 histIdx,
                 updatedAt: Date.now(),
@@ -380,7 +397,7 @@ export default function App() {
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, decos, activeId])
 
   // save ทุกงานลง localStorage
   useEffect(() => {
@@ -469,7 +486,7 @@ export default function App() {
   const flushInto = (list: Project[]): Project[] =>
     list.map((p) =>
       p.id === activeId
-        ? { ...p, live: liveSpec(), qty, history, histIdx, updatedAt: Date.now() }
+        ? { ...p, live: liveSpec(), qty, decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -478,6 +495,8 @@ export default function App() {
     setActiveId(p.id)
     setSpec(p.live)
     setQty(p.qty)
+    setDecos(p.decos)
+    setSelectedId(null)
     setHistory(p.history)
     setHistIdx(p.histIdx)
     setFold(1)
@@ -561,6 +580,50 @@ export default function App() {
   const downloadPDF = () => {
     if (!dieline) return
     saveFile(dielinePDFString(dieline, showDims), 'application/pdf', 'pdf')
+  }
+
+  const selected = decos.find((d) => d.id === selectedId) ?? null
+
+  const addImage = async (file: File | undefined) => {
+    if (!file || !dieline) return
+    try {
+      const { src, aspect } = await loadImageFile(file)
+      const el = makeImageEl(dieline, src, aspect)
+      setDecos((ds) => [...ds, el])
+      setSelectedId(el.id)
+    } catch {
+      window.alert('เปิดไฟล์รูปนี้ไม่ได้ ลองไฟล์ PNG หรือ JPG อีกครั้ง')
+    }
+  }
+
+  const addText = () => {
+    if (!dieline) return
+    const el = makeTextEl(dieline, 'ข้อความ')
+    setDecos((ds) => [...ds, el])
+    setSelectedId(el.id)
+  }
+
+  // แก้เฉพาะชิ้นที่เลือก ผ่านฟังก์ชันแปลง (คงชนิด image/text ไว้)
+  const patchSelected = (fn: (d: Deco) => Deco) => {
+    if (!selectedId) return
+    setDecos((ds) => ds.map((d) => (d.id === selectedId ? fn(d) : d)))
+  }
+
+  const moveDeco = (id: string, x: number, y: number) =>
+    setDecos((ds) => ds.map((d) => (d.id === id ? { ...d, x, y } : d)))
+
+  const rotateDeco = (id: string, deg: number) =>
+    setDecos((ds) => ds.map((d) => (d.id === id ? { ...d, rot: deg } : d)))
+
+  const removeSelected = () => {
+    if (!selectedId) return
+    setDecos((ds) => ds.filter((d) => d.id !== selectedId))
+    setSelectedId(null)
+  }
+
+  const recenterSelected = () => {
+    if (!selected || !dieline) return
+    patchSelected((d) => recenter(dieline, d))
   }
 
   return (
@@ -695,6 +758,97 @@ export default function App() {
               </section>
 
               <section>
+                <h2>โลโก้ / ข้อความ</h2>
+                <div className="art-actions">
+                  <label className="file-pick inline">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={aiBusy}
+                      onChange={(e) => {
+                        void addImage(e.target.files?.[0])
+                        e.target.value = ''
+                      }}
+                    />
+                    <span>+ โลโก้</span>
+                  </label>
+                  <button disabled={aiBusy} onClick={addText}>
+                    + ข้อความ
+                  </button>
+                </div>
+
+                {decos.length > 0 && (
+                  <ul className="deco-list">
+                    {decos.map((d) => (
+                      <li key={d.id}>
+                        <button
+                          className={`deco-item${d.id === selectedId ? ' active' : ''}`}
+                          onClick={() => setSelectedId(d.id)}
+                        >
+                          {d.type === 'image' ? '🖼 รูป' : `T ${d.text || 'ข้อความ'}`}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {selected && (
+                  <div className="deco-edit">
+                    {selected.type === 'text' && (
+                      <>
+                        <input
+                          type="text"
+                          className="deco-text-input"
+                          value={selected.text}
+                          disabled={aiBusy}
+                          aria-label="ข้อความ"
+                          onChange={(e) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, text: e.target.value }) : d))}
+                        />
+                        <label className="deco-color">
+                          สี
+                          <input
+                            type="color"
+                            value={selected.color}
+                            disabled={aiBusy}
+                            aria-label="สีข้อความ"
+                            onChange={(e) => patchSelected((d) => (d.type === 'text' ? { ...d, color: e.target.value } : d))}
+                          />
+                        </label>
+                      </>
+                    )}
+                    <DimField
+                      label={selected.type === 'text' ? 'ขนาดตัวอักษร' : 'ขนาดรูป'}
+                      value={selected.type === 'text' ? selected.size : Math.round(elW(selected) * 10) / 10}
+                      min={selected.type === 'text' ? 3 : 5}
+                      max={selected.type === 'text' ? 120 : Math.round(dieline.width)}
+                      disabled={aiBusy}
+                      onChange={(v) =>
+                        patchSelected((d) =>
+                          d.type === 'text' ? withTextW({ ...d, size: v }) : { ...d, w: v },
+                        )
+                      }
+                    />
+                    <DimField
+                      label="หมุน (องศา)"
+                      value={selected.rot}
+                      min={-180}
+                      max={180}
+                      disabled={aiBusy}
+                      onChange={(deg) => patchSelected((d) => ({ ...d, rot: deg }))}
+                    />
+                    <div className="art-actions">
+                      <button onClick={recenterSelected}>วางกลางแผงหน้า</button>
+                      <button onClick={removeSelected}>ลบชิ้นนี้</button>
+                    </div>
+                    <p className="hint">ลาก/หมุนบน blueprint ได้ (จุดวงกลม = หมุน) ดูผลบนกล่อง 3D ทันที</p>
+                  </div>
+                )}
+                <p className="hint warn">
+                  ตอนนี้ใช้ดูพรีวิวบนจอเท่านั้น — ยังไม่ถูกใส่ลงไฟล์ .dxf / .svg / .pdf ที่ส่งโรงงาน
+                </p>
+              </section>
+
+              <section>
                 <h2>จำนวนที่จะสั่ง</h2>
                 <div className="field">
                   <span className="field-head">
@@ -795,6 +949,7 @@ export default function App() {
                     fold={fold}
                     depth={template.foldDepth({ W, D, H }, mat)}
                     tilt={template.tilt}
+                    decos={decos}
                   />
                 </div>
                 <div className="blueprint card">
@@ -805,7 +960,15 @@ export default function App() {
                       <i className="sw-crease" /> เส้นพับ
                     </span>
                   </div>
-                  <DielineSVG dieline={dieline} showDims={showDims} />
+                  <DielineSVG
+                    dieline={dieline}
+                    showDims={showDims}
+                    decos={decos}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    onMove={moveDeco}
+                    onRotate={rotateDeco}
+                  />
                 </div>
               </>
             ) : (
