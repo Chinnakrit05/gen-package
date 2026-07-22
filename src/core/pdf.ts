@@ -36,7 +36,13 @@ const CHAR_W: Record<string, number> = { ' ': 0.278, '.': 0.278, ',': 0.278 }
 const textWidth = (s: string, size: number) =>
   size * [...s].reduce((w, c) => w + (CHAR_W[c] ?? (/[A-Z]/.test(c) ? 0.7 : 0.556)), 0)
 
-export function dielinePDFString(d: Dieline, withDims: boolean): string {
+export interface PdfArtwork {
+  jpeg: Uint8Array
+  w: number
+  h: number
+}
+
+export function dielinePDFBytes(d: Dieline, withDims: boolean, artwork?: PdfArtwork): Uint8Array {
   const pad = withDims ? 26 : 5
   const pageW = (d.width + pad * 2) * K
   const pageH = (d.height + pad * 2) * K
@@ -110,44 +116,86 @@ export function dielinePDFString(d: Dieline, withDims: boolean): string {
     dimsBody = layer('OC3', `${rgb(DIM)} RG\n${rgb(DIM)} rg\n0.25 w`, `${strokes}\n${labels}`)
   }
 
+  // เลขวัตถุ: 1-5 คงที่ (catalog/pages/page/contents/font) จากนั้น OCG แล้วปิดท้ายด้วยภาพ
+  let num = 6
+  const cutOCG = num++
+  const creaseOCG = num++
+  const dimsOCG = withDims ? num++ : 0
+  const artOCG = artwork ? num++ : 0
+  const imgNum = artwork ? num++ : 0
+  const lastObj = num - 1
+
+  // เลเยอร์ artwork วาดก่อน (ล่างสุด) ให้เส้น cut/crease โชว์ทับเป็นไกด์
+  // ภาพครอบพื้นที่แผ่น [pad, pad+width] × [pad, pad+height] ในหน่วย มม. (อยู่ใน K space)
+  const artBody = artwork
+    ? `q\n/OC /OCa BDC\n${n(d.width)} 0 0 ${n(d.height)} ${n(pad)} ${n(pad)} cm\n/Im0 Do\nEMC\nQ\n`
+    : ''
+
   // ทั้งหน้าอยู่ในระบบ มม. โดยสเกลครั้งเดียวที่นี่ ตัวเลขในสตรีมจึงอ่านเป็น มม. ตรง ๆ
-  const stream = `q\n${n(K)} 0 0 ${n(K)} 0 0 cm\n${cutBody}${creaseBody}${dimsBody}Q\n`
+  const stream = `q\n${n(K)} 0 0 ${n(K)} 0 0 cm\n${artBody}${cutBody}${creaseBody}${dimsBody}Q\n`
 
-  const ocgNums = withDims ? [6, 7, 8] : [6, 7]
-  const ocgRefs = ocgNums.map((i) => `${i} 0 R`).join(' ')
-  const props = ocgNums.map((i, k) => `/OC${k + 1} ${i} 0 R`).join(' ')
+  const ocgRefs: string[] = [`${cutOCG} 0 R`, `${creaseOCG} 0 R`]
+  if (dimsOCG) ocgRefs.push(`${dimsOCG} 0 R`)
+  if (artOCG) ocgRefs.push(`${artOCG} 0 R`)
+  const ocgList = ocgRefs.join(' ')
 
-  const objects: string[] = [
-    // 1 catalog
-    `<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [${ocgRefs}] /D << /Order [${ocgRefs}] /ON [${ocgRefs}] >> >> >>`,
-    // 2 pages
-    `<< /Type /Pages /Kids [3 0 R] /Count 1 >>`,
-    // 3 page
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(pageW)} ${n(pageH)}] ` +
-      `/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /Properties << ${props} >> >> >>`,
-    // 4 contents
-    `<< /Length ${stream.length} >>\nstream\n${stream}endstream`,
-    // 5 font
-    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>`,
-    // 6,7(,8) OCG
-    `<< /Type /OCG /Name ${pdfStr('cut')} >>`,
-    `<< /Type /OCG /Name ${pdfStr('crease')} >>`,
-  ]
-  if (withDims) objects.push(`<< /Type /OCG /Name ${pdfStr('dims')} >>`)
+  const props: string[] = [`/OC1 ${cutOCG} 0 R`, `/OC2 ${creaseOCG} 0 R`]
+  if (dimsOCG) props.push(`/OC3 ${dimsOCG} 0 R`)
+  if (artOCG) props.push(`/OCa ${artOCG} 0 R`)
+  const xobj = artwork ? ` /XObject << /Im0 ${imgNum} 0 R >>` : ''
 
-  // ประกอบไฟล์พร้อมจด byte offset ของทุก object ไว้ทำตาราง xref
-  // (PDF ทั้งไฟล์เป็น ASCII ล้วน ความยาวสตริงจึงเท่ากับจำนวนไบต์)
-  let out = '%PDF-1.5\n'
+  const enc = new TextEncoder()
+  const parts: Uint8Array[] = []
+  let len = 0
+  const push = (c: string | Uint8Array) => {
+    const b = typeof c === 'string' ? enc.encode(c) : c
+    parts.push(b)
+    len += b.length
+  }
   const offsets: number[] = []
-  objects.forEach((body, i) => {
-    offsets.push(out.length)
-    out += `${i + 1} 0 obj\n${body}\nendobj\n`
-  })
+  const obj = (body: string) => {
+    offsets.push(len)
+    push(body)
+  }
 
-  const xrefPos = out.length
-  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
-  for (const off of offsets) out += `${String(off).padStart(10, '0')} 00000 n \n`
-  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`
+  // คอมเมนต์ไบต์สูงหลัง header บอกเครื่องมือว่าไฟล์มีข้อมูล binary
+  push('%PDF-1.5\n%\xE2\xE3\xCF\xD3\n')
+  obj(
+    `1 0 obj\n<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [${ocgList}] ` +
+      `/D << /Order [${ocgList}] /ON [${ocgList}] >> >> >>\nendobj\n`,
+  )
+  obj('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n')
+  obj(
+    `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(pageW)} ${n(pageH)}] ` +
+      `/Contents 4 0 R /Resources << /Font << /F1 5 0 R >>${xobj} /Properties << ${props.join(' ')} >> >> >>\nendobj\n`,
+  )
+  obj(`4 0 obj\n<< /Length ${enc.encode(stream).length} >>\nstream\n${stream}endstream\nendobj\n`)
+  obj('5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n')
+  obj(`${cutOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('cut')} >>\nendobj\n`)
+  obj(`${creaseOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('crease')} >>\nendobj\n`)
+  if (dimsOCG) obj(`${dimsOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('dims')} >>\nendobj\n`)
+  if (artOCG) obj(`${artOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('artwork')} >>\nendobj\n`)
+  if (artwork) {
+    offsets.push(len)
+    push(
+      `${imgNum} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${artwork.w} /Height ${artwork.h} ` +
+        `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${artwork.jpeg.length} >>\nstream\n`,
+    )
+    push(artwork.jpeg)
+    push('\nendstream\nendobj\n')
+  }
 
+  const xrefPos = len
+  let xref = `xref\n0 ${lastObj + 1}\n0000000000 65535 f \n`
+  for (const off of offsets) xref += `${String(off).padStart(10, '0')} 00000 n \n`
+  push(xref)
+  push(`trailer\n<< /Size ${lastObj + 1} /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`)
+
+  const out = new Uint8Array(len)
+  let p = 0
+  for (const part of parts) {
+    out.set(part, p)
+    p += part.length
+  }
   return out
 }

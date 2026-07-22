@@ -51,8 +51,9 @@ export const withTextW = (e: TextEl): TextEl => ({ ...e, w: measureText(e.text, 
 // --- โหลดไฟล์รูป ---
 // เก็บลง localStorage รวมกับข้อมูลงาน จึงต้องคุมขนาดไม่ให้ชน quota (~5MB ทั้ง origin)
 // แล้วทำให้ save ของทั้งแอปล้มเงียบ ๆ ไปด้วย — ไล่ย่อลงจนกว่าจะเข้าเกณฑ์
-const MAX_BYTES = 400_000
-const SIZES = [512, 384, 256]
+// เพดานสูงขึ้นเพื่อคุณภาพงานพิมพ์: โลโก้กว้าง 100 มม. ที่ 300 dpi ≈ 1180px จึงเริ่มที่ 1200
+const MAX_BYTES = 700_000
+const SIZES = [1200, 900, 640, 480]
 
 export async function loadImageFile(file: File): Promise<{ src: string; aspect: number }> {
   const bmp = await createImageBitmap(file)
@@ -135,6 +136,97 @@ export function recenter(dieline: Dieline, e: Deco): Deco {
 // พลาดตรงนี้เมื่อไหร่รูปจะกลับหัวหรือเลื่อนไปคนละแผง
 export function sheetUV(X: number, Y: number, width: number, height: number): [number, number] {
   return [X / width, 1 + Y / height]
+}
+
+const xmlEsc = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+// สร้างเลเยอร์ <g id="artwork"> สำหรับฝังใน SVG export — vector ล้วน คุณภาพงานพิมพ์
+// รูปฝังเป็น data URI (ไฟล์ standalone), ข้อความเป็น <text> แก้ไขได้ใน Illustrator
+// ไม่มิเรอร์ — SVG คือเลย์เอาต์ฝั่งพิมพ์/ด้านนอก เหมือนที่เห็นบน blueprint
+export function svgArtworkLayer(decos: Deco[]): string {
+  if (!decos.length) return ''
+  const body = decos
+    .map((e) => {
+      const w = elW(e)
+      const h = elH(e)
+      const c = elCenter(e)
+      const rot = e.rot ? ` transform="rotate(${e.rot} ${c.x} ${c.y})"` : ''
+      if (e.type === 'image') {
+        return `    <image href="${e.src}" x="${e.x}" y="${e.y}" width="${w}" height="${h}" preserveAspectRatio="none"${rot}/>`
+      }
+      return (
+        `    <text x="${c.x}" y="${c.y}" font-size="${e.size}" fill="${e.color}"` +
+        ` text-anchor="middle" dominant-baseline="central"` +
+        ` font-family="'Noto Sans Thai', sans-serif"${rot}>${xmlEsc(e.text)}</text>`
+      )
+    })
+    .join('\n')
+  return `  <g id="artwork" inkscape:groupmode="layer" inkscape:label="artwork">\n${body}\n  </g>\n`
+}
+
+// วาด deco ลง canvas 2D ในพิกัดแผ่นคลี่ (สเกล s) — ไม่มิเรอร์ (สำหรับ export/proof)
+// ต่างจากตัวใน Viewer3D ที่มิเรอร์ให้ผิวนอกกล่องอ่านถูก
+export function drawDeco2D(
+  ctx: CanvasRenderingContext2D,
+  e: Deco,
+  s: number,
+  imgOf: (src: string) => HTMLImageElement | undefined,
+) {
+  const w = elW(e)
+  const h = elH(e)
+  ctx.save()
+  ctx.translate((e.x + w / 2) * s, (e.y + h / 2) * s)
+  ctx.rotate((e.rot * Math.PI) / 180)
+  if (e.type === 'image') {
+    const img = imgOf(e.src)
+    if (img) ctx.drawImage(img, (-w / 2) * s, (-h / 2) * s, w * s, h * s)
+  } else {
+    ctx.fillStyle = e.color
+    ctx.font = `${e.size * s}px 'Noto Sans Thai', sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(e.text, 0, 0)
+  }
+  ctx.restore()
+}
+
+// เรนเดอร์ลายทั้งหมดลง canvas ขนาดเท่าแผ่นคลี่ที่ dpi กำหนด
+// ใช้ฝังเป็นภาพในไฟล์ PDF — คืน null ถ้าไม่มีลาย
+// พื้นขาว เพราะ JPEG ไม่มี alpha (โปร่งใสจะกลายเป็นดำ) และ PDF หน้าขาวอยู่แล้ว จึงกลืนกัน
+export async function renderArtworkCanvas(
+  decos: Deco[],
+  sheetW: number,
+  sheetH: number,
+  dpi: number,
+): Promise<HTMLCanvasElement | null> {
+  if (!decos.length) return null
+  const s = dpi / 25.4
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(sheetW * s))
+  canvas.height = Math.max(1, Math.round(sheetH * s))
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  const srcs = [...new Set(decos.filter((d) => d.type === 'image').map((d) => d.src))]
+  const imgs = new Map<string, HTMLImageElement>()
+  await Promise.all(
+    srcs.map(
+      (src) =>
+        new Promise<void>((res) => {
+          const im = new Image()
+          im.onload = () => {
+            imgs.set(src, im)
+            res()
+          }
+          im.onerror = () => res()
+          im.src = src
+        }),
+    ),
+  )
+  for (const e of decos) drawDeco2D(ctx, e, s, (src) => imgs.get(src))
+  return canvas
 }
 
 // --- persistence ---

@@ -4,7 +4,7 @@ import { TEMPLATES, getTemplate } from './core/templates'
 import type { Dieline } from './core/types'
 import type { AiBoxSpec, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
-import { dielinePDFString } from './core/pdf'
+import { dielinePDFBytes } from './core/pdf'
 import { specSheetPDFBytes } from './core/specSheet'
 import {
   loadImageFile,
@@ -13,6 +13,8 @@ import {
   recenter,
   withTextW,
   parseDecos,
+  svgArtworkLayer,
+  renderArtworkCanvas,
   elW,
   type Deco,
 } from './core/artwork'
@@ -77,7 +79,7 @@ function svgLayer(id: string, attrs: string, body: string): string {
   )
 }
 
-function dielineSVGString(d: Dieline, withDims: boolean): string {
+function dielineSVGString(d: Dieline, withDims: boolean, decos: Deco[] = []): string {
   const pathsOf = (kind: 'cut' | 'crease') =>
     d.segments
       .filter((s) => s.kind === kind)
@@ -112,14 +114,18 @@ function dielineSVGString(d: Dieline, withDims: boolean): string {
     dimLayer = svgLayer('dims', 'stroke="#1b6ea8" stroke-width="0.25" font-family="sans-serif"', marks)
   }
 
+  // artwork อยู่ล่างสุด (วาดก่อน) เพื่อให้เส้น cut/crease โชว์ทับเป็นไกด์ — ตรงกับที่เห็นบนจอ
+  const artLayer = svgArtworkLayer(decos)
+
   const w = d.width + pad * 2
   const h = d.height + pad * 2
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"` +
+    ` xmlns:xlink="http://www.w3.org/1999/xlink"` +
     ` width="${w}mm" height="${h}mm" viewBox="${-pad} ${-pad} ${w} ${h}">\n` +
-    `<!-- สเกลจริง 1:1 หน่วย mm | เลเยอร์ cut = เส้นตัด (แดงทึบ) | crease = เส้นพับ (เขียวประ) | dims = เส้นบอกขนาด (ห้ามใช้ผลิต ลบทิ้งก่อนส่งโรงงาน) -->\n` +
-    `${cutLayer}${creaseLayer}${dimLayer}</svg>\n`
+    `<!-- สเกลจริง 1:1 หน่วย mm | artwork = ลายพิมพ์ | cut = เส้นตัด (แดง) | crease = เส้นพับ (เขียวประ) | dims = เส้นบอกขนาด (ห้ามใช้ผลิต) -->\n` +
+    `${artLayer}${cutLayer}${creaseLayer}${dimLayer}</svg>\n`
   )
 }
 
@@ -597,7 +603,7 @@ export default function App() {
 
   const downloadSVG = () => {
     if (!dieline) return
-    saveFile(dielineSVGString(dieline, showDims), 'image/svg+xml', 'svg')
+    saveFile(dielineSVGString(dieline, showDims, decos), 'image/svg+xml', 'svg')
   }
 
   // DXF คือไฟล์ที่โรงทำมีดไดคัทใช้จริง — มีแต่เลเยอร์ CUT/CREASE ไม่มีเส้นบอกขนาด
@@ -607,9 +613,19 @@ export default function App() {
   }
 
   // PDF สเกล 1:1 สำหรับพิมพ์ตรวจ/ส่งโรงงาน — เลเยอร์ปิด-เปิดได้ใน Acrobat
-  const downloadPDF = () => {
+  // ลายฝังเป็นภาพ 300 dpi (ไทยได้ ไม่ต้องฝังฟอนต์) ใต้เส้น cut/crease
+  const downloadPDF = async () => {
     if (!dieline) return
-    saveFile(dielinePDFString(dieline, showDims), 'application/pdf', 'pdf')
+    let art
+    const canvas = await renderArtworkCanvas(decos, dieline.width, dieline.height, 300)
+    if (canvas) {
+      const b64 = canvas.toDataURL('image/jpeg', 0.92).split(',')[1]
+      const bin = atob(b64)
+      const jpeg = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) jpeg[i] = bin.charCodeAt(i)
+      art = { jpeg, w: canvas.width, h: canvas.height }
+    }
+    saveFile(dielinePDFBytes(dieline, showDims, art), 'application/pdf', 'pdf')
   }
 
   const selected = decos.find((d) => d.id === selectedId) ?? null
@@ -897,8 +913,8 @@ export default function App() {
                     <p className="hint">ลาก/หมุนบน blueprint ได้ (จุดวงกลม = หมุน) ดูผลบนกล่อง 3D ทันที</p>
                   </div>
                 )}
-                <p className="hint warn">
-                  ตอนนี้ใช้ดูพรีวิวบนจอเท่านั้น — ยังไม่ถูกใส่ลงไฟล์ .dxf / .svg / .pdf ที่ส่งโรงงาน
+                <p className="hint">
+                  ลายจะถูกใส่ลงไฟล์ .svg (vector) และ .pdf (300 dpi) แล้ว — ไม่ใส่ใน .dxf เพราะเป็นไฟล์มีดตัด
                 </p>
               </section>
 
@@ -930,14 +946,14 @@ export default function App() {
                 </label>
                 <button onClick={downloadSVG}>ดาวน์โหลด dieline (.svg)</button>
                 <button onClick={downloadDXF}>ดาวน์โหลดไฟล์ผลิต (.dxf)</button>
-                <button onClick={downloadPDF}>ดาวน์โหลดแบบพิมพ์ (.pdf)</button>
+                <button onClick={() => void downloadPDF()}>ดาวน์โหลดแบบพิมพ์ (.pdf)</button>
                 <button className="primary" onClick={downloadSpecSheet}>
                   ดาวน์โหลดใบสเปกขอราคา (.pdf)
                 </button>
                 <p className="hint">
                   .dxf สำหรับส่งโรงทำมีดไดคัท — เลเยอร์ CUT/CREASE แยกกัน หน่วย มม. ไม่มีเส้นบอกขนาด
                   <br />
-                  .pdf สเกล 1:1 สั่งพิมพ์ตรวจได้ทันที — เลเยอร์ cut/crease/dims ปิด-เปิดได้ใน Acrobat
+                  .pdf สเกล 1:1 + ลายพิมพ์ฝัง 300 dpi — เลเยอร์ artwork/cut/crease/dims ปิด-เปิดได้ใน Acrobat
                   <br />
                   ใบสเปก = สรุปขนาด/วัสดุ/จำนวน/ข้อสันนิษฐาน + แบบย่อ ส่งโรงงานขอราคาได้เลย
                 </p>
