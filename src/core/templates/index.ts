@@ -1,6 +1,7 @@
 import type { BoxParams, Dieline, Material } from '../types'
 import { generateTuckEndBox } from './tuckEnd'
 import { generateMailerBox } from './mailer'
+import { generateFefco0427 } from './fefco0427'
 import { generateSleeve } from './sleeve'
 import { generateBottleCarrier } from './bottleCarrier'
 
@@ -35,6 +36,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: true,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateMailerBox,
+  },
+  {
+    id: 'fefco-0427',
+    nameTh: 'กล่องไปรษณีย์ฝาล็อก (FEFCO 0427)',
+    detail: 'mailer มาตรฐานอุตสาหกรรม ผนังข้างม้วนสองชั้น ลิ้นล็อกเสียบฐาน แข็งแรง ไม่ใช้กาว',
+    defaults: { W: 200, D: 140, H: 60 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.H + m.thickness,
+    generate: generateFefco0427,
   },
   {
     id: 'bottle-carrier',
