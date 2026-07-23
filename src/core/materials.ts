@@ -70,7 +70,9 @@ export const MATERIALS: Material[] = [
     foldable: false,
     process: 'เป่าขึ้นรูป (blow molding)',
     color: '#9fc9dd',
-    note: 'วัสดุนี้พับไม่ได้ — ต้องขึ้นรูปด้วยการเป่า จะใช้เส้นทาง revolve profile + dieline ของฉลากแทน (เฟสถัดไป)',
+    opacity: 0.5,
+    roughness: 0.12,
+    note: 'ขึ้นรูปด้วยการเป่า — blueprint ที่เห็นคือ dieline ของฉลากพันรอบขวด พร้อมส่งพิมพ์',
   },
   {
     id: 'glass',
@@ -80,7 +82,9 @@ export const MATERIALS: Material[] = [
     foldable: false,
     process: 'เป่า/หล่อขึ้นรูป',
     color: '#cfe6dd',
-    note: 'วัสดุนี้พับไม่ได้ — ขึ้นรูปจากแม่พิมพ์ blueprint ที่มีความหมายคือ dieline ของฉลาก (เฟสถัดไป)',
+    opacity: 0.55,
+    roughness: 0.08,
+    note: 'ขึ้นรูปจากแม่พิมพ์ — blueprint ที่เห็นคือ dieline ของฉลากพันรอบโหล/ขวด พร้อมส่งพิมพ์',
   },
   {
     id: 'aluminum',
@@ -90,7 +94,8 @@ export const MATERIALS: Material[] = [
     foldable: false,
     process: 'ดึงขึ้นรูป (draw & iron)',
     color: '#c8ccd0',
-    note: 'วัสดุนี้พับไม่ได้ — ขึ้นรูปจากแผ่นด้วยแม่พิมพ์ จะใช้เส้นทาง revolve + ฉลากแทน (เฟสถัดไป)',
+    roughness: 0.3,
+    note: 'ดึงขึ้นรูปจากแผ่น — blueprint ที่เห็นคือ dieline ของฉลาก/สติกเกอร์พันรอบกระป๋อง พร้อมส่งพิมพ์',
   },
 ]
 

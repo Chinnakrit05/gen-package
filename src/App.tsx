@@ -19,6 +19,8 @@ import {
   type Deco,
 } from './core/artwork'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
+import { generateVessel } from './core/vessel'
+import { VesselViewer3D } from './components/VesselViewer3D'
 import { Viewer3D } from './components/Viewer3D'
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
@@ -406,9 +408,15 @@ export default function App() {
 
   const template = getTemplate(templateId)
   const mat = getMaterial(materialId)
+  // วัสดุกลุ่มพับไม่ได้ → เส้นทางภาชนะ: ทรง revolve + dieline ของ "ฉลาก"
+  // ฉลากเป็น Dieline ธรรมดา ระบบเดิมทั้งหมด (artwork/export/guides/ใบสเปก) จึงใช้ต่อได้เลย
+  const vessel = useMemo(
+    () => (mat.foldable ? null : generateVessel({ W, D, H, handle }, mat)),
+    [W, D, H, handle, mat],
+  )
   const dieline = useMemo(
-    () => (mat.foldable ? template.generate({ W, D, H, handle }, mat) : null),
-    [W, D, H, handle, mat, template],
+    () => (mat.foldable ? template.generate({ W, D, H, handle }, mat) : vessel!.label),
+    [W, D, H, handle, mat, template, vessel],
   )
   const guides = useMemo(
     () => (showGuides && dieline ? computeGuides(dieline.panels) : null),
@@ -650,7 +658,7 @@ export default function App() {
     if (!dieline) return
     const bytes = specSheetPDFBytes({
       projectName: activeName,
-      templateNameTh: template.nameTh,
+      templateNameTh: mat.foldable ? template.nameTh : `ภาชนะ ${mat.nameTh} + ฉลากพันรอบ`,
       materialNameTh: mat.nameTh,
       materialThickness: mat.thickness,
       W,
@@ -755,7 +763,7 @@ export default function App() {
             <h2>รูปแบบบรรจุภัณฑ์</h2>
             <select
               value={templateId}
-              disabled={aiBusy}
+              disabled={aiBusy || !mat.foldable}
               aria-label="รูปแบบบรรจุภัณฑ์"
               onChange={(e) => changeTemplate(e.target.value)}
             >
@@ -765,7 +773,16 @@ export default function App() {
                 </option>
               ))}
             </select>
-            <p className="hint">{template.detail}</p>
+            <p className="hint">
+              {mat.foldable
+                ? template.detail
+                : 'วัสดุภาชนะไม่ใช้รูปแบบกล่อง — ระบบขึ้นทรง revolve และ blueprint คือ dieline ฉลากพันรอบตัว'}
+            </p>
+            {mat.foldable && (
+              <p className="hint">
+                อยากทำตัวขวด/โหล/กระป๋องเอง? เลือกที่ช่อง “วัสดุ” กลุ่มภาชนะขึ้นรูป
+              </p>
+            )}
           </section>
 
           <section>
@@ -776,12 +793,20 @@ export default function App() {
               aria-label="เลือกวัสดุ"
               onChange={(e) => changeMaterial(e.target.value)}
             >
-              {MATERIALS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.nameTh}
-                  {m.foldable ? '' : ' — พับไม่ได้'}
-                </option>
-              ))}
+              <optgroup label="กล่อง (เลือกรูปแบบด้านบน)">
+                {MATERIALS.filter((m) => m.foldable).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.nameTh}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="ภาชนะขึ้นรูป + ฉลาก (ขวด/โหล/กระป๋อง)">
+                {MATERIALS.filter((m) => !m.foldable).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.nameTh}
+                  </option>
+                ))}
+              </optgroup>
             </select>
             <div className="mat-info">
               <div>{mat.detail}</div>
@@ -796,14 +821,35 @@ export default function App() {
             </div>
           </section>
 
-          {mat.foldable && dieline && (
+          {dieline && (
             <>
               <section>
-                <h2>ขนาดกล่อง (ด้านใน)</h2>
-                <DimField label="กว้าง W" value={W} min={30} max={250} disabled={aiBusy} onChange={setW} />
-                <DimField label="ลึก D" value={D} min={20} max={150} disabled={aiBusy} onChange={setD} />
-                <DimField label="สูง H" value={H} min={30} max={300} disabled={aiBusy} onChange={setH} />
-                {template.supportsHandle && (
+                <h2>{mat.foldable ? 'ขนาดกล่อง (ด้านใน)' : 'ขนาดภาชนะ'}</h2>
+                <DimField
+                  label={mat.foldable ? 'กว้าง W' : '⌀ ตัว W'}
+                  value={W}
+                  min={30}
+                  max={250}
+                  disabled={aiBusy}
+                  onChange={setW}
+                />
+                <DimField
+                  label={mat.foldable ? 'ลึก D' : '⌀ ปาก/คอ D'}
+                  value={D}
+                  min={20}
+                  max={150}
+                  disabled={aiBusy}
+                  onChange={setD}
+                />
+                <DimField
+                  label={mat.foldable ? 'สูง H' : 'สูง H'}
+                  value={H}
+                  min={30}
+                  max={300}
+                  disabled={aiBusy}
+                  onChange={setH}
+                />
+                {mat.foldable && template.supportsHandle && (
                   <label className="check" style={{ marginTop: 12 }}>
                     <input
                       type="checkbox"
@@ -816,7 +862,7 @@ export default function App() {
                 )}
               </section>
 
-              <section>
+              <section hidden={!mat.foldable}>
                 <h2>การพับ</h2>
                 <button className="primary" onClick={play}>
                   ▶ พับให้ดู
@@ -1056,48 +1102,39 @@ export default function App() {
             </div>
           )}
           <div className="panels">
-            {mat.foldable && dieline ? (
-              <>
-                <div className="viewer card">
-                  <Viewer3D
-                    dieline={dieline}
-                    mat={mat}
-                    fold={fold}
-                    depth={template.foldDepth({ W, D, H }, mat)}
-                    tilt={template.tilt}
-                    decos={decos}
-                  />
-                </div>
-                <div className="blueprint card">
-                  <div className="bp-head">
-                    <span>blueprint การพับ</span>
-                    <span className="legend">
-                      <i className="sw-cut" /> เส้นตัด
-                      <i className="sw-crease" /> เส้นพับ
-                    </span>
-                  </div>
-                  <DielineSVG
-                    dieline={dieline}
-                    showDims={showDims}
-                    decos={decos}
-                    guides={guides}
-                    selectedId={selectedId}
-                    onSelect={setSelectedId}
-                    onMove={moveDeco}
-                    onRotate={rotateDeco}
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="card notfoldable">
-                <h2>{mat.nameTh} — พับไม่ได้</h2>
-                <p>{mat.note}</p>
-                <p>
-                  ระบบจึงไม่สร้าง dieline การพับให้วัสดุนี้ เพราะกระบวนการขึ้นรูปจริงคือ “{mat.process}”
-                  — เฟสถัดไปวัสดุกลุ่มนี้จะได้โปรไฟล์ทรง (revolve) + dieline ของฉลากแทน
-                </p>
+            <div className="viewer card">
+              {mat.foldable ? (
+                <Viewer3D
+                  dieline={dieline}
+                  mat={mat}
+                  fold={fold}
+                  depth={template.foldDepth({ W, D, H }, mat)}
+                  tilt={template.tilt}
+                  decos={decos}
+                />
+              ) : (
+                <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} />
+              )}
+            </div>
+            <div className="blueprint card">
+              <div className="bp-head">
+                <span>{mat.foldable ? 'blueprint การพับ' : 'dieline ฉลาก'}</span>
+                <span className="legend">
+                  <i className="sw-cut" /> เส้นตัด
+                  <i className="sw-crease" /> {mat.foldable ? 'เส้นพับ' : 'แนวทับกาว'}
+                </span>
               </div>
-            )}
+              <DielineSVG
+                dieline={dieline}
+                showDims={showDims}
+                decos={decos}
+                guides={guides}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                onMove={moveDeco}
+                onRotate={rotateDeco}
+              />
+            </div>
           </div>
         </main>
       </div>
