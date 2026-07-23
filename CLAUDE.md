@@ -7,6 +7,11 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `npm run dev` — dev server ที่ port 5173 (strict)
 - `npm run build` — typecheck (`tsc --noEmit`) + vite build
 - `npx tsc --noEmit` — typecheck อย่างเดียว
+- `npm test` — vitest (unit test ใน `src/**/*.test.ts`) — เทสต์เรขาคณิตเป็นเชิงตัวเลขล้วน:
+  ไฟล์ export ตรวจ byte/โครงสร้างจริง (xref offset, เลเยอร์), การพับตรวจตำแหน่ง 3D ของแผง
+  ผ่าน `computeMatrices` แทนการดูภาพ — เพิ่ม template/รูปแบบไฟล์ใหม่ให้เพิ่มเทสต์แนวเดียวกัน
+  (ดู `fefco0427.test.ts` เป็นแบบ) config อยู่ `vitest.config.ts` แยกจาก vite.config.ts
+  โดยเจตนา เพื่อไม่โหลด middleware /api/box-spec ตอนรันเทสต์
 
 ## โครงสร้าง
 
@@ -33,4 +38,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - เปลี่ยนเวอร์ชัน dependency แล้วต้องลบ `node_modules/.vite` แล้วรีสตาร์ท dev server ไม่งั้น pre-bundle เก่าค้าง
 - พิกัดแผ่นคลี่: x ขวา y ลง หน่วย mm; แปลงเป็น 3D ที่ (x, -y, 0)
 - ตัวเลขบน blueprint คือระยะ score จริง (บวกเผื่อความหนาแล้ว) จึงใหญ่กว่าค่าที่ผู้ใช้ตั้งเล็กน้อย — ตั้งใจ ไม่ใช่บั๊ก
-- แผนเฟสถัดไป: template เพิ่ม (FEFCO 0427, sleeve), export PDF/DXF, โลโก้/ข้อความ (dieline คือ UV map), ขวด revolve + ฉลาก
+- แผนเฟสถัดไป: ขวด revolve + ฉลาก (วัสดุกลุ่มพับไม่ได้ยังเป็นทางตันใน UI) — ของเดิมในแผน
+  (FEFCO 0427, sleeve, export PDF/DXF, โลโก้/ข้อความ) เสร็จหมดแล้ว
+- polish ค้างของ 3D fefco-0427 (คอสเมติกล้วน dieline ถูกแล้ว): จังหวะกลางทางแผงเฉียดกัน
+  ช่วง 42-68%, แผ่นม้วนทบแบนไม่โชว์ความโค้งรัศมีสันบน
