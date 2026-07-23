@@ -18,6 +18,7 @@ import {
   elW,
   type Deco,
 } from './core/artwork'
+import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import { Viewer3D } from './components/Viewer3D'
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
@@ -79,7 +80,12 @@ function svgLayer(id: string, attrs: string, body: string): string {
   )
 }
 
-function dielineSVGString(d: Dieline, withDims: boolean, decos: Deco[] = []): string {
+function dielineSVGString(
+  d: Dieline,
+  withDims: boolean,
+  decos: Deco[] = [],
+  guides: Guides | null = null,
+): string {
   const pathsOf = (kind: 'cut' | 'crease') =>
     d.segments
       .filter((s) => s.kind === kind)
@@ -116,6 +122,7 @@ function dielineSVGString(d: Dieline, withDims: boolean, decos: Deco[] = []): st
 
   // artwork อยู่ล่างสุด (วาดก่อน) เพื่อให้เส้น cut/crease โชว์ทับเป็นไกด์ — ตรงกับที่เห็นบนจอ
   const artLayer = svgArtworkLayer(decos)
+  const guideLayer = guides ? guidesSVGLayer(guides) : ''
 
   const w = d.width + pad * 2
   const h = d.height + pad * 2
@@ -124,8 +131,8 @@ function dielineSVGString(d: Dieline, withDims: boolean, decos: Deco[] = []): st
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"` +
     ` xmlns:xlink="http://www.w3.org/1999/xlink"` +
     ` width="${w}mm" height="${h}mm" viewBox="${-pad} ${-pad} ${w} ${h}">\n` +
-    `<!-- สเกลจริง 1:1 หน่วย mm | artwork = ลายพิมพ์ | cut = เส้นตัด (แดง) | crease = เส้นพับ (เขียวประ) | dims = เส้นบอกขนาด (ห้ามใช้ผลิต) -->\n` +
-    `${artLayer}${cutLayer}${creaseLayer}${dimLayer}</svg>\n`
+    `<!-- สเกลจริง 1:1 หน่วย mm | artwork = ลายพิมพ์ | cut = เส้นตัด (แดง) | crease = เส้นพับ (เขียวประ) | guides = เผื่อตัด/ปลอดภัย | dims = เส้นบอกขนาด (ห้ามใช้ผลิต) -->\n` +
+    `${artLayer}${cutLayer}${creaseLayer}${guideLayer}${dimLayer}</svg>\n`
   )
 }
 
@@ -391,6 +398,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [fold, setFold] = useState(1)
   const [showDims, setShowDims] = useState(store0.showDims)
+  const [showGuides, setShowGuides] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
   const [history, setHistory] = useState<DesignVersion[]>(active0.history)
   const [histIdx, setHistIdx] = useState(active0.histIdx)
@@ -401,6 +409,10 @@ export default function App() {
   const dieline = useMemo(
     () => (mat.foldable ? template.generate({ W, D, H, handle }, mat) : null),
     [W, D, H, handle, mat, template],
+  )
+  const guides = useMemo(
+    () => (showGuides && dieline ? computeGuides(dieline.panels) : null),
+    [showGuides, dieline],
   )
 
   useEffect(() => () => cancelAnimationFrame(raf.current), [])
@@ -603,7 +615,7 @@ export default function App() {
 
   const downloadSVG = () => {
     if (!dieline) return
-    saveFile(dielineSVGString(dieline, showDims, decos), 'image/svg+xml', 'svg')
+    saveFile(dielineSVGString(dieline, showDims, decos, guides), 'image/svg+xml', 'svg')
   }
 
   // DXF คือไฟล์ที่โรงทำมีดไดคัทใช้จริง — มีแต่เลเยอร์ CUT/CREASE ไม่มีเส้นบอกขนาด
@@ -625,7 +637,7 @@ export default function App() {
       for (let i = 0; i < bin.length; i++) jpeg[i] = bin.charCodeAt(i)
       art = { jpeg, w: canvas.width, h: canvas.height }
     }
-    saveFile(dielinePDFBytes(dieline, showDims, art), 'application/pdf', 'pdf')
+    saveFile(dielinePDFBytes(dieline, showDims, art, guides), 'application/pdf', 'pdf')
   }
 
   const selected = decos.find((d) => d.id === selectedId) ?? null
@@ -944,6 +956,14 @@ export default function App() {
                   />
                   แสดงขนาดกำกับเส้น (มม.)
                 </label>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={showGuides}
+                    onChange={(e) => setShowGuides(e.target.checked)}
+                  />
+                  แสดงเส้นเผื่อตัด (bleed) / ระยะปลอดภัย
+                </label>
                 <button onClick={downloadSVG}>ดาวน์โหลด dieline (.svg)</button>
                 <button onClick={downloadDXF}>ดาวน์โหลดไฟล์ผลิต (.dxf)</button>
                 <button onClick={() => void downloadPDF()}>ดาวน์โหลดแบบพิมพ์ (.pdf)</button>
@@ -1060,6 +1080,7 @@ export default function App() {
                     dieline={dieline}
                     showDims={showDims}
                     decos={decos}
+                    guides={guides}
                     selectedId={selectedId}
                     onSelect={setSelectedId}
                     onMove={moveDeco}

@@ -1,5 +1,6 @@
 import type { Dieline } from './types'
 import { pathToPolylines } from './dxf'
+import type { Guides } from './guides'
 
 // Export dieline เป็น PDF สเกล 1:1 สำหรับพิมพ์ตรวจและส่งโรงงาน
 //
@@ -25,6 +26,8 @@ const rgb = (hex: string) =>
 const CUT = '#e30613'
 const CREASE = '#009640'
 const DIM = '#1b6ea8'
+const SAFE = '#1b6ea8'
+const BLEED = '#c0158a'
 
 // PDF string: หนี \ ( ) และตัดอักขระนอก ASCII ทิ้ง (Helvetica แสดงไม่ได้อยู่ดี)
 // การคุม PDF ให้เป็น ASCII ล้วนยังทำให้ความยาวสตริง = จำนวนไบต์ ซึ่ง xref ต้องใช้
@@ -42,7 +45,12 @@ export interface PdfArtwork {
   h: number
 }
 
-export function dielinePDFBytes(d: Dieline, withDims: boolean, artwork?: PdfArtwork): Uint8Array {
+export function dielinePDFBytes(
+  d: Dieline,
+  withDims: boolean,
+  artwork?: PdfArtwork,
+  guides?: Guides | null,
+): Uint8Array {
   const pad = withDims ? 26 : 5
   const pageW = (d.width + pad * 2) * K
   const pageH = (d.height + pad * 2) * K
@@ -117,13 +125,37 @@ export function dielinePDFBytes(d: Dieline, withDims: boolean, artwork?: PdfArtw
   }
 
   // เลขวัตถุ: 1-5 คงที่ (catalog/pages/page/contents/font) จากนั้น OCG แล้วปิดท้ายด้วยภาพ
+  const hasGuides = !!guides && (guides.safe.length > 0 || guides.bleed.length > 0)
   let num = 6
   const cutOCG = num++
   const creaseOCG = num++
   const dimsOCG = withDims ? num++ : 0
   const artOCG = artwork ? num++ : 0
+  const guidesOCG = hasGuides ? num++ : 0
   const imgNum = artwork ? num++ : 0
   const lastObj = num - 1
+
+  // เลเยอร์ไกด์: safe (น้ำเงินประ ปิด polygon) + bleed (ม่วงประ เฉพาะขอบนอก)
+  // เปลี่ยนสี/เส้นประกลางเลเยอร์ได้เพราะ state ค้างอยู่ใน q/Q เดียวกัน
+  let guideBody = ''
+  if (hasGuides && guides) {
+    const parts: string[] = [`${rgb(SAFE)} RG`, '0.3 w', '[2 2] 0 d']
+    for (const poly of guides.safe) {
+      if (poly.length < 3) continue
+      parts.push(`${n(tx(poly[0].x))} ${n(ty(poly[0].y))} m`)
+      for (let i = 1; i < poly.length; i++) {
+        parts.push(`${n(tx(poly[i].x))} ${n(ty(poly[i].y))} l`)
+      }
+      parts.push('h')
+    }
+    parts.push('S')
+    parts.push(`${rgb(BLEED)} RG`, '[3 2] 0 d')
+    for (const [a, b] of guides.bleed) {
+      parts.push(`${n(tx(a.x))} ${n(ty(a.y))} m\n${n(tx(b.x))} ${n(ty(b.y))} l`)
+    }
+    parts.push('S')
+    guideBody = `q\n/OC /OCg BDC\n${parts.join('\n')}\nEMC\nQ\n`
+  }
 
   // เลเยอร์ artwork วาดก่อน (ล่างสุด) ให้เส้น cut/crease โชว์ทับเป็นไกด์
   // ภาพครอบพื้นที่แผ่น [pad, pad+width] × [pad, pad+height] ในหน่วย มม. (อยู่ใน K space)
@@ -132,16 +164,18 @@ export function dielinePDFBytes(d: Dieline, withDims: boolean, artwork?: PdfArtw
     : ''
 
   // ทั้งหน้าอยู่ในระบบ มม. โดยสเกลครั้งเดียวที่นี่ ตัวเลขในสตรีมจึงอ่านเป็น มม. ตรง ๆ
-  const stream = `q\n${n(K)} 0 0 ${n(K)} 0 0 cm\n${artBody}${cutBody}${creaseBody}${dimsBody}Q\n`
+  const stream = `q\n${n(K)} 0 0 ${n(K)} 0 0 cm\n${artBody}${cutBody}${creaseBody}${guideBody}${dimsBody}Q\n`
 
   const ocgRefs: string[] = [`${cutOCG} 0 R`, `${creaseOCG} 0 R`]
   if (dimsOCG) ocgRefs.push(`${dimsOCG} 0 R`)
   if (artOCG) ocgRefs.push(`${artOCG} 0 R`)
+  if (guidesOCG) ocgRefs.push(`${guidesOCG} 0 R`)
   const ocgList = ocgRefs.join(' ')
 
   const props: string[] = [`/OC1 ${cutOCG} 0 R`, `/OC2 ${creaseOCG} 0 R`]
   if (dimsOCG) props.push(`/OC3 ${dimsOCG} 0 R`)
   if (artOCG) props.push(`/OCa ${artOCG} 0 R`)
+  if (guidesOCG) props.push(`/OCg ${guidesOCG} 0 R`)
   const xobj = artwork ? ` /XObject << /Im0 ${imgNum} 0 R >>` : ''
 
   const enc = new TextEncoder()
@@ -175,6 +209,7 @@ export function dielinePDFBytes(d: Dieline, withDims: boolean, artwork?: PdfArtw
   obj(`${creaseOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('crease')} >>\nendobj\n`)
   if (dimsOCG) obj(`${dimsOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('dims')} >>\nendobj\n`)
   if (artOCG) obj(`${artOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('artwork')} >>\nendobj\n`)
+  if (guidesOCG) obj(`${guidesOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('guides')} >>\nendobj\n`)
   if (artwork) {
     offsets.push(len)
     push(

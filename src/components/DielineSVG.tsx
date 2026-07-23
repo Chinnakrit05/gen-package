@@ -1,9 +1,12 @@
 import { memo, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
 import { elW, elH, elCenter, type Deco } from '../core/artwork'
+import type { Guides } from '../core/guides'
 
 const DIM_COLOR = '#1b6ea8'
 const SEL_COLOR = '#1b6ea8'
+const SAFE_COLOR = '#1b6ea8'
+const BLEED_COLOR = '#c0158a'
 
 function Dim({ d }: { d: DimMark }) {
   const vert = Math.abs(d.a.x - d.b.x) < 0.001
@@ -74,6 +77,7 @@ export const DielineSVG = memo(function DielineSVG({
   dieline,
   showDims,
   decos = [],
+  guides,
   selectedId,
   onSelect,
   onMove,
@@ -82,6 +86,7 @@ export const DielineSVG = memo(function DielineSVG({
   dieline: Dieline
   showDims: boolean
   decos?: Deco[]
+  guides?: Guides | null
   selectedId?: string | null
   onSelect?: (id: string | null) => void
   onMove?: (id: string, x: number, y: number) => void
@@ -232,6 +237,35 @@ export const DielineSVG = memo(function DielineSVG({
           </g>
         )
       })}
+
+      {guides && (
+        <g className="guides" pointerEvents="none">
+          {guides.safe.map((poly, i) => (
+            <polygon
+              key={`s${i}`}
+              points={poly.map((p) => `${p.x},${p.y}`).join(' ')}
+              fill="none"
+              stroke={SAFE_COLOR}
+              strokeWidth={0.8}
+              strokeDasharray="2 2"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          {guides.bleed.map(([a, b], i) => (
+            <line
+              key={`b${i}`}
+              x1={a.x}
+              y1={a.y}
+              x2={b.x}
+              y2={b.y}
+              stroke={BLEED_COLOR}
+              strokeWidth={0.8}
+              strokeDasharray="3 2"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </g>
+      )}
 
       {showDims && dieline.dims.map((d, i) => <Dim key={i} d={d} />)}
     </svg>
