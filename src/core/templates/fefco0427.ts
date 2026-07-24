@@ -135,27 +135,27 @@ export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
       id: 'ear-br', parentId: 'back', outline: earPts(cx1, 1, y3, y2),
       hingeA: P(cx1, y2), hingeB: P(cx1, y3), foldAngle: 90, stage: 1, zOffset: layer,
     },
-    // แผ่นม้วน (stage 1 พร้อมหูมุม) — พับ 180° กลับเข้าด้านใน ทับหูมุม ลิ้นชี้ลงหาช่องบนฐาน
+    // แผ่นม้วน (stage 2) — รอหูมุมพับเสร็จก่อนค่อยทบ 180° กลับเข้าด้านในทับไว้ ทับหูมุม ลิ้นชี้ลงหาช่องบนฐาน
     // zOffset ติดลบ: หลังหมุน 180° แกน z ท้องถิ่นกลับทิศ (ชี้ออกนอกกล่อง)
     // จึงต้องดันทางลบเพื่อให้แผ่นม้วนลอยเข้าด้านใน ไม่ใช่ทะลุออกนอกผนัง
     {
       id: 'roll-left', parentId: 'side-left', outline: rollOutline(xr1, xr0, 0).pts,
       hingeA: P(xr1, y3 + rollIns), hingeB: P(xr1, y4 - rollIns),
-      foldAngle: -180, stage: 1, zOffset: -2 * layer,
+      foldAngle: -180, stage: 2, zOffset: -2 * layer,
     },
     {
       id: 'roll-right', parentId: 'side-right', outline: rollOutline(xr2, xr3, width).pts,
       hingeA: P(xr2, y3 + rollIns), hingeB: P(xr2, y4 - rollIns),
-      foldAngle: 180, stage: 1, zOffset: -2 * layer,
+      foldAngle: 180, stage: 2, zOffset: -2 * layer,
     },
-    // ฝาปิด (stage 2) แล้วลิ้นหน้าค่อยเสียบ (stage 3) — แยกจังหวะกันลิ้นกวาดทะลุผนังหน้า
+    // ฝาปิด (stage 3) แล้วลิ้นหน้าค่อยเสียบ (stage 4) — แยกจังหวะกันลิ้นกวาดทะลุผนังหน้า
     {
       id: 'lid', parentId: 'back', outline: rect(cx0, y1, cx1, y2),
-      hingeA: P(cx0, y2), hingeB: P(cx1, y2), foldAngle: 90, stage: 2,
+      hingeA: P(cx0, y2), hingeB: P(cx1, y2), foldAngle: 90, stage: 3,
     },
     {
       id: 'lip', parentId: 'lid', outline: lipOutline,
-      hingeA: P(cx0 + tuckIn, y1), hingeB: P(cx1 - tuckIn, y1), foldAngle: 90, stage: 3, zOffset: layer,
+      hingeA: P(cx0 + tuckIn, y1), hingeB: P(cx1 - tuckIn, y1), foldAngle: 90, stage: 4, zOffset: layer,
     },
   ]
 

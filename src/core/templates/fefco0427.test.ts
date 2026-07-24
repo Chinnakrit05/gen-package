@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Vector3 } from 'three'
+import { Quaternion, Vector3 } from 'three'
 import { computeMatrices, to3D } from '../fold'
 import { getTemplate } from './index'
 import { getMaterial } from '../materials'
@@ -118,6 +118,50 @@ describe('fefco-0427: ตำแหน่งหลังพับสุด (fold=
     expect(v.y).toBeLessThan(yF + 4 * t + 2)
     expect(v.z).toBeGreaterThan(0)
     expect(v.z).toBeLessThan(Hp)
+  })
+})
+
+describe('fefco-0427: ลำดับจังหวะพับ', () => {
+  // วัดความคืบหน้าของ "บานพับตัวเอง" = มุมหมุนเทียบกับแผงแม่ (parent⁻¹ × own)
+  // ต้องหักการเคลื่อนที่ที่ถูกแผงแม่พาไปออก ไม่งั้นแผงลูกจะดูเหมือนเริ่มขยับ
+  // ตั้งแต่แม่เริ่มพับ ทั้งที่บานพับตัวเองยังไม่หมุน
+  const ownAngle = (id: string, fold: number) => {
+    const p = d.panels.find((q) => q.id === id)!
+    const M = computeMatrices(d.panels, fold)
+    const own = M.get(id)!.clone()
+    if (p.parentId) own.premultiply(M.get(p.parentId)!.clone().invert())
+    const q = new Quaternion().setFromRotationMatrix(own)
+    return 2 * Math.acos(Math.min(1, Math.abs(q.w)))
+  }
+  const progressAt = (id: string, fold: number) => {
+    const full = ownAngle(id, 1)
+    return full < 1e-9 ? 1 : ownAngle(id, fold) / full
+  }
+
+  it('แผ่นม้วนยังไม่เริ่มทบจนหูมุมพับไปแล้วเกิน 85% (กันสองแผงกวาดเฉียดกัน)', () => {
+    let started = 1
+    for (let f = 0; f <= 1.0001; f += 0.01) {
+      if (progressAt('roll-left', f) > 0.01) {
+        started = f
+        break
+      }
+    }
+    expect(progressAt('ear-fl', started)).toBeGreaterThan(0.85)
+  })
+
+  it('ลิ้นฝายังไม่เสียบจนฝาปิดไปแล้วเกิน 75%', () => {
+    let started = 1
+    for (let f = 0; f <= 1.0001; f += 0.01) {
+      if (progressAt('lip', f) > 0.01) {
+        started = f
+        break
+      }
+    }
+    expect(progressAt('lid', started)).toBeGreaterThan(0.75)
+  })
+
+  it('ทุกแผงพับครบเมื่อ fold=1', () => {
+    for (const p of d.panels) expect(progressAt(p.id, 1)).toBeCloseTo(1, 6)
   })
 })
 
