@@ -699,3 +699,47 @@ button[aria-disabled='true'] {
   color: #8a8474;
   font-size: 13px;
 }
+
+/* --- modal ตั้งชื่องาน --- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 18, 14, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  width: min(360px, 90vw);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+.modal h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f6e56;
+  margin-bottom: 12px;
+}
+.modal input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #c9bda2;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 15px;
+}
+.modal input:focus {
+  outline: none;
+  border-color: #0f6e56;
+}
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+.modal-actions button {
+  flex: 1;
+}

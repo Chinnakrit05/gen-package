@@ -254,6 +254,51 @@ const DEFAULT_SPEC: CurrentSpec = {
   handle: false,
 }
 
+// modal ตั้งชื่องาน — ใช้ทั้งตอนสร้างงานใหม่และเปลี่ยนชื่อ (แทน window.prompt เดิม)
+function NameModal({
+  title,
+  initial,
+  onOk,
+  onCancel,
+}: {
+  title: string
+  initial: string
+  onOk: (name: string) => void
+  onCancel: () => void
+}) {
+  const [value, setValue] = useState(initial)
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    ref.current?.focus()
+    ref.current?.select()
+  }, [])
+  return (
+    <div className="modal-overlay" onMouseDown={onCancel}>
+      <div className="modal" role="dialog" aria-label={title} onMouseDown={(e) => e.stopPropagation()}>
+        <h3>{title}</h3>
+        <input
+          ref={ref}
+          type="text"
+          value={value}
+          maxLength={60}
+          aria-label={title}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onOk(value.trim())
+            else if (e.key === 'Escape') onCancel()
+          }}
+        />
+        <div className="modal-actions">
+          <button onClick={onCancel}>ยกเลิก</button>
+          <button className="primary" onClick={() => onOk(value.trim())}>
+            ตกลง
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function freshProject(n: number): Project {
   return {
     id: crypto.randomUUID(),
@@ -405,6 +450,7 @@ export default function App() {
   const [fold, setFold] = useState(1)
   const [showDims, setShowDims] = useState(store0.showDims)
   const [showGuides, setShowGuides] = useState(false)
+  const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
   const [aiBusy, setAiBusy] = useState(false)
   const [history, setHistory] = useState<DesignVersion[]>(active0.history)
   const [histIdx, setHistIdx] = useState(active0.histIdx)
@@ -572,9 +618,16 @@ export default function App() {
 
   const newProject = () => {
     if (aiBusy) return
-    const p = freshProject(projects.length + 1)
-    setProjects((prev) => [...flushInto(prev), p])
-    openProject(p)
+    setNameModal({
+      title: 'ตั้งชื่องานใหม่',
+      value: `งาน ${projects.length + 1}`,
+      onOk: (name) => {
+        const p = freshProject(projects.length + 1)
+        p.name = name.slice(0, 60) || p.name
+        setProjects((prev) => [...flushInto(prev), p])
+        openProject(p)
+      },
+    })
   }
 
   const deleteProject = (id: string) => {
@@ -591,11 +644,15 @@ export default function App() {
   const renameProject = () => {
     if (aiBusy) return
     const cur = projects.find((p) => p.id === activeId)
-    const name = window.prompt('ตั้งชื่องาน', cur?.name ?? '')?.trim()
-    if (!name) return
-    setProjects((prev) =>
-      prev.map((p) => (p.id === activeId ? { ...p, name: name.slice(0, 60) } : p)),
-    )
+    setNameModal({
+      title: 'ตั้งชื่องาน',
+      value: cur?.name ?? '',
+      onOk: (name) => {
+        const n = name.slice(0, 60)
+        if (!n) return
+        setProjects((prev) => prev.map((p) => (p.id === activeId ? { ...p, name: n } : p)))
+      },
+    })
   }
 
   const changeTemplate = (id: string) => {
@@ -725,6 +782,9 @@ export default function App() {
       <header>
         <h1>gen-package</h1>
         <nav className="projects" aria-label="งานที่บันทึกไว้">
+          <button className="proj-new" aria-disabled={aiBusy} onClick={newProject}>
+            + งานใหม่
+          </button>
           {projects.map((p) => (
             <div key={p.id} className={`proj-tab${p.id === activeId ? ' active' : ''}`}>
               <button
@@ -756,9 +816,6 @@ export default function App() {
               </button>
             </div>
           ))}
-          <button className="proj-new" aria-disabled={aiBusy} onClick={newProject}>
-            + งานใหม่
-          </button>
         </nav>
       </header>
       <div className="body">
@@ -1144,6 +1201,17 @@ export default function App() {
           </div>
         </main>
       </div>
+      {nameModal && (
+        <NameModal
+          title={nameModal.title}
+          initial={nameModal.value}
+          onOk={(n) => {
+            nameModal.onOk(n)
+            setNameModal(null)
+          }}
+          onCancel={() => setNameModal(null)}
+        />
+      )}
     </div>
   )
 }

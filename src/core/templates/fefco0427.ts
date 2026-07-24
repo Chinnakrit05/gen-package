@@ -73,13 +73,18 @@ export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
     return { pts }
   }
 
-  const earPts = (hx: number, dir: 1 | -1, ya: number, yb: number) => [
-    // hx = เส้นพับ, dir = ทิศยื่น (-1 ซ้าย +1 ขวา), ya..yb = แถวผนัง (ya คือฝั่งสันพับกับฐาน)
-    P(hx, ya + earIns),
-    P(hx + dir * earW, ya + earIns + earSlant),
-    P(hx + dir * earW, yb - topIns - earSlant),
-    P(hx, yb - topIns),
-  ]
+  // hx = เส้นพับ, dir = ทิศยื่น (-1 ซ้าย +1 ขวา), ya = ขอบผนังฝั่งติดฐาน, yb = ขอบไกล
+  // sy = ทิศเข้าเนื้อผนัง: ผนังหน้าอยู่ฝั่ง +y ของ ya, ผนังหลังอยู่ฝั่ง −y — ต้องปรับ inset
+  // ตามด้าน ไม่งั้นหูมุมหลังจะถูกวางในโซนฐานแล้วพับทะลุ
+  const earPts = (hx: number, dir: 1 | -1, ya: number, yb: number) => {
+    const sy = Math.sign(yb - ya) || 1
+    return [
+      P(hx, ya + sy * earIns),
+      P(hx + dir * earW, ya + sy * (earIns + earSlant)),
+      P(hx + dir * earW, yb - sy * (topIns + earSlant)),
+      P(hx, yb - sy * topIns),
+    ]
+  }
 
   // ลิ้นฝา: โค้งมนแบบ mailer + บ่าล็อกสองข้างที่โคน
   const lipOutline = [
@@ -162,9 +167,13 @@ export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
   const cut = (d: string): Segment => ({ kind: 'cut', d })
   const crease = (d: string): Segment => ({ kind: 'crease', d })
 
-  const earCut = (hx: number, dir: 1 | -1, ya: number, yb: number) =>
-    `M ${hx} ${ya + earIns} L ${hx + dir * earW} ${ya + earIns + earSlant} ` +
-    `L ${hx + dir * earW} ${yb - topIns - earSlant} L ${hx} ${yb - topIns}`
+  const earCut = (hx: number, dir: 1 | -1, ya: number, yb: number) => {
+    const sy = Math.sign(yb - ya) || 1
+    return (
+      `M ${hx} ${ya + sy * earIns} L ${hx + dir * earW} ${ya + sy * (earIns + earSlant)} ` +
+      `L ${hx + dir * earW} ${yb - sy * (topIns + earSlant)} L ${hx} ${yb - sy * topIns}`
+    )
+  }
 
   // ขอบอิสระของแผ่นม้วน (แนวตั้ง) พร้อมลิ้นสองอัน
   const rollFreeCut = (x1: number, tabX: number) => {

@@ -82,14 +82,17 @@ describe('fefco-0427: ตำแหน่งหลังพับสุด (fold=
     ['ear-bl', cx0, 1],
     ['ear-fr', cx1, -1],
     ['ear-br', cx1, -1],
-  ] as const)('%s พับแนบด้านในผนังข้าง', (id, plane, dir) => {
+  ] as const)('%s พับแนบด้านในผนังข้าง (ตรวจทุกมุม ไม่ใช่แค่จุดกึ่งกลาง)', (id, plane, dir) => {
     const v = world(id)
     expect((v.x - plane) * dir).toBeGreaterThanOrEqual(-0.01) // ฝั่งในกล่อง
     expect(Math.abs(v.x - plane)).toBeLessThan(3 * t + 1)
-    expect(v.z).toBeGreaterThan(0)
-    expect(v.z).toBeLessThan(Hp)
     expect(v.y).toBeGreaterThan(yF - 1)
     expect(v.y).toBeLessThan(yB + 1)
+    // เช็ค z ของ "ทุกมุม" ต้องอยู่ในช่วง [0, Hp] — กันหูมุมเอียงทะลุใต้ฐาน/เหนือกล่อง
+    // (จุดกึ่งกลางจับไม่ได้: หูที่เอียงจาก z=-10 ถึง 75 มี centroid ~32 ดูเหมือนปกติ)
+    const zs = worldPts(id).map((p) => p.z)
+    expect(Math.min(...zs)).toBeGreaterThan(-1)
+    expect(Math.max(...zs)).toBeLessThan(Hp + 1)
   })
 
   it.each([
