@@ -689,3 +689,13 @@ button[aria-disabled='true'] {
   color: #6a5f49;
   font-style: italic;
 }
+
+/* placeholder ระหว่างโหลด viewer 3D แบบ lazy */
+.viewer-loading {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8a8474;
+  font-size: 13px;
+}

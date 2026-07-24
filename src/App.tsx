@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { MATERIALS, getMaterial } from './core/materials'
 import { TEMPLATES, getTemplate } from './core/templates'
 import type { Dieline } from './core/types'
@@ -20,8 +20,12 @@ import {
 } from './core/artwork'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import { generateVessel } from './core/vessel'
-import { VesselViewer3D } from './components/VesselViewer3D'
-import { Viewer3D } from './components/Viewer3D'
+// โหลด viewer 3D แบบ lazy — three + R3F เป็นก้อนใหญ่สุดของ bundle และไม่จำเป็น
+// ต่อการเรนเดอร์ครั้งแรก (แถบซ้าย + blueprint เป็น SVG ล้วน) แยกออกไปให้หน้าแรกเบาลง
+const Viewer3D = lazy(() => import('./components/Viewer3D').then((m) => ({ default: m.Viewer3D })))
+const VesselViewer3D = lazy(() =>
+  import('./components/VesselViewer3D').then((m) => ({ default: m.VesselViewer3D })),
+)
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
 
@@ -1103,18 +1107,20 @@ export default function App() {
           )}
           <div className="panels">
             <div className="viewer card">
-              {mat.foldable ? (
-                <Viewer3D
-                  dieline={dieline}
-                  mat={mat}
-                  fold={fold}
-                  depth={template.foldDepth({ W, D, H }, mat)}
-                  tilt={template.tilt}
-                  decos={decos}
-                />
-              ) : (
-                <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} />
-              )}
+              <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
+                {mat.foldable ? (
+                  <Viewer3D
+                    dieline={dieline}
+                    mat={mat}
+                    fold={fold}
+                    depth={template.foldDepth({ W, D, H }, mat)}
+                    tilt={template.tilt}
+                    decos={decos}
+                  />
+                ) : (
+                  <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} />
+                )}
+              </Suspense>
             </div>
             <div className="blueprint card">
               <div className="bp-head">
