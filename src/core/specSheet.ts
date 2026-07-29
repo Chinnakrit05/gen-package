@@ -1,11 +1,14 @@
 import type { Dieline } from './types'
 import { pathToPolylines } from './dxf'
+import { ensureThaiFont } from './artwork'
 
 // ใบสรุปสเปก 1 หน้า (A4) สำหรับส่งโรงงานขอราคา — ไม่ใช่ไฟล์ผลิต
 //
 // เรนเดอร์ลง canvas ก่อน (ข้อความไทยใช้ฟอนต์เบราว์เซอร์ได้เลย) แล้วฝังเป็น JPEG
 // ในหน้า PDF เดียว — เลี่ยงการฝังฟอนต์ไทยลง PDF ซึ่งซับซ้อนมาก ตัว pdf.ts เดิม
 // รองรับแค่ Helvetica/ASCII จึงพิมพ์ไทยไม่ได้ วิธี raster นี้พอสำหรับเอกสารขอราคา
+// สำคัญ: ต้อง await ensureThaiFont() ก่อน renderCanvas ไม่งั้น canvas อาจ fallback ไปฟอนต์ระบบ
+// (Noto Sans Thai self-host ผ่าน @fontsource แต่ fontsource แยกโหลด subset ต่อน้ำหนักแบบ lazy)
 
 export interface SpecSheetInput {
   projectName: string
@@ -272,7 +275,8 @@ function assemblePDF(jpeg: Uint8Array, imgW: number, imgH: number): Uint8Array {
   return out
 }
 
-export function specSheetPDFBytes(input: SpecSheetInput): Uint8Array {
+export async function specSheetPDFBytes(input: SpecSheetInput): Promise<Uint8Array> {
+  await ensureThaiFont() // รอฟอนต์ไทยก่อน rasterize ไม่งั้นข้อความในใบสเปกเพี้ยน
   const canvas = renderCanvas(input)
   return assemblePDF(jpegBytes(canvas), canvas.width, canvas.height)
 }

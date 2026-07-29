@@ -744,9 +744,9 @@ export default function App() {
   const activeName = projects.find((p) => p.id === activeId)?.name ?? 'งาน'
 
   // ใบสรุปสเปก 1 หน้า สำหรับส่งโรงงานขอราคา — รวมจำนวน + สิ่งที่ AI สันนิษฐาน
-  const downloadSpecSheet = () => {
+  const downloadSpecSheet = async () => {
     if (!dieline) return
-    const bytes = specSheetPDFBytes({
+    const bytes = await specSheetPDFBytes({
       projectName: activeName,
       templateNameTh: mat.foldable ? template.nameTh : `ภาชนะ ${mat.nameTh} + ฉลากพันรอบ`,
       materialNameTh: mat.nameTh,
@@ -1233,7 +1233,7 @@ export default function App() {
                 <button onClick={downloadSVG}>ดาวน์โหลด dieline (.svg)</button>
                 <button onClick={downloadDXF}>ดาวน์โหลดไฟล์ผลิต (.dxf)</button>
                 <button onClick={() => void downloadPDF()}>ดาวน์โหลดแบบพิมพ์ (.pdf)</button>
-                <button className="primary" onClick={downloadSpecSheet}>
+                <button className="primary" onClick={() => void downloadSpecSheet()}>
                   ดาวน์โหลดใบสเปกขอราคา (.pdf)
                 </button>
                 <p className="hint">

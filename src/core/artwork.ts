@@ -37,12 +37,29 @@ export const elH = (e: Deco) => (e.type === 'image' ? e.w / e.aspect : e.size * 
 export const elCenter = (e: Deco): Vec2 => ({ x: e.x + elW(e) / 2, y: e.y + elH(e) / 2 })
 
 // วัดความกว้างข้อความด้วย canvas (ในหน่วย px = มม. เพราะวัดที่สเกล 1:1)
+// ใช้ฟอนต์เดียวกับที่ render จริง (Noto Sans Thai) ไม่งั้น bbox/จุดกึ่งกลาง/snap ของข้อความไทยจะเพี้ยน
 let measureCtx: CanvasRenderingContext2D | null = null
 export function measureText(text: string, size: number): number {
   if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')
   if (!measureCtx) return Math.max(1, (text.length || 1) * size * 0.6)
-  measureCtx.font = `${size}px sans-serif`
+  measureCtx.font = `${size}px 'Noto Sans Thai', sans-serif`
   return Math.max(1, measureCtx.measureText(text || ' ').width)
+}
+
+// รอให้ฟอนต์ไทยโหลดครบก่อน rasterize ลง canvas — ถ้าฟอนต์ยังไม่มา canvas จะ fallback ไปฟอนต์ระบบ
+// ทำให้ตัวอักษรไทยในไฟล์ที่ export เพี้ยน/เมตริกไม่ตรงกับที่เห็นบนจอ
+export async function ensureThaiFont(): Promise<void> {
+  const fonts = document.fonts
+  if (!fonts?.load) return
+  try {
+    // ระบุตัวอย่างอักษรไทยเพื่อบังคับโหลด subset ที่มีสระ/วรรณยุกต์จริง
+    await Promise.all(
+      ['400', '500', '600', '700'].map((w) => fonts.load(`${w} 16px 'Noto Sans Thai'`, 'กขคง้๊')),
+    )
+    await fonts.ready
+  } catch {
+    // โหลดฟอนต์ไม่ได้ (ออฟไลน์ครั้งแรก ฯลฯ) — ปล่อยให้ fallback ดีกว่าค้างการ export
+  }
 }
 
 // อัปเดตความกว้างที่เก็บของ text element หลังแก้ข้อความหรือขนาด
@@ -235,6 +252,7 @@ export async function renderArtworkCanvas(
   dpi: number,
 ): Promise<HTMLCanvasElement | null> {
   if (!decos.length) return null
+  await ensureThaiFont() // ให้ตัวอักษรไทยที่ฝังลง PDF ตรงกับที่เห็นบนจอ
   const s = dpi / 25.4
   const canvas = document.createElement('canvas')
   canvas.width = Math.max(1, Math.round(sheetW * s))
