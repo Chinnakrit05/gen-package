@@ -814,3 +814,79 @@ button[aria-disabled='true'] {
   line-height: 1;
   border-radius: 8px;
 }
+
+/* --- responsive: แท็บเล็ต/มือถือ --- */
+/* เดสก์ท็อปอัดทุกอย่างในความสูงจอเดียว (flex fill); จอเล็กสลับเป็นหน้าเลื่อนแนวตั้ง
+   แถบควบคุมอยู่บน แล้ว 3D/blueprint เรียงบน-ล่าง แต่ละอันสูงพอใช้งานจริง */
+@media (max-width: 820px) {
+  html,
+  body,
+  #root {
+    height: auto;
+    min-height: 100%;
+  }
+  .app {
+    height: auto;
+    min-height: 100%;
+  }
+
+  header {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 10px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  /* รายการงานไปอยู่บรรทัดล่างเต็มความกว้าง เลื่อนแนวนอนได้เหมือนเดิม */
+  .projects {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .body {
+    flex-direction: column;
+  }
+  aside {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #e3ded2;
+    overflow-y: visible;
+  }
+
+  main {
+    padding: 12px;
+  }
+  .panels {
+    grid-template-columns: 1fr;
+  }
+  .viewer {
+    height: 46vh;
+    min-height: 300px;
+  }
+  .blueprint {
+    height: 62vh;
+    min-height: 360px;
+  }
+}
+
+@media (max-width: 480px) {
+  header h1 {
+    font-size: 15px;
+  }
+  .proj-name {
+    max-width: 120px;
+  }
+  main {
+    padding: 10px;
+    gap: 10px;
+  }
+  /* ช่อง prompt + ปุ่มขึ้นบรรทัดใหม่แทนอัดในแถวเดียว */
+  .pb-row {
+    flex-wrap: wrap;
+  }
+  .pb-go,
+  .pb-attach {
+    flex: 1;
+  }
+}
