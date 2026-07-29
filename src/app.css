@@ -800,3 +800,17 @@ button[aria-disabled='true'] {
   background: none;
   cursor: pointer;
 }
+
+/* แถบ undo/redo ในหัว */
+.undo-bar {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.undo-btn {
+  width: auto;
+  padding: 4px 12px;
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 8px;
+}

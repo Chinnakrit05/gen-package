@@ -11,6 +11,7 @@ import {
   makeImageEl,
   makeTextEl,
   recenter,
+  cloneDeco,
   withTextW,
   parseDecos,
   svgArtworkLayer,
@@ -214,6 +215,30 @@ interface DesignVersion {
   spec: CurrentSpec
   ai?: AiInfo
 }
+
+// สแนปช็อตสถานะที่ผู้ใช้แก้ได้ สำหรับ undo/redo (ต่างจาก DesignVersion ที่เก็บเฉพาะสเปกจาก AI)
+interface EditSnapshot {
+  templateId: string
+  materialId: string
+  W: number
+  D: number
+  H: number
+  handle: boolean
+  qty: number
+  fillColor: string | null
+  decos: Deco[]
+}
+
+const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
+  a.templateId === b.templateId &&
+  a.materialId === b.materialId &&
+  a.W === b.W &&
+  a.D === b.D &&
+  a.H === b.H &&
+  a.handle === b.handle &&
+  a.qty === b.qty &&
+  a.fillColor === b.fillColor &&
+  a.decos === b.decos
 
 const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
   a.template === b.template &&
@@ -463,6 +488,11 @@ export default function App() {
   const [aiBusy, setAiBusy] = useState(false)
   const [history, setHistory] = useState<DesignVersion[]>(active0.history)
   const [histIdx, setHistIdx] = useState(active0.histIdx)
+  const [undoStack, setUndoStack] = useState<EditSnapshot[]>([])
+  const [redoStack, setRedoStack] = useState<EditSnapshot[]>([])
+  // ข้ามการบันทึกลง undo หนึ่งครั้ง — ใช้ตอน apply undo/redo หรือสลับงาน (ไม่ใช่การแก้ของผู้ใช้)
+  const skipCapture = useRef(false)
+  const lastSnap = useRef<EditSnapshot | null>(null)
   const raf = useRef(0)
 
   const template = getTemplate(templateId)
@@ -540,6 +570,70 @@ export default function App() {
     setHandle(spec.handle && getTemplate(spec.template).supportsHandle)
   }
 
+  // --- undo/redo ของสถานะที่แก้ได้ ---
+  const snapshot = (): EditSnapshot => ({
+    templateId,
+    materialId,
+    W,
+    D,
+    H,
+    handle,
+    qty,
+    fillColor,
+    decos,
+  })
+
+  // เก็บสแนปช็อตแบบหน่วง (coalesce) — ตอนลาก slider/ลากลายจะไม่ยัด undo ทุกเฟรม
+  // ดันสถานะ "ก่อนหน้า" เข้าสแตกเมื่อค่านิ่งแล้วต่างจากเดิม
+  useEffect(() => {
+    if (skipCapture.current) {
+      skipCapture.current = false
+      lastSnap.current = snapshot()
+      return
+    }
+    const t = setTimeout(() => {
+      const cur = snapshot()
+      if (lastSnap.current && !sameSnap(lastSnap.current, cur)) {
+        const prev = lastSnap.current
+        setUndoStack((s) => [...s.slice(-49), prev])
+        setRedoStack([])
+      }
+      lastSnap.current = cur
+    }, 350)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, decos])
+
+  const applySnapshot = (s: EditSnapshot) => {
+    skipCapture.current = true
+    setTemplateId(s.templateId)
+    setMaterialId(s.materialId)
+    setW(s.W)
+    setD(s.D)
+    setH(s.H)
+    setHandle(s.handle)
+    setQty(s.qty)
+    setFillColor(s.fillColor)
+    setDecos(s.decos)
+    setSelectedId(null)
+  }
+
+  const undo = () => {
+    if (aiBusy || undoStack.length === 0) return
+    const prev = undoStack[undoStack.length - 1]
+    setRedoStack((r) => [...r, snapshot()])
+    setUndoStack((u) => u.slice(0, -1))
+    applySnapshot(prev)
+  }
+
+  const redo = () => {
+    if (aiBusy || redoStack.length === 0) return
+    const next = redoStack[redoStack.length - 1]
+    setUndoStack((u) => [...u, snapshot()])
+    setRedoStack((r) => r.slice(0, -1))
+    applySnapshot(next)
+  }
+
   const applySpec = (spec: AiBoxSpec, label: string) => {
     const applied: CurrentSpec = {
       template: spec.template,
@@ -608,6 +702,10 @@ export default function App() {
 
   const openProject = (p: Project) => {
     cancelAnimationFrame(raf.current)
+    // สลับงาน = ไม่ใช่การแก้ที่ควร undo — ล้างสแตกและข้ามการบันทึกครั้งนี้
+    skipCapture.current = true
+    setUndoStack([])
+    setRedoStack([])
     setActiveId(p.id)
     setSpec(p.live)
     setQty(p.qty)
@@ -794,10 +892,82 @@ export default function App() {
     patchSelected((d) => recenter(dieline, d))
   }
 
+  const duplicateSelected = () => {
+    if (!selected) return
+    const copy = cloneDeco(selected)
+    setDecos((ds) => [...ds, copy])
+    setSelectedId(copy.id)
+  }
+
+  const nudgeSelected = (dx: number, dy: number) => {
+    if (!selectedId) return
+    setDecos((ds) => ds.map((d) => (d.id === selectedId ? { ...d, x: d.x + dx, y: d.y + dy } : d)))
+  }
+
+  // คีย์ลัด: Ctrl+Z/Ctrl+Shift+Z undo/redo, Delete ลบ, Esc เลิกเลือก, ลูกศรเลื่อน, Ctrl+D สำเนา
+  // ข้ามเมื่อกำลังพิมพ์ในช่อง input/textarea (ไม่แย่งคีย์)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+      const mod = e.ctrlKey || e.metaKey
+      if (mod && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault()
+        e.shiftKey ? redo() : undo()
+        return
+      }
+      if (mod && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault()
+        redo()
+        return
+      }
+      if (typing) return
+      if (mod && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault()
+        duplicateSelected()
+      } else if (e.key === 'Escape') {
+        setSelectedId(null)
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        e.preventDefault()
+        removeSelected()
+      } else if (selectedId && e.key.startsWith('Arrow')) {
+        e.preventDefault()
+        const step = e.shiftKey ? 10 : 1
+        if (e.key === 'ArrowLeft') nudgeSelected(-step, 0)
+        else if (e.key === 'ArrowRight') nudgeSelected(step, 0)
+        else if (e.key === 'ArrowUp') nudgeSelected(0, -step)
+        else if (e.key === 'ArrowDown') nudgeSelected(0, step)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, selected, undoStack, redoStack, aiBusy, decos, templateId, materialId, W, D, H, handle, qty, fillColor])
+
   return (
     <div className="app">
       <header>
         <h1>gen-package</h1>
+        <div className="undo-bar">
+          <button
+            className="undo-btn"
+            title="เลิกทำ (Ctrl+Z)"
+            aria-label="เลิกทำ"
+            aria-disabled={aiBusy || undoStack.length === 0}
+            onClick={undo}
+          >
+            ↶
+          </button>
+          <button
+            className="undo-btn"
+            title="ทำซ้ำ (Ctrl+Shift+Z)"
+            aria-label="ทำซ้ำ"
+            aria-disabled={aiBusy || redoStack.length === 0}
+            onClick={redo}
+          >
+            ↷
+          </button>
+        </div>
         <nav className="projects" aria-label="งานที่บันทึกไว้">
           <button className="proj-new" aria-disabled={aiBusy} onClick={newProject}>
             + งานใหม่

@@ -130,6 +130,11 @@ export function recenter(dieline: Dieline, e: Deco): Deco {
   return { ...e, x, y }
 }
 
+// สำเนาองค์ประกอบ (id ใหม่ เยื้องเล็กน้อยให้เห็นว่าเป็นชิ้นใหม่)
+export function cloneDeco(e: Deco, dx = 5, dy = 5): Deco {
+  return { ...e, id: newId(), x: e.x + dx, y: e.y + dy }
+}
+
 // แปลงจุดยอด shape เป็น UV บนผ้าใบขนาดเท่าแผ่นคลี่
 // X = x ของแผ่น, Y = -y ของแผ่น (Viewer3D สร้าง shape ด้วย (pt.x, -pt.y))
 // CanvasTexture flipY=true → v=1 คือแถวบนสุดของผ้าใบ ต้องตรงกับ y=0 ของแผ่น จึงได้ v = 1 + Y/สูง
