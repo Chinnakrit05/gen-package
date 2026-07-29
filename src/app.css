@@ -743,3 +743,37 @@ button[aria-disabled='true'] {
 .modal-actions button {
   flex: 1;
 }
+
+/* --- แท็บแถบซ้าย (ออกแบบ/ตกแต่ง/ส่งออก) --- */
+.tabbar {
+  display: flex;
+  gap: 4px;
+  background: #f0ece2;
+  border-radius: 9px;
+  padding: 3px;
+  margin-bottom: 4px;
+}
+.tabbar .tab {
+  flex: 1;
+  width: auto;
+  padding: 7px 4px;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  font-size: 13px;
+  color: #6a6153;
+}
+.tabbar .tab:hover {
+  color: #0f6e56;
+}
+.tabbar .tab.active {
+  background: #fff;
+  color: #0f6e56;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* กากบาทลบ deco บน blueprint */
+.dieline-svg .del-handle {
+  cursor: pointer;
+}

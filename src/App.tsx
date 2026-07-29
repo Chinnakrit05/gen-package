@@ -451,6 +451,7 @@ export default function App() {
   const [showDims, setShowDims] = useState(store0.showDims)
   const [showGuides, setShowGuides] = useState(false)
   const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
+  const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>('design')
   const [aiBusy, setAiBusy] = useState(false)
   const [history, setHistory] = useState<DesignVersion[]>(active0.history)
   const [histIdx, setHistIdx] = useState(active0.histIdx)
@@ -766,6 +767,12 @@ export default function App() {
   const rotateDeco = (id: string, deg: number) =>
     setDecos((ds) => ds.map((d) => (d.id === id ? { ...d, rot: deg } : d)))
 
+  const removeDeco = (id: string) =>
+    setDecos((ds) => {
+      if (selectedId === id) setSelectedId(null)
+      return ds.filter((d) => d.id !== id)
+    })
+
   const removeSelected = () => {
     if (!selectedId) return
     setDecos((ds) => ds.filter((d) => d.id !== selectedId))
@@ -820,6 +827,28 @@ export default function App() {
       </header>
       <div className="body">
         <aside>
+          <div className="tabbar" role="tablist">
+            {(
+              [
+                ['design', 'ออกแบบ'],
+                ['artwork', 'ตกแต่ง'],
+                ['export', 'ส่งออก'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                role="tab"
+                className={`tab${sideTab === id ? ' active' : ''}`}
+                aria-selected={sideTab === id}
+                onClick={() => setSideTab(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {sideTab === 'design' && (
+          <>
           <section>
             <h2>รูปแบบบรรจุภัณฑ์</h2>
             <select
@@ -882,8 +911,6 @@ export default function App() {
             </div>
           </section>
 
-          {dieline && (
-            <>
               <section>
                 <h2>{mat.foldable ? 'ขนาดกล่อง (ด้านใน)' : 'ขนาดภาชนะ'}</h2>
                 <DimField
@@ -945,7 +972,11 @@ export default function App() {
                   />
                 </label>
               </section>
+          </>
+          )}
 
+          {sideTab === 'artwork' && (
+          <>
               <section>
                 <h2>โลโก้ / ข้อความ</h2>
                 <div className="art-actions">
@@ -1036,7 +1067,11 @@ export default function App() {
                   ลายจะถูกใส่ลงไฟล์ .svg (vector) และ .pdf (300 dpi) แล้ว — ไม่ใส่ใน .dxf เพราะเป็นไฟล์มีดตัด
                 </p>
               </section>
+          </>
+          )}
 
+          {sideTab === 'export' && (
+          <>
               <section>
                 <h2>จำนวนที่จะสั่ง</h2>
                 <div className="field">
@@ -1196,6 +1231,7 @@ export default function App() {
                 onSelect={setSelectedId}
                 onMove={moveDeco}
                 onRotate={rotateDeco}
+                onRemove={removeDeco}
               />
             </div>
           </div>

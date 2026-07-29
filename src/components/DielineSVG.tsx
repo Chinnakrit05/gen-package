@@ -7,6 +7,7 @@ const DIM_COLOR = '#1b6ea8'
 const SEL_COLOR = '#1b6ea8'
 const SAFE_COLOR = '#1b6ea8'
 const BLEED_COLOR = '#c0158a'
+const DEL_COLOR = '#c0392b'
 
 function Dim({ d }: { d: DimMark }) {
   const vert = Math.abs(d.a.x - d.b.x) < 0.001
@@ -82,6 +83,7 @@ export const DielineSVG = memo(function DielineSVG({
   onSelect,
   onMove,
   onRotate,
+  onRemove,
 }: {
   dieline: Dieline
   showDims: boolean
@@ -91,6 +93,7 @@ export const DielineSVG = memo(function DielineSVG({
   onSelect?: (id: string | null) => void
   onMove?: (id: string, x: number, y: number) => void
   onRotate?: (id: string, deg: number) => void
+  onRemove?: (id: string) => void
 }) {
   const pad = showDims ? 26 : 12
   const svgRef = useRef<SVGSVGElement>(null)
@@ -230,6 +233,21 @@ export const DielineSVG = memo(function DielineSVG({
                       vectorEffect="non-scaling-stroke"
                     />
                     <circle cx={c.x} cy={handleY} r={3} fill="#fff" stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                  </g>
+                )}
+                {editable && onRemove && (
+                  // กากบาทลบที่มุมขวาบนของชิ้น — กด pointerdown แล้วลบทันที (stopPropagation กันไปเริ่มลาก)
+                  <g
+                    className="del-handle"
+                    onPointerDown={(e) => {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      onRemove(d.id)
+                    }}
+                  >
+                    <circle cx={d.x + w} cy={d.y} r={3.4} fill="#fff" stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                    <line x1={d.x + w - 1.7} y1={d.y - 1.7} x2={d.x + w + 1.7} y2={d.y + 1.7} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                    <line x1={d.x + w - 1.7} y1={d.y + 1.7} x2={d.x + w + 1.7} y2={d.y - 1.7} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
                   </g>
                 )}
               </>
