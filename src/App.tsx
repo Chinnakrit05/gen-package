@@ -13,7 +13,6 @@ import {
   recenter,
   cloneDeco,
   withTextW,
-  parseDecos,
   svgArtworkLayer,
   fillSVGLayer,
   renderArtworkCanvas,
@@ -22,6 +21,22 @@ import {
 } from './core/artwork'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import { generateVessel } from './core/vessel'
+import {
+  clamp,
+  freshProject,
+  parseProject,
+  parseSpec,
+  parseHistory,
+  parseQty,
+  clampIdx,
+  DEFAULT_QTY,
+  QTY_MIN,
+  QTY_MAX,
+  MAX_HISTORY,
+  type DesignVersion,
+  type Project,
+} from './core/project'
+import { serializeProject, parseProjectFile, projectFileName } from './core/projectFile'
 // โหลด viewer 3D แบบ lazy — three + R3F เป็นก้อนใหญ่สุดของ bundle และไม่จำเป็น
 // ต่อการเรนเดอร์ครั้งแรก (แถบซ้าย + blueprint เป็น SVG ล้วน) แยกออกไปให้หน้าแรกเบาลง
 const Viewer3D = lazy(() => import('./components/Viewer3D').then((m) => ({ default: m.Viewer3D })))
@@ -30,8 +45,6 @@ const VesselViewer3D = lazy(() =>
 )
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
-
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 interface DimFieldProps {
   label: string
@@ -146,15 +159,6 @@ function dielineSVGString(
   )
 }
 
-const QTY_MIN = 1
-const QTY_MAX = 1_000_000
-const DEFAULT_QTY = 500
-
-const parseQty = (v: unknown): number => {
-  const n = Math.round(Number(v))
-  return Number.isFinite(n) ? clamp(n, QTY_MIN, QTY_MAX) : DEFAULT_QTY
-}
-
 // ช่องจำนวนเก็บข้อความที่กำลังพิมพ์ไว้ต่างหาก ไม่ผูกกับตัวเลขโดยตรง
 // ถ้า clamp ทุกครั้งที่พิมพ์ พอผู้ใช้ลบจนว่างช่องจะเด้งเป็นค่าต่ำสุดทันที
 // แล้วพิมพ์ต่อจะได้เลขปนกัน — จำนวนเป็นค่าที่แก้บ่อย ต้องพิมพ์ได้ลื่น
@@ -202,20 +206,6 @@ function QtyField({
   )
 }
 
-// สิ่งที่ AI สันนิษฐาน/ให้เหตุผลตอนสร้างเวอร์ชันนี้ — เก็บติดไว้เพื่อย้อนดูภายหลัง
-// และใช้พิมพ์ลงใบสเปกที่ส่งโรงงาน (assumptions คือจุดที่ต้องให้โรงงานทักท้วง)
-interface AiInfo {
-  assumptions: string[]
-  layoutNote: string
-  reasoning: string
-}
-
-interface DesignVersion {
-  label: string
-  spec: CurrentSpec
-  ai?: AiInfo
-}
-
 // สแนปช็อตสถานะที่ผู้ใช้แก้ได้ สำหรับ undo/redo (ต่างจาก DesignVersion ที่เก็บเฉพาะสเปกจาก AI)
 interface EditSnapshot {
   templateId: string
@@ -252,35 +242,11 @@ const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
 
 const STORAGE_KEY = 'gen-package-projects-v1'
 const LEGACY_KEY = 'gen-package-design-v1'
-const MAX_HISTORY = 30
-
-// qty คือจำนวนที่จะสั่งผลิต ไม่ใช่สเปกของแบบ จึงเก็บระดับงาน ไม่ใช่ใน CurrentSpec
-// (ไม่ส่งให้ AI และไม่สร้างเวอร์ชันใหม่เวลาแก้ — มันไม่เปลี่ยนรูปกล่องเลย)
-interface Project {
-  id: string
-  name: string
-  updatedAt: number
-  live: CurrentSpec
-  qty: number
-  fillColor: string | null
-  decos: Deco[]
-  history: DesignVersion[]
-  histIdx: number
-}
 
 interface Store {
   projects: Project[]
   activeId: string
   showDims: boolean
-}
-
-const DEFAULT_SPEC: CurrentSpec = {
-  template: 'tuck-end',
-  materialId: 'carton-300',
-  W: 80,
-  D: 50,
-  H: 120,
-  handle: false,
 }
 
 // modal ตั้งชื่องาน — ใช้ทั้งตอนสร้างงานใหม่และเปลี่ยนชื่อ (แทน window.prompt เดิม)
@@ -326,90 +292,6 @@ function NameModal({
       </div>
     </div>
   )
-}
-
-function freshProject(n: number): Project {
-  return {
-    id: crypto.randomUUID(),
-    name: `งาน ${n}`,
-    updatedAt: Date.now(),
-    live: { ...DEFAULT_SPEC },
-    qty: DEFAULT_QTY,
-    fillColor: null,
-    decos: [],
-    history: [],
-    histIdx: -1,
-  }
-}
-
-function parseSpec(s: unknown): CurrentSpec | null {
-  if (typeof s !== 'object' || s === null) return null
-  const o = s as Record<string, unknown>
-  const template = TEMPLATES.some((t) => t.id === o.template) ? (o.template as string) : null
-  const materialId = MATERIALS.some((m) => m.id === o.materialId) ? (o.materialId as string) : null
-  const W = Number(o.W)
-  const D = Number(o.D)
-  const H = Number(o.H)
-  if (!template || !materialId || !Number.isFinite(W) || !Number.isFinite(D) || !Number.isFinite(H)) {
-    return null
-  }
-  return {
-    template,
-    materialId,
-    W: clamp(W, 30, 250),
-    D: clamp(D, 20, 150),
-    H: clamp(H, 30, 300),
-    handle: o.handle === true,
-  }
-}
-
-function parseAiInfo(v: unknown): AiInfo | undefined {
-  if (typeof v !== 'object' || v === null) return undefined
-  const o = v as Record<string, unknown>
-  const assumptions = Array.isArray(o.assumptions)
-    ? o.assumptions.filter((x): x is string => typeof x === 'string').map((x) => x.slice(0, 300))
-    : []
-  const layoutNote = typeof o.layoutNote === 'string' ? o.layoutNote.slice(0, 200) : ''
-  const reasoning = typeof o.reasoning === 'string' ? o.reasoning.slice(0, 600) : ''
-  if (!assumptions.length && !layoutNote && !reasoning) return undefined
-  return { assumptions, layoutNote, reasoning }
-}
-
-function parseHistory(v: unknown): DesignVersion[] {
-  if (!Array.isArray(v)) return []
-  return v
-    .map((item: unknown): DesignVersion | null => {
-      const o = item as Record<string, unknown> | null
-      const spec = parseSpec(o?.spec)
-      if (!spec) return null
-      return { label: String(o?.label ?? 'เวอร์ชัน').slice(0, 120), spec, ai: parseAiInfo(o?.ai) }
-    })
-    .filter((item): item is DesignVersion => item !== null)
-    .slice(-MAX_HISTORY)
-}
-
-function clampIdx(raw: unknown, len: number): number {
-  const n = Number(raw)
-  return Math.min(Math.max(-1, Number.isInteger(n) ? n : len - 1), len - 1)
-}
-
-function parseProject(v: unknown, idx: number): Project | null {
-  if (typeof v !== 'object' || v === null) return null
-  const o = v as Record<string, unknown>
-  const live = parseSpec(o.live)
-  if (!live) return null
-  const history = parseHistory(o.history)
-  return {
-    id: typeof o.id === 'string' && o.id ? o.id : crypto.randomUUID(),
-    name: String(o.name ?? `งาน ${idx + 1}`).slice(0, 60) || `งาน ${idx + 1}`,
-    updatedAt: Number(o.updatedAt) || Date.now(),
-    live,
-    qty: parseQty(o.qty),
-    fillColor: typeof o.fillColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.fillColor) ? o.fillColor : null,
-    decos: parseDecos(o.decos, o.artwork),
-    history,
-    histIdx: clampIdx(o.histIdx, history.length),
-  }
 }
 
 function loadStore(): Store {
@@ -762,6 +644,44 @@ export default function App() {
         setProjects((prev) => prev.map((p) => (p.id === activeId ? { ...p, name: n } : p)))
       },
     })
+  }
+
+  // --- ส่งออก/นำเข้างานเป็นไฟล์ .genpkg.json (สำรอง/ย้ายเครื่อง/ส่งให้ลูกค้าเปิดต่อ) ---
+
+  const exportProject = () => {
+    if (aiBusy) return
+    // flushInto ให้ได้สถานะล่าสุดที่ยังไม่ทันเขียนเข้า projects (debounce 300ms)
+    const cur = flushInto(projects).find((p) => p.id === activeId)
+    if (!cur) return
+    // ตั้งชื่อไฟล์ตามชื่องาน (ไม่ใช้ saveFile ที่ตั้งชื่อตามสเปกกล่อง)
+    const blob = new Blob([serializeProject(cur)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = projectFileName(cur.name)
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const importProject = async (file: File | undefined) => {
+    if (!file || aiBusy) return
+    let res
+    try {
+      res = parseProjectFile(await file.text())
+    } catch {
+      window.alert('อ่านไฟล์ไม่สำเร็จ')
+      return
+    }
+    if (!res.ok) {
+      window.alert(`นำเข้าไม่สำเร็จ: ${res.error}`)
+      return
+    }
+    // บันทึกงานที่เปิดอยู่ก่อน แล้วเพิ่มงานที่นำเข้าเป็นงานใหม่ (ไม่ทับของเดิม) และสลับไป
+    setProjects((prev) => [...flushInto(prev), res.project])
+    openProject(res.project)
+    if (res.warnings.length) {
+      window.alert(`นำเข้าสำเร็จ แต่มีการปรับข้อมูลบางส่วน:\n• ${res.warnings.join('\n• ')}`)
+    }
   }
 
   const changeTemplate = (id: string) => {
@@ -1329,6 +1249,32 @@ export default function App() {
                 <p className="hint">
                   ตัวเลขบนแบบคือระยะจริงบนแผ่น (บวกเผื่อความหนา {mat.thickness} มม. แล้ว)
                   จึงใหญ่กว่าขนาดด้านในที่ตั้งไว้เล็กน้อย
+                </p>
+              </section>
+
+              <section>
+                <h2>สำรอง / ย้ายงาน (.genpkg.json)</h2>
+                <div className="art-actions">
+                  <button disabled={aiBusy} onClick={exportProject}>
+                    ⬇ ส่งออกงานนี้
+                  </button>
+                  <label className="file-pick inline">
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      disabled={aiBusy}
+                      onChange={(e) => {
+                        void importProject(e.target.files?.[0])
+                        e.target.value = ''
+                      }}
+                    />
+                    <span>⬆ นำเข้างาน</span>
+                  </label>
+                </div>
+                <p className="hint">
+                  เก็บทั้งงาน (รูปแบบ/วัสดุ/ขนาด/สี/โลโก้-ข้อความ/ประวัติเวอร์ชัน) เป็นไฟล์เดียว —
+                  สำรองไว้ ย้ายไปเครื่องอื่น หรือส่งให้ลูกค้า/โรงงานเปิดต่อได้ นำเข้าแล้วเพิ่มเป็นงานใหม่
+                  ไม่ทับงานเดิม
                 </p>
               </section>
             </>
