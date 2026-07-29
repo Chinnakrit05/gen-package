@@ -50,6 +50,7 @@ export function dielinePDFBytes(
   withDims: boolean,
   artwork?: PdfArtwork,
   guides?: Guides | null,
+  fillColor?: string | null,
 ): Uint8Array {
   const pad = withDims ? 26 : 5
   const pageW = (d.width + pad * 2) * K
@@ -126,14 +127,32 @@ export function dielinePDFBytes(
 
   // เลขวัตถุ: 1-5 คงที่ (catalog/pages/page/contents/font) จากนั้น OCG แล้วปิดท้ายด้วยภาพ
   const hasGuides = !!guides && (guides.safe.length > 0 || guides.bleed.length > 0)
+  const hasFill = !!fillColor
   let num = 6
   const cutOCG = num++
   const creaseOCG = num++
   const dimsOCG = withDims ? num++ : 0
   const artOCG = artwork ? num++ : 0
   const guidesOCG = hasGuides ? num++ : 0
+  const fillOCG = hasFill ? num++ : 0
   const imgNum = artwork ? num++ : 0
   const lastObj = num - 1
+
+  // เลเยอร์สีพื้น: เติมสีลง polygon ของทุกแผงจริง (ล่างสุด) — vector
+  let fillBody = ''
+  if (hasFill && fillColor) {
+    const parts: string[] = [`${rgb(fillColor)} rg`]
+    for (const p of d.panels) {
+      if (p.outline.length < 3) continue
+      parts.push(`${n(tx(p.outline[0].x))} ${n(ty(p.outline[0].y))} m`)
+      for (let i = 1; i < p.outline.length; i++) {
+        parts.push(`${n(tx(p.outline[i].x))} ${n(ty(p.outline[i].y))} l`)
+      }
+      parts.push('h')
+    }
+    parts.push('f')
+    fillBody = `q\n/OC /OCf BDC\n${parts.join('\n')}\nEMC\nQ\n`
+  }
 
   // เลเยอร์ไกด์: safe (น้ำเงินประ ปิด polygon) + bleed (ม่วงประ เฉพาะขอบนอก)
   // เปลี่ยนสี/เส้นประกลางเลเยอร์ได้เพราะ state ค้างอยู่ใน q/Q เดียวกัน
@@ -164,18 +183,20 @@ export function dielinePDFBytes(
     : ''
 
   // ทั้งหน้าอยู่ในระบบ มม. โดยสเกลครั้งเดียวที่นี่ ตัวเลขในสตรีมจึงอ่านเป็น มม. ตรง ๆ
-  const stream = `q\n${n(K)} 0 0 ${n(K)} 0 0 cm\n${artBody}${cutBody}${creaseBody}${guideBody}${dimsBody}Q\n`
+  const stream = `q\n${n(K)} 0 0 ${n(K)} 0 0 cm\n${fillBody}${artBody}${cutBody}${creaseBody}${guideBody}${dimsBody}Q\n`
 
   const ocgRefs: string[] = [`${cutOCG} 0 R`, `${creaseOCG} 0 R`]
   if (dimsOCG) ocgRefs.push(`${dimsOCG} 0 R`)
   if (artOCG) ocgRefs.push(`${artOCG} 0 R`)
   if (guidesOCG) ocgRefs.push(`${guidesOCG} 0 R`)
+  if (fillOCG) ocgRefs.push(`${fillOCG} 0 R`)
   const ocgList = ocgRefs.join(' ')
 
   const props: string[] = [`/OC1 ${cutOCG} 0 R`, `/OC2 ${creaseOCG} 0 R`]
   if (dimsOCG) props.push(`/OC3 ${dimsOCG} 0 R`)
   if (artOCG) props.push(`/OCa ${artOCG} 0 R`)
   if (guidesOCG) props.push(`/OCg ${guidesOCG} 0 R`)
+  if (fillOCG) props.push(`/OCf ${fillOCG} 0 R`)
   const xobj = artwork ? ` /XObject << /Im0 ${imgNum} 0 R >>` : ''
 
   const enc = new TextEncoder()
@@ -210,6 +231,7 @@ export function dielinePDFBytes(
   if (dimsOCG) obj(`${dimsOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('dims')} >>\nendobj\n`)
   if (artOCG) obj(`${artOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('artwork')} >>\nendobj\n`)
   if (guidesOCG) obj(`${guidesOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('guides')} >>\nendobj\n`)
+  if (fillOCG) obj(`${fillOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('fill')} >>\nendobj\n`)
   if (artwork) {
     offsets.push(len)
     push(

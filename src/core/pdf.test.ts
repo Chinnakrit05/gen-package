@@ -123,4 +123,18 @@ describe('pdf: เลเยอร์เสริม', () => {
     expect(x.ok).toBe(true)
     expect(x.size - 1).toBe(11) // ครบทุกเลเยอร์ = 11 objects
   })
+
+  it('fill: สีพื้นเป็น OCG vector (rg + f) และ xref ถูกเมื่อรวมทุกเลเยอร์', () => {
+    const g = computeGuides(d.panels)
+    const s = dec(dielinePDFBytes(d, true, { jpeg: fakeJpeg(), w: 10, h: 10 }, g, '#0f6e56'))
+    expect(s.includes('(fill)')).toBe(true)
+    expect(s.includes('/OC /OCf BDC')).toBe(true)
+    expect(/[\d.]+ [\d.]+ [\d.]+ rg/.test(s)).toBe(true) // ตั้งสีเติม
+    expect(xrefOffsetsOk(s).ok).toBe(true)
+    expect(xrefOffsetsOk(s).size - 1).toBe(12) // + fill OCG = 12 objects
+  })
+
+  it('ไม่มีสีพื้น → ไม่มีเลเยอร์ fill', () => {
+    expect(dec(dielinePDFBytes(d, false)).includes('(fill)')).toBe(false)
+  })
 })

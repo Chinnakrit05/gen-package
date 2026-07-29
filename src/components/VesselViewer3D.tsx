@@ -11,7 +11,7 @@ import { drawDeco2D, type Deco } from '../core/artwork'
 // จึงเห็นลาย (โลโก้/ข้อความ) พันรอบขวดตรงตำแหน่งเดียวกับบน blueprint
 
 // วาดแผ่นฉลากลง canvas — พื้นขาวเสมอ (ฉลากคือกระดาษพิมพ์ ไม่ใช่สีวัสดุภาชนะ)
-function useLabelTexture(vessel: Vessel, decos: Deco[]) {
+function useLabelTexture(vessel: Vessel, decos: Deco[], fillColor: string | null | undefined) {
   const [tex, setTex] = useState<THREE.CanvasTexture | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const imgCache = useRef(new Map<string, HTMLImageElement>())
@@ -53,7 +53,7 @@ function useLabelTexture(vessel: Vessel, decos: Deco[]) {
     }
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.fillStyle = '#ffffff'
+    ctx.fillStyle = fillColor || '#ffffff'
     ctx.fillRect(0, 0, w, h)
     // ผิวทรงกระบอกมองจากด้านนอก UV อ่านตรง — ไม่ต้องมิเรอร์แบบกล่อง
     for (const e of decos) drawDeco2D(ctx, e, s, (src) => imgCache.current.get(src))
@@ -76,8 +76,8 @@ function useLabelTexture(vessel: Vessel, decos: Deco[]) {
   return tex
 }
 
-function VesselModel({ vessel, mat, decos }: { vessel: Vessel; mat: Material; decos: Deco[] }) {
-  const tex = useLabelTexture(vessel, decos)
+function VesselModel({ vessel, mat, decos, fillColor }: { vessel: Vessel; mat: Material; decos: Deco[]; fillColor: string | null | undefined }) {
+  const tex = useLabelTexture(vessel, decos, fillColor)
 
   const body = useMemo(
     () => new THREE.LatheGeometry(vessel.profile.map((p) => new THREE.Vector2(p.x, p.y)), 64),
@@ -119,7 +119,7 @@ function VesselModel({ vessel, mat, decos }: { vessel: Vessel; mat: Material; de
   )
 }
 
-export function VesselViewer3D({ vessel, mat, decos }: { vessel: Vessel; mat: Material; decos: Deco[] }) {
+export function VesselViewer3D({ vessel, mat, decos, fillColor }: { vessel: Vessel; mat: Material; decos: Deco[]; fillColor?: string | null }) {
   const dist = Math.max(vessel.H, vessel.labelR * 4) * 2.2
   return (
     <Canvas
@@ -131,7 +131,7 @@ export function VesselViewer3D({ vessel, mat, decos }: { vessel: Vessel; mat: Ma
       <ambientLight intensity={0.85} />
       <directionalLight position={[250, 420, 300]} intensity={1.7} />
       <directionalLight position={[-220, 120, -260]} intensity={0.6} />
-      <VesselModel vessel={vessel} mat={mat} decos={decos} />
+      <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} />
       <OrbitControls makeDefault enableDamping />
     </Canvas>
   )

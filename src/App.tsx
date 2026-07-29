@@ -14,6 +14,7 @@ import {
   withTextW,
   parseDecos,
   svgArtworkLayer,
+  fillSVGLayer,
   renderArtworkCanvas,
   elW,
   type Deco,
@@ -91,6 +92,7 @@ function dielineSVGString(
   withDims: boolean,
   decos: Deco[] = [],
   guides: Guides | null = null,
+  fillColor: string | null = null,
 ): string {
   const pathsOf = (kind: 'cut' | 'crease') =>
     d.segments
@@ -126,7 +128,8 @@ function dielineSVGString(
     dimLayer = svgLayer('dims', 'stroke="#1b6ea8" stroke-width="0.25" font-family="sans-serif"', marks)
   }
 
-  // artwork อยู่ล่างสุด (วาดก่อน) เพื่อให้เส้น cut/crease โชว์ทับเป็นไกด์ — ตรงกับที่เห็นบนจอ
+  // สีพื้นอยู่ล่างสุด แล้วลาย แล้วเส้น cut/crease โชว์ทับเป็นไกด์ — ตรงกับที่เห็นบนจอ
+  const fillLayer = fillSVGLayer(d, fillColor)
   const artLayer = svgArtworkLayer(decos)
   const guideLayer = guides ? guidesSVGLayer(guides) : ''
 
@@ -137,8 +140,8 @@ function dielineSVGString(
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"` +
     ` xmlns:xlink="http://www.w3.org/1999/xlink"` +
     ` width="${w}mm" height="${h}mm" viewBox="${-pad} ${-pad} ${w} ${h}">\n` +
-    `<!-- สเกลจริง 1:1 หน่วย mm | artwork = ลายพิมพ์ | cut = เส้นตัด (แดง) | crease = เส้นพับ (เขียวประ) | guides = เผื่อตัด/ปลอดภัย | dims = เส้นบอกขนาด (ห้ามใช้ผลิต) -->\n` +
-    `${artLayer}${cutLayer}${creaseLayer}${guideLayer}${dimLayer}</svg>\n`
+    `<!-- สเกลจริง 1:1 หน่วย mm | fill = สีพื้น | artwork = ลายพิมพ์ | cut = เส้นตัด (แดง) | crease = เส้นพับ (เขียวประ) | guides = เผื่อตัด/ปลอดภัย | dims = เส้นบอกขนาด (ห้ามใช้ผลิต) -->\n` +
+    `${fillLayer}${artLayer}${cutLayer}${creaseLayer}${guideLayer}${dimLayer}</svg>\n`
   )
 }
 
@@ -234,6 +237,7 @@ interface Project {
   updatedAt: number
   live: CurrentSpec
   qty: number
+  fillColor: string | null
   decos: Deco[]
   history: DesignVersion[]
   histIdx: number
@@ -306,6 +310,7 @@ function freshProject(n: number): Project {
     updatedAt: Date.now(),
     live: { ...DEFAULT_SPEC },
     qty: DEFAULT_QTY,
+    fillColor: null,
     decos: [],
     history: [],
     histIdx: -1,
@@ -375,6 +380,7 @@ function parseProject(v: unknown, idx: number): Project | null {
     updatedAt: Number(o.updatedAt) || Date.now(),
     live,
     qty: parseQty(o.qty),
+    fillColor: typeof o.fillColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.fillColor) ? o.fillColor : null,
     decos: parseDecos(o.decos, o.artwork),
     history,
     histIdx: clampIdx(o.histIdx, history.length),
@@ -416,6 +422,7 @@ function loadStore(): Store {
           updatedAt: Date.now(),
           live,
           qty: DEFAULT_QTY,
+          fillColor: null,
           decos: [],
           history,
           histIdx: clampIdx(d.histIdx, history.length),
@@ -445,6 +452,7 @@ export default function App() {
   const [H, setH] = useState(active0.live.H)
   const [handle, setHandle] = useState(active0.live.handle)
   const [qty, setQty] = useState(active0.qty)
+  const [fillColor, setFillColor] = useState<string | null>(active0.fillColor)
   const [decos, setDecos] = useState<Deco[]>(active0.decos)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [fold, setFold] = useState(1)
@@ -486,6 +494,7 @@ export default function App() {
                 ...p,
                 live: { template: templateId, materialId, W, D, H, handle },
                 qty,
+                fillColor,
                 decos,
                 history,
                 histIdx,
@@ -496,7 +505,7 @@ export default function App() {
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, decos, activeId])
 
   // save ทุกงานลง localStorage
   useEffect(() => {
@@ -593,7 +602,7 @@ export default function App() {
   const flushInto = (list: Project[]): Project[] =>
     list.map((p) =>
       p.id === activeId
-        ? { ...p, live: liveSpec(), qty, decos, history, histIdx, updatedAt: Date.now() }
+        ? { ...p, live: liveSpec(), qty, fillColor, decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -602,6 +611,7 @@ export default function App() {
     setActiveId(p.id)
     setSpec(p.live)
     setQty(p.qty)
+    setFillColor(p.fillColor)
     setDecos(p.decos)
     setSelectedId(null)
     setHistory(p.history)
@@ -685,7 +695,7 @@ export default function App() {
 
   const downloadSVG = () => {
     if (!dieline) return
-    saveFile(dielineSVGString(dieline, showDims, decos, guides), 'image/svg+xml', 'svg')
+    saveFile(dielineSVGString(dieline, showDims, decos, guides, fillColor), 'image/svg+xml', 'svg')
   }
 
   // DXF คือไฟล์ที่โรงทำมีดไดคัทใช้จริง — มีแต่เลเยอร์ CUT/CREASE ไม่มีเส้นบอกขนาด
@@ -707,7 +717,7 @@ export default function App() {
       for (let i = 0; i < bin.length; i++) jpeg[i] = bin.charCodeAt(i)
       art = { jpeg, w: canvas.width, h: canvas.height }
     }
-    saveFile(dielinePDFBytes(dieline, showDims, art, guides), 'application/pdf', 'pdf')
+    saveFile(dielinePDFBytes(dieline, showDims, art, guides, fillColor), 'application/pdf', 'pdf')
   }
 
   const selected = decos.find((d) => d.id === selectedId) ?? null
@@ -978,6 +988,30 @@ export default function App() {
           {sideTab === 'artwork' && (
           <>
               <section>
+                <h2>สีพื้นแพ็กเกจ</h2>
+                <div className="art-actions">
+                  <label className="fill-swatch">
+                    <input
+                      type="color"
+                      value={fillColor ?? '#0f6e56'}
+                      disabled={aiBusy}
+                      aria-label="สีพื้นแพ็กเกจ"
+                      onChange={(e) => setFillColor(e.target.value)}
+                    />
+                    <span>{fillColor ? fillColor.toUpperCase() : 'เลือกสีพื้น'}</span>
+                  </label>
+                  <button disabled={aiBusy || !fillColor} onClick={() => setFillColor(null)}>
+                    ไม่มีสี
+                  </button>
+                </div>
+                <p className="hint">
+                  {mat.foldable
+                    ? 'ถมสีทั้งแผ่น (flood) เข้าไฟล์ .svg/.pdf จริง — ไม่ใส่ใน .dxf; “ไม่มีสี” = โชว์สีวัสดุ'
+                    : 'ถมสีพื้นฉลากทั้งแผ่น เข้าไฟล์ .svg/.pdf จริง; “ไม่มีสี” = ฉลากพื้นขาว'}
+                </p>
+              </section>
+
+              <section>
                 <h2>โลโก้ / ข้อความ</h2>
                 <div className="art-actions">
                   <label className="file-pick inline">
@@ -1208,9 +1242,10 @@ export default function App() {
                     depth={template.foldDepth({ W, D, H }, mat)}
                     tilt={template.tilt}
                     decos={decos}
+                    fillColor={fillColor}
                   />
                 ) : (
-                  <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} />
+                  <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} />
                 )}
               </Suspense>
             </div>
@@ -1227,6 +1262,7 @@ export default function App() {
                 showDims={showDims}
                 decos={decos}
                 guides={guides}
+                fillColor={fillColor}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
                 onMove={moveDeco}

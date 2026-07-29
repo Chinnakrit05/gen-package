@@ -141,6 +141,35 @@ export function sheetUV(X: number, Y: number, width: number, height: number): [n
 const xmlEsc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
+// สีพื้นทั้งแผ่น (flood color) = เติมสีลงพื้นที่ของทุกแผงจริง (ไม่ใช่ทั้งสี่เหลี่ยม)
+// เพราะช่องว่างระหว่างแฟลปไม่ใช่กระดาษ ไม่ควรมีสี — แผงต่อกันสนิทจึงคลุมทั้งชิ้นพอดี
+export function fillSVGLayer(dieline: Dieline, color: string | null): string {
+  if (!color) return ''
+  const polys = dieline.panels
+    .map(
+      (p) =>
+        `    <polygon points="${p.outline.map((q) => `${q.x},${q.y}`).join(' ')}" fill="${color}"/>`,
+    )
+    .join('\n')
+  return `  <g id="fill" inkscape:groupmode="layer" inkscape:label="fill">\n${polys}\n  </g>\n`
+}
+
+// วาดพื้นสีลง canvas (พิกัดแผ่นคลี่ × s) — ใช้ทั้ง texture 3D และ export PDF
+export function drawFill(
+  ctx: CanvasRenderingContext2D,
+  dieline: Dieline,
+  color: string,
+  s: number,
+) {
+  ctx.fillStyle = color
+  for (const p of dieline.panels) {
+    ctx.beginPath()
+    p.outline.forEach((q, i) => (i ? ctx.lineTo(q.x * s, q.y * s) : ctx.moveTo(q.x * s, q.y * s)))
+    ctx.closePath()
+    ctx.fill()
+  }
+}
+
 // สร้างเลเยอร์ <g id="artwork"> สำหรับฝังใน SVG export — vector ล้วน คุณภาพงานพิมพ์
 // รูปฝังเป็น data URI (ไฟล์ standalone), ข้อความเป็น <text> แก้ไขได้ใน Illustrator
 // ไม่มิเรอร์ — SVG คือเลย์เอาต์ฝั่งพิมพ์/ด้านนอก เหมือนที่เห็นบน blueprint

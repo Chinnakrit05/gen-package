@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import type { Dieline, Material } from '../core/types'
-import { elW, elH, sheetUV, type Deco } from '../core/artwork'
+import { drawFill, elW, elH, sheetUV, type Deco } from '../core/artwork'
 import { computeMatrices } from '../core/fold'
 
 // วาดองค์ประกอบ (รูป/ข้อความ) ลง ctx ในพิกัดแผ่นคลี่ (สเกล s) พร้อมหมุนรอบจุดกึ่งกลาง
@@ -39,7 +39,7 @@ function drawDeco(
 // วาดสีวัสดุ + องค์ประกอบทั้งหมดลงผ้าใบขนาดเท่าแผ่นคลี่ แล้วใช้เป็น texture ผืนเดียวของทุกแผง
 // เพราะ UV ของทุกแผงอ้างพิกัดแผ่นคลี่ร่วมกัน (ดู uv ใน FoldedModel) องค์ประกอบจึงพาด
 // ข้ามรอยพับได้ถูกต้องเหมือนพิมพ์ลงแผ่นจริงแล้วค่อยพับ
-function useSheetTexture(dieline: Dieline, mat: Material, decos: Deco[]) {
+function useSheetTexture(dieline: Dieline, mat: Material, decos: Deco[], fillColor: string | null | undefined) {
   const [tex, setTex] = useState<THREE.CanvasTexture | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const imgCache = useRef(new Map<string, HTMLImageElement>())
@@ -71,7 +71,8 @@ function useSheetTexture(dieline: Dieline, mat: Material, decos: Deco[]) {
   const decoKey = JSON.stringify(decos)
 
   useEffect(() => {
-    if (decos.length === 0) {
+    // ไม่มีทั้งลายและสีพื้น → ใช้สีวัสดุตรง ๆ ไม่ต้องมี texture
+    if (decos.length === 0 && !fillColor) {
       setTex(null)
       return
     }
@@ -90,8 +91,10 @@ function useSheetTexture(dieline: Dieline, mat: Material, decos: Deco[]) {
     if (!ctx) return
 
     ctx.clearRect(0, 0, w, h)
+    // พื้นสีวัสดุก่อน (ช่องว่าง/ขอบ) แล้วทับด้วยสีพื้นแพ็กเกจเฉพาะพื้นที่แผงจริง
     ctx.fillStyle = mat.color
     ctx.fillRect(0, 0, w, h)
+    if (fillColor) drawFill(ctx, dieline, fillColor, s)
     for (const e of decos) drawDeco(ctx, e, s, (src) => imgCache.current.get(src))
 
     // ห้าม dispose ของเก่าตรงนี้ — StrictMode เรียกตัวอัปเดตซ้ำได้
@@ -106,7 +109,7 @@ function useSheetTexture(dieline: Dieline, mat: Material, decos: Deco[]) {
       return t
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decoKey, imgReady, mat.color, dieline.width, dieline.height])
+  }, [decoKey, imgReady, fillColor, mat.color, dieline.width, dieline.height])
 
   // คืนหน่วยความจำเมื่อ viewer ถูกถอด
   useEffect(() => () => tex?.dispose(), [tex])
@@ -204,10 +207,11 @@ interface ModelProps {
   depth: number
   tilt: number
   decos?: Deco[]
+  fillColor?: string | null
 }
 
-function FoldedModel({ dieline, mat, fold, depth, tilt, decos }: ModelProps) {
-  const tex = useSheetTexture(dieline, mat, decos ?? [])
+function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor }: ModelProps) {
+  const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor)
 
   const geoms = useMemo(
     () =>

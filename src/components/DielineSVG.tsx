@@ -79,6 +79,7 @@ export const DielineSVG = memo(function DielineSVG({
   showDims,
   decos = [],
   guides,
+  fillColor,
   selectedId,
   onSelect,
   onMove,
@@ -89,6 +90,7 @@ export const DielineSVG = memo(function DielineSVG({
   showDims: boolean
   decos?: Deco[]
   guides?: Guides | null
+  fillColor?: string | null
   selectedId?: string | null
   onSelect?: (id: string | null) => void
   onMove?: (id: string, x: number, y: number) => void
@@ -181,6 +183,13 @@ export const DielineSVG = memo(function DielineSVG({
       // คลิกที่ว่าง = ยกเลิกการเลือก
       onPointerDown={() => editable && !grab.current && onSelect?.(null)}
     >
+      {fillColor && (
+        <g className="fill" pointerEvents="none">
+          {dieline.panels.map((p, i) => (
+            <polygon key={i} points={p.outline.map((q) => `${q.x},${q.y}`).join(' ')} fill={fillColor} />
+          ))}
+        </g>
+      )}
       {dieline.segments.map((s, i) => (
         <path
           key={i}

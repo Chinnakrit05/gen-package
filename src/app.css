@@ -777,3 +777,26 @@ button[aria-disabled='true'] {
 .dieline-svg .del-handle {
   cursor: pointer;
 }
+
+/* สวอทช์สีพื้นแพ็กเกจ */
+.fill-swatch {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid #d8cfbb;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #5c5344;
+}
+.fill-swatch input[type='color'] {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #c9bda2;
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+}
