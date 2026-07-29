@@ -1,6 +1,7 @@
 import { memo, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
 import { elW, elH, elCenter, type Deco } from '../core/artwork'
+import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
 const DIM_COLOR = '#1b6ea8'
@@ -8,6 +9,8 @@ const SEL_COLOR = '#1b6ea8'
 const SAFE_COLOR = '#1b6ea8'
 const BLEED_COLOR = '#c0158a'
 const DEL_COLOR = '#c0392b'
+const SNAP_COLOR = '#ff7a00'
+const SNAP_PX = 6 // ระยะดูดบนจอ (พิกเซล) — แปลงเป็น มม. ตามซูมปัจจุบัน จะได้รู้สึกคงที่ทุกขนาดแผ่น
 
 function Dim({ d }: { d: DimMark }) {
   const vert = Math.abs(d.a.x - d.b.x) < 0.001
@@ -100,7 +103,10 @@ export const DielineSVG = memo(function DielineSVG({
   const pad = showDims ? 26 : 12
   const svgRef = useRef<SVGSVGElement>(null)
   const grab = useRef<Grab | null>(null)
+  const snapT = useRef<SnapTargets | null>(null)
   const [active, setActive] = useState(false)
+  // เส้นไกด์ที่กำลังดูดติด (ค่า x ของเส้นตั้ง / y ของเส้นนอน) — null = ไม่มี
+  const [snap, setSnap] = useState<{ vx: number | null; vy: number | null }>({ vx: null, vy: null })
   const editable = !!(onMove && onRotate && onSelect)
 
   // แปลงพิกัดหน้าจอเป็นพิกัดแผ่นคลี่ (มม.) — viewBox เป็นหน่วย มม. อยู่แล้ว
@@ -128,6 +134,8 @@ export const DielineSVG = memo(function DielineSVG({
     const p = toSheet(e.clientX, e.clientY)
     if (!p) return
     grab.current = { mode: 'move', id: d.id, dx: p.x - d.x, dy: p.y - d.y }
+    // เส้นเป้าหมายคงที่ตลอดการลาก (แผงนิ่ง, ชิ้นอื่นนิ่ง) — คิดครั้งเดียวตอนเริ่ม
+    snapT.current = snapTargets(dieline.panels, decos, d.id, dieline.width, dieline.height)
     setActive(true)
     capture(e)
     e.stopPropagation()
@@ -153,9 +161,21 @@ export const DielineSVG = memo(function DielineSVG({
     if (g.mode === 'move') {
       const w = elW(d)
       const h = elH(d)
+      let rx = p.x - g.dx
+      let ry = p.y - g.dy
+      // ดูดเข้าแนว เว้นแต่กด Alt ค้าง (ลากอิสระ) — threshold แปลงจากพิกเซลเป็น มม. ตามซูมปัจจุบัน
+      if (!e.altKey && snapT.current) {
+        const scale = svgRef.current?.getScreenCTM()?.a || 1
+        const s = applySnap(rx, ry, w, h, snapT.current, SNAP_PX / scale)
+        rx = s.x
+        ry = s.y
+        setSnap({ vx: s.vx, vy: s.vy })
+      } else if (snap.vx !== null || snap.vy !== null) {
+        setSnap({ vx: null, vy: null })
+      }
       // กันลากหลุดจนหาไม่เจอ แต่ยังให้เลยขอบได้ (งานจริงมักออกแบบให้ลายตกขอบ)
-      const x = Math.min(Math.max(p.x - g.dx, -w / 2), dieline.width - w / 2)
-      const y = Math.min(Math.max(p.y - g.dy, -h / 2), dieline.height - h / 2)
+      const x = Math.min(Math.max(rx, -w / 2), dieline.width - w / 2)
+      const y = Math.min(Math.max(ry, -h / 2), dieline.height - h / 2)
       onMove?.(d.id, x, y)
     } else {
       const c = elCenter(d)
@@ -167,7 +187,9 @@ export const DielineSVG = memo(function DielineSVG({
 
   const endDrag = (e: React.PointerEvent) => {
     grab.current = null
+    snapT.current = null
     setActive(false)
+    setSnap({ vx: null, vy: null })
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
   }
 
@@ -264,6 +286,35 @@ export const DielineSVG = memo(function DielineSVG({
           </g>
         )
       })}
+
+      {active && (snap.vx !== null || snap.vy !== null) && (
+        <g className="snap-lines" pointerEvents="none">
+          {snap.vx !== null && (
+            <line
+              x1={snap.vx}
+              y1={-pad}
+              x2={snap.vx}
+              y2={dieline.height + pad}
+              stroke={SNAP_COLOR}
+              strokeWidth={0.8}
+              strokeDasharray="3 3"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+          {snap.vy !== null && (
+            <line
+              x1={-pad}
+              y1={snap.vy}
+              x2={dieline.width + pad}
+              y2={snap.vy}
+              stroke={SNAP_COLOR}
+              strokeWidth={0.8}
+              strokeDasharray="3 3"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+        </g>
+      )}
 
       {guides && (
         <g className="guides" pointerEvents="none">
