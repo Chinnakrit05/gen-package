@@ -4,6 +4,7 @@ import { generateMailerBox } from './mailer'
 import { generateFefco0427 } from './fefco0427'
 import { generateSleeve } from './sleeve'
 import { generateBottleCarrier } from './bottleCarrier'
+import { generateTrayBox } from './tray'
 
 export interface BoxTemplate {
   id: string
@@ -66,6 +67,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: false,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateSleeve,
+  },
+  {
+    id: 'tray',
+    nameTh: 'กล่องถาด (open tray)',
+    detail: 'ถาดเปิดบน ผนัง 4 ด้านพับขึ้น มุมมีลิ้นล็อกด้านใน — ถาดอาหาร/ดิสเพลย์ หรือลิ้นชักคู่กับ sleeve',
+    defaults: { W: 160, D: 110, H: 40 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.H + m.thickness,
+    generate: generateTrayBox,
   },
 ]
 
