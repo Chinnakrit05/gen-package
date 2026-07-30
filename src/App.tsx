@@ -10,6 +10,7 @@ import {
   loadImageFile,
   makeImageEl,
   makeTextEl,
+  makeShapeEl,
   recenter,
   cloneDeco,
   withTextW,
@@ -843,6 +844,13 @@ export default function App() {
     setSelectedId(el.id)
   }
 
+  const addShape = (shape: 'rect' | 'ellipse' | 'line') => {
+    if (!dieline) return
+    const el = makeShapeEl(dieline, shape)
+    setDecos((ds) => [...ds, el])
+    setSelectedId(el.id)
+  }
+
   // แก้เฉพาะชิ้นที่เลือก ผ่านฟังก์ชันแปลง (คงชนิด image/text ไว้)
   const patchSelected = (fn: (d: Deco) => Deco) => {
     if (!selectedId) return
@@ -1167,7 +1175,7 @@ export default function App() {
               </section>
 
               <section>
-                <h2>โลโก้ / ข้อความ</h2>
+                <h2>โลโก้ / ข้อความ / รูปทรง</h2>
                 <div className="art-actions">
                   <label className="file-pick inline">
                     <input
@@ -1185,6 +1193,17 @@ export default function App() {
                     + ข้อความ
                   </button>
                 </div>
+                <div className="art-actions" style={{ marginTop: 8 }}>
+                  <button disabled={aiBusy} title="สี่เหลี่ยม" onClick={() => addShape('rect')}>
+                    ▭ สี่เหลี่ยม
+                  </button>
+                  <button disabled={aiBusy} title="วงกลม/วงรี" onClick={() => addShape('ellipse')}>
+                    ⬭ วงกลม
+                  </button>
+                  <button disabled={aiBusy} title="เส้น" onClick={() => addShape('line')}>
+                    ／ เส้น
+                  </button>
+                </div>
 
                 {decos.length > 0 && (
                   <ul className="deco-list">
@@ -1194,7 +1213,11 @@ export default function App() {
                           className={`deco-item${d.id === selectedId ? ' active' : ''}`}
                           onClick={() => setSelectedId(d.id)}
                         >
-                          {d.type === 'image' ? '🖼 รูป' : `T ${d.text || 'ข้อความ'}`}
+                          {d.type === 'image'
+                            ? '🖼 รูป'
+                            : d.type === 'shape'
+                              ? `${d.shape === 'rect' ? '▭ สี่เหลี่ยม' : d.shape === 'ellipse' ? '⬭ วงกลม' : '／ เส้น'}`
+                              : `T ${d.text || 'ข้อความ'}`}
                         </button>
                       </li>
                     ))}
@@ -1225,18 +1248,109 @@ export default function App() {
                         </label>
                       </>
                     )}
-                    <DimField
-                      label={selected.type === 'text' ? 'ขนาดตัวอักษร' : 'ขนาดรูป'}
-                      value={selected.type === 'text' ? selected.size : Math.round(elW(selected) * 10) / 10}
-                      min={selected.type === 'text' ? 3 : 5}
-                      max={selected.type === 'text' ? 120 : Math.round(dieline.width)}
-                      disabled={aiBusy}
-                      onChange={(v) =>
-                        patchSelected((d) =>
-                          d.type === 'text' ? withTextW({ ...d, size: v }) : { ...d, w: v },
-                        )
-                      }
-                    />
+
+                    {selected.type === 'shape' && selected.shape === 'line' && (
+                      <>
+                        <label className="deco-color">
+                          สีเส้น
+                          <input
+                            type="color"
+                            value={selected.stroke === 'none' ? '#222222' : selected.stroke}
+                            disabled={aiBusy}
+                            aria-label="สีเส้น"
+                            onChange={(e) => patchSelected((d) => (d.type === 'shape' ? { ...d, stroke: e.target.value } : d))}
+                          />
+                        </label>
+                        <DimField
+                          label="ความยาว"
+                          value={Math.round(selected.w * 10) / 10}
+                          min={2}
+                          max={Math.round(dieline.width)}
+                          disabled={aiBusy}
+                          onChange={(v) => patchSelected((d) => (d.type === 'shape' ? { ...d, w: v } : d))}
+                        />
+                        <DimField
+                          label="ความหนา"
+                          value={selected.strokeW}
+                          min={0.5}
+                          max={30}
+                          disabled={aiBusy}
+                          onChange={(v) => patchSelected((d) => (d.type === 'shape' ? { ...d, strokeW: v, h: v } : d))}
+                        />
+                      </>
+                    )}
+
+                    {selected.type === 'shape' && selected.shape !== 'line' && (
+                      <>
+                        <div className="art-actions">
+                          <label className="deco-color">
+                            พื้น
+                            <input
+                              type="color"
+                              value={selected.fill === 'none' ? '#0f6e56' : selected.fill}
+                              disabled={aiBusy}
+                              aria-label="สีพื้น"
+                              onChange={(e) => patchSelected((d) => (d.type === 'shape' ? { ...d, fill: e.target.value } : d))}
+                            />
+                          </label>
+                          <button
+                            disabled={aiBusy || selected.fill === 'none'}
+                            onClick={() => patchSelected((d) => (d.type === 'shape' ? { ...d, fill: 'none', strokeW: d.strokeW > 0 ? d.strokeW : 2, stroke: d.stroke === 'none' ? '#222222' : d.stroke } : d))}
+                          >
+                            ไม่มีพื้น
+                          </button>
+                        </div>
+                        <label className="deco-color">
+                          เส้นขอบ
+                          <input
+                            type="color"
+                            value={selected.stroke === 'none' ? '#222222' : selected.stroke}
+                            disabled={aiBusy}
+                            aria-label="สีเส้นขอบ"
+                            onChange={(e) => patchSelected((d) => (d.type === 'shape' ? { ...d, stroke: e.target.value, strokeW: d.strokeW > 0 ? d.strokeW : 2 } : d))}
+                          />
+                        </label>
+                        <DimField
+                          label="เส้นขอบหนา (0=ไม่มี)"
+                          value={selected.strokeW}
+                          min={0}
+                          max={20}
+                          disabled={aiBusy}
+                          onChange={(v) => patchSelected((d) => (d.type === 'shape' ? { ...d, strokeW: v, stroke: v > 0 && d.stroke === 'none' ? '#222222' : d.stroke } : d))}
+                        />
+                        <DimField
+                          label="กว้าง"
+                          value={Math.round(selected.w * 10) / 10}
+                          min={2}
+                          max={Math.round(dieline.width)}
+                          disabled={aiBusy}
+                          onChange={(v) => patchSelected((d) => (d.type === 'shape' ? { ...d, w: v } : d))}
+                        />
+                        <DimField
+                          label="สูง"
+                          value={Math.round(selected.h * 10) / 10}
+                          min={2}
+                          max={Math.round(dieline.height)}
+                          disabled={aiBusy}
+                          onChange={(v) => patchSelected((d) => (d.type === 'shape' ? { ...d, h: v } : d))}
+                        />
+                      </>
+                    )}
+
+                    {selected.type !== 'shape' && (
+                      <DimField
+                        label={selected.type === 'text' ? 'ขนาดตัวอักษร' : 'ขนาดรูป'}
+                        value={selected.type === 'text' ? selected.size : Math.round(elW(selected) * 10) / 10}
+                        min={selected.type === 'text' ? 3 : 5}
+                        max={selected.type === 'text' ? 120 : Math.round(dieline.width)}
+                        disabled={aiBusy}
+                        onChange={(v) =>
+                          patchSelected((d) =>
+                            d.type === 'text' ? withTextW({ ...d, size: v }) : d.type === 'image' ? { ...d, w: v } : d,
+                          )
+                        }
+                      />
+                    )}
                     <DimField
                       label="หมุน (องศา)"
                       value={selected.rot}

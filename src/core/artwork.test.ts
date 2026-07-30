@@ -4,11 +4,13 @@ import {
   elH,
   elW,
   makeImageEl,
+  makeShapeEl,
   makeTextEl,
   measureText,
   parseDeco,
   parseDecos,
   recenter,
+  shapeSVG,
   sheetUV,
   withTextW,
   type Deco,
@@ -94,6 +96,54 @@ describe('การวางอัตโนมัติ', () => {
     const d = dieline()
     const ids = [makeImageEl(d, 'data:image/png;base64,A', 1).id, makeTextEl(d, 'x').id, makeTextEl(d, 'y').id]
     expect(new Set(ids).size).toBe(3)
+  })
+})
+
+describe('รูปทรงพื้นฐาน (shape)', () => {
+  it.each(['rect', 'ellipse', 'line'] as const)('makeShapeEl %s: วางกลางหน้าโชว์ ขนาด+สีครบ', (shape) => {
+    const d = dieline()
+    const el = makeShapeEl(d, shape)
+    expect(el.type).toBe('shape')
+    expect(el.shape).toBe(shape)
+    expect(elW(el)).toBeGreaterThan(0)
+    expect(elH(el)).toBeGreaterThan(0)
+    expect(el.x).toBeGreaterThanOrEqual(0)
+    expect(el.y).toBeGreaterThanOrEqual(0)
+    if (shape === 'line') {
+      expect(el.stroke).toMatch(/^#/)
+      expect(el.strokeW).toBeGreaterThan(0)
+      expect(el.h).toBe(el.strokeW) // เส้น: สูง = ความหนา
+    } else {
+      expect(el.fill).toMatch(/^#/)
+    }
+  })
+
+  it('elH ของ shape = h (ไม่ใช่สูตร text/image)', () => {
+    const d = dieline()
+    const el = makeShapeEl(d, 'rect')
+    expect(elH(el)).toBe(el.h)
+    expect(elCenter(el)).toEqual({ x: el.x + el.w / 2, y: el.y + el.h / 2 })
+  })
+
+  it('parseDeco round-trip shape คงทุกฟิลด์', () => {
+    const src = { type: 'shape', shape: 'ellipse', w: 40, h: 25, fill: '#123456', stroke: 'none', strokeW: 0, x: 5, y: 6, rot: 15 }
+    const el = parseDeco(src)
+    expect(el).not.toBeNull()
+    expect(el).toMatchObject({ type: 'shape', shape: 'ellipse', w: 40, h: 25, fill: '#123456', stroke: 'none', strokeW: 0, x: 5, y: 6, rot: 15 })
+  })
+
+  it('parseDeco: shape ไม่รู้จัก → rect, ขนาด ≤ 0 → null', () => {
+    expect((parseDeco({ type: 'shape', shape: 'ดาว', w: 10, h: 10, x: 0, y: 0, rot: 0 }) as { shape: string }).shape).toBe('rect')
+    expect(parseDeco({ type: 'shape', shape: 'rect', w: 0, h: 10, x: 0, y: 0, rot: 0 })).toBeNull()
+  })
+
+  it('shapeSVG: rect มีพื้น+ขอบ, ellipse ใช้ cx/rx, line ใช้ x1..x2', () => {
+    expect(shapeSVG({ id: 'a', type: 'shape', shape: 'rect', w: 20, h: 10, fill: '#0f6e56', stroke: '#000', strokeW: 2, x: 1, y: 2, rot: 0 }, ''))
+      .toMatch(/<rect .*fill="#0f6e56".*stroke="#000".*stroke-width="2"/)
+    expect(shapeSVG({ id: 'b', type: 'shape', shape: 'ellipse', w: 20, h: 10, fill: '#0f6e56', stroke: 'none', strokeW: 0, x: 0, y: 0, rot: 0 }, ''))
+      .toMatch(/<ellipse .*rx="10".*ry="5"/)
+    expect(shapeSVG({ id: 'c', type: 'shape', shape: 'line', w: 30, h: 2, fill: 'none', stroke: '#222', strokeW: 2, x: 0, y: 0, rot: 0 }, ''))
+      .toMatch(/<line x1="0".*x2="30".*stroke="#222"/)
   })
 })
 

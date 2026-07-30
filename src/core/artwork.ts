@@ -29,11 +29,24 @@ export interface TextEl extends BaseEl {
   w: number // ความกว้างที่วัดได้ (เก็บไว้เพื่อลาก/หมุน/จัดกลาง) — คำนวณใหม่เมื่อ text/size เปลี่ยน
 }
 
-export type Deco = ImageEl | TextEl
+// รูปทรงพื้นฐาน — สี่เหลี่ยม/วงรี/เส้น สำหรับทำแถบสี กรอบ เส้นแบ่ง
+// rect,ellipse ใช้ fill (พื้น) + stroke/strokeW (เส้นขอบ); line ใช้ stroke/strokeW (h = ความหนาเส้น)
+export interface ShapeEl extends BaseEl {
+  type: 'shape'
+  shape: 'rect' | 'ellipse' | 'line'
+  w: number // ความกว้าง/ความยาว (มม.)
+  h: number // ความสูง (มม.) — สำหรับ line = ความหนาเส้น
+  fill: string // สีพื้น หรือ 'none'
+  stroke: string // สีเส้นขอบ หรือ 'none'
+  strokeW: number // ความหนาเส้น (มม.)
+}
+
+export type Deco = ImageEl | TextEl | ShapeEl
 
 const LINE = 1.25 // อัตราส่วนความสูงบรรทัดต่อขนาดฟอนต์
 export const elW = (e: Deco) => e.w
-export const elH = (e: Deco) => (e.type === 'image' ? e.w / e.aspect : e.size * LINE)
+export const elH = (e: Deco) =>
+  e.type === 'image' ? e.w / e.aspect : e.type === 'text' ? e.size * LINE : e.h
 export const elCenter = (e: Deco): Vec2 => ({ x: e.x + elW(e) / 2, y: e.y + elH(e) / 2 })
 
 // วัดความกว้างข้อความด้วย canvas (ในหน่วย px = มม. เพราะวัดที่สเกล 1:1)
@@ -141,6 +154,22 @@ export function makeTextEl(dieline: Dieline, text: string): TextEl {
   return { id: newId(), type: 'text', text, color: '#222222', size, w, x, y, rot: 0 }
 }
 
+export function makeShapeEl(dieline: Dieline, shape: 'rect' | 'ellipse' | 'line'): ShapeEl {
+  const b = bbox(showFace(dieline).outline)
+  const fw = b.x1 - b.x0
+  const fh = b.y1 - b.y0
+  if (shape === 'line') {
+    const w = Math.max(10, fw * 0.5)
+    const strokeW = Math.max(1, Math.round(fh * 0.02))
+    const { x, y } = centerOnFace(dieline, w, strokeW)
+    return { id: newId(), type: 'shape', shape, w, h: strokeW, fill: 'none', stroke: '#222222', strokeW, x, y, rot: 0 }
+  }
+  const w = Math.max(10, fw * 0.4)
+  const h = Math.max(10, fh * 0.3)
+  const { x, y } = centerOnFace(dieline, w, h)
+  return { id: newId(), type: 'shape', shape, w, h, fill: '#0f6e56', stroke: 'none', strokeW: 0, x, y, rot: 0 }
+}
+
 // จัดองค์ประกอบให้กลับไปกลางหน้าโชว์ (คงขนาด/มุมเดิม) — เผื่อลากหลุด
 export function recenter(dieline: Dieline, e: Deco): Deco {
   const { x, y } = centerOnFace(dieline, elW(e), elH(e))
@@ -192,6 +221,49 @@ export function drawFill(
   }
 }
 
+// รูปทรงเป็น SVG element (พิกัดแผ่นคลี่ มม.) — ใช้ทั้ง blueprint (DielineSVG อ้าง shapeSVG ไม่ได้
+// เพราะเป็น JSX แยก) และ export; rot = attribute transform ที่คำนวณไว้แล้ว
+export function shapeSVG(e: ShapeEl, rot: string): string {
+  const stroke = e.stroke !== 'none' && e.strokeW > 0 ? ` stroke="${e.stroke}" stroke-width="${e.strokeW}"` : ''
+  if (e.shape === 'line') {
+    const cy = e.y + e.h / 2
+    return `<line x1="${e.x}" y1="${cy}" x2="${e.x + e.w}" y2="${cy}" stroke="${e.stroke}" stroke-width="${e.strokeW}" stroke-linecap="round"${rot}/>`
+  }
+  const fill = e.fill !== 'none' ? e.fill : 'none'
+  if (e.shape === 'ellipse') {
+    return `<ellipse cx="${e.x + e.w / 2}" cy="${e.y + e.h / 2}" rx="${e.w / 2}" ry="${e.h / 2}" fill="${fill}"${stroke}${rot}/>`
+  }
+  return `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="${fill}"${stroke}${rot}/>`
+}
+
+// วาดรูปทรงลง canvas 2D — ctx ถูก translate ไปจุดกึ่งกลางและหมุนไว้แล้ว (เรียกจาก drawDeco2D/Viewer3D)
+export function drawShape2D(ctx: CanvasRenderingContext2D, e: ShapeEl, s: number) {
+  const hw = (e.w / 2) * s
+  const hh = (e.h / 2) * s
+  if (e.shape === 'line') {
+    ctx.strokeStyle = e.stroke
+    ctx.lineWidth = Math.max(0.5, e.strokeW * s)
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(-hw, 0)
+    ctx.lineTo(hw, 0)
+    ctx.stroke()
+    return
+  }
+  ctx.beginPath()
+  if (e.shape === 'ellipse') ctx.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2)
+  else ctx.rect(-hw, -hh, hw * 2, hh * 2)
+  if (e.fill !== 'none') {
+    ctx.fillStyle = e.fill
+    ctx.fill()
+  }
+  if (e.stroke !== 'none' && e.strokeW > 0) {
+    ctx.strokeStyle = e.stroke
+    ctx.lineWidth = e.strokeW * s
+    ctx.stroke()
+  }
+}
+
 // สร้างเลเยอร์ <g id="artwork"> สำหรับฝังใน SVG export — vector ล้วน คุณภาพงานพิมพ์
 // รูปฝังเป็น data URI (ไฟล์ standalone), ข้อความเป็น <text> แก้ไขได้ใน Illustrator
 // ไม่มิเรอร์ — SVG คือเลย์เอาต์ฝั่งพิมพ์/ด้านนอก เหมือนที่เห็นบน blueprint
@@ -206,6 +278,7 @@ export function svgArtworkLayer(decos: Deco[]): string {
       if (e.type === 'image') {
         return `    <image href="${e.src}" x="${e.x}" y="${e.y}" width="${w}" height="${h}" preserveAspectRatio="none"${rot}/>`
       }
+      if (e.type === 'shape') return `    ${shapeSVG(e, rot)}`
       return (
         `    <text x="${c.x}" y="${c.y}" font-size="${e.size}" fill="${e.color}"` +
         ` text-anchor="middle" dominant-baseline="central"` +
@@ -232,6 +305,8 @@ export function drawDeco2D(
   if (e.type === 'image') {
     const img = imgOf(e.src)
     if (img) ctx.drawImage(img, (-w / 2) * s, (-h / 2) * s, w * s, h * s)
+  } else if (e.type === 'shape') {
+    drawShape2D(ctx, e, s)
   } else {
     ctx.fillStyle = e.color
     ctx.font = `${e.size * s}px 'Noto Sans Thai', sans-serif`
@@ -312,6 +387,16 @@ export function parseDeco(v: unknown): Deco | null {
     if (!(size > 0)) return null
     const w = Number(o.w) > 0 ? Number(o.w) : measureText(text, size)
     return { id, type: 'text', text, size, color, w, ...base }
+  }
+  if (o.type === 'shape') {
+    const shape = o.shape === 'ellipse' || o.shape === 'line' ? o.shape : 'rect'
+    const w = Number(o.w)
+    const h = Number(o.h)
+    if (!(w > 0) || !(h > 0)) return null
+    const fill = typeof o.fill === 'string' ? o.fill : '#0f6e56'
+    const stroke = typeof o.stroke === 'string' ? o.stroke : 'none'
+    const strokeW = Number(o.strokeW) >= 0 ? Number(o.strokeW) : 0
+    return { id, type: 'shape', shape, w, h, fill, stroke, strokeW, ...base }
   }
   return null
 }

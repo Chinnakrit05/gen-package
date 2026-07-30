@@ -56,6 +56,18 @@ function DecoBody({ e }: { e: Deco }) {
   if (e.type === 'image') {
     return <image href={e.src} x={e.x} y={e.y} width={w} height={h} preserveAspectRatio="none" />
   }
+  if (e.type === 'shape') {
+    const strokeProps =
+      e.stroke !== 'none' && e.strokeW > 0 ? { stroke: e.stroke, strokeWidth: e.strokeW } : {}
+    if (e.shape === 'line') {
+      const cy = e.y + e.h / 2
+      return <line x1={e.x} y1={cy} x2={e.x + e.w} y2={cy} stroke={e.stroke} strokeWidth={e.strokeW} strokeLinecap="round" />
+    }
+    if (e.shape === 'ellipse') {
+      return <ellipse cx={e.x + w / 2} cy={e.y + h / 2} rx={w / 2} ry={h / 2} fill={e.fill} {...strokeProps} />
+    }
+    return <rect x={e.x} y={e.y} width={w} height={h} fill={e.fill} {...strokeProps} />
+  }
   const c = elCenter(e)
   return (
     <text
