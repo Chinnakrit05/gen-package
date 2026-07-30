@@ -924,6 +924,32 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, selected, undoStack, redoStack, aiBusy, decos, templateId, materialId, W, D, H, handle, qty, fillColor])
 
+  // ควบคุมการพับ — ใช้ทั้งแท็บ "ออกแบบ" และ "ตกแต่ง" (ตอนแต่งลายก็อยากพับดูผลบนกล่อง 3D)
+  const foldSection = (
+    <section hidden={!mat.foldable}>
+      <h2>การพับ</h2>
+      <button className="primary" onClick={play}>
+        ▶ พับให้ดู
+      </button>
+      <label className="field">
+        <span>กาง ↔ พับ</span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={fold}
+          aria-label="กาง-พับ"
+          aria-valuetext={`${Math.round(fold * 100)}%`}
+          onChange={(e) => {
+            cancelAnimationFrame(raf.current)
+            setFold(Number(e.target.value))
+          }}
+        />
+      </label>
+    </section>
+  )
+
   return (
     <div className="app">
       <header>
@@ -1110,28 +1136,7 @@ export default function App() {
                 )}
               </section>
 
-              <section hidden={!mat.foldable}>
-                <h2>การพับ</h2>
-                <button className="primary" onClick={play}>
-                  ▶ พับให้ดู
-                </button>
-                <label className="field">
-                  <span>กาง ↔ พับ</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={fold}
-                    aria-label="กาง-พับ"
-                    aria-valuetext={`${Math.round(fold * 100)}%`}
-                    onChange={(e) => {
-                      cancelAnimationFrame(raf.current)
-                      setFold(Number(e.target.value))
-                    }}
-                  />
-                </label>
-              </section>
+              {foldSection}
           </>
           )}
 
@@ -1251,6 +1256,8 @@ export default function App() {
                   ลายจะถูกใส่ลงไฟล์ .svg (vector) และ .pdf (300 dpi) แล้ว — ไม่ใส่ใน .dxf เพราะเป็นไฟล์มีดตัด
                 </p>
               </section>
+
+              {foldSection}
           </>
           )}
 
