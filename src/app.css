@@ -815,6 +815,56 @@ button[aria-disabled='true'] {
   border-radius: 8px;
 }
 
+/* --- imposition: จำนวนต่อแผ่น --- */
+.imp-custom {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.imp-custom label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #8a8474;
+}
+.imp-custom input {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid #d5cfc0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  color: #0f6e56;
+  font-weight: 600;
+  text-align: right;
+}
+.imp-diagram {
+  display: block;
+  margin: 12px auto 4px;
+}
+.imp-result {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f0f6f3;
+  font-size: 13px;
+  color: #3f4a44;
+}
+.imp-result b {
+  color: #0f6e56;
+  font-size: 15px;
+}
+.imp-need {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed #cdddd5;
+}
+
 /* --- responsive: แท็บเล็ต/มือถือ --- */
 /* เดสก์ท็อปอัดทุกอย่างในความสูงจอเดียว (flex fill); จอเล็กสลับเป็นหน้าเลื่อนแนวตั้ง
    แถบควบคุมอยู่บน แล้ว 3D/blueprint เรียงบน-ล่าง แต่ละอันสูงพอใช้งานจริง */

@@ -37,6 +37,14 @@ import {
   type Project,
 } from './core/project'
 import { serializeProject, parseProjectFile, projectFileName } from './core/projectFile'
+import {
+  SHEET_PRESETS,
+  DEFAULT_OPT,
+  computeImposition,
+  sheetsNeeded,
+  type Layout,
+  type Sheet,
+} from './core/imposition'
 // โหลด viewer 3D แบบ lazy — three + R3F เป็นก้อนใหญ่สุดของ bundle และไม่จำเป็น
 // ต่อการเรนเดอร์ครั้งแรก (แถบซ้าย + blueprint เป็น SVG ล้วน) แยกออกไปให้หน้าแรกเบาลง
 const Viewer3D = lazy(() => import('./components/Viewer3D').then((m) => ({ default: m.Viewer3D })))
@@ -346,6 +354,45 @@ function loadStore(): Store {
   return { projects: [p], activeId: p.id, showDims: true }
 }
 
+// แผนภาพย่อ: แผ่นใหญ่ + กริดของกล่องที่วางได้ (ทิศตามผลของ computeImposition)
+function ImpositionDiagram({
+  sheet,
+  pieceW,
+  pieceH,
+  layout,
+  margin,
+  gutter,
+}: {
+  sheet: Sheet
+  pieceW: number
+  pieceH: number
+  layout: Layout
+  margin: number
+  gutter: number
+}) {
+  const s = Math.min(200 / sheet.w, 260 / sheet.h)
+  const W = sheet.w * s
+  const H = sheet.h * s
+  const pw = pieceW * s
+  const ph = pieceH * s
+  const m = margin * s
+  const g = gutter * s
+  const cells: { x: number; y: number }[] = []
+  for (let r = 0; r < layout.rows; r++) {
+    for (let c = 0; c < layout.cols; c++) {
+      cells.push({ x: m + c * (pw + g), y: m + r * (ph + g) })
+    }
+  }
+  return (
+    <svg className="imp-diagram" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="แผนภาพการวางบนแผ่น">
+      <rect x={0} y={0} width={W} height={H} fill="#f4f2ec" stroke="#c9bda2" strokeWidth={1} />
+      {cells.map((c, i) => (
+        <rect key={i} x={c.x} y={c.y} width={pw} height={ph} fill="#cfe6dd" stroke="#0f6e56" strokeWidth={0.7} />
+      ))}
+    </svg>
+  )
+}
+
 const store0 = loadStore()
 const active0 = store0.projects.find((p) => p.id === store0.activeId) ?? store0.projects[0]
 
@@ -367,6 +414,9 @@ export default function App() {
   const [showGuides, setShowGuides] = useState(false)
   const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
   const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>('design')
+  const [sheetId, setSheetId] = useState(SHEET_PRESETS[0].id)
+  const [customSheet, setCustomSheet] = useState({ w: 640, h: 900 })
+  const [gutter, setGutter] = useState(DEFAULT_OPT.gutter)
   const [aiBusy, setAiBusy] = useState(false)
   const [history, setHistory] = useState<DesignVersion[]>(active0.history)
   const [histIdx, setHistIdx] = useState(active0.histIdx)
@@ -392,6 +442,16 @@ export default function App() {
   const guides = useMemo(
     () => (showGuides && dieline ? computeGuides(dieline.panels) : null),
     [showGuides, dieline],
+  )
+
+  // imposition: กล่องแผ่นคลี่วางบนแผ่นใหญ่ได้กี่ชิ้น (ประเมินต้นทุน/สั่งวัสดุ)
+  const sheet: Sheet =
+    sheetId === 'custom'
+      ? { id: 'custom', nameTh: 'กำหนดเอง', w: customSheet.w, h: customSheet.h }
+      : SHEET_PRESETS.find((s) => s.id === sheetId) ?? SHEET_PRESETS[0]
+  const imposition = useMemo(
+    () => (dieline ? computeImposition(dieline.width, dieline.height, sheet, { ...DEFAULT_OPT, gutter }) : null),
+    [dieline, sheet.w, sheet.h, gutter],
   )
 
   useEffect(() => () => cancelAnimationFrame(raf.current), [])
@@ -1209,6 +1269,112 @@ export default function App() {
                 </div>
                 <p className="hint">
                   ใช้ตอนขอราคาจากโรงงาน — ไม่มีผลกับรูปกล่องหรือไฟล์ไดคัท
+                </p>
+              </section>
+
+              <section>
+                <h2>จำนวนต่อแผ่น (imposition)</h2>
+                <select
+                  value={sheetId}
+                  disabled={aiBusy}
+                  aria-label="ขนาดแผ่นใหญ่"
+                  onChange={(e) => setSheetId(e.target.value)}
+                >
+                  {SHEET_PRESETS.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nameTh}
+                    </option>
+                  ))}
+                  <option value="custom">กำหนดขนาดเอง…</option>
+                </select>
+
+                {sheetId === 'custom' && (
+                  <div className="imp-custom">
+                    <label>
+                      กว้าง
+                      <input
+                        type="number"
+                        min={50}
+                        max={2000}
+                        value={customSheet.w}
+                        aria-label="ความกว้างแผ่น (มม.)"
+                        onChange={(e) =>
+                          setCustomSheet((s) => ({ ...s, w: clamp(Number(e.target.value) || 0, 50, 2000) }))
+                        }
+                      />
+                      มม.
+                    </label>
+                    <label>
+                      ยาว
+                      <input
+                        type="number"
+                        min={50}
+                        max={2000}
+                        value={customSheet.h}
+                        aria-label="ความยาวแผ่น (มม.)"
+                        onChange={(e) =>
+                          setCustomSheet((s) => ({ ...s, h: clamp(Number(e.target.value) || 0, 50, 2000) }))
+                        }
+                      />
+                      มม.
+                    </label>
+                  </div>
+                )}
+
+                <div className="field">
+                  <span className="field-head">
+                    ร่องระหว่างชิ้น
+                    <span className="field-num">
+                      <input
+                        type="number"
+                        min={0}
+                        max={30}
+                        step={0.5}
+                        value={gutter}
+                        disabled={aiBusy}
+                        aria-label="ร่องระหว่างชิ้น (มม.)"
+                        onChange={(e) => setGutter(clamp(Number(e.target.value) || 0, 0, 30))}
+                      />
+                      มม.
+                    </span>
+                  </span>
+                </div>
+
+                {imposition &&
+                  (imposition.count > 0 ? (
+                    <>
+                      <ImpositionDiagram
+                        sheet={sheet}
+                        pieceW={imposition.rotated ? dieline.height : dieline.width}
+                        pieceH={imposition.rotated ? dieline.width : dieline.height}
+                        layout={imposition}
+                        margin={DEFAULT_OPT.margin}
+                        gutter={gutter}
+                      />
+                      <div className="imp-result">
+                        <div>
+                          <b>{imposition.count}</b> ชิ้น/แผ่น ({imposition.cols}×{imposition.rows}
+                          {imposition.rotated ? ' · หมุน 90°' : ''})
+                        </div>
+                        <div>
+                          ใช้พื้นที่ {Math.round(imposition.usedFrac * 100)}% · เศษเหลือ{' '}
+                          {Math.round((1 - imposition.usedFrac) * 100)}%
+                        </div>
+                        <div className="imp-need">
+                          ผลิต {qty.toLocaleString('th-TH')} ใบ → ใช้ประมาณ{' '}
+                          <b>{sheetsNeeded(qty, imposition.count).toLocaleString('th-TH')}</b> แผ่น
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="hint warn">
+                      กล่องแผ่นคลี่ ({Math.ceil(dieline.width)}×{Math.ceil(dieline.height)} มม.)
+                      ใหญ่กว่าพื้นที่วางบนแผ่นนี้ — ลองแผ่นใหญ่ขึ้น ลดร่อง หรือลดขนาดกล่อง
+                    </p>
+                  ))}
+                <p className="hint">
+                  ขอบแผ่น {DEFAULT_OPT.margin} มม.รอบด้าน · เทียบวางตั้ง/หมุน 90° เลือกที่ได้มากสุด —
+                  ประมาณการเบื้องต้น ยังไม่รวมการวางสลับทิศในแผ่นเดียว
                 </p>
               </section>
 

@@ -25,6 +25,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `src/core/fold.ts` — fold engine: panel หมุนรอบ crease ในพิกัดแผ่นคลี่ คูณ matrix แม่เป็นลูกโซ่; ด้านในกล่อง = +z; stage 0-3 (ลำตัว→ลิ้นกันฝุ่น→ฝาเสียบ→ลิ้น); zOffset ดันชั้นวัสดุที่ซ้อนกันกัน z-fighting
 - `src/components/Viewer3D.tsx` — R3F viewer + FitCamera (วัดจากส่วนแผ่นที่ยื่นไกลสุดจากแผงหน้า ไม่ใช่ครึ่งแผ่น)
 - `src/components/DielineSVG.tsx` — blueprint preview + เส้นบอกขนาด (toggle ได้) + ลาก/หมุน/ลบ artwork; การลากมี snap
+- `src/core/imposition.ts` — คำนวณ yield ต่อแผ่น (pure): `computeImposition` วางกริด step&repeat เทียบชิ้นตั้ง/หมุน 90° เลือกจำนวนมากสุด + `sheetsNeeded` (ปัดขึ้น) + `SHEET_PRESETS` แผ่นมาตรฐานไทย; UI อยู่แท็บ "ส่งออก" ผูกกับช่องจำนวน (state ephemeral ไม่เก็บลง project)
 - `src/core/snap.ts` — logic ดูด artwork เข้าแนวขณะลาก (pure): `snapTargets` สร้างเส้นเป้าหมายจากกึ่งกลางแผ่น/ขอบ-กึ่งกลางแผง/ขอบ-กึ่งกลางชิ้นอื่น, `applySnap` ดูดขอบ-กึ่งกลางชิ้นเข้าเส้นใกล้สุดในระยะ threshold (แปลงจาก 6px ตามซูม); กด Alt ค้างระหว่างลาก = ปิด snap
 - `src/components/PromptBar.tsx` + `src/core/ai.ts` — AI layer ฝั่ง client; แนบรูปอ้างอิงได้ (ย่อเป็น JPEG ≤1024px ฝั่ง client → base64; backend api ส่งเป็น image block, backend cli เขียนไฟล์ tmp ให้ Claude เปิดอ่านเองแล้วลบทิ้ง)
 - `server/boxSpec.ts` — endpoint /api/box-spec (Vite middleware): Claude strict tool use → JSON spec; ไม่มี ANTHROPIC_API_KEY → โหมดจำลอง (mockSpec)
