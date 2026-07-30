@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Quaternion, Vector3 } from 'three'
-import { computeMatrices, to3D } from '../fold'
+import { computeMatrices, rollBeads, to3D } from '../fold'
 import { getTemplate } from './index'
 import { getMaterial } from '../materials'
 import { computeGuides } from '../guides'
@@ -121,6 +121,37 @@ describe('fefco-0427: ตำแหน่งหลังพับสุด (fold=
     expect(v.y).toBeLessThan(yF + 4 * t + 2)
     expect(v.z).toBeGreaterThan(0)
     expect(v.z).toBeLessThan(Hp)
+  })
+})
+
+describe('fefco-0427: สันโค้งรอยพับม้วน (rollBeads)', () => {
+  it('มีสัน 2 เส้น (ม้วนซ้าย+ขวา) เมื่อพับสุด', () => {
+    const beads = rollBeads(d.panels, M)
+    expect(beads.map((b) => b.id).sort()).toEqual(['roll-left', 'roll-right'])
+  })
+
+  it('ตอนกาง (fold=0) ยังไม่มีสัน', () => {
+    expect(rollBeads(d.panels, computeMatrices(d.panels, 0))).toHaveLength(0)
+  })
+
+  it('รัศมีสัน ≈ ครึ่งของระยะสองชั้น (สเกลตามความหนา) และวางตามแนวสันบนผนัง', () => {
+    const beads = rollBeads(d.panels, M)
+    for (const bd of beads) {
+      // ระยะสองชั้น = |zOffset| = 2*(t+0.05) → รัศมี = t+0.05
+      expect(bd.r).toBeGreaterThan(0)
+      expect(bd.r).toBeCloseTo(t + 0.05, 1)
+      // สันพาดตามแนว D (ยาว ~ ช่วง hinge) และอยู่แถวสันบนกล่อง (z สูง)
+      expect(bd.a.distanceTo(bd.b)).toBeGreaterThan(10)
+      expect((bd.a.z + bd.b.z) / 2).toBeGreaterThan(Hp * 0.3)
+    }
+  })
+
+  it('สันโตขึ้นตามการพับ (0.5 < เต็ม)', () => {
+    const half = rollBeads(d.panels, computeMatrices(d.panels, 0.98))
+    const full = rollBeads(d.panels, M)
+    // ที่ 0.98 ม้วนเกือบเต็ม รัศมีควรใกล้แต่ไม่เกินเต็ม
+    expect(half.length).toBe(2)
+    expect(Math.max(...half.map((b) => b.r))).toBeLessThanOrEqual(Math.max(...full.map((b) => b.r)) + 1e-6)
   })
 })
 

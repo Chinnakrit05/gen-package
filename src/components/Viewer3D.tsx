@@ -4,7 +4,7 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import type { Dieline, Material } from '../core/types'
 import { drawFill, elW, elH, sheetUV, type Deco } from '../core/artwork'
-import { computeMatrices } from '../core/fold'
+import { computeMatrices, rollBeads } from '../core/fold'
 
 // วาดองค์ประกอบ (รูป/ข้อความ) ลง ctx ในพิกัดแผ่นคลี่ (สเกล s) พร้อมหมุนรอบจุดกึ่งกลาง
 // ใช้พิกัดชุดเดียวกับ blueprint (y ชี้ลง, มุมหมุนตามเข็ม) เพื่อให้จอสองฝั่งตรงกัน
@@ -155,6 +155,22 @@ function FitCamera({ dieline }: { dieline: Dieline }) {
   return null
 }
 
+// สันโค้งของรอยพับม้วน 180° — ทรงกระบอกบางตามแนวเส้นพับ อุดร่องสองชั้นให้ดูเป็นสันจริง
+// แทนขอบมีดคม (ตำแหน่ง/รัศมีมาจาก rollBeads ซึ่งคุมด้วยเทสต์เชิงตัวเลข)
+const UP = new THREE.Vector3(0, 1, 0)
+function Bead({ a, b, r, mat }: { a: THREE.Vector3; b: THREE.Vector3; r: number; mat: Material }) {
+  const dir = b.clone().sub(a)
+  const len = dir.length()
+  const mid = a.clone().add(b).multiplyScalar(0.5)
+  const quat = new THREE.Quaternion().setFromUnitVectors(UP, dir.normalize())
+  return (
+    <mesh position={mid} quaternion={quat}>
+      <cylinderGeometry args={[r, r, len, 14, 1]} />
+      <meshStandardMaterial color={mat.color} roughness={mat.roughness ?? 0.8} metalness={0} />
+    </mesh>
+  )
+}
+
 interface PanelMeshProps {
   geometry: THREE.BufferGeometry
   edges: THREE.BufferGeometry
@@ -251,6 +267,8 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor }: Mode
   )
 
   const matrices = useMemo(() => computeMatrices(dieline.panels, fold), [dieline, fold])
+  // สันโค้งของรอยพับม้วน 180° (FEFCO 0427) — คำนวณจาก matrices จึงขยับตามการพับ
+  const beads = useMemo(() => rollBeads(dieline.panels, matrices), [dieline, matrices])
 
   // จัดกึ่งกลางฉากที่แผงหน้า (root ของ fold tree)
   const front = dieline.panels[0]
@@ -272,6 +290,9 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor }: Mode
             mat={mat}
             tex={tex}
           />
+        ))}
+        {beads.map((bd) => (
+          <Bead key={bd.id} a={bd.a} b={bd.b} r={bd.r} mat={mat} />
         ))}
       </group>
     </group>

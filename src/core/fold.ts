@@ -69,3 +69,37 @@ export function computeMatrices(panels: Panel[], fold: number): Map<string, Matr
   panels.forEach((p) => get(p.id))
   return cache
 }
+
+// สันโค้งของรอยพับ 180° (roll/ม้วนทบ): กล่องจริงพับทบไม่ได้เป็นขอบมีดคม แต่ม้วนเป็นสัน
+// รัศมี ≈ ครึ่งของระยะห่างสองชั้น ตามแนวเส้นพับ — สร้างเป็นทรงกระบอกบาง ๆ อุดร่องที่สันบน
+// คำนวณจาก matrices โดยตรง: จุด hinge เดียวกันถูกแผงแม่(ผนัง)กับแผงลูก(ม้วน) พาไปคนละ z
+// (ต่างกันตาม zOffset*progress) — สันจึงโตจาก 0 ตอนกางเป็นเต็มตอนพับ เข้าจังหวะ animation เอง
+export interface FoldBead {
+  id: string
+  a: Vector3 // ปลายสันด้านหนึ่ง (กึ่งกลางระหว่างขอบผนังกับขอบม้วน)
+  b: Vector3
+  r: number // รัศมีสัน
+}
+
+export function rollBeads(panels: Panel[], matrices: Map<string, Matrix4>): FoldBead[] {
+  const out: FoldBead[] = []
+  for (const p of panels) {
+    if (Math.abs(p.foldAngle ?? 0) !== 180 || !p.parentId || !p.hingeA || !p.hingeB) continue
+    const pm = matrices.get(p.parentId)
+    const rm = matrices.get(p.id)
+    if (!pm || !rm) continue
+    const wallA = to3D(p.hingeA).applyMatrix4(pm)
+    const rollA = to3D(p.hingeA).applyMatrix4(rm)
+    const wallB = to3D(p.hingeB).applyMatrix4(pm)
+    const rollB = to3D(p.hingeB).applyMatrix4(rm)
+    const r = wallA.distanceTo(rollA) / 2
+    if (r < 0.03) continue // ยังกางอยู่ (สันแทบไม่มี) — ข้าม
+    out.push({
+      id: p.id,
+      a: wallA.add(rollA).multiplyScalar(0.5),
+      b: wallB.add(rollB).multiplyScalar(0.5),
+      r,
+    })
+  }
+  return out
+}
