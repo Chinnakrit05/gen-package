@@ -800,6 +800,7 @@ export default function App() {
   }
 
   const selected = decos.find((d) => d.id === selectedId) ?? null
+  const selIdx = selected ? decos.findIndex((d) => d.id === selectedId) : -1
   const currentAi = histIdx >= 0 ? history[histIdx]?.ai : undefined
 
   const activeName = projects.find((p) => p.id === activeId)?.name ?? 'งาน'
@@ -890,6 +891,22 @@ export default function App() {
   const nudgeSelected = (dx: number, dy: number) => {
     if (!selectedId) return
     setDecos((ds) => ds.map((d) => (d.id === selectedId ? { ...d, x: d.x + dx, y: d.y + dy } : d)))
+  }
+
+  // จัดเลเยอร์: ลำดับใน decos = ลำดับวาด (ท้าย = หน้าสุด) — เลื่อนชิ้นที่เลือกขึ้นหน้า/ลงหลัง
+  // step +1 = ขึ้นหน้าหนึ่งชั้น, -1 = ลงหลังหนึ่งชั้น; toEnd = ไปสุด (หน้าสุด/หลังสุด)
+  const restackSelected = (dir: 1 | -1, toEnd = false) => {
+    if (!selectedId) return
+    setDecos((ds) => {
+      const i = ds.findIndex((d) => d.id === selectedId)
+      if (i < 0) return ds
+      const j = dir > 0 ? ds.length - 1 : 0
+      if (i === j) return ds // อยู่สุดแล้ว
+      const next = [...ds]
+      const [el] = next.splice(i, 1)
+      next.splice(toEnd ? j : i + dir, 0, el)
+      return next
+    })
   }
 
   // คีย์ลัด: Ctrl+Z/Ctrl+Shift+Z undo/redo, Delete ลบ, Esc เลิกเลือก, ลูกศรเลื่อน, Ctrl+D สำเนา
@@ -1359,11 +1376,52 @@ export default function App() {
                       disabled={aiBusy}
                       onChange={(deg) => patchSelected((d) => ({ ...d, rot: deg }))}
                     />
+                    {decos.length > 1 && (
+                      <div className="layer-row">
+                        <span className="layer-label">
+                          เลเยอร์ {selIdx + 1}/{decos.length}
+                        </span>
+                        <div className="layer-btns">
+                          <button
+                            title="ไปหลังสุด"
+                            aria-label="ไปหลังสุด"
+                            disabled={aiBusy || selIdx <= 0}
+                            onClick={() => restackSelected(-1, true)}
+                          >
+                            ⤓
+                          </button>
+                          <button
+                            title="ลงหลังหนึ่งชั้น"
+                            aria-label="ลงหลัง"
+                            disabled={aiBusy || selIdx <= 0}
+                            onClick={() => restackSelected(-1)}
+                          >
+                            ▼
+                          </button>
+                          <button
+                            title="ขึ้นหน้าหนึ่งชั้น"
+                            aria-label="ขึ้นหน้า"
+                            disabled={aiBusy || selIdx >= decos.length - 1}
+                            onClick={() => restackSelected(1)}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            title="ไปหน้าสุด"
+                            aria-label="ไปหน้าสุด"
+                            disabled={aiBusy || selIdx >= decos.length - 1}
+                            onClick={() => restackSelected(1, true)}
+                          >
+                            ⤒
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <div className="art-actions">
                       <button onClick={recenterSelected}>วางกลางแผงหน้า</button>
                       <button onClick={removeSelected}>ลบชิ้นนี้</button>
                     </div>
-                    <p className="hint">ลาก/หมุนบน blueprint ได้ (จุดวงกลม = หมุน) ดูผลบนกล่อง 3D ทันที</p>
+                    <p className="hint">ลาก/หมุนบน blueprint ได้ (จุดวงกลม = หมุน) · เลเยอร์สูง = อยู่หน้า</p>
                   </div>
                 )}
                 <p className="hint">

@@ -815,6 +815,30 @@ button[aria-disabled='true'] {
   border-radius: 8px;
 }
 
+/* --- จัดเลเยอร์ artwork หน้า-หลัง --- */
+.layer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.layer-label {
+  font-size: 12.5px;
+  color: #6a6153;
+  white-space: nowrap;
+}
+.layer-btns {
+  display: flex;
+  gap: 4px;
+}
+.layer-btns button {
+  width: auto;
+  padding: 4px 9px;
+  font-size: 13px;
+  line-height: 1;
+}
+
 /* --- imposition: จำนวนต่อแผ่น --- */
 .imp-custom {
   display: flex;
