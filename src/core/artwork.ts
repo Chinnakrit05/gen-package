@@ -12,6 +12,8 @@ export interface BaseEl {
   x: number // มุมซ้ายบน (ก่อนหมุน) บนแผ่นคลี่ (มม.)
   y: number
   rot: number // องศา หมุนตามเข็มรอบจุดกึ่งกลางกล่อง
+  hidden?: boolean // ซ่อน = ไม่เรนเดอร์ทุกที่ (blueprint/3D/export) แต่ยังอยู่ในรายการ
+  locked?: boolean // ล็อก = ลาก/หมุน/ลบบน canvas ไม่ได้ (กันเผลอ)
 }
 
 export interface ImageEl extends BaseEl {
@@ -176,9 +178,9 @@ export function recenter(dieline: Dieline, e: Deco): Deco {
   return { ...e, x, y }
 }
 
-// สำเนาองค์ประกอบ (id ใหม่ เยื้องเล็กน้อยให้เห็นว่าเป็นชิ้นใหม่)
+// สำเนาองค์ประกอบ (id ใหม่ เยื้องเล็กน้อยให้เห็นว่าเป็นชิ้นใหม่) — สำเนาแสดง+แก้ได้เสมอ
 export function cloneDeco(e: Deco, dx = 5, dy = 5): Deco {
-  return { ...e, id: newId(), x: e.x + dx, y: e.y + dy }
+  return { ...e, id: newId(), x: e.x + dx, y: e.y + dy, hidden: false, locked: false }
 }
 
 // แปลงจุดยอด shape เป็น UV บนผ้าใบขนาดเท่าแผ่นคลี่
@@ -268,8 +270,9 @@ export function drawShape2D(ctx: CanvasRenderingContext2D, e: ShapeEl, s: number
 // รูปฝังเป็น data URI (ไฟล์ standalone), ข้อความเป็น <text> แก้ไขได้ใน Illustrator
 // ไม่มิเรอร์ — SVG คือเลย์เอาต์ฝั่งพิมพ์/ด้านนอก เหมือนที่เห็นบน blueprint
 export function svgArtworkLayer(decos: Deco[]): string {
-  if (!decos.length) return ''
-  const body = decos
+  const visible = decos.filter((e) => !e.hidden)
+  if (!visible.length) return ''
+  const body = visible
     .map((e) => {
       const w = elW(e)
       const h = elH(e)
@@ -326,7 +329,8 @@ export async function renderArtworkCanvas(
   sheetH: number,
   dpi: number,
 ): Promise<HTMLCanvasElement | null> {
-  if (!decos.length) return null
+  const visible = decos.filter((d) => !d.hidden)
+  if (!visible.length) return null
   await ensureThaiFont() // ให้ตัวอักษรไทยที่ฝังลง PDF ตรงกับที่เห็นบนจอ
   const s = dpi / 25.4
   const canvas = document.createElement('canvas')
@@ -336,7 +340,7 @@ export async function renderArtworkCanvas(
   if (!ctx) return null
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
-  const srcs = [...new Set(decos.filter((d) => d.type === 'image').map((d) => d.src))]
+  const srcs = [...new Set(visible.filter((d) => d.type === 'image').map((d) => (d as { src: string }).src))]
   const imgs = new Map<string, HTMLImageElement>()
   await Promise.all(
     srcs.map(
@@ -352,17 +356,26 @@ export async function renderArtworkCanvas(
         }),
     ),
   )
-  for (const e of decos) drawDeco2D(ctx, e, s, (src) => imgs.get(src))
+  for (const e of visible) drawDeco2D(ctx, e, s, (src) => imgs.get(src))
   return canvas
 }
 
 // --- persistence ---
-function parseBase(o: Record<string, unknown>): { x: number; y: number; rot: number } | null {
+function parseBase(
+  o: Record<string, unknown>,
+): { x: number; y: number; rot: number; hidden?: boolean; locked?: boolean } | null {
   const x = Number(o.x)
   const y = Number(o.y)
   const rot = Number(o.rot)
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null
-  return { x, y, rot: Number.isFinite(rot) ? rot : 0 }
+  // เก็บ flag เฉพาะเมื่อ true — กันบวม JSON และให้ round-trip เหมือนเดิมสำหรับชิ้นปกติ
+  return {
+    x,
+    y,
+    rot: Number.isFinite(rot) ? rot : 0,
+    ...(o.hidden === true ? { hidden: true } : {}),
+    ...(o.locked === true ? { locked: true } : {}),
+  }
 }
 
 export function parseDeco(v: unknown): Deco | null {

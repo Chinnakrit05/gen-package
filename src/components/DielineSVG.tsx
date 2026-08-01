@@ -142,7 +142,13 @@ export const DielineSVG = memo(function DielineSVG({
 
   const startMove = (e: React.PointerEvent, d: Deco) => {
     if (!editable) return
+    // กัน pointerdown ลอยไปโดน handler พื้นหลังของ svg (ยกเลิกการเลือก) — ต้องทำก่อน return กรณีล็อก
+    e.stopPropagation()
     onSelect?.(d.id)
+    if (d.locked) {
+      e.preventDefault()
+      return // ล็อกไว้ — เลือกได้แต่ลากไม่ได้ (กันเผลอ)
+    }
     const p = toSheet(e.clientX, e.clientY)
     if (!p) return
     grab.current = { mode: 'move', id: d.id, dx: p.x - d.x, dy: p.y - d.y }
@@ -150,7 +156,6 @@ export const DielineSVG = memo(function DielineSVG({
     snapT.current = snapTargets(dieline.panels, decos, d.id, dieline.width, dieline.height)
     setActive(true)
     capture(e)
-    e.stopPropagation()
     e.preventDefault()
   }
 
@@ -237,7 +242,7 @@ export const DielineSVG = memo(function DielineSVG({
         />
       ))}
 
-      {decos.map((d) => {
+      {decos.filter((d) => !d.hidden).map((d) => {
         const w = elW(d)
         const h = elH(d)
         const c = elCenter(d)
@@ -246,7 +251,7 @@ export const DielineSVG = memo(function DielineSVG({
         return (
           <g
             key={d.id}
-            className={`deco${sel ? ' selected' : ''}${active && sel ? ' dragging' : ''}`}
+            className={`deco${sel ? ' selected' : ''}${active && sel ? ' dragging' : ''}${d.locked ? ' locked' : ''}`}
             transform={`rotate(${d.rot} ${c.x} ${c.y})`}
             onPointerDown={(e) => startMove(e, d)}
           >
@@ -264,7 +269,7 @@ export const DielineSVG = memo(function DielineSVG({
                   strokeDasharray="4 3"
                   vectorEffect="non-scaling-stroke"
                 />
-                {editable && (
+                {editable && !d.locked && (
                   <g className="rot-handle" onPointerDown={(e) => startRotate(e, d)}>
                     <line
                       x1={c.x}
@@ -278,7 +283,7 @@ export const DielineSVG = memo(function DielineSVG({
                     <circle cx={c.x} cy={handleY} r={3} fill="#fff" stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
                   </g>
                 )}
-                {editable && onRemove && (
+                {editable && onRemove && !d.locked && (
                   // กากบาทลบที่มุมขวาบนของชิ้น — กด pointerdown แล้วลบทันที (stopPropagation กันไปเริ่มลาก)
                   <g
                     className="del-handle"

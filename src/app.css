@@ -602,6 +602,33 @@ button[aria-disabled='true'] {
   flex-direction: column;
   gap: 4px;
 }
+.deco-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+.deco-row .deco-item {
+  flex: 1;
+  min-width: 0;
+}
+.deco-row.is-hidden .deco-item {
+  opacity: 0.5;
+}
+.deco-toggle {
+  width: auto;
+  flex-shrink: 0;
+  padding: 0 8px;
+  font-size: 13px;
+  line-height: 1;
+  background: #faf7f0;
+  border: 1px solid #d8cfbb;
+}
+.deco-toggle[aria-pressed='false'] {
+  opacity: 0.55;
+}
+.deco-toggle:hover {
+  border-color: #0f6e56;
+}
 .deco-item {
   width: 100%;
   text-align: left;

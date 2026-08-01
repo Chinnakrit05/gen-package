@@ -97,7 +97,7 @@ function useSheetTexture(dieline: Dieline, mat: Material, decos: Deco[], fillCol
     ctx.fillStyle = mat.color
     ctx.fillRect(0, 0, w, h)
     if (fillColor) drawFill(ctx, dieline, fillColor, s)
-    for (const e of decos) drawDeco(ctx, e, s, (src) => imgCache.current.get(src))
+    for (const e of decos) if (!e.hidden) drawDeco(ctx, e, s, (src) => imgCache.current.get(src))
 
     // ห้าม dispose ของเก่าตรงนี้ — StrictMode เรียกตัวอัปเดตซ้ำได้
     // ปล่อยให้ cleanup ของ effect ด้านล่างเป็นคนคืนหน่วยความจำแทน

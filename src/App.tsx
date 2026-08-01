@@ -871,7 +871,7 @@ export default function App() {
     })
 
   const removeSelected = () => {
-    if (!selectedId) return
+    if (!selectedId || selected?.locked) return
     setDecos((ds) => ds.filter((d) => d.id !== selectedId))
     setSelectedId(null)
   }
@@ -889,7 +889,7 @@ export default function App() {
   }
 
   const nudgeSelected = (dx: number, dy: number) => {
-    if (!selectedId) return
+    if (!selectedId || selected?.locked) return
     setDecos((ds) => ds.map((d) => (d.id === selectedId ? { ...d, x: d.x + dx, y: d.y + dy } : d)))
   }
 
@@ -908,6 +908,11 @@ export default function App() {
       return next
     })
   }
+
+  const toggleHidden = (id: string) =>
+    setDecos((ds) => ds.map((d) => (d.id === id ? { ...d, hidden: !d.hidden } : d)))
+  const toggleLocked = (id: string) =>
+    setDecos((ds) => ds.map((d) => (d.id === id ? { ...d, locked: !d.locked } : d)))
 
   // คีย์ลัด: Ctrl+Z/Ctrl+Shift+Z undo/redo, Delete ลบ, Esc เลิกเลือก, ลูกศรเลื่อน, Ctrl+D สำเนา
   // ข้ามเมื่อกำลังพิมพ์ในช่อง input/textarea (ไม่แย่งคีย์)
@@ -1225,7 +1230,7 @@ export default function App() {
                 {decos.length > 0 && (
                   <ul className="deco-list">
                     {decos.map((d) => (
-                      <li key={d.id}>
+                      <li key={d.id} className={`deco-row${d.hidden ? ' is-hidden' : ''}`}>
                         <button
                           className={`deco-item${d.id === selectedId ? ' active' : ''}`}
                           onClick={() => setSelectedId(d.id)}
@@ -1235,6 +1240,24 @@ export default function App() {
                             : d.type === 'shape'
                               ? `${d.shape === 'rect' ? '▭ สี่เหลี่ยม' : d.shape === 'ellipse' ? '⬭ วงกลม' : '／ เส้น'}`
                               : `T ${d.text || 'ข้อความ'}`}
+                        </button>
+                        <button
+                          className="deco-toggle"
+                          title={d.hidden ? 'แสดง' : 'ซ่อน'}
+                          aria-label={d.hidden ? 'แสดงชิ้นนี้' : 'ซ่อนชิ้นนี้'}
+                          aria-pressed={!d.hidden}
+                          onClick={() => toggleHidden(d.id)}
+                        >
+                          {d.hidden ? '🙈' : '👁'}
+                        </button>
+                        <button
+                          className="deco-toggle"
+                          title={d.locked ? 'ปลดล็อก' : 'ล็อก'}
+                          aria-label={d.locked ? 'ปลดล็อกชิ้นนี้' : 'ล็อกชิ้นนี้'}
+                          aria-pressed={!!d.locked}
+                          onClick={() => toggleLocked(d.id)}
+                        >
+                          {d.locked ? '🔒' : '🔓'}
                         </button>
                       </li>
                     ))}

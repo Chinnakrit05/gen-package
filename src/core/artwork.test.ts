@@ -176,4 +176,12 @@ describe('persistence + migration', () => {
   it('parseDecos รับค่าเสียแล้วคืน []', () => {
     expect(parseDecos('ไม่ใช่ array', undefined)).toHaveLength(0)
   })
+
+  it('hidden/locked: parse คงค่า true, ปกติไม่ใส่ flag (round-trip สะอาด)', () => {
+    const withFlags = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', x: 0, y: 0, rot: 0, hidden: true, locked: true })
+    expect(withFlags).toMatchObject({ hidden: true, locked: true })
+    const noFlags = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', x: 0, y: 0, rot: 0 })!
+    expect(noFlags.hidden).toBeUndefined()
+    expect(noFlags.locked).toBeUndefined()
+  })
 })
