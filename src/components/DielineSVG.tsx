@@ -9,6 +9,14 @@ const SEL_COLOR = '#1b6ea8'
 const SAFE_COLOR = '#1b6ea8'
 const BLEED_COLOR = '#c0158a'
 const DEL_COLOR = '#c0392b'
+const GRID = 10 // ระยะกริด (มม.)
+// ค่าตำแหน่งเส้นกริด 0..max ทีละ GRID (รวมเส้นสุดท้ายถ้าหารลงตัว)
+const gridTicks = (max: number): number[] => {
+  const out: number[] = []
+  for (let v = 0; v <= max + 0.01; v += GRID) out.push(Math.round(v))
+  return out
+}
+
 const SNAP_COLOR = '#ff7a00'
 const SNAP_PX = 6 // ระยะดูดบนจอ (พิกเซล) — แปลงเป็น มม. ตามซูมปัจจุบัน จะได้รู้สึกคงที่ทุกขนาดแผ่น
 
@@ -122,6 +130,7 @@ export const DielineSVG = memo(function DielineSVG({
   // ซูม/แพน blueprint ผ่าน viewBox — zoom=1 คือพอดีจอ, center=null คือกึ่งกลาง
   const [zoom, setZoom] = useState(1)
   const [center, setCenter] = useState<{ x: number; y: number } | null>(null)
+  const [showGrid, setShowGrid] = useState(false)
   const pan = useRef<{ sx: number; sy: number; cx: number; cy: number; moved: boolean } | null>(null)
   const editable = !!(onMove && onRotate && onSelect)
 
@@ -304,6 +313,35 @@ export const DielineSVG = memo(function DielineSVG({
           ))}
         </g>
       )}
+      {showGrid && (
+        <g className="grid" pointerEvents="none">
+          {/* เส้นกริดทุก 10 มม. เน้นทุก 50 มม. (พิกัดแผ่นคลี่ อ้างมุมกล่อง 0,0) */}
+          {gridTicks(dieline.width).map((x) => (
+            <line
+              key={`gx${x}`}
+              x1={x}
+              y1={0}
+              x2={x}
+              y2={dieline.height}
+              stroke={x % 50 === 0 ? '#c0b9a4' : '#e4dfd1'}
+              strokeWidth={x % 50 === 0 ? 0.7 : 0.4}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          {gridTicks(dieline.height).map((y) => (
+            <line
+              key={`gy${y}`}
+              x1={0}
+              y1={y}
+              x2={dieline.width}
+              y2={y}
+              stroke={y % 50 === 0 ? '#c0b9a4' : '#e4dfd1'}
+              strokeWidth={y % 50 === 0 ? 0.7 : 0.4}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </g>
+      )}
       {dieline.segments.map((s, i) => (
         <path
           key={i}
@@ -441,6 +479,17 @@ export const DielineSVG = memo(function DielineSVG({
     </svg>
     {editable && (
       <div className="zoom-toolbar">
+        <button
+          type="button"
+          className="grid-toggle"
+          title={showGrid ? 'ซ่อนกริด' : 'แสดงกริด'}
+          aria-label="เปิด-ปิดกริด"
+          aria-pressed={showGrid}
+          onClick={() => setShowGrid((g) => !g)}
+        >
+          ▦
+        </button>
+        <span className="zoom-sep" />
         <button type="button" title="ซูมออก" aria-label="ซูมออก" disabled={zoom <= 1} onClick={() => zoomAt(1 / 1.3, viewCx, viewCy)}>
           −
         </button>

@@ -574,6 +574,16 @@ button[aria-disabled='true'] {
   opacity: 0.4;
   cursor: default;
 }
+.zoom-toolbar .grid-toggle[aria-pressed='true'] {
+  background: #e7f2ee;
+  color: #0f6e56;
+}
+.zoom-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 1px;
+  background: #e3ded2;
+}
 
 .notfoldable {
   grid-column: 1 / -1;
