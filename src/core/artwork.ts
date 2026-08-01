@@ -14,6 +14,7 @@ export interface BaseEl {
   rot: number // องศา หมุนตามเข็มรอบจุดกึ่งกลางกล่อง
   hidden?: boolean // ซ่อน = ไม่เรนเดอร์ทุกที่ (blueprint/3D/export) แต่ยังอยู่ในรายการ
   locked?: boolean // ล็อก = ลาก/หมุน/ลบบน canvas ไม่ได้ (กันเผลอ)
+  name?: string // ชื่อที่ผู้ใช้ตั้งเอง (โชว์ในแผงเลเยอร์แทนป้ายอัตโนมัติ)
 }
 
 export interface ImageEl extends BaseEl {
@@ -154,6 +155,14 @@ export function makeTextEl(dieline: Dieline, text: string): TextEl {
   const w = measureText(text, size)
   const { x, y } = centerOnFace(dieline, w, size * LINE)
   return { id: newId(), type: 'text', text, color: '#222222', size, w, x, y, rot: 0 }
+}
+
+// ชื่อที่โชว์ในแผงเลเยอร์ — ใช้ชื่อที่ตั้งเองก่อน ไม่งั้น fallback ตามชนิด
+export function decoLabel(e: Deco): string {
+  if (e.name && e.name.trim()) return e.name
+  if (e.type === 'image') return 'รูป'
+  if (e.type === 'text') return e.text || 'ข้อความ'
+  return e.shape === 'rect' ? 'สี่เหลี่ยม' : e.shape === 'ellipse' ? 'วงกลม' : 'เส้น'
 }
 
 export function makeShapeEl(dieline: Dieline, shape: 'rect' | 'ellipse' | 'line'): ShapeEl {
@@ -375,6 +384,7 @@ function parseBase(
     rot: Number.isFinite(rot) ? rot : 0,
     ...(o.hidden === true ? { hidden: true } : {}),
     ...(o.locked === true ? { locked: true } : {}),
+    ...(typeof o.name === 'string' && o.name.trim() ? { name: o.name.slice(0, 40) } : {}),
   }
 }
 

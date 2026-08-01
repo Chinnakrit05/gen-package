@@ -11,6 +11,7 @@ import {
   makeImageEl,
   makeTextEl,
   makeShapeEl,
+  decoLabel,
   recenter,
   cloneDeco,
   withTextW,
@@ -1229,17 +1230,30 @@ export default function App() {
 
                 {decos.length > 0 && (
                   <ul className="deco-list">
-                    {decos.map((d) => (
+                    {/* บนสุด = หน้าสุด (กลับลำดับ array ที่ท้าย = วาดทับ) */}
+                    {[...decos].reverse().map((d) => (
                       <li key={d.id} className={`deco-row${d.hidden ? ' is-hidden' : ''}`}>
                         <button
                           className={`deco-item${d.id === selectedId ? ' active' : ''}`}
                           onClick={() => setSelectedId(d.id)}
+                          title={decoLabel(d)}
                         >
-                          {d.type === 'image'
-                            ? '🖼 รูป'
-                            : d.type === 'shape'
-                              ? `${d.shape === 'rect' ? '▭ สี่เหลี่ยม' : d.shape === 'ellipse' ? '⬭ วงกลม' : '／ เส้น'}`
-                              : `T ${d.text || 'ข้อความ'}`}
+                          {d.type === 'image' ? (
+                            <img className="deco-thumb" src={d.src} alt="" />
+                          ) : d.type === 'shape' ? (
+                            <span
+                              className={`deco-sw${d.shape === 'ellipse' ? ' round' : ''}`}
+                              style={{
+                                background: d.fill && d.fill !== 'none' ? d.fill : 'transparent',
+                                borderColor: d.stroke && d.stroke !== 'none' ? d.stroke : d.fill,
+                              }}
+                            />
+                          ) : (
+                            <span className="deco-tico" style={{ color: d.color }}>
+                              T
+                            </span>
+                          )}
+                          <span className="deco-name">{decoLabel(d)}</span>
                         </button>
                         <button
                           className="deco-toggle"
@@ -1266,6 +1280,16 @@ export default function App() {
 
                 {selected && (
                   <div className="deco-edit">
+                    <input
+                      type="text"
+                      className="deco-name-input"
+                      value={selected.name ?? ''}
+                      disabled={aiBusy}
+                      maxLength={40}
+                      placeholder="ตั้งชื่อชิ้น (ไม่บังคับ)"
+                      aria-label="ชื่อชิ้น"
+                      onChange={(e) => patchSelected((d) => ({ ...d, name: e.target.value }))}
+                    />
                     {selected.type === 'text' && (
                       <>
                         <input
@@ -1716,23 +1740,6 @@ export default function App() {
             </div>
           )}
           <div className="panels">
-            <div className="viewer card">
-              <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
-                {mat.foldable ? (
-                  <Viewer3D
-                    dieline={dieline}
-                    mat={mat}
-                    fold={fold}
-                    depth={template.foldDepth({ W, D, H }, mat)}
-                    tilt={template.tilt}
-                    decos={decos}
-                    fillColor={fillColor}
-                  />
-                ) : (
-                  <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} />
-                )}
-              </Suspense>
-            </div>
             <div className="blueprint card">
               <div className="bp-head">
                 <span>{mat.foldable ? 'blueprint การพับ' : 'dieline ฉลาก'}</span>
@@ -1753,6 +1760,23 @@ export default function App() {
                 onRotate={rotateDeco}
                 onRemove={removeDeco}
               />
+            </div>
+            <div className="viewer card">
+              <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
+                {mat.foldable ? (
+                  <Viewer3D
+                    dieline={dieline}
+                    mat={mat}
+                    fold={fold}
+                    depth={template.foldDepth({ W, D, H }, mat)}
+                    tilt={template.tilt}
+                    decos={decos}
+                    fillColor={fillColor}
+                  />
+                ) : (
+                  <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} />
+                )}
+              </Suspense>
             </div>
           </div>
         </main>

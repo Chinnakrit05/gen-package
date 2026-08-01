@@ -3,6 +3,7 @@ import {
   elCenter,
   elH,
   elW,
+  decoLabel,
   makeImageEl,
   makeShapeEl,
   makeTextEl,
@@ -175,6 +176,15 @@ describe('persistence + migration', () => {
 
   it('parseDecos รับค่าเสียแล้วคืน []', () => {
     expect(parseDecos('ไม่ใช่ array', undefined)).toHaveLength(0)
+  })
+
+  it('name: parse คงชื่อที่ตั้งเอง, ว่าง/ไม่มี → ไม่ใส่คีย์ (decoLabel fallback ตามชนิด)', () => {
+    const named = parseDeco({ type: 'shape', shape: 'rect', w: 10, h: 10, fill: '#000', stroke: 'none', strokeW: 0, x: 0, y: 0, rot: 0, name: 'แถบหัว' })!
+    expect(named.name).toBe('แถบหัว')
+    expect(decoLabel(named)).toBe('แถบหัว')
+    const noName = parseDeco({ type: 'shape', shape: 'ellipse', w: 10, h: 10, fill: '#000', stroke: 'none', strokeW: 0, x: 0, y: 0, rot: 0, name: '  ' })!
+    expect(noName.name).toBeUndefined()
+    expect(decoLabel(noName)).toBe('วงกลม')
   })
 
   it('hidden/locked: parse คงค่า true, ปกติไม่ใส่ flag (round-trip สะอาด)', () => {
