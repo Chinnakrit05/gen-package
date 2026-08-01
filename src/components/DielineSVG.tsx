@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
 import { elW, elH, elCenter, type Deco } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
@@ -119,6 +119,10 @@ export const DielineSVG = memo(function DielineSVG({
   const [active, setActive] = useState(false)
   // เส้นไกด์ที่กำลังดูดติด (ค่า x ของเส้นตั้ง / y ของเส้นนอน) — null = ไม่มี
   const [snap, setSnap] = useState<{ vx: number | null; vy: number | null }>({ vx: null, vy: null })
+  // ซูม/แพน blueprint ผ่าน viewBox — zoom=1 คือพอดีจอ, center=null คือกึ่งกลาง
+  const [zoom, setZoom] = useState(1)
+  const [center, setCenter] = useState<{ x: number; y: number } | null>(null)
+  const pan = useRef<{ sx: number; sy: number; cx: number; cy: number; moved: boolean } | null>(null)
   const editable = !!(onMove && onRotate && onSelect)
 
   // แปลงพิกัดหน้าจอเป็นพิกัดแผ่นคลี่ (มม.) — viewBox เป็นหน่วย มม. อยู่แล้ว
@@ -169,6 +173,16 @@ export const DielineSVG = memo(function DielineSVG({
   }
 
   const onMoveEvt = (e: React.PointerEvent) => {
+    if (pan.current) {
+      const dxS = e.clientX - pan.current.sx
+      const dyS = e.clientY - pan.current.sy
+      if (Math.abs(dxS) + Math.abs(dyS) > 3) pan.current.moved = true
+      if (zoom > 1) {
+        const scale = svgRef.current?.getScreenCTM()?.a || 1
+        setCenter(clampCenter(pan.current.cx - dxS / scale, pan.current.cy - dyS / scale))
+      }
+      return
+    }
     const g = grab.current
     if (!g) return
     const p = toSheet(e.clientX, e.clientY)
@@ -203,6 +217,11 @@ export const DielineSVG = memo(function DielineSVG({
   }
 
   const endDrag = (e: React.PointerEvent) => {
+    if (pan.current) {
+      // ลากพื้นที่ว่างแบบไม่ขยับ = คลิกที่ว่าง → ยกเลิกการเลือก
+      if (!pan.current.moved) onSelect?.(null)
+      pan.current = null
+    }
     grab.current = null
     snapT.current = null
     setActive(false)
@@ -210,17 +229,73 @@ export const DielineSVG = memo(function DielineSVG({
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
   }
 
+  // กดพื้นที่ว่าง = เริ่มลาก pan (ตอนซูม) หรือถ้าไม่ขยับก็ยกเลิกการเลือกตอนปล่อย
+  const onBgDown = (e: React.PointerEvent) => {
+    if (!editable || grab.current) return
+    pan.current = { sx: e.clientX, sy: e.clientY, cx: viewCx, cy: viewCy, moved: false }
+    capture(e)
+  }
+
+  // --- viewBox ตามซูม/แพน ---
+  const MAXZOOM = 8
+  const baseW = dieline.width + pad * 2
+  const baseH = dieline.height + pad * 2
+  const vw = baseW / zoom
+  const vh = baseH / zoom
+  const viewCx = center?.x ?? dieline.width / 2
+  const viewCy = center?.y ?? dieline.height / 2
+  const clampCenter = (x: number, y: number) => ({
+    x: Math.min(Math.max(x, -pad), dieline.width + pad),
+    y: Math.min(Math.max(y, -pad), dieline.height + pad),
+  })
+  // ซูมโดยตรึงจุดโฟกัส (fx,fy บนแผ่น) ให้อยู่ที่เดิม
+  const zoomAt = (factor: number, fx: number, fy: number) => {
+    const nz = Math.min(MAXZOOM, Math.max(1, zoom * factor))
+    if (nz <= 1) {
+      setZoom(1)
+      setCenter(null)
+      return
+    }
+    setZoom(nz)
+    setCenter(clampCenter(fx - (fx - viewCx) * (zoom / nz), fy - (fy - viewCy) * (zoom / nz)))
+  }
+  const fit = () => {
+    setZoom(1)
+    setCenter(null)
+  }
+
+  // เปลี่ยนขนาดแผ่น (เปลี่ยน template/ขนาด) → กลับไปพอดีจอ
+  useEffect(() => {
+    setZoom(1)
+    setCenter(null)
+  }, [dieline.width, dieline.height])
+
+  // ล้อเมาส์ซูมที่ตำแหน่งเคอร์เซอร์ (ต้อง non-passive เพื่อ preventDefault กันหน้าเลื่อน)
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg || !editable) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const f = toSheet(e.clientX, e.clientY)
+      if (f) zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, f.x, f.y)
+    }
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    return () => svg.removeEventListener('wheel', onWheel)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoom, center, pad, dieline.width, dieline.height])
+
   return (
+    <div className="bp-canvas">
     <svg
       ref={svgRef}
-      className="dieline-svg"
-      viewBox={`${-pad} ${-pad} ${dieline.width + pad * 2} ${dieline.height + pad * 2}`}
+      className={`dieline-svg${zoom > 1 ? ' zoomed' : ''}`}
+      viewBox={`${viewCx - vw / 2} ${viewCy - vh / 2} ${vw} ${vh}`}
       preserveAspectRatio="xMidYMid meet"
       onPointerMove={onMoveEvt}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
-      // คลิกที่ว่าง = ยกเลิกการเลือก
-      onPointerDown={() => editable && !grab.current && onSelect?.(null)}
+      // กดพื้นที่ว่าง = เริ่ม pan / คลิกเปล่า = ยกเลิกการเลือก
+      onPointerDown={onBgDown}
     >
       {fillColor && (
         <g className="fill" pointerEvents="none">
@@ -364,5 +439,19 @@ export const DielineSVG = memo(function DielineSVG({
 
       {showDims && dieline.dims.map((d, i) => <Dim key={i} d={d} />)}
     </svg>
+    {editable && (
+      <div className="zoom-toolbar">
+        <button type="button" title="ซูมออก" aria-label="ซูมออก" disabled={zoom <= 1} onClick={() => zoomAt(1 / 1.3, viewCx, viewCy)}>
+          −
+        </button>
+        <button type="button" title="พอดีจอ" aria-label="พอดีจอ" onClick={fit}>
+          {Math.round(zoom * 100)}%
+        </button>
+        <button type="button" title="ซูมเข้า" aria-label="ซูมเข้า" disabled={zoom >= MAXZOOM} onClick={() => zoomAt(1.3, viewCx, viewCy)}>
+          ＋
+        </button>
+      </div>
+    )}
+    </div>
   )
 })
