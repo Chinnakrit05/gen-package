@@ -940,6 +940,14 @@ button[aria-disabled='true'] {
   border-radius: 8px;
 }
 
+/* --- แผงเลือกหลายชิ้น --- */
+.multi-head {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f6e56;
+  margin-bottom: 10px;
+}
+
 /* --- จัดแนว artwork เทียบแผงหน้า --- */
 .align-box {
   margin-top: 10px;

@@ -15,6 +15,7 @@ export interface BaseEl {
   hidden?: boolean // ซ่อน = ไม่เรนเดอร์ทุกที่ (blueprint/3D/export) แต่ยังอยู่ในรายการ
   locked?: boolean // ล็อก = ลาก/หมุน/ลบบน canvas ไม่ได้ (กันเผลอ)
   name?: string // ชื่อที่ผู้ใช้ตั้งเอง (โชว์ในแผงเลเยอร์แทนป้ายอัตโนมัติ)
+  groupId?: string // ชิ้นที่ groupId เดียวกัน = กลุ่มเดียวกัน (เลือก/ย้ายพร้อมกัน)
 }
 
 export interface ImageEl extends BaseEl {
@@ -208,6 +209,82 @@ export function alignToFace(dieline: Dieline, e: Deco, mode: AlignMode): Deco {
   else if (mode === 'vcenter') y = (b.y0 + b.y1) / 2 - h / 2
   else if (mode === 'bottom') y = b.y1 - h
   return { ...e, x, y }
+}
+
+// --- เลือกหลายชิ้น + จัดกลุ่ม ---
+
+export const newGroupId = (): string => `g-${newId()}`
+
+// ขยายชุด id ที่เลือกให้ครอบ "ทั้งกลุ่ม" ของแต่ละชิ้น (คงลำดับตาม decos)
+export function expandGroups(decos: Deco[], ids: Iterable<string>): string[] {
+  const picked = new Set(ids)
+  const groups = new Set<string>()
+  for (const d of decos) if (picked.has(d.id) && d.groupId) groups.add(d.groupId)
+  return decos
+    .filter((d) => picked.has(d.id) || (d.groupId !== undefined && groups.has(d.groupId)))
+    .map((d) => d.id)
+}
+
+// กรอบรวม (bbox) ของชิ้นที่เลือก — null ถ้าไม่มี
+export function selectionBounds(
+  decos: Deco[],
+  ids: Iterable<string>,
+): { x0: number; x1: number; y0: number; y1: number } | null {
+  const sel = new Set(ids)
+  let x0 = Infinity
+  let x1 = -Infinity
+  let y0 = Infinity
+  let y1 = -Infinity
+  let n = 0
+  for (const e of decos) {
+    if (!sel.has(e.id)) continue
+    n++
+    const w = elW(e)
+    const h = elH(e)
+    x0 = Math.min(x0, e.x)
+    x1 = Math.max(x1, e.x + w)
+    y0 = Math.min(y0, e.y)
+    y1 = Math.max(y1, e.y + h)
+  }
+  return n ? { x0, x1, y0, y1 } : null
+}
+
+// จัดแนวชิ้นที่เลือกเทียบ "กรอบรวมของสิ่งที่เลือก" (Illustrator align-to-selection)
+export function alignInSelection(decos: Deco[], ids: Iterable<string>, mode: AlignMode): Deco[] {
+  const b = selectionBounds(decos, ids)
+  if (!b) return decos
+  const sel = new Set(ids)
+  return decos.map((e) => {
+    if (!sel.has(e.id)) return e
+    const w = elW(e)
+    const h = elH(e)
+    let { x, y } = e
+    if (mode === 'left') x = b.x0
+    else if (mode === 'hcenter') x = (b.x0 + b.x1) / 2 - w / 2
+    else if (mode === 'right') x = b.x1 - w
+    else if (mode === 'top') y = b.y0
+    else if (mode === 'vcenter') y = (b.y0 + b.y1) / 2 - h / 2
+    else if (mode === 'bottom') y = b.y1 - h
+    return { ...e, x, y }
+  })
+}
+
+// กระจายให้กึ่งกลางห่างเท่ากันตามแกน (ต้องเลือก ≥ 3 ชิ้น) — ชิ้นหัว-ท้ายอยู่กับที่
+export function distribute(decos: Deco[], ids: Iterable<string>, axis: 'h' | 'v'): Deco[] {
+  const sel = new Set(ids)
+  const chosen = decos.filter((d) => sel.has(d.id))
+  if (chosen.length < 3) return decos
+  const centerOf = (e: Deco) => (axis === 'h' ? e.x + elW(e) / 2 : e.y + elH(e) / 2)
+  const sorted = [...chosen].sort((a, b) => centerOf(a) - centerOf(b))
+  const first = centerOf(sorted[0])
+  const step = (centerOf(sorted[sorted.length - 1]) - first) / (sorted.length - 1)
+  const target = new Map<string, number>()
+  sorted.forEach((e, i) => target.set(e.id, first + step * i))
+  return decos.map((e) => {
+    const c = target.get(e.id)
+    if (c === undefined) return e
+    return axis === 'h' ? { ...e, x: c - elW(e) / 2 } : { ...e, y: c - elH(e) / 2 }
+  })
 }
 
 // สำเนาองค์ประกอบ (id ใหม่ เยื้องเล็กน้อยให้เห็นว่าเป็นชิ้นใหม่) — สำเนาแสดง+แก้ได้เสมอ
@@ -408,6 +485,7 @@ function parseBase(
     ...(o.hidden === true ? { hidden: true } : {}),
     ...(o.locked === true ? { locked: true } : {}),
     ...(typeof o.name === 'string' && o.name.trim() ? { name: o.name.slice(0, 40) } : {}),
+    ...(typeof o.groupId === 'string' && o.groupId ? { groupId: o.groupId.slice(0, 40) } : {}),
   }
 }
 

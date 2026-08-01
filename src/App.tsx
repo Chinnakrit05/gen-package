@@ -13,6 +13,10 @@ import {
   makeShapeEl,
   decoLabel,
   alignToFace,
+  alignInSelection,
+  distribute,
+  expandGroups,
+  newGroupId,
   type AlignMode,
   recenter,
   cloneDeco,
@@ -412,7 +416,7 @@ export default function App() {
   const [qty, setQty] = useState(active0.qty)
   const [fillColor, setFillColor] = useState<string | null>(active0.fillColor)
   const [decos, setDecos] = useState<Deco[]>(active0.decos)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [fold, setFold] = useState(1)
   const [showDims, setShowDims] = useState(store0.showDims)
   const [showGuides, setShowGuides] = useState(false)
@@ -561,7 +565,7 @@ export default function App() {
     setQty(s.qty)
     setFillColor(s.fillColor)
     setDecos(s.decos)
-    setSelectedId(null)
+    setSelectedIds([])
   }
 
   const undo = () => {
@@ -657,7 +661,7 @@ export default function App() {
     setQty(p.qty)
     setFillColor(p.fillColor)
     setDecos(p.decos)
-    setSelectedId(null)
+    setSelectedIds([])
     setHistory(p.history)
     setHistIdx(p.histIdx)
     setFold(1)
@@ -802,8 +806,26 @@ export default function App() {
     saveFile(dielinePDFBytes(dieline, showDims, art, guides, fillColor), 'application/pdf', 'pdf')
   }
 
-  const selected = decos.find((d) => d.id === selectedId) ?? null
+  // เลือกได้หลายชิ้น — เมื่อเลือกชิ้นเดียวจึงโชว์แผงแก้ไขรายชิ้น; หลายชิ้นโชว์แผงหลายชิ้น
+  const multi = selectedIds.length > 1
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
+  const selected = selectedId ? decos.find((d) => d.id === selectedId) ?? null : null
   const selIdx = selected ? decos.findIndex((d) => d.id === selectedId) : -1
+
+  // เลือกชิ้น (พร้อมทั้งกลุ่มของมัน) — additive = Shift/Ctrl คลิกเพื่อสลับเข้า/ออกชุดเลือก
+  const selectDeco = (id: string | null, additive = false) => {
+    if (id === null) {
+      setSelectedIds([])
+      return
+    }
+    const grp = expandGroups(decos, [id])
+    setSelectedIds((cur) => {
+      if (!additive) return grp
+      const all = grp.every((g) => cur.includes(g))
+      return all ? cur.filter((x) => !grp.includes(x)) : [...new Set([...cur, ...grp])]
+    })
+  }
+  const isSelected = (id: string) => selectedIds.includes(id)
   const currentAi = histIdx >= 0 ? history[histIdx]?.ai : undefined
 
   const activeName = projects.find((p) => p.id === activeId)?.name ?? 'งาน'
@@ -835,7 +857,7 @@ export default function App() {
       const { src, aspect } = await loadImageFile(file)
       const el = makeImageEl(dieline, src, aspect)
       setDecos((ds) => [...ds, el])
-      setSelectedId(el.id)
+      setSelectedIds([el.id])
     } catch {
       window.alert('เปิดไฟล์รูปนี้ไม่ได้ ลองไฟล์ PNG หรือ JPG อีกครั้ง')
     }
@@ -845,38 +867,49 @@ export default function App() {
     if (!dieline) return
     const el = makeTextEl(dieline, 'ข้อความ')
     setDecos((ds) => [...ds, el])
-    setSelectedId(el.id)
+    setSelectedIds([el.id])
   }
 
   const addShape = (shape: 'rect' | 'ellipse' | 'line') => {
     if (!dieline) return
     const el = makeShapeEl(dieline, shape)
     setDecos((ds) => [...ds, el])
-    setSelectedId(el.id)
+    setSelectedIds([el.id])
   }
 
-  // แก้เฉพาะชิ้นที่เลือก ผ่านฟังก์ชันแปลง (คงชนิด image/text ไว้)
+  // แก้เฉพาะชิ้นที่เลือก (ชิ้นเดียว) ผ่านฟังก์ชันแปลง (คงชนิด image/text ไว้)
   const patchSelected = (fn: (d: Deco) => Deco) => {
     if (!selectedId) return
     setDecos((ds) => ds.map((d) => (d.id === selectedId ? fn(d) : d)))
   }
 
+  // ลากชิ้น: ถ้าอยู่ในชุดเลือกหลายชิ้น ให้ย้ายทั้งชุดตามระยะเดียวกัน (ชิ้นที่ลากตรง snap)
   const moveDeco = (id: string, x: number, y: number) =>
-    setDecos((ds) => ds.map((d) => (d.id === id ? { ...d, x, y } : d)))
+    setDecos((ds) => {
+      const g = ds.find((d) => d.id === id)
+      if (!g) return ds
+      const move = multi && selectedIds.includes(id) ? new Set(selectedIds) : new Set([id])
+      const dx = x - g.x
+      const dy = y - g.y
+      return ds.map((d) => (move.has(d.id) ? { ...d, x: d.x + dx, y: d.y + dy } : d))
+    })
 
   const rotateDeco = (id: string, deg: number) =>
     setDecos((ds) => ds.map((d) => (d.id === id ? { ...d, rot: deg } : d)))
 
   const removeDeco = (id: string) =>
     setDecos((ds) => {
-      if (selectedId === id) setSelectedId(null)
+      setSelectedIds((cur) => cur.filter((x) => x !== id))
       return ds.filter((d) => d.id !== id)
     })
 
+  // ลบทุกชิ้นที่เลือก (ข้ามชิ้นที่ล็อก)
   const removeSelected = () => {
-    if (!selectedId || selected?.locked) return
-    setDecos((ds) => ds.filter((d) => d.id !== selectedId))
-    setSelectedId(null)
+    if (!selectedIds.length) return
+    const kill = new Set(decos.filter((d) => selectedIds.includes(d.id) && !d.locked).map((d) => d.id))
+    if (!kill.size) return
+    setDecos((ds) => ds.filter((d) => !kill.has(d.id)))
+    setSelectedIds((cur) => cur.filter((x) => !kill.has(x)))
   }
 
   const recenterSelected = () => {
@@ -884,21 +917,63 @@ export default function App() {
     patchSelected((d) => recenter(dieline, d))
   }
 
+  // จัดแนว: เลือกชิ้นเดียว = เทียบแผงหน้า; หลายชิ้น = เทียบกรอบรวมของสิ่งที่เลือก
   const alignSelected = (mode: AlignMode) => {
-    if (!selected || !dieline) return
-    patchSelected((d) => alignToFace(dieline, d, mode))
+    if (!dieline || !selectedIds.length) return
+    if (multi) setDecos((ds) => alignInSelection(ds, selectedIds, mode))
+    else patchSelected((d) => alignToFace(dieline, d, mode))
   }
 
+  const distributeSelected = (axis: 'h' | 'v') => {
+    if (selectedIds.length < 3) return
+    setDecos((ds) => distribute(ds, selectedIds, axis))
+  }
+
+  // จัดกลุ่ม/แยกกลุ่ม (groupId ร่วมกัน = เลือก/ย้ายพร้อมกัน)
+  const groupSelected = () => {
+    if (selectedIds.length < 2) return
+    const gid = newGroupId()
+    const sel = new Set(selectedIds)
+    setDecos((ds) => ds.map((d) => (sel.has(d.id) ? { ...d, groupId: gid } : d)))
+  }
+  const ungroupSelected = () => {
+    const sel = new Set(selectedIds)
+    setDecos((ds) => ds.map((d) => (sel.has(d.id) ? { ...d, groupId: undefined } : d)))
+  }
+
+  // สลับ ซ่อน/ล็อก ให้ทุกชิ้นที่เลือก (อิงค่าของชิ้นแรกเป็นตัวตั้ง)
+  const toggleHiddenSelected = () => {
+    const sel = new Set(selectedIds)
+    const anyShown = decos.some((d) => sel.has(d.id) && !d.hidden)
+    setDecos((ds) => ds.map((d) => (sel.has(d.id) ? { ...d, hidden: anyShown } : d)))
+  }
+  const toggleLockedSelected = () => {
+    const sel = new Set(selectedIds)
+    const anyUnlocked = decos.some((d) => sel.has(d.id) && !d.locked)
+    setDecos((ds) => ds.map((d) => (sel.has(d.id) ? { ...d, locked: anyUnlocked } : d)))
+  }
+
+  // ทำสำเนาทุกชิ้นที่เลือก (สำเนาของกลุ่มเดิม → กลุ่มใหม่ร่วมกัน) แล้วเลือกสำเนา
   const duplicateSelected = () => {
-    if (!selected) return
-    const copy = cloneDeco(selected)
-    setDecos((ds) => [...ds, copy])
-    setSelectedId(copy.id)
+    if (!selectedIds.length) return
+    const sel = decos.filter((d) => selectedIds.includes(d.id))
+    const regroup = new Map<string, string>()
+    const copies = sel.map((d) => {
+      const c = cloneDeco(d)
+      if (d.groupId) {
+        if (!regroup.has(d.groupId)) regroup.set(d.groupId, newGroupId())
+        return { ...c, groupId: regroup.get(d.groupId) }
+      }
+      return c
+    })
+    setDecos((ds) => [...ds, ...copies])
+    setSelectedIds(copies.map((c) => c.id))
   }
 
   const nudgeSelected = (dx: number, dy: number) => {
-    if (!selectedId || selected?.locked) return
-    setDecos((ds) => ds.map((d) => (d.id === selectedId ? { ...d, x: d.x + dx, y: d.y + dy } : d)))
+    if (!selectedIds.length) return
+    const move = new Set(decos.filter((d) => selectedIds.includes(d.id) && !d.locked).map((d) => d.id))
+    setDecos((ds) => ds.map((d) => (move.has(d.id) ? { ...d, x: d.x + dx, y: d.y + dy } : d)))
   }
 
   // จัดเลเยอร์: ลำดับใน decos = ลำดับวาด (ท้าย = หน้าสุด) — เลื่อนชิ้นที่เลือกขึ้นหน้า/ลงหลัง
@@ -943,12 +1018,15 @@ export default function App() {
       if (mod && (e.key === 'd' || e.key === 'D')) {
         e.preventDefault()
         duplicateSelected()
+      } else if (mod && (e.key === 'g' || e.key === 'G')) {
+        e.preventDefault()
+        e.shiftKey ? ungroupSelected() : groupSelected()
       } else if (e.key === 'Escape') {
-        setSelectedId(null)
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        setSelectedIds([])
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length) {
         e.preventDefault()
         removeSelected()
-      } else if (selectedId && e.key.startsWith('Arrow')) {
+      } else if (selectedIds.length && e.key.startsWith('Arrow')) {
         e.preventDefault()
         const step = e.shiftKey ? 10 : 1
         if (e.key === 'ArrowLeft') nudgeSelected(-step, 0)
@@ -960,7 +1038,7 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, selected, undoStack, redoStack, aiBusy, decos, templateId, materialId, W, D, H, handle, qty, fillColor])
+  }, [selectedIds, selected, undoStack, redoStack, aiBusy, decos, templateId, materialId, W, D, H, handle, qty, fillColor])
 
   // ควบคุมการพับ — ใช้ทั้งแท็บ "ออกแบบ" และ "ตกแต่ง" (ตอนแต่งลายก็อยากพับดูผลบนกล่อง 3D)
   const foldSection = (
@@ -1241,9 +1319,9 @@ export default function App() {
                     {[...decos].reverse().map((d) => (
                       <li key={d.id} className={`deco-row${d.hidden ? ' is-hidden' : ''}`}>
                         <button
-                          className={`deco-item${d.id === selectedId ? ' active' : ''}`}
-                          onClick={() => setSelectedId(d.id)}
-                          title={decoLabel(d)}
+                          className={`deco-item${isSelected(d.id) ? ' active' : ''}`}
+                          onClick={(e) => selectDeco(d.id, e.shiftKey || e.ctrlKey || e.metaKey)}
+                          title={`${decoLabel(d)} — Shift/Ctrl คลิกเพื่อเลือกหลายชิ้น`}
                         >
                           {d.type === 'image' ? (
                             <img className="deco-thumb" src={d.src} alt="" />
@@ -1283,6 +1361,44 @@ export default function App() {
                       </li>
                     ))}
                   </ul>
+                )}
+
+                {multi && (
+                  <div className="deco-edit">
+                    <div className="multi-head">เลือก {selectedIds.length} ชิ้น</div>
+                    <div className="align-box">
+                      <span className="align-title">จัดแนวในกลุ่มที่เลือก</span>
+                      <div className="align-grid">
+                        <span className="align-axis">↔</span>
+                        <button title="ชิดซ้าย" aria-label="ชิดซ้าย" onClick={() => alignSelected('left')}>⭰</button>
+                        <button title="กึ่งกลางแนวนอน" aria-label="กึ่งกลางแนวนอน" onClick={() => alignSelected('hcenter')}>⭤</button>
+                        <button title="ชิดขวา" aria-label="ชิดขวา" onClick={() => alignSelected('right')}>⭲</button>
+                        <span className="align-axis">↕</span>
+                        <button title="ชิดบน" aria-label="ชิดบน" onClick={() => alignSelected('top')}>⭱</button>
+                        <button title="กึ่งกลางแนวตั้ง" aria-label="กึ่งกลางแนวตั้ง" onClick={() => alignSelected('vcenter')}>⭥</button>
+                        <button title="ชิดล่าง" aria-label="ชิดล่าง" onClick={() => alignSelected('bottom')}>⭳</button>
+                      </div>
+                    </div>
+                    {selectedIds.length >= 3 && (
+                      <div className="art-actions" style={{ marginTop: 8 }}>
+                        <button onClick={() => distributeSelected('h')}>กระจาย ↔</button>
+                        <button onClick={() => distributeSelected('v')}>กระจาย ↕</button>
+                      </div>
+                    )}
+                    <div className="art-actions" style={{ marginTop: 8 }}>
+                      <button onClick={groupSelected}>จัดกลุ่ม</button>
+                      <button onClick={ungroupSelected}>แยกกลุ่ม</button>
+                    </div>
+                    <div className="art-actions">
+                      <button onClick={duplicateSelected}>ทำสำเนา</button>
+                      <button onClick={toggleHiddenSelected}>ซ่อน/แสดง</button>
+                      <button onClick={toggleLockedSelected}>ล็อก/ปลด</button>
+                    </div>
+                    <div className="art-actions">
+                      <button onClick={removeSelected}>ลบที่เลือก</button>
+                    </div>
+                    <p className="hint">Shift/Ctrl คลิกเพื่อเพิ่ม-ลดชิ้น · ลากชิ้นใดชิ้นหนึ่งเพื่อย้ายทั้งชุด · Ctrl+G จัดกลุ่ม</p>
+                  </div>
                 )}
 
                 {selected && (
@@ -1774,8 +1890,8 @@ export default function App() {
                 decos={decos}
                 guides={guides}
                 fillColor={fillColor}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
+                selectedIds={selectedIds}
+                onSelect={selectDeco}
                 onMove={moveDeco}
                 onRotate={rotateDeco}
                 onRemove={removeDeco}

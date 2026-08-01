@@ -4,6 +4,10 @@ import {
   elH,
   elW,
   alignToFace,
+  alignInSelection,
+  distribute,
+  expandGroups,
+  selectionBounds,
   faceBounds,
   decoLabel,
   makeImageEl,
@@ -176,6 +180,51 @@ describe('จัดแนวเทียบแผงหน้า (alignToFace)',
     expect(r.type).toBe(el.type)
     expect(elW(r)).toBe(w)
     expect(r.rot).toBe(30)
+  })
+})
+
+describe('เลือกหลายชิ้น + จัดกลุ่ม', () => {
+  const shp = (id: string, x: number, y: number, w = 20, h = 20, groupId?: string): Deco => ({
+    id, type: 'shape', shape: 'rect', w, h, fill: '#000', stroke: 'none', strokeW: 0, x, y, rot: 0,
+    ...(groupId ? { groupId } : {}),
+  })
+
+  it('expandGroups: คลิกชิ้นในกลุ่ม → ดึงทั้งกลุ่ม, คงลำดับ, ไม่ซ้ำ', () => {
+    const decos = [shp('a', 0, 0, 20, 20, 'g1'), shp('b', 50, 0), shp('c', 100, 0, 20, 20, 'g1')]
+    expect(expandGroups(decos, ['a'])).toEqual(['a', 'c']) // a,c กลุ่มเดียวกัน
+    expect(expandGroups(decos, ['b'])).toEqual(['b']) // ไม่มีกลุ่ม
+    expect(expandGroups(decos, ['b', 'c'])).toEqual(['a', 'b', 'c'])
+  })
+
+  it('selectionBounds: กรอบรวมครอบทุกชิ้นที่เลือก', () => {
+    const decos = [shp('a', 0, 0, 20, 10), shp('b', 100, 50, 30, 20)]
+    expect(selectionBounds(decos, ['a', 'b'])).toEqual({ x0: 0, x1: 130, y0: 0, y1: 70 })
+    expect(selectionBounds(decos, [])).toBeNull()
+  })
+
+  it('alignInSelection: ชิดซ้าย/ขวาเทียบกรอบรวม (ไม่ใช่แผงหน้า)', () => {
+    const decos = [shp('a', 10, 0, 20, 20), shp('b', 100, 0, 40, 20)]
+    const left = alignInSelection(decos, ['a', 'b'], 'left')
+    expect(left.find((d) => d.id === 'a')!.x).toBe(10) // x0 ของกรอบ = 10
+    expect(left.find((d) => d.id === 'b')!.x).toBe(10)
+    const right = alignInSelection(decos, ['a', 'b'], 'right')
+    // x1 = max(10+20, 100+40)=140 → a.x=140-20=120, b.x=140-40=100
+    expect(right.find((d) => d.id === 'a')!.x).toBe(120)
+    expect(right.find((d) => d.id === 'b')!.x).toBe(100)
+    // ชิ้นที่ไม่ได้เลือกไม่ขยับ
+    expect(alignInSelection(decos, ['a'], 'right').find((d) => d.id === 'b')!.x).toBe(100)
+  })
+
+  it('distribute: กึ่งกลางห่างเท่ากัน หัว-ท้ายอยู่กับที่ (ต้อง ≥3)', () => {
+    // กึ่งกลาง x: a=10, b=40, c=100 → กระจายให้ b ไปกลาง (55)
+    const decos = [shp('a', 0, 0, 20, 20), shp('b', 30, 0, 20, 20), shp('c', 90, 0, 20, 20)]
+    const r = distribute(decos, ['a', 'b', 'c'], 'h')
+    const cx = (id: string) => { const d = r.find((x) => x.id === id)!; return d.x + 10 }
+    expect(cx('a')).toBeCloseTo(10) // หัวคงเดิม
+    expect(cx('c')).toBeCloseTo(100) // ท้ายคงเดิม
+    expect(cx('b')).toBeCloseTo(55) // กลางพอดี
+    // < 3 ชิ้น → ไม่เปลี่ยน
+    expect(distribute(decos, ['a', 'b'], 'h')).toEqual(decos)
   })
 })
 

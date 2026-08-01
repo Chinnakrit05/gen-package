@@ -103,7 +103,7 @@ export const DielineSVG = memo(function DielineSVG({
   decos = [],
   guides,
   fillColor,
-  selectedId,
+  selectedIds = [],
   onSelect,
   onMove,
   onRotate,
@@ -114,8 +114,8 @@ export const DielineSVG = memo(function DielineSVG({
   decos?: Deco[]
   guides?: Guides | null
   fillColor?: string | null
-  selectedId?: string | null
-  onSelect?: (id: string | null) => void
+  selectedIds?: string[]
+  onSelect?: (id: string | null, additive?: boolean) => void
   onMove?: (id: string, x: number, y: number) => void
   onRotate?: (id: string, deg: number) => void
   onRemove?: (id: string) => void
@@ -157,7 +157,14 @@ export const DielineSVG = memo(function DielineSVG({
     if (!editable) return
     // กัน pointerdown ลอยไปโดน handler พื้นหลังของ svg (ยกเลิกการเลือก) — ต้องทำก่อน return กรณีล็อก
     e.stopPropagation()
-    onSelect?.(d.id)
+    const additive = e.shiftKey || e.ctrlKey || e.metaKey
+    if (additive) {
+      onSelect?.(d.id, true) // Shift/Ctrl คลิก = สลับเข้า/ออกชุดเลือก (ไม่เริ่มลาก)
+      e.preventDefault()
+      return
+    }
+    // คลิกชิ้นที่ยังไม่ได้เลือก = เลือกชิ้นนั้น; ถ้าเลือกอยู่แล้ว (อาจเป็นชุดหลายชิ้น) คงชุดไว้เพื่อลากทั้งชุด
+    if (!selectedIds.includes(d.id)) onSelect?.(d.id, false)
     if (d.locked) {
       e.preventDefault()
       return // ล็อกไว้ — เลือกได้แต่ลากไม่ได้ (กันเผลอ)
@@ -359,7 +366,8 @@ export const DielineSVG = memo(function DielineSVG({
         const w = elW(d)
         const h = elH(d)
         const c = elCenter(d)
-        const sel = d.id === selectedId
+        const sel = selectedIds.includes(d.id)
+        const single = sel && selectedIds.length === 1 // ก้านหมุน/กากบาทลบ โชว์เฉพาะตอนเลือกชิ้นเดียว
         const handleY = d.y - Math.max(8, h * 0.25) // ก้านหมุนเหนือกล่อง
         return (
           <g
@@ -382,7 +390,7 @@ export const DielineSVG = memo(function DielineSVG({
                   strokeDasharray="4 3"
                   vectorEffect="non-scaling-stroke"
                 />
-                {editable && !d.locked && (
+                {editable && single && !d.locked && (
                   <g className="rot-handle" onPointerDown={(e) => startRotate(e, d)}>
                     <line
                       x1={c.x}
@@ -396,7 +404,7 @@ export const DielineSVG = memo(function DielineSVG({
                     <circle cx={c.x} cy={handleY} r={3} fill="#fff" stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
                   </g>
                 )}
-                {editable && onRemove && !d.locked && (
+                {editable && single && onRemove && !d.locked && (
                   // กากบาทลบที่มุมขวาบนของชิ้น — กด pointerdown แล้วลบทันที (stopPropagation กันไปเริ่มลาก)
                   <g
                     className="del-handle"
