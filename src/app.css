@@ -940,6 +940,37 @@ button[aria-disabled='true'] {
   border-radius: 8px;
 }
 
+/* --- จัดแนว artwork เทียบแผงหน้า --- */
+.align-box {
+  margin-top: 10px;
+}
+.align-title {
+  display: block;
+  font-size: 12px;
+  color: #8a8474;
+  margin-bottom: 6px;
+}
+.align-grid {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr 1fr;
+  align-items: center;
+  gap: 4px;
+}
+.align-axis {
+  text-align: center;
+  color: #8a8474;
+  font-size: 14px;
+}
+.align-grid button {
+  width: auto;
+  padding: 6px 0;
+  font-size: 16px;
+  line-height: 1;
+}
+.align-grid button:hover {
+  background: #eef2ef;
+}
+
 /* --- จัดเลเยอร์ artwork หน้า-หลัง --- */
 .layer-row {
   display: flex;

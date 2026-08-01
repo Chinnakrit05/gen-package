@@ -187,6 +187,29 @@ export function recenter(dieline: Dieline, e: Deco): Deco {
   return { ...e, x, y }
 }
 
+// ขอบเขต (bbox) ของหน้าโชว์ — ใช้เป็น "อาร์ตบอร์ด" อ้างอิงตอนจัดแนว
+export function faceBounds(dieline: Dieline): { x0: number; x1: number; y0: number; y1: number } {
+  return bbox(showFace(dieline).outline)
+}
+
+export type AlignMode = 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom'
+
+// จัดแนวชิ้นเทียบขอบหน้าโชว์ (แบบ Illustrator "Align to Artboard") — คงขนาด/มุมเดิม
+// อ้าง bbox ที่ยังไม่หมุน (x,y,w,h) เหมือน snap/recenter เพื่อให้ผลตรงกันทั้งระบบ
+export function alignToFace(dieline: Dieline, e: Deco, mode: AlignMode): Deco {
+  const b = faceBounds(dieline)
+  const w = elW(e)
+  const h = elH(e)
+  let { x, y } = e
+  if (mode === 'left') x = b.x0
+  else if (mode === 'hcenter') x = (b.x0 + b.x1) / 2 - w / 2
+  else if (mode === 'right') x = b.x1 - w
+  else if (mode === 'top') y = b.y0
+  else if (mode === 'vcenter') y = (b.y0 + b.y1) / 2 - h / 2
+  else if (mode === 'bottom') y = b.y1 - h
+  return { ...e, x, y }
+}
+
 // สำเนาองค์ประกอบ (id ใหม่ เยื้องเล็กน้อยให้เห็นว่าเป็นชิ้นใหม่) — สำเนาแสดง+แก้ได้เสมอ
 export function cloneDeco(e: Deco, dx = 5, dy = 5): Deco {
   return { ...e, id: newId(), x: e.x + dx, y: e.y + dy, hidden: false, locked: false }

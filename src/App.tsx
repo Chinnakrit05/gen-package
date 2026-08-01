@@ -12,6 +12,8 @@ import {
   makeTextEl,
   makeShapeEl,
   decoLabel,
+  alignToFace,
+  type AlignMode,
   recenter,
   cloneDeco,
   withTextW,
@@ -882,6 +884,11 @@ export default function App() {
     patchSelected((d) => recenter(dieline, d))
   }
 
+  const alignSelected = (mode: AlignMode) => {
+    if (!selected || !dieline) return
+    patchSelected((d) => alignToFace(dieline, d, mode))
+  }
+
   const duplicateSelected = () => {
     if (!selected) return
     const copy = cloneDeco(selected)
@@ -1464,6 +1471,19 @@ export default function App() {
                         </div>
                       </div>
                     )}
+                    <div className="align-box">
+                      <span className="align-title">จัดแนวในแผงหน้า</span>
+                      <div className="align-grid">
+                        <span className="align-axis">↔</span>
+                        <button title="ชิดซ้าย" aria-label="ชิดซ้าย" onClick={() => alignSelected('left')}>⭰</button>
+                        <button title="กึ่งกลางแนวนอน" aria-label="กึ่งกลางแนวนอน" onClick={() => alignSelected('hcenter')}>⭤</button>
+                        <button title="ชิดขวา" aria-label="ชิดขวา" onClick={() => alignSelected('right')}>⭲</button>
+                        <span className="align-axis">↕</span>
+                        <button title="ชิดบน" aria-label="ชิดบน" onClick={() => alignSelected('top')}>⭱</button>
+                        <button title="กึ่งกลางแนวตั้ง" aria-label="กึ่งกลางแนวตั้ง" onClick={() => alignSelected('vcenter')}>⭥</button>
+                        <button title="ชิดล่าง" aria-label="ชิดล่าง" onClick={() => alignSelected('bottom')}>⭳</button>
+                      </div>
+                    </div>
                     <div className="art-actions">
                       <button onClick={recenterSelected}>วางกลางแผงหน้า</button>
                       <button onClick={removeSelected}>ลบชิ้นนี้</button>

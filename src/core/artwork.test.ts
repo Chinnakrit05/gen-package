@@ -3,6 +3,8 @@ import {
   elCenter,
   elH,
   elW,
+  alignToFace,
+  faceBounds,
   decoLabel,
   makeImageEl,
   makeShapeEl,
@@ -145,6 +147,35 @@ describe('รูปทรงพื้นฐาน (shape)', () => {
       .toMatch(/<ellipse .*rx="10".*ry="5"/)
     expect(shapeSVG({ id: 'c', type: 'shape', shape: 'line', w: 30, h: 2, fill: 'none', stroke: '#222', strokeW: 2, x: 0, y: 0, rot: 0 }, ''))
       .toMatch(/<line x1="0".*x2="30".*stroke="#222"/)
+  })
+})
+
+describe('จัดแนวเทียบแผงหน้า (alignToFace)', () => {
+  const d = dieline()
+  const b = faceBounds(d)
+  const el = makeShapeEl(d, 'rect') // มี w,h ชัดเจน
+  const w = elW(el)
+  const h = elH(el)
+
+  it('แนวนอน: ชิดซ้าย/กลาง/ชิดขวา วางขอบตรงกับ bbox แผงหน้า (y คงเดิม)', () => {
+    expect(alignToFace(d, el, 'left').x).toBeCloseTo(b.x0)
+    expect(alignToFace(d, el, 'hcenter').x).toBeCloseTo((b.x0 + b.x1) / 2 - w / 2)
+    expect(alignToFace(d, el, 'right').x).toBeCloseTo(b.x1 - w)
+    expect(alignToFace(d, el, 'left').y).toBe(el.y) // ไม่แตะแกน y
+  })
+
+  it('แนวตั้ง: ชิดบน/กลาง/ชิดล่าง วางขอบตรงกับ bbox แผงหน้า (x คงเดิม)', () => {
+    expect(alignToFace(d, el, 'top').y).toBeCloseTo(b.y0)
+    expect(alignToFace(d, el, 'vcenter').y).toBeCloseTo((b.y0 + b.y1) / 2 - h / 2)
+    expect(alignToFace(d, el, 'bottom').y).toBeCloseTo(b.y1 - h)
+    expect(alignToFace(d, el, 'top').x).toBe(el.x)
+  })
+
+  it('คงขนาด/ชนิด/มุม ไม่เปลี่ยน', () => {
+    const r = alignToFace(d, { ...el, rot: 30 }, 'right')
+    expect(r.type).toBe(el.type)
+    expect(elW(r)).toBe(w)
+    expect(r.rot).toBe(30)
   })
 })
 
