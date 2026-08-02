@@ -61,6 +61,20 @@ const VesselViewer3D = lazy(() =>
 )
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
+import { ColorField } from './components/ColorField'
+
+// จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
+const PALETTE_KEY = 'gen-package-palette-v1'
+const isHex = (s: unknown): s is string => typeof s === 'string' && /^#[0-9a-fA-F]{6}$/.test(s)
+function loadPalette(): string[] {
+  try {
+    const a = JSON.parse(localStorage.getItem(PALETTE_KEY) || '[]')
+    if (Array.isArray(a)) return a.filter(isHex).slice(0, 16)
+  } catch {
+    /* ค่าเริ่มต้นว่าง */
+  }
+  return []
+}
 
 interface DimFieldProps {
   label: string
@@ -422,6 +436,7 @@ export default function App() {
   const [showGuides, setShowGuides] = useState(false)
   const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
   const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>('design')
+  const [palette, setPalette] = useState<string[]>(loadPalette)
   const [sheetId, setSheetId] = useState(SHEET_PRESETS[0].id)
   const [customSheet, setCustomSheet] = useState({ w: 640, h: 900 })
   const [gutter, setGutter] = useState(DEFAULT_OPT.gutter)
@@ -495,6 +510,22 @@ export default function App() {
       // storage เต็มหรือถูกปิดไว้ — ข้ามการ save เงียบๆ
     }
   }, [projects, activeId, showDims])
+
+  // save จานสี (ใช้ร่วมทุกงาน)
+  useEffect(() => {
+    try {
+      localStorage.setItem(PALETTE_KEY, JSON.stringify(palette))
+    } catch {
+      /* ข้าม */
+    }
+  }, [palette])
+
+  // เพิ่มสีลงจาน (ใหม่สุดอยู่หน้า, ไม่ซ้ำ, สูงสุด 16)
+  const saveSwatch = (hex: string) => {
+    if (!isHex(hex)) return
+    const c = hex.toLowerCase()
+    setPalette((p) => [c, ...p.filter((x) => x !== c)].slice(0, 16))
+  }
 
   const play = () => {
     cancelAnimationFrame(raf.current)
@@ -1260,18 +1291,16 @@ export default function App() {
           <>
               <section>
                 <h2>สีพื้นแพ็กเกจ</h2>
-                <div className="art-actions">
-                  <label className="fill-swatch">
-                    <input
-                      type="color"
-                      value={fillColor ?? '#0f6e56'}
-                      disabled={aiBusy}
-                      aria-label="สีพื้นแพ็กเกจ"
-                      onChange={(e) => setFillColor(e.target.value)}
-                    />
-                    <span>{fillColor ? fillColor.toUpperCase() : 'เลือกสีพื้น'}</span>
-                  </label>
-                  <button disabled={aiBusy || !fillColor} onClick={() => setFillColor(null)}>
+                <div className="fill-color-row">
+                  <ColorField
+                    value={fillColor ?? '#0f6e56'}
+                    onChange={setFillColor}
+                    palette={palette}
+                    onSave={saveSwatch}
+                    disabled={aiBusy}
+                    label="สีพื้นแพ็กเกจ"
+                  />
+                  <button className="fill-none-btn" disabled={aiBusy || !fillColor} onClick={() => setFillColor(null)}>
                     ไม่มีสี
                   </button>
                 </div>
@@ -1423,31 +1452,33 @@ export default function App() {
                           aria-label="ข้อความ"
                           onChange={(e) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, text: e.target.value }) : d))}
                         />
-                        <label className="deco-color">
-                          สี
-                          <input
-                            type="color"
+                        <div className="deco-color">
+                          <span>สี</span>
+                          <ColorField
                             value={selected.color}
+                            onChange={(hex) => patchSelected((d) => (d.type === 'text' ? { ...d, color: hex } : d))}
+                            palette={palette}
+                            onSave={saveSwatch}
                             disabled={aiBusy}
-                            aria-label="สีข้อความ"
-                            onChange={(e) => patchSelected((d) => (d.type === 'text' ? { ...d, color: e.target.value } : d))}
+                            label="สีข้อความ"
                           />
-                        </label>
+                        </div>
                       </>
                     )}
 
                     {selected.type === 'shape' && selected.shape === 'line' && (
                       <>
-                        <label className="deco-color">
-                          สีเส้น
-                          <input
-                            type="color"
+                        <div className="deco-color">
+                          <span>สีเส้น</span>
+                          <ColorField
                             value={selected.stroke === 'none' ? '#222222' : selected.stroke}
+                            onChange={(hex) => patchSelected((d) => (d.type === 'shape' ? { ...d, stroke: hex } : d))}
+                            palette={palette}
+                            onSave={saveSwatch}
                             disabled={aiBusy}
-                            aria-label="สีเส้น"
-                            onChange={(e) => patchSelected((d) => (d.type === 'shape' ? { ...d, stroke: e.target.value } : d))}
+                            label="สีเส้น"
                           />
-                        </label>
+                        </div>
                         <DimField
                           label="ความยาว"
                           value={Math.round(selected.w * 10) / 10}
@@ -1470,16 +1501,17 @@ export default function App() {
                     {selected.type === 'shape' && selected.shape !== 'line' && (
                       <>
                         <div className="art-actions">
-                          <label className="deco-color">
-                            พื้น
-                            <input
-                              type="color"
+                          <div className="deco-color">
+                            <span>พื้น</span>
+                            <ColorField
                               value={selected.fill === 'none' ? '#0f6e56' : selected.fill}
+                              onChange={(hex) => patchSelected((d) => (d.type === 'shape' ? { ...d, fill: hex } : d))}
+                              palette={palette}
+                              onSave={saveSwatch}
                               disabled={aiBusy}
-                              aria-label="สีพื้น"
-                              onChange={(e) => patchSelected((d) => (d.type === 'shape' ? { ...d, fill: e.target.value } : d))}
+                              label="สีพื้น"
                             />
-                          </label>
+                          </div>
                           <button
                             disabled={aiBusy || selected.fill === 'none'}
                             onClick={() => patchSelected((d) => (d.type === 'shape' ? { ...d, fill: 'none', strokeW: d.strokeW > 0 ? d.strokeW : 2, stroke: d.stroke === 'none' ? '#222222' : d.stroke } : d))}
@@ -1487,16 +1519,17 @@ export default function App() {
                             ไม่มีพื้น
                           </button>
                         </div>
-                        <label className="deco-color">
-                          เส้นขอบ
-                          <input
-                            type="color"
+                        <div className="deco-color">
+                          <span>เส้นขอบ</span>
+                          <ColorField
                             value={selected.stroke === 'none' ? '#222222' : selected.stroke}
+                            onChange={(hex) => patchSelected((d) => (d.type === 'shape' ? { ...d, stroke: hex, strokeW: d.strokeW > 0 ? d.strokeW : 2 } : d))}
+                            palette={palette}
+                            onSave={saveSwatch}
                             disabled={aiBusy}
-                            aria-label="สีเส้นขอบ"
-                            onChange={(e) => patchSelected((d) => (d.type === 'shape' ? { ...d, stroke: e.target.value, strokeW: d.strokeW > 0 ? d.strokeW : 2 } : d))}
+                            label="สีเส้นขอบ"
                           />
-                        </label>
+                        </div>
                         <DimField
                           label="เส้นขอบหนา (0=ไม่มี)"
                           value={selected.strokeW}

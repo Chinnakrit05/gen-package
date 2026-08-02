@@ -760,11 +760,15 @@ button[aria-disabled='true'] {
 }
 .deco-color {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   font-size: 13px;
   color: #5c5344;
   margin-bottom: 8px;
+}
+.deco-color > span {
+  flex-shrink: 0;
+  padding-top: 5px;
 }
 .deco-color input[type='color'] {
   width: 40px;
@@ -938,6 +942,75 @@ button[aria-disabled='true'] {
   font-size: 16px;
   line-height: 1;
   border-radius: 8px;
+}
+
+/* --- ช่องสี (ColorField) + จานสี + ดูดสี --- */
+.color-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.cf-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cf-main input[type='color'] {
+  width: 34px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #c9bda2;
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cf-btn {
+  width: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 7px;
+  font-size: 13px;
+  line-height: 1;
+  color: #5c5344;
+  background: #faf7f0;
+  border: 1px solid #d8cfbb;
+}
+.cf-btn:hover:not([disabled]) {
+  border-color: #0f6e56;
+  color: #0f6e56;
+}
+.cf-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.cf-swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+.cf-swatch.on {
+  outline: 2px solid #0f6e56;
+  outline-offset: 1px;
+}
+.fill-color-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.fill-none-btn {
+  width: auto;
+  flex-shrink: 0;
+  padding: 5px 12px;
+  font-size: 13px;
 }
 
 /* --- ตำแหน่งตัวเลข X/Y + พลิก --- */
