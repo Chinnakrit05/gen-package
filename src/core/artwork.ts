@@ -16,6 +16,8 @@ export interface BaseEl {
   locked?: boolean // ล็อก = ลาก/หมุน/ลบบน canvas ไม่ได้ (กันเผลอ)
   name?: string // ชื่อที่ผู้ใช้ตั้งเอง (โชว์ในแผงเลเยอร์แทนป้ายอัตโนมัติ)
   groupId?: string // ชิ้นที่ groupId เดียวกัน = กลุ่มเดียวกัน (เลือก/ย้ายพร้อมกัน)
+  flipX?: boolean // พลิกแนวนอน (สะท้อนรอบแกนตั้งผ่านจุดกึ่งกลาง)
+  flipY?: boolean // พลิกแนวตั้ง
 }
 
 export interface ImageEl extends BaseEl {
@@ -375,6 +377,13 @@ export function drawShape2D(ctx: CanvasRenderingContext2D, e: ShapeEl, s: number
   }
 }
 
+// transform พลิก (สะท้อนรอบจุดกึ่งกลาง) สำหรับ SVG — ต่อท้าย rotate; ว่างถ้าไม่พลิก
+export function flipTransform(e: Deco): string {
+  if (!e.flipX && !e.flipY) return ''
+  const c = elCenter(e)
+  return ` translate(${c.x} ${c.y}) scale(${e.flipX ? -1 : 1} ${e.flipY ? -1 : 1}) translate(${-c.x} ${-c.y})`
+}
+
 // สร้างเลเยอร์ <g id="artwork"> สำหรับฝังใน SVG export — vector ล้วน คุณภาพงานพิมพ์
 // รูปฝังเป็น data URI (ไฟล์ standalone), ข้อความเป็น <text> แก้ไขได้ใน Illustrator
 // ไม่มิเรอร์ — SVG คือเลย์เอาต์ฝั่งพิมพ์/ด้านนอก เหมือนที่เห็นบน blueprint
@@ -386,7 +395,8 @@ export function svgArtworkLayer(decos: Deco[]): string {
       const w = elW(e)
       const h = elH(e)
       const c = elCenter(e)
-      const rot = e.rot ? ` transform="rotate(${e.rot} ${c.x} ${c.y})"` : ''
+      const ft = flipTransform(e)
+      const rot = e.rot || ft ? ` transform="rotate(${e.rot} ${c.x} ${c.y})${ft}"` : ''
       if (e.type === 'image') {
         return `    <image href="${e.src}" x="${e.x}" y="${e.y}" width="${w}" height="${h}" preserveAspectRatio="none"${rot}/>`
       }
@@ -414,6 +424,7 @@ export function drawDeco2D(
   ctx.save()
   ctx.translate((e.x + w / 2) * s, (e.y + h / 2) * s)
   ctx.rotate((e.rot * Math.PI) / 180)
+  if (e.flipX || e.flipY) ctx.scale(e.flipX ? -1 : 1, e.flipY ? -1 : 1)
   if (e.type === 'image') {
     const img = imgOf(e.src)
     if (img) ctx.drawImage(img, (-w / 2) * s, (-h / 2) * s, w * s, h * s)
@@ -486,6 +497,8 @@ function parseBase(
     ...(o.locked === true ? { locked: true } : {}),
     ...(typeof o.name === 'string' && o.name.trim() ? { name: o.name.slice(0, 40) } : {}),
     ...(typeof o.groupId === 'string' && o.groupId ? { groupId: o.groupId.slice(0, 40) } : {}),
+    ...(o.flipX === true ? { flipX: true } : {}),
+    ...(o.flipY === true ? { flipY: true } : {}),
   }
 }
 

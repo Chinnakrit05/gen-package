@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, type Deco } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, type Deco } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
@@ -58,7 +58,8 @@ function Dim({ d }: { d: DimMark }) {
 }
 
 // เนื้อขององค์ประกอบหนึ่งชิ้น (ยังไม่รวม transform หมุน — พาเรนต์เป็นคนครอบ <g rotate>)
-function DecoBody({ e }: { e: Deco }) {
+// พลิก (flip) ครอบเฉพาะเนื้อ ไม่โดนกรอบเลือก/ก้านหมุน
+function decoInner(e: Deco) {
   const w = elW(e)
   const h = elH(e)
   if (e.type === 'image') {
@@ -91,6 +92,12 @@ function DecoBody({ e }: { e: Deco }) {
       {e.text}
     </text>
   )
+}
+
+function DecoBody({ e }: { e: Deco }) {
+  const ft = flipTransform(e).trim()
+  const inner = decoInner(e)
+  return ft ? <g transform={ft}>{inner}</g> : inner
 }
 
 type Grab =

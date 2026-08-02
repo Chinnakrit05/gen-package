@@ -10,6 +10,7 @@ import {
   selectionBounds,
   faceBounds,
   decoLabel,
+  flipTransform,
   makeImageEl,
   makeShapeEl,
   makeTextEl,
@@ -225,6 +226,29 @@ describe('เลือกหลายชิ้น + จัดกลุ่ม', (
     expect(cx('b')).toBeCloseTo(55) // กลางพอดี
     // < 3 ชิ้น → ไม่เปลี่ยน
     expect(distribute(decos, ['a', 'b'], 'h')).toEqual(decos)
+  })
+})
+
+describe('พลิก (flip)', () => {
+  const el = (over = {}): Deco => ({
+    id: 'a', type: 'shape', shape: 'rect', w: 20, h: 10, fill: '#000', stroke: 'none', strokeW: 0, x: 5, y: 6, rot: 0, ...over,
+  })
+
+  it('flipTransform: ว่างถ้าไม่พลิก, สะท้อนรอบกึ่งกลางเมื่อพลิก', () => {
+    expect(flipTransform(el())).toBe('')
+    // center = (5+10, 6+5) = (15,11); flipX → scale(-1 1) รอบจุดนั้น
+    expect(flipTransform(el({ flipX: true }))).toContain('scale(-1 1)')
+    expect(flipTransform(el({ flipX: true }))).toContain('translate(15 11)')
+    expect(flipTransform(el({ flipY: true }))).toContain('scale(1 -1)')
+    expect(flipTransform(el({ flipX: true, flipY: true }))).toContain('scale(-1 -1)')
+  })
+
+  it('parse: คง flipX/flipY = true, ปกติไม่ใส่คีย์', () => {
+    const flipped = parseDeco({ ...el({ flipX: true }) })
+    expect(flipped).toMatchObject({ flipX: true })
+    expect((flipped as { flipY?: boolean }).flipY).toBeUndefined()
+    const plain = parseDeco({ ...el() }) as { flipX?: boolean }
+    expect(plain.flipX).toBeUndefined()
   })
 })
 

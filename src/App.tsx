@@ -1546,6 +1546,48 @@ export default function App() {
                       disabled={aiBusy}
                       onChange={(deg) => patchSelected((d) => ({ ...d, rot: deg }))}
                     />
+                    <div className="xy-row">
+                      <label>
+                        X
+                        <input
+                          type="number"
+                          step={0.5}
+                          value={Math.round(selected.x * 10) / 10}
+                          disabled={aiBusy}
+                          aria-label="ตำแหน่ง X (มม.)"
+                          onChange={(e) => patchSelected((d) => ({ ...d, x: Number(e.target.value) || 0 }))}
+                        />
+                        มม.
+                      </label>
+                      <label>
+                        Y
+                        <input
+                          type="number"
+                          step={0.5}
+                          value={Math.round(selected.y * 10) / 10}
+                          disabled={aiBusy}
+                          aria-label="ตำแหน่ง Y (มม.)"
+                          onChange={(e) => patchSelected((d) => ({ ...d, y: Number(e.target.value) || 0 }))}
+                        />
+                        มม.
+                      </label>
+                    </div>
+                    <div className="art-actions">
+                      <button
+                        aria-pressed={!!selected.flipX}
+                        title="พลิกแนวนอน"
+                        onClick={() => patchSelected((d) => ({ ...d, flipX: !d.flipX }))}
+                      >
+                        ⇋ พลิกแนวนอน
+                      </button>
+                      <button
+                        aria-pressed={!!selected.flipY}
+                        title="พลิกแนวตั้ง"
+                        onClick={() => patchSelected((d) => ({ ...d, flipY: !d.flipY }))}
+                      >
+                        ⥯ พลิกแนวตั้ง
+                      </button>
+                    </div>
                     {decos.length > 1 && (
                       <div className="layer-row">
                         <span className="layer-label">
