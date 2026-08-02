@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, flipTransform, type Deco } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, gradientId, gradientSVGString, type Deco } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
@@ -72,10 +72,24 @@ function decoInner(e: Deco) {
       const cy = e.y + e.h / 2
       return <line x1={e.x} y1={cy} x2={e.x + e.w} y2={cy} stroke={e.stroke} strokeWidth={e.strokeW} strokeLinecap="round" />
     }
-    if (e.shape === 'ellipse') {
-      return <ellipse cx={e.x + w / 2} cy={e.y + h / 2} rx={w / 2} ry={h / 2} fill={e.fill} {...strokeProps} />
-    }
-    return <rect x={e.x} y={e.y} width={w} height={h} fill={e.fill} {...strokeProps} />
+    const gid = gradientId(e.id)
+    const fill = e.grad ? `url(#${gid})` : e.fill
+    // ไล่สี: ฝัง <defs> จากสตริงเดียวกับ export (กัน logic ต่างกัน) ผ่าน dangerouslySetInnerHTML บน <g>
+    const defs = e.grad ? (
+      <g dangerouslySetInnerHTML={{ __html: `<defs>${gradientSVGString(e)}</defs>` }} />
+    ) : null
+    const body =
+      e.shape === 'ellipse' ? (
+        <ellipse cx={e.x + w / 2} cy={e.y + h / 2} rx={w / 2} ry={h / 2} fill={fill} {...strokeProps} />
+      ) : (
+        <rect x={e.x} y={e.y} width={w} height={h} fill={fill} {...strokeProps} />
+      )
+    return (
+      <>
+        {defs}
+        {body}
+      </>
+    )
   }
   const c = elCenter(e)
   return (

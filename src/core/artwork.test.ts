@@ -11,6 +11,8 @@ import {
   faceBounds,
   decoLabel,
   flipTransform,
+  gradVec,
+  gradientSVGString,
   makeImageEl,
   makeShapeEl,
   makeTextEl,
@@ -226,6 +228,45 @@ describe('เลือกหลายชิ้น + จัดกลุ่ม', (
     expect(cx('b')).toBeCloseTo(55) // กลางพอดี
     // < 3 ชิ้น → ไม่เปลี่ยน
     expect(distribute(decos, ['a', 'b'], 'h')).toEqual(decos)
+  })
+})
+
+describe('ไล่สี (gradient)', () => {
+  const g = (over = {}): Deco => ({
+    id: 'gx', type: 'shape', shape: 'rect', w: 20, h: 10, fill: '#000', stroke: 'none', strokeW: 0, x: 0, y: 0, rot: 0,
+    grad: { from: '#ff0000', to: '#0000ff', angle: 90 }, ...over,
+  })
+
+  it('gradVec: 0°=แนวนอน, 90°=แนวตั้ง', () => {
+    const h = gradVec(0)
+    expect(h.x1).toBeCloseTo(0)
+    expect(h.x2).toBeCloseTo(1)
+    expect(h.y1).toBeCloseTo(0.5)
+    const v = gradVec(90)
+    expect(v.y1).toBeCloseTo(0)
+    expect(v.y2).toBeCloseTo(1)
+    expect(v.x1).toBeCloseTo(0.5)
+  })
+
+  it('gradientSVGString: linear มี stop 2 สี, radial ใช้ radialGradient', () => {
+    const lin = gradientSVGString(g() as never)
+    expect(lin).toContain('<linearGradient id="grad-gx"')
+    expect(lin).toContain('stop-color="#ff0000"')
+    expect(lin).toContain('stop-color="#0000ff"')
+    expect(gradientSVGString(g({ grad: { from: '#fff', to: '#000', angle: 0, radial: true } }) as never)).toContain('<radialGradient')
+  })
+
+  it('shapeSVG: ใช้ url(#grad-id) + ฝัง defs เมื่อมี grad', () => {
+    const svg = shapeSVG(g() as never, '')
+    expect(svg).toContain('fill="url(#grad-gx)"')
+    expect(svg).toContain('<defs>')
+  })
+
+  it('parse: grad ถูกต้อง (ค่าครบ), line ไม่รับ grad', () => {
+    const ok = parseDeco({ ...g() }) as { grad?: { from: string; angle: number } }
+    expect(ok.grad).toMatchObject({ from: '#ff0000', to: '#0000ff', angle: 90 })
+    const line = parseDeco({ id: 'l', type: 'shape', shape: 'line', w: 20, h: 2, fill: 'none', stroke: '#000', strokeW: 2, x: 0, y: 0, rot: 0, grad: { from: '#fff', to: '#000', angle: 0 } }) as { grad?: unknown }
+    expect(line.grad).toBeUndefined()
   })
 })
 

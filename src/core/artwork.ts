@@ -38,6 +38,14 @@ export interface TextEl extends BaseEl {
 
 // รูปทรงพื้นฐาน — สี่เหลี่ยม/วงรี/เส้น สำหรับทำแถบสี กรอบ เส้นแบ่ง
 // rect,ellipse ใช้ fill (พื้น) + stroke/strokeW (เส้นขอบ); line ใช้ stroke/strokeW (h = ความหนาเส้น)
+// ไล่สี 2 สต็อป: from→to, angle องศา (แนวเชิงเส้น), radial=วงกลมจากกลางออก
+export interface GradientDef {
+  from: string
+  to: string
+  angle: number
+  radial?: boolean
+}
+
 export interface ShapeEl extends BaseEl {
   type: 'shape'
   shape: 'rect' | 'ellipse' | 'line'
@@ -46,6 +54,7 @@ export interface ShapeEl extends BaseEl {
   fill: string // สีพื้น หรือ 'none'
   stroke: string // สีเส้นขอบ หรือ 'none'
   strokeW: number // ความหนาเส้น (มม.)
+  grad?: GradientDef // ถ้ามี = ใช้ไล่สีแทนสีพื้นทึบ (เฉพาะ rect/ellipse)
 }
 
 export type Deco = ImageEl | TextEl | ShapeEl
@@ -335,6 +344,49 @@ export function drawFill(
   }
 }
 
+// id ของ gradient สำหรับ SVG defs
+export const gradientId = (id: string) => `grad-${id}`
+
+// เวกเตอร์เส้นไล่สีเชิงเส้นบน unit box (objectBoundingBox 0..1) จากมุมองศา
+export function gradVec(angle: number): { x1: number; y1: number; x2: number; y2: number } {
+  const r = (angle * Math.PI) / 180
+  const cx = Math.cos(r) / 2
+  const cy = Math.sin(r) / 2
+  return { x1: 0.5 - cx, y1: 0.5 - cy, x2: 0.5 + cx, y2: 0.5 + cy }
+}
+
+// สตริง <linearGradient>/<radialGradient> สำหรับใส่ใน <defs> ของ SVG
+export function gradientSVGString(e: ShapeEl): string {
+  if (!e.grad) return ''
+  const id = gradientId(e.id)
+  const stops = `<stop offset="0" stop-color="${e.grad.from}"/><stop offset="1" stop-color="${e.grad.to}"/>`
+  if (e.grad.radial) return `<radialGradient id="${id}">${stops}</radialGradient>`
+  const v = gradVec(e.grad.angle)
+  return `<linearGradient id="${id}" x1="${v.x1}" y1="${v.y1}" x2="${v.x2}" y2="${v.y2}">${stops}</linearGradient>`
+}
+
+// สร้าง CanvasGradient ในพิกัดท้องถิ่นของชิ้น (กึ่งกลาง = origin, ครึ่งกว้าง=hw ครึ่งสูง=hh)
+export function shapeGradient(
+  ctx: CanvasRenderingContext2D,
+  e: ShapeEl,
+  hw: number,
+  hh: number,
+): CanvasGradient | null {
+  if (!e.grad) return null
+  let g: CanvasGradient
+  if (e.grad.radial) {
+    g = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(hw, hh))
+  } else {
+    const v = gradVec(e.grad.angle)
+    const lx = (u: number) => (u - 0.5) * 2 * hw
+    const ly = (u: number) => (u - 0.5) * 2 * hh
+    g = ctx.createLinearGradient(lx(v.x1), ly(v.y1), lx(v.x2), ly(v.y2))
+  }
+  g.addColorStop(0, e.grad.from)
+  g.addColorStop(1, e.grad.to)
+  return g
+}
+
 // รูปทรงเป็น SVG element (พิกัดแผ่นคลี่ มม.) — ใช้ทั้ง blueprint (DielineSVG อ้าง shapeSVG ไม่ได้
 // เพราะเป็น JSX แยก) และ export; rot = attribute transform ที่คำนวณไว้แล้ว
 export function shapeSVG(e: ShapeEl, rot: string): string {
@@ -343,11 +395,13 @@ export function shapeSVG(e: ShapeEl, rot: string): string {
     const cy = e.y + e.h / 2
     return `<line x1="${e.x}" y1="${cy}" x2="${e.x + e.w}" y2="${cy}" stroke="${e.stroke}" stroke-width="${e.strokeW}" stroke-linecap="round"${rot}/>`
   }
-  const fill = e.fill !== 'none' ? e.fill : 'none'
-  if (e.shape === 'ellipse') {
-    return `<ellipse cx="${e.x + e.w / 2}" cy="${e.y + e.h / 2}" rx="${e.w / 2}" ry="${e.h / 2}" fill="${fill}"${stroke}${rot}/>`
-  }
-  return `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="${fill}"${stroke}${rot}/>`
+  const defs = e.grad ? `<defs>${gradientSVGString(e)}</defs>` : ''
+  const fill = e.grad ? `url(#${gradientId(e.id)})` : e.fill !== 'none' ? e.fill : 'none'
+  const body =
+    e.shape === 'ellipse'
+      ? `<ellipse cx="${e.x + e.w / 2}" cy="${e.y + e.h / 2}" rx="${e.w / 2}" ry="${e.h / 2}" fill="${fill}"${stroke}${rot}/>`
+      : `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="${fill}"${stroke}${rot}/>`
+  return defs + body
 }
 
 // วาดรูปทรงลง canvas 2D — ctx ถูก translate ไปจุดกึ่งกลางและหมุนไว้แล้ว (เรียกจาก drawDeco2D/Viewer3D)
@@ -367,8 +421,9 @@ export function drawShape2D(ctx: CanvasRenderingContext2D, e: ShapeEl, s: number
   ctx.beginPath()
   if (e.shape === 'ellipse') ctx.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2)
   else ctx.rect(-hw, -hh, hw * 2, hh * 2)
-  if (e.fill !== 'none') {
-    ctx.fillStyle = e.fill
+  const grad = shapeGradient(ctx, e, hw, hh)
+  if (grad || e.fill !== 'none') {
+    ctx.fillStyle = grad ?? e.fill
     ctx.fill()
   }
   if (e.stroke !== 'none' && e.strokeW > 0) {
@@ -542,7 +597,17 @@ export function parseDeco(v: unknown): Deco | null {
     const fill = typeof o.fill === 'string' ? o.fill : '#0f6e56'
     const stroke = typeof o.stroke === 'string' ? o.stroke : 'none'
     const strokeW = Number(o.strokeW) >= 0 ? Number(o.strokeW) : 0
-    return { id, type: 'shape', shape, w, h, fill, stroke, strokeW, ...base }
+    const gr = o.grad as Record<string, unknown> | undefined
+    const grad =
+      shape !== 'line' && gr && typeof gr.from === 'string' && typeof gr.to === 'string'
+        ? {
+            from: gr.from,
+            to: gr.to,
+            angle: Number.isFinite(Number(gr.angle)) ? Number(gr.angle) : 90,
+            ...(gr.radial === true ? { radial: true } : {}),
+          }
+        : undefined
+    return { id, type: 'shape', shape, w, h, fill, stroke, strokeW, ...(grad ? { grad } : {}), ...base }
   }
   return null
 }

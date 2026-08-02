@@ -1519,6 +1519,71 @@ export default function App() {
                             ไม่มีพื้น
                           </button>
                         </div>
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked={!!selected.grad}
+                            disabled={aiBusy}
+                            onChange={(e) =>
+                              patchSelected((d) =>
+                                d.type === 'shape'
+                                  ? {
+                                      ...d,
+                                      grad: e.target.checked
+                                        ? { from: d.fill !== 'none' ? d.fill : '#0f6e56', to: '#ffffff', angle: 90 }
+                                        : undefined,
+                                    }
+                                  : d,
+                              )
+                            }
+                          />
+                          ไล่สี (gradient)
+                        </label>
+                        {selected.grad && (
+                          <>
+                            <div className="deco-color">
+                              <span>จาก</span>
+                              <ColorField
+                                value={selected.grad.from}
+                                onChange={(hex) => patchSelected((d) => (d.type === 'shape' && d.grad ? { ...d, grad: { ...d.grad, from: hex } } : d))}
+                                palette={palette}
+                                onSave={saveSwatch}
+                                disabled={aiBusy}
+                                label="สีเริ่มไล่"
+                              />
+                            </div>
+                            <div className="deco-color">
+                              <span>ถึง</span>
+                              <ColorField
+                                value={selected.grad.to}
+                                onChange={(hex) => patchSelected((d) => (d.type === 'shape' && d.grad ? { ...d, grad: { ...d.grad, to: hex } } : d))}
+                                palette={palette}
+                                onSave={saveSwatch}
+                                disabled={aiBusy}
+                                label="สีปลายไล่"
+                              />
+                            </div>
+                            <label className="check">
+                              <input
+                                type="checkbox"
+                                checked={!!selected.grad.radial}
+                                disabled={aiBusy}
+                                onChange={(e) => patchSelected((d) => (d.type === 'shape' && d.grad ? { ...d, grad: { ...d.grad, radial: e.target.checked || undefined } } : d))}
+                              />
+                              แบบวงกลม (radial)
+                            </label>
+                            {!selected.grad.radial && (
+                              <DimField
+                                label="มุมไล่สี (องศา)"
+                                value={selected.grad.angle}
+                                min={0}
+                                max={360}
+                                disabled={aiBusy}
+                                onChange={(v) => patchSelected((d) => (d.type === 'shape' && d.grad ? { ...d, grad: { ...d.grad, angle: v } } : d))}
+                              />
+                            )}
+                          </>
+                        )}
                         <div className="deco-color">
                           <span>เส้นขอบ</span>
                           <ColorField
