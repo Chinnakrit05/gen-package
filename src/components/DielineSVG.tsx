@@ -97,7 +97,8 @@ function decoInner(e: Deco) {
 function DecoBody({ e }: { e: Deco }) {
   const ft = flipTransform(e).trim()
   const inner = decoInner(e)
-  return ft ? <g transform={ft}>{inner}</g> : inner
+  const flipped = ft ? <g transform={ft}>{inner}</g> : inner
+  return e.opacity !== undefined && e.opacity < 1 ? <g opacity={e.opacity}>{flipped}</g> : flipped
 }
 
 type Grab =

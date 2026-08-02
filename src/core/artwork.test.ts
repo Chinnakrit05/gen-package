@@ -243,6 +243,13 @@ describe('พลิก (flip)', () => {
     expect(flipTransform(el({ flipX: true, flipY: true }))).toContain('scale(-1 -1)')
   })
 
+  it('opacity: parse เก็บเมื่อ <1 (clamp 0..1), =1/ไม่มี → ไม่ใส่คีย์', () => {
+    expect((parseDeco({ ...el({ opacity: 0.4 }) }) as { opacity?: number }).opacity).toBe(0.4)
+    expect((parseDeco({ ...el({ opacity: 1 }) }) as { opacity?: number }).opacity).toBeUndefined()
+    expect((parseDeco({ ...el() }) as { opacity?: number }).opacity).toBeUndefined()
+    expect((parseDeco({ ...el({ opacity: -3 }) }) as { opacity?: number }).opacity).toBe(0)
+  })
+
   it('parse: คง flipX/flipY = true, ปกติไม่ใส่คีย์', () => {
     const flipped = parseDeco({ ...el({ flipX: true }) })
     expect(flipped).toMatchObject({ flipX: true })

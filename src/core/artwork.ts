@@ -18,6 +18,7 @@ export interface BaseEl {
   groupId?: string // ชิ้นที่ groupId เดียวกัน = กลุ่มเดียวกัน (เลือก/ย้ายพร้อมกัน)
   flipX?: boolean // พลิกแนวนอน (สะท้อนรอบแกนตั้งผ่านจุดกึ่งกลาง)
   flipY?: boolean // พลิกแนวตั้ง
+  opacity?: number // ความทึบ 0..1 (ไม่ใส่ = 1 ทึบเต็ม)
 }
 
 export interface ImageEl extends BaseEl {
@@ -397,15 +398,19 @@ export function svgArtworkLayer(decos: Deco[]): string {
       const c = elCenter(e)
       const ft = flipTransform(e)
       const rot = e.rot || ft ? ` transform="rotate(${e.rot} ${c.x} ${c.y})${ft}"` : ''
+      let el: string
       if (e.type === 'image') {
-        return `    <image href="${e.src}" x="${e.x}" y="${e.y}" width="${w}" height="${h}" preserveAspectRatio="none"${rot}/>`
+        el = `<image href="${e.src}" x="${e.x}" y="${e.y}" width="${w}" height="${h}" preserveAspectRatio="none"${rot}/>`
+      } else if (e.type === 'shape') {
+        el = shapeSVG(e, rot)
+      } else {
+        el =
+          `<text x="${c.x}" y="${c.y}" font-size="${e.size}" fill="${e.color}"` +
+          ` text-anchor="middle" dominant-baseline="central"` +
+          ` font-family="'Noto Sans Thai', sans-serif"${rot}>${xmlEsc(e.text)}</text>`
       }
-      if (e.type === 'shape') return `    ${shapeSVG(e, rot)}`
-      return (
-        `    <text x="${c.x}" y="${c.y}" font-size="${e.size}" fill="${e.color}"` +
-        ` text-anchor="middle" dominant-baseline="central"` +
-        ` font-family="'Noto Sans Thai', sans-serif"${rot}>${xmlEsc(e.text)}</text>`
-      )
+      // ความทึบ: ครอบด้วย <g opacity> เมื่อ < 1
+      return e.opacity !== undefined && e.opacity < 1 ? `    <g opacity="${e.opacity}">${el}</g>` : `    ${el}`
     })
     .join('\n')
   return `  <g id="artwork" inkscape:groupmode="layer" inkscape:label="artwork">\n${body}\n  </g>\n`
@@ -422,6 +427,7 @@ export function drawDeco2D(
   const w = elW(e)
   const h = elH(e)
   ctx.save()
+  if (e.opacity !== undefined && e.opacity < 1) ctx.globalAlpha = e.opacity
   ctx.translate((e.x + w / 2) * s, (e.y + h / 2) * s)
   ctx.rotate((e.rot * Math.PI) / 180)
   if (e.flipX || e.flipY) ctx.scale(e.flipX ? -1 : 1, e.flipY ? -1 : 1)
@@ -499,6 +505,9 @@ function parseBase(
     ...(typeof o.groupId === 'string' && o.groupId ? { groupId: o.groupId.slice(0, 40) } : {}),
     ...(o.flipX === true ? { flipX: true } : {}),
     ...(o.flipY === true ? { flipY: true } : {}),
+    ...(Number.isFinite(Number(o.opacity)) && Number(o.opacity) < 1
+      ? { opacity: Math.min(1, Math.max(0, Number(o.opacity))) }
+      : {}),
   }
 }
 

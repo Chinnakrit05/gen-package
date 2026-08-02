@@ -17,6 +17,7 @@ function drawDeco(
   const w = elW(e)
   const h = elH(e)
   ctx.save()
+  if (e.opacity !== undefined && e.opacity < 1) ctx.globalAlpha = e.opacity
   ctx.translate((e.x + w / 2) * s, (e.y + h / 2) * s)
   ctx.rotate((e.rot * Math.PI) / 180)
   // ผิวที่กล้องเห็น (ด้านนอกกล่อง) เป็น "หลัง" ของ UV — ถ้าวาดปกติจะอ่านกลับซ้าย-ขวา

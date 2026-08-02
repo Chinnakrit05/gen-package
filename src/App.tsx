@@ -1621,6 +1621,16 @@ export default function App() {
                         ⥯ พลิกแนวตั้ง
                       </button>
                     </div>
+                    <DimField
+                      label="ความทึบ (%)"
+                      value={Math.round((selected.opacity ?? 1) * 100)}
+                      min={0}
+                      max={100}
+                      disabled={aiBusy}
+                      onChange={(v) =>
+                        patchSelected((d) => ({ ...d, opacity: Math.min(1, Math.max(0, v / 100)) }))
+                      }
+                    />
                     {decos.length > 1 && (
                       <div className="layer-row">
                         <span className="layer-label">
