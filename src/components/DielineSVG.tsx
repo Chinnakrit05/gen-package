@@ -310,11 +310,13 @@ export const DielineSVG = memo(function DielineSVG({
     setCenter(null)
   }, [dieline.width, dieline.height])
 
-  // ล้อเมาส์ซูมที่ตำแหน่งเคอร์เซอร์ (ต้อง non-passive เพื่อ preventDefault กันหน้าเลื่อน)
+  // ล้อเมาส์ซูมที่ตำแหน่งเคอร์เซอร์ — เฉพาะเมื่อกด Ctrl/⌘ (กันเผลอซูมตอนสกอลล์ธรรมดา)
+  // (non-passive เพื่อ preventDefault กันเบราว์เซอร์ซูมทั้งหน้า)
   useEffect(() => {
     const svg = svgRef.current
     if (!svg || !editable) return
     const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return // สกอลล์เฉยๆ ไม่ซูม
       e.preventDefault()
       const f = toSheet(e.clientX, e.clientY)
       if (f) zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, f.x, f.y)
@@ -525,7 +527,7 @@ export const DielineSVG = memo(function DielineSVG({
         <button type="button" title="ซูมออก" aria-label="ซูมออก" disabled={zoom <= 1} onClick={() => zoomAt(1 / 1.3, viewCx, viewCy)}>
           −
         </button>
-        <button type="button" title="พอดีจอ" aria-label="พอดีจอ" onClick={fit}>
+        <button type="button" title="พอดีจอ (ซูม: Ctrl/⌘ + ล้อเมาส์)" aria-label="พอดีจอ" onClick={fit}>
           {Math.round(zoom * 100)}%
         </button>
         <button type="button" title="ซูมเข้า" aria-label="ซูมเข้า" disabled={zoom >= MAXZOOM} onClick={() => zoomAt(1.3, viewCx, viewCy)}>
