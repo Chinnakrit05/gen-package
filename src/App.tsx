@@ -1073,31 +1073,30 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds, selected, undoStack, redoStack, aiBusy, decos, templateId, materialId, W, D, H, handle, qty, fillColor])
 
-  // ควบคุมการพับ — ใช้ทั้งแท็บ "ออกแบบ" และ "ตกแต่ง" (ตอนแต่งลายก็อยากพับดูผลบนกล่อง 3D)
-  const foldSection = (
-    <section hidden={!mat.foldable}>
-      <h2>การพับ</h2>
-      <button className="primary" onClick={play}>
+  // ควบคุมการพับ — แถบบนสุดของมุมมอง 3D (โชว์เฉพาะวัสดุที่พับได้)
+  const foldBar = mat.foldable ? (
+    <div className="fold-bar">
+      <button className="fold-play" onClick={play}>
         ▶ พับให้ดู
       </button>
-      <label className="field">
-        <span>กาง ↔ พับ</span>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={fold}
-          aria-label="กาง-พับ"
-          aria-valuetext={`${Math.round(fold * 100)}%`}
-          onChange={(e) => {
-            cancelAnimationFrame(raf.current)
-            setFold(Number(e.target.value))
-          }}
-        />
-      </label>
-    </section>
-  )
+      <span className="fold-label">กาง</span>
+      <input
+        type="range"
+        className="fold-range"
+        min={0}
+        max={1}
+        step={0.01}
+        value={fold}
+        aria-label="กาง-พับ"
+        aria-valuetext={`${Math.round(fold * 100)}%`}
+        onChange={(e) => {
+          cancelAnimationFrame(raf.current)
+          setFold(Number(e.target.value))
+        }}
+      />
+      <span className="fold-label">พับ</span>
+    </div>
+  ) : null
 
   return (
     <div className="app">
@@ -1284,8 +1283,6 @@ export default function App() {
                   </label>
                 )}
               </section>
-
-              {foldSection}
           </>
           )}
 
@@ -1787,8 +1784,6 @@ export default function App() {
                   ลายจะถูกใส่ลงไฟล์ .svg (vector) และ .pdf (300 dpi) แล้ว — ไม่ใส่ใน .dxf เพราะเป็นไฟล์มีดตัด
                 </p>
               </section>
-
-              {foldSection}
           </>
           )}
 
@@ -2074,21 +2069,24 @@ export default function App() {
               />
             </div>
             <div className="viewer card">
-              <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
-                {mat.foldable ? (
-                  <Viewer3D
-                    dieline={dieline}
-                    mat={mat}
-                    fold={fold}
-                    depth={template.foldDepth({ W, D, H }, mat)}
-                    tilt={template.tilt}
-                    decos={decos}
-                    fillColor={fillColor}
-                  />
-                ) : (
-                  <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} />
-                )}
-              </Suspense>
+              {foldBar}
+              <div className="viewer-3d">
+                <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
+                  {mat.foldable ? (
+                    <Viewer3D
+                      dieline={dieline}
+                      mat={mat}
+                      fold={fold}
+                      depth={template.foldDepth({ W, D, H }, mat)}
+                      tilt={template.tilt}
+                      decos={decos}
+                      fillColor={fillColor}
+                    />
+                  ) : (
+                    <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} />
+                  )}
+                </Suspense>
+              </div>
             </div>
           </div>
         </main>
