@@ -13,6 +13,8 @@ import {
   makeShapeEl,
   decoLabel,
   alignToFace,
+  fontCss,
+  FONTS,
   alignInSelection,
   distribute,
   expandGroups,
@@ -1462,6 +1464,30 @@ export default function App() {
                             disabled={aiBusy}
                             label="สีข้อความ"
                           />
+                        </div>
+                        <div className="font-row">
+                          <select
+                            value={selected.font ?? 'noto'}
+                            disabled={aiBusy}
+                            aria-label="ฟอนต์"
+                            style={{ fontFamily: `${fontCss(selected.font)}, sans-serif` }}
+                            onChange={(e) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, font: e.target.value }) : d))}
+                          >
+                            {FONTS.map((f) => (
+                              <option key={f.id} value={f.id} style={{ fontFamily: `${f.css}, sans-serif` }}>
+                                {f.nameTh}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className="bold-btn"
+                            aria-pressed={selected.weight === 700}
+                            title="ตัวหนา"
+                            disabled={aiBusy}
+                            onClick={() => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, weight: d.weight === 700 ? 400 : 700 }) : d))}
+                          >
+                            B
+                          </button>
                         </div>
                       </>
                     )}

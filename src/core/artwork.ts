@@ -33,8 +33,23 @@ export interface TextEl extends BaseEl {
   text: string
   color: string
   size: number // ความสูงฟอนต์ (มม.)
-  w: number // ความกว้างที่วัดได้ (เก็บไว้เพื่อลาก/หมุน/จัดกลาง) — คำนวณใหม่เมื่อ text/size เปลี่ยน
+  w: number // ความกว้างที่วัดได้ (เก็บไว้เพื่อลาก/หมุน/จัดกลาง) — คำนวณใหม่เมื่อ text/size/font/weight เปลี่ยน
+  font?: string // id ฟอนต์ (ดู FONTS) — ไม่ใส่ = 'noto'
+  weight?: number // น้ำหนัก 400/700 — ไม่ใส่ = 400
 }
+
+// ฟอนต์ไทยที่ให้เลือก — ต้อง import ไฟล์น้ำหนัก 400/700 ใน main.tsx ให้ครบทุกตัว
+// (Noto เป็นค่าเริ่มต้น; เพิ่มฟอนต์ใหม่ต้องเพิ่มที่นี่ + import ใน main.tsx + ensureThaiFont โหลดให้)
+export const FONTS: { id: string; nameTh: string; css: string }[] = [
+  { id: 'noto', nameTh: 'Noto Sans Thai', css: "'Noto Sans Thai'" },
+  { id: 'sarabun', nameTh: 'Sarabun', css: "'Sarabun'" },
+  { id: 'prompt', nameTh: 'Prompt', css: "'Prompt'" },
+  { id: 'kanit', nameTh: 'Kanit', css: "'Kanit'" },
+]
+export const fontCss = (id?: string) => (FONTS.find((f) => f.id === id) ?? FONTS[0]).css
+// สตริง font สำหรับ canvas/measure: "<weight> <px>px <family>, sans-serif"
+export const textFont = (e: { size: number; font?: string; weight?: number }, s = 1) =>
+  `${e.weight ?? 400} ${e.size * s}px ${fontCss(e.font)}, sans-serif`
 
 // รูปทรงพื้นฐาน — สี่เหลี่ยม/วงรี/เส้น สำหรับทำแถบสี กรอบ เส้นแบ่ง
 // rect,ellipse ใช้ fill (พื้น) + stroke/strokeW (เส้นขอบ); line ใช้ stroke/strokeW (h = ความหนาเส้น)
@@ -66,12 +81,12 @@ export const elH = (e: Deco) =>
 export const elCenter = (e: Deco): Vec2 => ({ x: e.x + elW(e) / 2, y: e.y + elH(e) / 2 })
 
 // วัดความกว้างข้อความด้วย canvas (ในหน่วย px = มม. เพราะวัดที่สเกล 1:1)
-// ใช้ฟอนต์เดียวกับที่ render จริง (Noto Sans Thai) ไม่งั้น bbox/จุดกึ่งกลาง/snap ของข้อความไทยจะเพี้ยน
+// ใช้ฟอนต์/น้ำหนักเดียวกับที่ render จริง ไม่งั้น bbox/จุดกึ่งกลาง/snap ของข้อความจะเพี้ยน
 let measureCtx: CanvasRenderingContext2D | null = null
-export function measureText(text: string, size: number): number {
+export function measureText(text: string, size: number, font?: string, weight?: number): number {
   if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')
   if (!measureCtx) return Math.max(1, (text.length || 1) * size * 0.6)
-  measureCtx.font = `${size}px 'Noto Sans Thai', sans-serif`
+  measureCtx.font = textFont({ size, font, weight })
   return Math.max(1, measureCtx.measureText(text || ' ').width)
 }
 
@@ -81,18 +96,20 @@ export async function ensureThaiFont(): Promise<void> {
   const fonts = document.fonts
   if (!fonts?.load) return
   try {
-    // ระบุตัวอย่างอักษรไทยเพื่อบังคับโหลด subset ที่มีสระ/วรรณยุกต์จริง
-    await Promise.all(
-      ['400', '500', '600', '700'].map((w) => fonts.load(`${w} 16px 'Noto Sans Thai'`, 'กขคง้๊')),
-    )
+    // ระบุตัวอย่างอักษรไทยเพื่อบังคับโหลด subset ที่มีสระ/วรรณยุกต์จริง — ทุกฟอนต์ที่ให้เลือก
+    const jobs: Promise<unknown>[] = []
+    for (const f of FONTS) {
+      for (const w of ['400', '700']) jobs.push(fonts.load(`${w} 16px ${f.css}`, 'กขคง้๊'))
+    }
+    await Promise.all(jobs)
     await fonts.ready
   } catch {
     // โหลดฟอนต์ไม่ได้ (ออฟไลน์ครั้งแรก ฯลฯ) — ปล่อยให้ fallback ดีกว่าค้างการ export
   }
 }
 
-// อัปเดตความกว้างที่เก็บของ text element หลังแก้ข้อความหรือขนาด
-export const withTextW = (e: TextEl): TextEl => ({ ...e, w: measureText(e.text, e.size) })
+// อัปเดตความกว้างที่เก็บของ text element หลังแก้ข้อความ/ขนาด/ฟอนต์/น้ำหนัก
+export const withTextW = (e: TextEl): TextEl => ({ ...e, w: measureText(e.text, e.size, e.font, e.weight) })
 
 // --- โหลดไฟล์รูป ---
 // เก็บลง localStorage รวมกับข้อมูลงาน จึงต้องคุมขนาดไม่ให้ชน quota (~5MB ทั้ง origin)
@@ -461,8 +478,8 @@ export function svgArtworkLayer(decos: Deco[]): string {
       } else {
         el =
           `<text x="${c.x}" y="${c.y}" font-size="${e.size}" fill="${e.color}"` +
-          ` text-anchor="middle" dominant-baseline="central"` +
-          ` font-family="'Noto Sans Thai', sans-serif"${rot}>${xmlEsc(e.text)}</text>`
+          ` text-anchor="middle" dominant-baseline="central" font-weight="${e.weight ?? 400}"` +
+          ` font-family="${fontCss(e.font)}, sans-serif"${rot}>${xmlEsc(e.text)}</text>`
       }
       // ความทึบ: ครอบด้วย <g opacity> เมื่อ < 1
       return e.opacity !== undefined && e.opacity < 1 ? `    <g opacity="${e.opacity}">${el}</g>` : `    ${el}`
@@ -493,7 +510,7 @@ export function drawDeco2D(
     drawShape2D(ctx, e, s)
   } else {
     ctx.fillStyle = e.color
-    ctx.font = `${e.size * s}px 'Noto Sans Thai', sans-serif`
+    ctx.font = textFont(e, s)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(e.text, 0, 0)
@@ -586,8 +603,10 @@ export function parseDeco(v: unknown): Deco | null {
     const size = Number(o.size)
     const color = typeof o.color === 'string' ? o.color : '#222222'
     if (!(size > 0)) return null
-    const w = Number(o.w) > 0 ? Number(o.w) : measureText(text, size)
-    return { id, type: 'text', text, size, color, w, ...base }
+    const font = FONTS.some((f) => f.id === o.font) ? (o.font as string) : undefined
+    const weight = Number(o.weight) === 700 ? 700 : undefined
+    const w = Number(o.w) > 0 ? Number(o.w) : measureText(text, size, font, weight)
+    return { id, type: 'text', text, size, color, w, ...(font ? { font } : {}), ...(weight ? { weight } : {}), ...base }
   }
   if (o.type === 'shape') {
     const shape = o.shape === 'ellipse' || o.shape === 'line' ? o.shape : 'rect'

@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import type { Dieline, Material } from '../core/types'
-import { drawFill, drawShape2D, elW, elH, sheetUV, type Deco } from '../core/artwork'
+import { drawFill, drawShape2D, elW, elH, sheetUV, textFont, type Deco } from '../core/artwork'
 import { computeMatrices, rollBeads } from '../core/fold'
 
 // วาดองค์ประกอบ (รูป/ข้อความ) ลง ctx ในพิกัดแผ่นคลี่ (สเกล s) พร้อมหมุนรอบจุดกึ่งกลาง
@@ -32,7 +32,7 @@ function drawDeco(
     drawShape2D(ctx, e, s)
   } else {
     ctx.fillStyle = e.color
-    ctx.font = `${e.size * s}px 'Noto Sans Thai', sans-serif`
+    ctx.font = textFont(e, s)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(e.text, 0, 0)

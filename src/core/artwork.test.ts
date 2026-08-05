@@ -10,6 +10,8 @@ import {
   selectionBounds,
   faceBounds,
   decoLabel,
+  FONTS,
+  textFont,
   flipTransform,
   gradVec,
   gradientSVGString,
@@ -228,6 +230,31 @@ describe('เลือกหลายชิ้น + จัดกลุ่ม', (
     expect(cx('b')).toBeCloseTo(55) // กลางพอดี
     // < 3 ชิ้น → ไม่เปลี่ยน
     expect(distribute(decos, ['a', 'b'], 'h')).toEqual(decos)
+  })
+})
+
+describe('ฟอนต์ + น้ำหนักตัวอักษร', () => {
+  it('textFont: ใส่น้ำหนัก+family, ฟอนต์ไม่รู้จัก → Noto (ตัวแรก)', () => {
+    expect(textFont({ size: 20, font: 'kanit', weight: 700 })).toBe("700 20px 'Kanit', sans-serif")
+    expect(textFont({ size: 10 })).toBe("400 10px 'Noto Sans Thai', sans-serif")
+    expect(textFont({ size: 10, font: 'ไม่มี' })).toContain("'Noto Sans Thai'")
+  })
+
+  it('มี Noto เป็นตัวแรก (ค่าเริ่มต้น) และทุกตัวมี css/nameTh', () => {
+    expect(FONTS[0].id).toBe('noto')
+    for (const f of FONTS) {
+      expect(f.css).toMatch(/^'.+'$/)
+      expect(f.nameTh.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('parse text: คง font ที่รู้จัก + weight 700; ค่าอื่น/ไม่มี → ไม่ใส่คีย์', () => {
+    const t = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', x: 0, y: 0, rot: 0, font: 'prompt', weight: 700 }) as { font?: string; weight?: number }
+    expect(t.font).toBe('prompt')
+    expect(t.weight).toBe(700)
+    const plain = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', x: 0, y: 0, rot: 0, font: 'เดา', weight: 500 }) as { font?: string; weight?: number }
+    expect(plain.font).toBeUndefined()
+    expect(plain.weight).toBeUndefined()
   })
 })
 

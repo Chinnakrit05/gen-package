@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, flipTransform, gradientId, gradientSVGString, type Deco } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, type Deco } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
@@ -99,6 +99,8 @@ function decoInner(e: Deco) {
       textAnchor="middle"
       dominantBaseline="central"
       fontSize={e.size}
+      fontWeight={e.weight ?? 400}
+      fontFamily={`${fontCss(e.font)}, sans-serif`}
       fill={e.color}
       stroke="none"
       style={{ userSelect: 'none' }}

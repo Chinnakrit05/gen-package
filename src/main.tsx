@@ -6,6 +6,13 @@ import '@fontsource/noto-sans-thai/400.css'
 import '@fontsource/noto-sans-thai/500.css'
 import '@fontsource/noto-sans-thai/600.css'
 import '@fontsource/noto-sans-thai/700.css'
+// ฟอนต์ไทยเสริมให้เลือก (แต่ละแบบ 400/700) — ต้องขึ้นทะเบียนใน FONTS ของ artwork.ts ด้วย
+import '@fontsource/sarabun/400.css'
+import '@fontsource/sarabun/700.css'
+import '@fontsource/prompt/400.css'
+import '@fontsource/prompt/700.css'
+import '@fontsource/kanit/400.css'
+import '@fontsource/kanit/700.css'
 import App from './App'
 import './app.css'
 

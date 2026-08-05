@@ -944,6 +944,29 @@ button[aria-disabled='true'] {
   border-radius: 8px;
 }
 
+/* --- แถวฟอนต์ + ตัวหนา --- */
+.font-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.font-row select {
+  flex: 1;
+  min-width: 0;
+}
+.bold-btn {
+  width: auto;
+  flex-shrink: 0;
+  padding: 0 12px;
+  font-weight: 700;
+  font-size: 15px;
+}
+.bold-btn[aria-pressed='true'] {
+  border-color: #0f6e56;
+  background: #e7f2ee;
+  color: #0f6e56;
+}
+
 /* --- ช่องสี (ColorField) + จานสี + ดูดสี --- */
 .color-field {
   display: flex;
