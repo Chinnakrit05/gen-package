@@ -265,8 +265,28 @@ main {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1.35fr 1fr;
-  gap: 14px;
+  grid-template-columns: var(--split-l, 1.35fr) 10px var(--split-r, 1fr);
+  gap: 8px;
+}
+/* เส้นแบ่งลากปรับขนาด (ระหว่าง blueprint กับ 3D) */
+.panels-divider {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+}
+.panels-divider span {
+  width: 4px;
+  height: 44px;
+  max-height: 40%;
+  border-radius: 3px;
+  background: #d5cfc0;
+}
+.panels-divider:hover span,
+.panels-divider:active span {
+  background: #0f6e56;
 }
 
 .promptbar {
@@ -1264,6 +1284,9 @@ button[aria-disabled='true'] {
   }
   .panels {
     grid-template-columns: 1fr;
+  }
+  .panels-divider {
+    display: none;
   }
   .viewer {
     height: 46vh;

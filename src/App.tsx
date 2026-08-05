@@ -67,6 +67,13 @@ import { ColorField } from './components/ColorField'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
 const PALETTE_KEY = 'gen-package-palette-v1'
+// สัดส่วนความกว้าง blueprint (ซ้าย) เทียบพื้นที่ทำงาน — ลากเส้นแบ่งปรับได้
+const SPLIT_KEY = 'gen-package-split-v1'
+const DEFAULT_SPLIT = 0.57
+function loadSplit(): number {
+  const v = Number(localStorage.getItem(SPLIT_KEY))
+  return v >= 0.2 && v <= 0.8 ? v : DEFAULT_SPLIT
+}
 const isHex = (s: unknown): s is string => typeof s === 'string' && /^#[0-9a-fA-F]{6}$/.test(s)
 function loadPalette(): string[] {
   try {
@@ -439,6 +446,9 @@ export default function App() {
   const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
   const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>('design')
   const [palette, setPalette] = useState<string[]>(loadPalette)
+  const [split, setSplit] = useState<number>(loadSplit)
+  const panelsRef = useRef<HTMLDivElement>(null)
+  const resizing = useRef(false)
   const [sheetId, setSheetId] = useState(SHEET_PRESETS[0].id)
   const [customSheet, setCustomSheet] = useState({ w: 640, h: 900 })
   const [gutter, setGutter] = useState(DEFAULT_OPT.gutter)
@@ -527,6 +537,30 @@ export default function App() {
     if (!isHex(hex)) return
     const c = hex.toLowerCase()
     setPalette((p) => [c, ...p.filter((x) => x !== c)].slice(0, 16))
+  }
+
+  // ลากเส้นแบ่ง blueprint | 3D ปรับสัดส่วน (คุมด้วย pointer capture)
+  useEffect(() => {
+    try {
+      localStorage.setItem(SPLIT_KEY, String(split))
+    } catch {
+      /* ข้าม */
+    }
+  }, [split])
+
+  const onDividerDown = (e: React.PointerEvent) => {
+    resizing.current = true
+    e.currentTarget.setPointerCapture(e.pointerId)
+    e.preventDefault()
+  }
+  const onDividerMove = (e: React.PointerEvent) => {
+    if (!resizing.current || !panelsRef.current) return
+    const r = panelsRef.current.getBoundingClientRect()
+    setSplit(clamp((e.clientX - r.left) / r.width, 0.2, 0.8))
+  }
+  const onDividerUp = (e: React.PointerEvent) => {
+    resizing.current = false
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
   }
 
   const play = () => {
@@ -2046,7 +2080,11 @@ export default function App() {
               {currentAi.reasoning && <p className="assume-reason">{currentAi.reasoning}</p>}
             </div>
           )}
-          <div className="panels">
+          <div
+            className="panels"
+            ref={panelsRef}
+            style={{ '--split-l': `${split}fr`, '--split-r': `${1 - split}fr` } as React.CSSProperties}
+          >
             <div className="blueprint card">
               <div className="bp-head">
                 <span>{mat.foldable ? 'blueprint การพับ' : 'dieline ฉลาก'}</span>
@@ -2067,6 +2105,18 @@ export default function App() {
                 onRotate={rotateDeco}
                 onRemove={removeDeco}
               />
+            </div>
+            <div
+              className="panels-divider"
+              role="separator"
+              aria-label="ลากปรับขนาดหน้าต่าง"
+              aria-orientation="vertical"
+              onPointerDown={onDividerDown}
+              onPointerMove={onDividerMove}
+              onPointerUp={onDividerUp}
+              onPointerCancel={onDividerUp}
+            >
+              <span />
             </div>
             <div className="viewer card">
               {foldBar}
