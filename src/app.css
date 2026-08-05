@@ -1020,6 +1020,13 @@ button[aria-disabled='true'] {
   font-weight: 700;
   font-size: 15px;
 }
+.ratio-btn {
+  width: auto;
+  flex-shrink: 0;
+  padding: 0 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
 .bold-btn[aria-pressed='true'] {
   border-color: #0f6e56;
   background: #e7f2ee;

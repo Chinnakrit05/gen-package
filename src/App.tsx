@@ -26,7 +26,6 @@ import {
   svgArtworkLayer,
   fillSVGLayer,
   renderArtworkCanvas,
-  elW,
   type Deco,
 } from './core/artwork'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
@@ -1679,19 +1678,72 @@ export default function App() {
                       </>
                     )}
 
-                    {selected.type !== 'shape' && (
+                    {selected.type === 'text' && (
                       <DimField
-                        label={selected.type === 'text' ? 'ขนาดตัวอักษร' : 'ขนาดรูป'}
-                        value={selected.type === 'text' ? selected.size : Math.round(elW(selected) * 10) / 10}
-                        min={selected.type === 'text' ? 3 : 5}
-                        max={selected.type === 'text' ? 120 : Math.round(dieline.width)}
+                        label="ขนาดตัวอักษร"
+                        value={selected.size}
+                        min={3}
+                        max={120}
                         disabled={aiBusy}
-                        onChange={(v) =>
-                          patchSelected((d) =>
-                            d.type === 'text' ? withTextW({ ...d, size: v }) : d.type === 'image' ? { ...d, w: v } : d,
-                          )
-                        }
+                        onChange={(v) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, size: v }) : d))}
                       />
+                    )}
+                    {selected.type === 'image' && (
+                      <>
+                        <DimField
+                          label="กรอบ กว้าง"
+                          value={Math.round(selected.w * 10) / 10}
+                          min={5}
+                          max={Math.round(dieline.width)}
+                          disabled={aiBusy}
+                          onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, w: v } : d))}
+                        />
+                        <DimField
+                          label="กรอบ สูง"
+                          value={Math.round(selected.h * 10) / 10}
+                          min={5}
+                          max={Math.round(dieline.height)}
+                          disabled={aiBusy}
+                          onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, h: v } : d))}
+                        />
+                        <div className="font-row">
+                          <select
+                            value={selected.fit ?? 'cover'}
+                            disabled={aiBusy}
+                            aria-label="วิธีวางรูปในกรอบ"
+                            onChange={(e) => patchSelected((d) => (d.type === 'image' ? { ...d, fit: e.target.value as 'cover' | 'contain' | 'stretch' } : d))}
+                          >
+                            <option value="cover">เต็มกรอบ (ครอป)</option>
+                            <option value="contain">พอดีทั้งรูป</option>
+                            <option value="stretch">ยืดเต็มกรอบ</option>
+                          </select>
+                          <button
+                            className="ratio-btn"
+                            title="คืนสัดส่วนเดิมของรูป"
+                            disabled={aiBusy}
+                            onClick={() => patchSelected((d) => (d.type === 'image' ? { ...d, h: Math.round((d.w / d.aspect) * 10) / 10 } : d))}
+                          >
+                            สัดส่วนเดิม
+                          </button>
+                        </div>
+                        <DimField
+                          label="มุมโค้ง (มม.)"
+                          value={selected.radius ?? 0}
+                          min={0}
+                          max={Math.round(Math.min(selected.w, selected.h) / 2)}
+                          disabled={aiBusy || !!selected.circle}
+                          onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, radius: v || undefined } : d))}
+                        />
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked={!!selected.circle}
+                            disabled={aiBusy}
+                            onChange={(e) => patchSelected((d) => (d.type === 'image' ? { ...d, circle: e.target.checked || undefined } : d))}
+                          />
+                          มาสก์วงรี
+                        </label>
+                      </>
                     )}
                     <DimField
                       label="หมุน (องศา)"

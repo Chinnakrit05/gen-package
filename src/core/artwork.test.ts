@@ -11,6 +11,8 @@ import {
   faceBounds,
   decoLabel,
   FONTS,
+  imgPAR,
+  imageMaskSVG,
   textFont,
   flipTransform,
   gradVec,
@@ -108,6 +110,42 @@ describe('การวางอัตโนมัติ', () => {
     const d = dieline()
     const ids = [makeImageEl(d, 'data:image/png;base64,A', 1).id, makeTextEl(d, 'x').id, makeTextEl(d, 'y').id]
     expect(new Set(ids).size).toBe(3)
+  })
+})
+
+describe('ครอป/มาสก์รูป (image)', () => {
+  const img = (over = {}): Deco => ({
+    id: 'im', type: 'image', src: 'data:image/png;base64,AAA', aspect: 2, w: 40, h: 20, x: 5, y: 6, rot: 0, ...over,
+  })
+
+  it('makeImageEl: h = w/aspect (สัดส่วนเดิม) และ elH = h', () => {
+    const d = dieline()
+    const el = makeImageEl(d, 'data:image/png;base64,AAA', 2)
+    expect(el.h).toBeCloseTo(el.w / 2)
+    expect(elH(el)).toBe(el.h)
+  })
+
+  it('imgPAR: cover=slice, contain=meet, stretch=none', () => {
+    expect(imgPAR('cover')).toBe('xMidYMid slice')
+    expect(imgPAR('contain')).toBe('xMidYMid meet')
+    expect(imgPAR('stretch')).toBe('none')
+    expect(imgPAR(undefined)).toBe('xMidYMid slice') // ค่าเริ่มต้น = cover
+  })
+
+  it('imageMaskSVG: วงรี→ellipse, มุมโค้ง→rect rx, ไม่มีมาสก์→ว่าง', () => {
+    expect(imageMaskSVG(img({ circle: true }) as never)).toContain('<ellipse')
+    expect(imageMaskSVG(img({ radius: 5 }) as never)).toMatch(/<rect .*rx="5"/)
+    expect(imageMaskSVG(img() as never)).toBe('')
+  })
+
+  it('parse: h เก่าไม่มี → w/aspect; fit/radius/circle คงเมื่อถูกต้อง', () => {
+    const noH = parseDeco({ type: 'image', src: 'data:image/png;base64,A', aspect: 2, w: 40, x: 0, y: 0, rot: 0 }) as { h: number }
+    expect(noH.h).toBeCloseTo(20)
+    const full = parseDeco({ ...img({ fit: 'contain', radius: 4, circle: true }) }) as { fit?: string; radius?: number; circle?: boolean }
+    expect(full).toMatchObject({ fit: 'contain', radius: 4, circle: true })
+    const bad = parseDeco({ ...img({ fit: 'weird', radius: -1 }) }) as { fit?: string; radius?: number }
+    expect(bad.fit).toBeUndefined()
+    expect(bad.radius).toBeUndefined()
   })
 })
 

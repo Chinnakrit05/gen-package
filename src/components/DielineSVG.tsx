@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, type Deco } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, type Deco } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
@@ -63,7 +63,26 @@ function decoInner(e: Deco) {
   const w = elW(e)
   const h = elH(e)
   if (e.type === 'image') {
-    return <image href={e.src} x={e.x} y={e.y} width={w} height={h} preserveAspectRatio="none" />
+    const mask = imageMaskSVG(e)
+    const img = (
+      <image
+        href={e.src}
+        x={e.x}
+        y={e.y}
+        width={w}
+        height={h}
+        preserveAspectRatio={imgPAR(e.fit)}
+        clipPath={mask ? `url(#${maskId(e.id)})` : undefined}
+      />
+    )
+    return mask ? (
+      <>
+        <g dangerouslySetInnerHTML={{ __html: `<defs>${mask}</defs>` }} />
+        {img}
+      </>
+    ) : (
+      img
+    )
   }
   if (e.type === 'shape') {
     const strokeProps =

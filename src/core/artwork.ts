@@ -25,7 +25,11 @@ export interface ImageEl extends BaseEl {
   type: 'image'
   src: string // data URL (PNG — รักษาพื้นหลังโปร่งใสของโลโก้)
   aspect: number // กว้าง/สูง ของรูปต้นฉบับ
-  w: number // ความกว้างบนแผ่น (มม.) — สูง = w/aspect
+  w: number // ความกว้างกรอบบนแผ่น (มม.)
+  h: number // ความสูงกรอบ (มม.) — ตั้งอิสระเพื่อครอป (เริ่มต้น = w/aspect)
+  fit?: 'cover' | 'contain' | 'stretch' // วิธีวางรูปในกรอบ (ไม่ใส่ = cover ครอปให้เต็ม)
+  radius?: number // มุมโค้งของกรอบ (มม.)
+  circle?: boolean // มาสก์เป็นวงรีตามกรอบ
 }
 
 export interface TextEl extends BaseEl {
@@ -77,7 +81,7 @@ export type Deco = ImageEl | TextEl | ShapeEl
 const LINE = 1.25 // อัตราส่วนความสูงบรรทัดต่อขนาดฟอนต์
 export const elW = (e: Deco) => e.w
 export const elH = (e: Deco) =>
-  e.type === 'image' ? e.w / e.aspect : e.type === 'text' ? e.size * LINE : e.h
+  e.type === 'image' ? e.h : e.type === 'text' ? e.size * LINE : e.h
 export const elCenter = (e: Deco): Vec2 => ({ x: e.x + elW(e) / 2, y: e.y + elH(e) / 2 })
 
 // วัดความกว้างข้อความด้วย canvas (ในหน่วย px = มม. เพราะวัดที่สเกล 1:1)
@@ -175,8 +179,50 @@ const newId = () => `el-${Date.now().toString(36)}-${(seq++).toString(36)}`
 export function makeImageEl(dieline: Dieline, src: string, aspect: number): ImageEl {
   const b = bbox(showFace(dieline).outline)
   const w = Math.max(5, Math.min((b.x1 - b.x0) * 0.5, (b.y1 - b.y0) * 0.5 * aspect))
-  const { x, y } = centerOnFace(dieline, w, w / aspect)
-  return { id: newId(), type: 'image', src, aspect, w, x, y, rot: 0 }
+  const h = w / aspect
+  const { x, y } = centerOnFace(dieline, w, h)
+  return { id: newId(), type: 'image', src, aspect, w, h, x, y, rot: 0 }
+}
+
+// preserveAspectRatio (SVG) ตามโหมด fit
+export const imgPAR = (fit?: string) =>
+  fit === 'contain' ? 'xMidYMid meet' : fit === 'stretch' ? 'none' : 'xMidYMid slice'
+export const maskId = (id: string) => `mask-${id}`
+// clipPath (มุมโค้ง/วงรี) เป็นสตริงใส่ใน <defs> — พิกัดจริงบนแผ่น (userSpaceOnUse)
+export function imageMaskSVG(e: ImageEl): string {
+  if (!e.circle && !(e.radius && e.radius > 0)) return ''
+  const inner = e.circle
+    ? `<ellipse cx="${e.x + e.w / 2}" cy="${e.y + e.h / 2}" rx="${e.w / 2}" ry="${e.h / 2}"/>`
+    : `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx="${e.radius}" ry="${e.radius}"/>`
+  return `<clipPath id="${maskId(e.id)}">${inner}</clipPath>`
+}
+
+// วาดรูปลง canvas ตามกรอบ+โหมด fit+มาสก์ — ctx ถูก translate ไปกึ่งกลาง+หมุน+พลิกไว้แล้ว
+export function drawImageFit(ctx: CanvasRenderingContext2D, img: CanvasImageSource, e: ImageEl, s: number) {
+  const hw = (e.w / 2) * s
+  const hh = (e.h / 2) * s
+  ctx.save()
+  // มาสก์
+  if (e.circle) {
+    ctx.beginPath()
+    ctx.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2)
+    ctx.clip()
+  } else if (e.radius && e.radius > 0 && ctx.roundRect) {
+    ctx.beginPath()
+    ctx.roundRect(-hw, -hh, hw * 2, hh * 2, Math.min(e.radius * s, hw, hh))
+    ctx.clip()
+  }
+  const fit = e.fit ?? 'cover'
+  if (fit === 'stretch') {
+    ctx.drawImage(img, -hw, -hh, hw * 2, hh * 2)
+  } else {
+    const frameAspect = e.w / e.h
+    const wide = fit === 'cover' ? e.aspect > frameAspect : e.aspect < frameAspect
+    const dw = wide ? hh * 2 * e.aspect : hw * 2
+    const dh = wide ? hh * 2 : (hw * 2) / e.aspect
+    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh)
+  }
+  ctx.restore()
 }
 
 export function makeTextEl(dieline: Dieline, text: string): TextEl {
@@ -472,7 +518,11 @@ export function svgArtworkLayer(decos: Deco[]): string {
       const rot = e.rot || ft ? ` transform="rotate(${e.rot} ${c.x} ${c.y})${ft}"` : ''
       let el: string
       if (e.type === 'image') {
-        el = `<image href="${e.src}" x="${e.x}" y="${e.y}" width="${w}" height="${h}" preserveAspectRatio="none"${rot}/>`
+        const mask = imageMaskSVG(e)
+        const clip = mask ? ` clip-path="url(#${maskId(e.id)})"` : ''
+        el =
+          (mask ? `<defs>${mask}</defs>` : '') +
+          `<image href="${e.src}" x="${e.x}" y="${e.y}" width="${w}" height="${h}" preserveAspectRatio="${imgPAR(e.fit)}"${clip}${rot}/>`
       } else if (e.type === 'shape') {
         el = shapeSVG(e, rot)
       } else {
@@ -505,7 +555,7 @@ export function drawDeco2D(
   if (e.flipX || e.flipY) ctx.scale(e.flipX ? -1 : 1, e.flipY ? -1 : 1)
   if (e.type === 'image') {
     const img = imgOf(e.src)
-    if (img) ctx.drawImage(img, (-w / 2) * s, (-h / 2) * s, w * s, h * s)
+    if (img) drawImageFit(ctx, img, e, s)
   } else if (e.type === 'shape') {
     drawShape2D(ctx, e, s)
   } else {
@@ -596,7 +646,16 @@ export function parseDeco(v: unknown): Deco | null {
     const aspect = Number(o.aspect)
     const w = Number(o.w)
     if (!src.startsWith('data:image/') || !(aspect > 0) || !(w > 0)) return null
-    return { id, type: 'image', src, aspect, w, ...base }
+    const h = Number(o.h) > 0 ? Number(o.h) : w / aspect // ข้อมูลเก่าไม่มี h → สัดส่วนเดิม
+    const fit = o.fit === 'contain' || o.fit === 'stretch' ? o.fit : undefined
+    const radius = Number(o.radius) > 0 ? Number(o.radius) : undefined
+    return {
+      id, type: 'image', src, aspect, w, h,
+      ...(fit ? { fit } : {}),
+      ...(radius ? { radius } : {}),
+      ...(o.circle === true ? { circle: true } : {}),
+      ...base,
+    }
   }
   if (o.type === 'text') {
     const text = typeof o.text === 'string' ? o.text : ''
