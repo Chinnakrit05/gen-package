@@ -64,6 +64,7 @@ const VesselViewer3D = lazy(() =>
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
 import { ColorField } from './components/ColorField'
+import { IconImage, IconText, IconRect, IconEllipse, IconLine } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
 const PALETTE_KEY = 'gen-package-palette-v1'
@@ -91,10 +92,11 @@ interface DimFieldProps {
   min: number
   max: number
   disabled?: boolean
+  unit?: string
   onChange: (v: number) => void
 }
 
-function DimField({ label, value, min, max, disabled, onChange }: DimFieldProps) {
+function DimField({ label, value, min, max, disabled, unit = 'มม.', onChange }: DimFieldProps) {
   const commit = (v: number) => onChange(clamp(Number.isFinite(v) ? v : min, min, max))
   return (
     <div className="field">
@@ -111,7 +113,7 @@ function DimField({ label, value, min, max, disabled, onChange }: DimFieldProps)
             aria-label={label}
             onChange={(e) => commit(Number(e.target.value))}
           />
-          มม.
+          {unit}
         </span>
       </span>
       <input
@@ -1369,21 +1371,21 @@ export default function App() {
                         e.target.value = ''
                       }}
                     />
-                    <span>+ โลโก้</span>
+                    <span className="ico-btn"><IconImage /> โลโก้</span>
                   </label>
-                  <button disabled={aiBusy} onClick={addText}>
-                    + ข้อความ
+                  <button className="ico-btn" disabled={aiBusy} onClick={addText}>
+                    <IconText /> ข้อความ
                   </button>
                 </div>
                 <div className="art-actions" style={{ marginTop: 8 }}>
-                  <button disabled={aiBusy} title="สี่เหลี่ยม" onClick={() => addShape('rect')}>
-                    ▭ สี่เหลี่ยม
+                  <button className="ico-btn" disabled={aiBusy} title="สี่เหลี่ยม" onClick={() => addShape('rect')}>
+                    <IconRect /> สี่เหลี่ยม
                   </button>
-                  <button disabled={aiBusy} title="วงกลม/วงรี" onClick={() => addShape('ellipse')}>
-                    ⬭ วงกลม
+                  <button className="ico-btn" disabled={aiBusy} title="วงกลม/วงรี" onClick={() => addShape('ellipse')}>
+                    <IconEllipse /> วงกลม
                   </button>
-                  <button disabled={aiBusy} title="เส้น" onClick={() => addShape('line')}>
-                    ／ เส้น
+                  <button className="ico-btn" disabled={aiBusy} title="เส้น" onClick={() => addShape('line')}>
+                    <IconLine /> เส้น
                   </button>
                 </div>
 
@@ -1813,6 +1815,7 @@ export default function App() {
                       value={Math.round((selected.opacity ?? 1) * 100)}
                       min={0}
                       max={100}
+                      unit="%"
                       disabled={aiBusy}
                       onChange={(v) =>
                         patchSelected((d) => ({ ...d, opacity: Math.min(1, Math.max(0, v / 100)) }))

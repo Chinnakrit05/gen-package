@@ -765,6 +765,22 @@ button[aria-disabled='true'] {
 .art-actions button {
   flex: 1;
 }
+/* ปุ่มไอคอน + ข้อความ: จัดกึ่งกลาง ไอคอนสีเทาจางลงเล็กน้อย */
+.ico-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.ico-btn svg {
+  flex: none;
+  color: var(--text-3);
+}
+.ico-btn:hover svg,
+.deco-item.active .ico-btn svg {
+  color: inherit;
+}
 .hint.warn {
   color: #8a5a1c;
 }
@@ -885,6 +901,16 @@ button[aria-disabled='true'] {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* ให้ gap คุมจังหวะแนวตั้งทั้งแผง แทน margin เฉพาะกิจของแต่ละบล็อก
+   (ใช้ !important เพราะบางคลาส เช่น .xy-row/.align-box/.font-row นิยาม margin ทีหลัง
+   ในไฟล์ ถ้าไม่บังคับจะชนะ cascade แล้วจังหวะเพี้ยน) */
+.deco-edit > * {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 .deco-text-input {
   width: 100%;
