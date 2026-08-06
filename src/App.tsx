@@ -17,6 +17,7 @@ import {
   FONTS,
   alignInSelection,
   distribute,
+  stepRepeat,
   expandGroups,
   newGroupId,
   type AlignMode,
@@ -445,6 +446,7 @@ export default function App() {
   const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
   const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>('design')
   const [palette, setPalette] = useState<string[]>(loadPalette)
+  const [sr, setSr] = useState({ cols: 3, rows: 1, dx: 30, dy: 30, brick: false })
   const [split, setSplit] = useState<number>(loadSplit)
   const panelsRef = useRef<HTMLDivElement>(null)
   const resizing = useRef(false)
@@ -1034,6 +1036,17 @@ export default function App() {
     })
     setDecos((ds) => [...ds, ...copies])
     setSelectedIds(copies.map((c) => c.id))
+  }
+
+  // ทำซ้ำเป็นแพตเทิร์นกริด: สร้างสำเนา + ดึงต้นฉบับเข้ากลุ่มเดียวกัน แล้วเลือกทั้งชุด
+  const applyStepRepeat = () => {
+    if (!selectedIds.length) return
+    const copies = stepRepeat(decos, selectedIds, sr)
+    if (!copies.length) return
+    const gid = copies[0].groupId!
+    const sel = new Set(selectedIds)
+    setDecos((ds) => [...ds.map((d) => (sel.has(d.id) ? { ...d, groupId: gid } : d)), ...copies])
+    setSelectedIds([...selectedIds, ...copies.map((c) => c.id)])
   }
 
   const nudgeSelected = (dx: number, dy: number) => {
@@ -1866,6 +1879,47 @@ export default function App() {
                     <p className="hint">ลาก/หมุนบน blueprint ได้ (จุดวงกลม = หมุน) · เลเยอร์สูง = อยู่หน้า</p>
                   </div>
                 )}
+
+                {selectedIds.length >= 1 && (
+                  <div className="sr-box">
+                    <span className="align-title">ทำซ้ำเป็นแพตเทิร์น (step &amp; repeat)</span>
+                    <div className="sr-grid">
+                      <label>
+                        คอลัมน์
+                        <input type="number" min={1} max={40} value={sr.cols} disabled={aiBusy} aria-label="จำนวนคอลัมน์"
+                          onChange={(e) => setSr((s) => ({ ...s, cols: clamp(Math.round(Number(e.target.value)) || 1, 1, 40) }))} />
+                      </label>
+                      <label>
+                        แถว
+                        <input type="number" min={1} max={40} value={sr.rows} disabled={aiBusy} aria-label="จำนวนแถว"
+                          onChange={(e) => setSr((s) => ({ ...s, rows: clamp(Math.round(Number(e.target.value)) || 1, 1, 40) }))} />
+                      </label>
+                      <label>
+                        ระยะ X
+                        <input type="number" min={0} value={sr.dx} disabled={aiBusy} aria-label="ระยะห่าง X (มม.)"
+                          onChange={(e) => setSr((s) => ({ ...s, dx: Number(e.target.value) || 0 }))} />
+                      </label>
+                      <label>
+                        ระยะ Y
+                        <input type="number" min={0} value={sr.dy} disabled={aiBusy} aria-label="ระยะห่าง Y (มม.)"
+                          onChange={(e) => setSr((s) => ({ ...s, dy: Number(e.target.value) || 0 }))} />
+                      </label>
+                    </div>
+                    <label className="check">
+                      <input type="checkbox" checked={sr.brick} disabled={aiBusy}
+                        onChange={(e) => setSr((s) => ({ ...s, brick: e.target.checked }))} />
+                      สลับฟันปลา (แถวคี่เยื้องครึ่งระยะ)
+                    </label>
+                    <button
+                      className="primary"
+                      disabled={aiBusy || sr.cols * sr.rows <= 1}
+                      onClick={applyStepRepeat}
+                    >
+                      สร้าง {(sr.cols * sr.rows - 1) * selectedIds.length} สำเนา
+                    </button>
+                  </div>
+                )}
+
                 <p className="hint">
                   ลายจะถูกใส่ลงไฟล์ .svg (vector) และ .pdf (300 dpi) แล้ว — ไม่ใส่ใน .dxf เพราะเป็นไฟล์มีดตัด
                 </p>

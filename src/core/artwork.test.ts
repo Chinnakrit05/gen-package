@@ -6,6 +6,7 @@ import {
   alignToFace,
   alignInSelection,
   distribute,
+  stepRepeat,
   expandGroups,
   selectionBounds,
   faceBounds,
@@ -256,6 +257,29 @@ describe('เลือกหลายชิ้น + จัดกลุ่ม', (
     expect(right.find((d) => d.id === 'b')!.x).toBe(100)
     // ชิ้นที่ไม่ได้เลือกไม่ขยับ
     expect(alignInSelection(decos, ['a'], 'right').find((d) => d.id === 'b')!.x).toBe(100)
+  })
+
+  it('stepRepeat: กริด cols×rows สร้างสำเนา (ยกเว้นเซลล์ต้นฉบับ), ตำแหน่งตามระยะ, กลุ่มเดียว', () => {
+    const decos = [shp('a', 10, 20)]
+    const copies = stepRepeat(decos, ['a'], { cols: 3, rows: 2, dx: 30, dy: 40 })
+    expect(copies).toHaveLength(3 * 2 - 1) // 5 สำเนา (ไม่รวมต้นฉบับ)
+    // แถว 0: c1=(40,20), c2=(70,20); แถว1: c0=(10,60), c1=(40,60), c2=(70,60)
+    const at = (x: number, y: number) => copies.some((c) => Math.round(c.x) === x && Math.round(c.y) === y)
+    expect(at(40, 20)).toBe(true)
+    expect(at(70, 20)).toBe(true)
+    expect(at(10, 60)).toBe(true)
+    expect(at(70, 60)).toBe(true)
+    // groupId เดียวกันทุกสำเนา + id ไม่ซ้ำ
+    expect(new Set(copies.map((c) => c.groupId)).size).toBe(1)
+    expect(new Set(copies.map((c) => c.id)).size).toBe(copies.length)
+  })
+
+  it('stepRepeat: brick เยื้องแถวคี่ครึ่งระยะ; 1×1 = ไม่มีสำเนา', () => {
+    const decos = [shp('a', 0, 0)]
+    const brick = stepRepeat(decos, ['a'], { cols: 2, rows: 2, dx: 20, dy: 20, brick: true })
+    // แถว1 (r=1) c0 เยื้อง +10 → x=10
+    expect(brick.some((c) => Math.round(c.x) === 10 && Math.round(c.y) === 20)).toBe(true)
+    expect(stepRepeat(decos, ['a'], { cols: 1, rows: 1, dx: 20, dy: 20 })).toHaveLength(0)
   })
 
   it('distribute: กึ่งกลางห่างเท่ากัน หัว-ท้ายอยู่กับที่ (ต้อง ≥3)', () => {

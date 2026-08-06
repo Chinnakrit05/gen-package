@@ -344,6 +344,36 @@ export function alignInSelection(decos: Deco[], ids: Iterable<string>, mode: Ali
   })
 }
 
+// ทำซ้ำเป็นแพตเทิร์นกริด (step & repeat) — คืนเฉพาะ "สำเนา" (ไม่รวมเซลล์ต้นฉบับ 0,0)
+// สำเนาทั้งหมด (และควรรวมต้นฉบับ) ใช้ groupId เดียวกัน = เป็นกลุ่มเดียว ย้าย/ลบทั้งชุดได้
+export interface StepRepeatOpt {
+  cols: number
+  rows: number
+  dx: number // ระยะห่างแนวนอน (มม.)
+  dy: number // ระยะห่างแนวตั้ง (มม.)
+  brick?: boolean // สลับฟันปลา: แถวคี่เยื้อง dx/2
+  groupId?: string // บังคับ groupId (ไม่ใส่ = สร้างใหม่)
+}
+export function stepRepeat(decos: Deco[], ids: Iterable<string>, opt: StepRepeatOpt): Deco[] {
+  const sel = new Set(ids)
+  const src = decos.filter((d) => sel.has(d.id))
+  if (!src.length) return []
+  const cols = Math.min(40, Math.max(1, Math.floor(opt.cols)))
+  const rows = Math.min(40, Math.max(1, Math.floor(opt.rows)))
+  const gid = opt.groupId ?? newGroupId()
+  const copies: Deco[] = []
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (r === 0 && c === 0) continue // เซลล์ต้นฉบับ ไม่ทำซ้ำ
+      const ox = c * opt.dx + (opt.brick && r % 2 === 1 ? opt.dx / 2 : 0)
+      const oy = r * opt.dy
+      for (const e of src) copies.push({ ...cloneDeco(e, ox, oy), groupId: gid })
+      if (copies.length > 600) return copies // กันสร้างเยอะเกิน
+    }
+  }
+  return copies
+}
+
 // กระจายให้กึ่งกลางห่างเท่ากันตามแกน (ต้องเลือก ≥ 3 ชิ้น) — ชิ้นหัว-ท้ายอยู่กับที่
 export function distribute(decos: Deco[], ids: Iterable<string>, axis: 'h' | 'v'): Deco[] {
   const sel = new Set(ids)
