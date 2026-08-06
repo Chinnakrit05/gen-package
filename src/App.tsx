@@ -450,6 +450,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [decos, setDecos] = useState<Deco[]>(active0.decos)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [renamingId, setRenamingId] = useState<string | null>(null) // เลเยอร์ที่กำลังแก้ชื่อ (ดับเบิลคลิก)
+  const [lockAspect, setLockAspect] = useState(true) // ล็อกสัดส่วนกรอบรูป: ปรับกว้าง/สูงพร้อมกันตามสัดส่วนรูปจริง
   const [fold, setFold] = useState(1)
   const [showDims, setShowDims] = useState(store0.showDims)
   const [showGuides, setShowGuides] = useState(false)
@@ -1836,7 +1837,19 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           min={5}
                           max={Math.round(dieline.width)}
                           disabled={aiBusy}
-                          onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, w: v } : d))}
+                          onChange={(v) =>
+                            patchSelected((d) =>
+                              d.type === 'image'
+                                ? {
+                                    ...d,
+                                    w: v,
+                                    ...(lockAspect
+                                      ? { h: Math.round(clamp(v / d.aspect, 5, dieline.height) * 10) / 10 }
+                                      : {}),
+                                  }
+                                : d,
+                            )
+                          }
                         />
                         <DimField
                           label="กรอบ สูง"
@@ -1844,8 +1857,39 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           min={5}
                           max={Math.round(dieline.height)}
                           disabled={aiBusy}
-                          onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, h: v } : d))}
+                          onChange={(v) =>
+                            patchSelected((d) =>
+                              d.type === 'image'
+                                ? {
+                                    ...d,
+                                    h: v,
+                                    ...(lockAspect
+                                      ? { w: Math.round(clamp(v * d.aspect, 5, dieline.width) * 10) / 10 }
+                                      : {}),
+                                  }
+                                : d,
+                            )
+                          }
                         />
+                        <button
+                          className="lock-ratio"
+                          aria-pressed={lockAspect}
+                          title={lockAspect ? 'กำลังล็อกสัดส่วน — ปรับกว้าง/สูงพร้อมกัน' : 'ล็อกสัดส่วนรูป'}
+                          disabled={aiBusy}
+                          onClick={() => {
+                            const next = !lockAspect
+                            setLockAspect(next)
+                            // เปิดล็อก = ปรับกรอบให้ตรงสัดส่วนรูปทันที (อิงความกว้างปัจจุบัน)
+                            if (next)
+                              patchSelected((d) =>
+                                d.type === 'image'
+                                  ? { ...d, h: Math.round(clamp(d.w / d.aspect, 5, dieline.height) * 10) / 10 }
+                                  : d,
+                              )
+                          }}
+                        >
+                          {lockAspect ? '🔒' : '🔓'} ล็อกสัดส่วน
+                        </button>
                         <div className="font-row">
                           <select
                             value={selected.fit ?? 'cover'}

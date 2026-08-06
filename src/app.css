@@ -1152,6 +1152,14 @@ button[aria-disabled='true'] {
   font-size: 12px;
   white-space: nowrap;
 }
+/* ล็อกสัดส่วนกรอบรูป — ปรับกว้าง/สูงพร้อมกัน (aria-pressed=true ได้สีเน้นจากกฎ deco-edit) */
+.lock-ratio {
+  width: auto;
+  align-self: flex-start;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
 .bold-btn[aria-pressed='true'] {
   border-color: var(--accent);
   background: var(--accent-weak);
