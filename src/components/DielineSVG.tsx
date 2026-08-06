@@ -18,6 +18,8 @@ const gridTicks = (max: number): number[] => {
 }
 
 const SNAP_COLOR = '#ff7a00'
+const GUIDE_COLOR = '#0aa5c9'
+let guideSeq = 0
 const SNAP_PX = 6 // ระยะดูดบนจอ (พิกเซล) — แปลงเป็น มม. ตามซูมปัจจุบัน จะได้รู้สึกคงที่ทุกขนาดแผ่น
 
 function Dim({ d }: { d: DimMark }) {
@@ -163,7 +165,8 @@ export const DielineSVG = memo(function DielineSVG({
   onRotate?: (id: string, deg: number) => void
   onRemove?: (id: string) => void
 }) {
-  const pad = showDims ? 26 : 12
+  const [showRuler, setShowRuler] = useState(false)
+  const pad = showDims || showRuler ? 26 : 12
   const svgRef = useRef<SVGSVGElement>(null)
   const grab = useRef<Grab | null>(null)
   const snapT = useRef<SnapTargets | null>(null)
@@ -174,6 +177,9 @@ export const DielineSVG = memo(function DielineSVG({
   const [zoom, setZoom] = useState(1)
   const [center, setCenter] = useState<{ x: number; y: number } | null>(null)
   const [showGrid, setShowGrid] = useState(false)
+  // เส้นไกด์ที่ผู้ใช้ลากวางเอง — axis 'x' = เส้นตั้ง (คงค่า x), 'y' = เส้นนอน (คงค่า y)
+  const [guideLines, setGuideLines] = useState<{ id: string; axis: 'x' | 'y'; pos: number }[]>([])
+  const guideDrag = useRef<{ id: string; axis: 'x' | 'y' } | null>(null)
   const pan = useRef<{ sx: number; sy: number; cx: number; cy: number; moved: boolean } | null>(null)
   const editable = !!(onMove && onRotate && onSelect)
 
@@ -215,8 +221,10 @@ export const DielineSVG = memo(function DielineSVG({
     const p = toSheet(e.clientX, e.clientY)
     if (!p) return
     grab.current = { mode: 'move', id: d.id, dx: p.x - d.x, dy: p.y - d.y }
-    // เส้นเป้าหมายคงที่ตลอดการลาก (แผงนิ่ง, ชิ้นอื่นนิ่ง) — คิดครั้งเดียวตอนเริ่ม
-    snapT.current = snapTargets(dieline.panels, decos, d.id, dieline.width, dieline.height)
+    // เส้นเป้าหมายคงที่ตลอดการลาก (แผงนิ่ง, ชิ้นอื่นนิ่ง) — คิดครั้งเดียวตอนเริ่ม + รวมเส้นไกด์ที่ผู้ใช้วาง
+    const t = snapTargets(dieline.panels, decos, d.id, dieline.width, dieline.height)
+    for (const gu of guideLines) (gu.axis === 'x' ? t.xs : t.ys).push(gu.pos)
+    snapT.current = t
     setActive(true)
     capture(e)
     e.preventDefault()
@@ -232,6 +240,13 @@ export const DielineSVG = memo(function DielineSVG({
   }
 
   const onMoveEvt = (e: React.PointerEvent) => {
+    if (guideDrag.current) {
+      const p = toSheet(e.clientX, e.clientY)
+      if (!p) return
+      const gd = guideDrag.current
+      setGuideLines((gs) => gs.map((g) => (g.id === gd.id ? { ...g, pos: gd.axis === 'x' ? p.x : p.y } : g)))
+      return
+    }
     if (pan.current) {
       const dxS = e.clientX - pan.current.sx
       const dyS = e.clientY - pan.current.sy
@@ -276,6 +291,20 @@ export const DielineSVG = memo(function DielineSVG({
   }
 
   const endDrag = (e: React.PointerEvent) => {
+    if (guideDrag.current) {
+      // ลากเส้นไกด์ออกนอกแผ่น = ลบทิ้ง
+      const gd = guideDrag.current
+      guideDrag.current = null
+      setGuideLines((gs) =>
+        gs.filter((g) => {
+          if (g.id !== gd.id) return true
+          const lim = g.axis === 'x' ? dieline.width : dieline.height
+          return g.pos >= -2 && g.pos <= lim + 2
+        }),
+      )
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+      return
+    }
     if (pan.current) {
       // ลากพื้นที่ว่างแบบไม่ขยับ = คลิกที่ว่าง → ยกเลิกการเลือก
       if (!pan.current.moved) onSelect?.(null)
@@ -293,6 +322,17 @@ export const DielineSVG = memo(function DielineSVG({
     if (!editable || grab.current) return
     pan.current = { sx: e.clientX, sy: e.clientY, cx: viewCx, cy: viewCy, moved: false }
     capture(e)
+  }
+
+  // เพิ่มเส้นไกด์ตรงกลางมุมมองปัจจุบัน
+  const addGuide = (axis: 'x' | 'y') =>
+    setGuideLines((gs) => [...gs, { id: `gd${guideSeq++}`, axis, pos: Math.round(axis === 'x' ? viewCx : viewCy) }])
+
+  const startGuideDrag = (e: React.PointerEvent, g: { id: string; axis: 'x' | 'y' }) => {
+    guideDrag.current = { id: g.id, axis: g.axis }
+    capture(e)
+    e.stopPropagation()
+    e.preventDefault()
   }
 
   // --- viewBox ตามซูม/แพน ---
@@ -347,6 +387,26 @@ export const DielineSVG = memo(function DielineSVG({
 
   return (
     <div className="bp-canvas">
+    {editable && (
+      <div className="bp-tools">
+        <button
+          type="button"
+          className="bp-tool"
+          title={showRuler ? 'ซ่อนไม้บรรทัด' : 'แสดงไม้บรรทัด'}
+          aria-label="เปิด-ปิดไม้บรรทัด"
+          aria-pressed={showRuler}
+          onClick={() => setShowRuler((r) => !r)}
+        >
+          📏
+        </button>
+        <button type="button" className="bp-tool" title="เพิ่มเส้นไกด์ตั้ง" aria-label="เพิ่มเส้นไกด์ตั้ง" onClick={() => addGuide('x')}>
+          ￨＋
+        </button>
+        <button type="button" className="bp-tool" title="เพิ่มเส้นไกด์นอน" aria-label="เพิ่มเส้นไกด์นอน" onClick={() => addGuide('y')}>
+          －＋
+        </button>
+      </div>
+    )}
     <svg
       ref={svgRef}
       className={`dieline-svg${zoom > 1 ? ' zoomed' : ''}`}
@@ -526,6 +586,51 @@ export const DielineSVG = memo(function DielineSVG({
             />
           ))}
         </g>
+      )}
+
+      {/* ไม้บรรทัด: ตัวเลข มม. ตามขอบบน/ซ้าย (ในพิกัดแผ่น จึงซูม/แพนตาม) */}
+      {showRuler && (
+        <g className="ruler" pointerEvents="none">
+          {gridTicks(dieline.width)
+            .filter((x) => x % 50 === 0)
+            .map((x) => (
+              <text key={`rx${x}`} x={x} y={-pad + 8} textAnchor="middle" fontSize={6} fill="#8a8474" stroke="none">
+                {x}
+              </text>
+            ))}
+          {gridTicks(dieline.height)
+            .filter((y) => y % 50 === 0 && y > 0)
+            .map((y) => (
+              <text key={`ry${y}`} x={-pad + 3} y={y} textAnchor="start" dominantBaseline="central" fontSize={6} fill="#8a8474" stroke="none">
+                {y}
+              </text>
+            ))}
+        </g>
+      )}
+
+      {/* เส้นไกด์ลากเอง (สีฟ้า) — ลากย้าย, ลากออกนอกแผ่นเพื่อลบ */}
+      {guideLines.map((g) =>
+        g.axis === 'x' ? (
+          <g key={g.id} className="guide" onPointerDown={(e) => startGuideDrag(e, g)}>
+            <line x1={g.pos} y1={-pad} x2={g.pos} y2={dieline.height + pad} stroke={GUIDE_COLOR} strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
+            <line x1={g.pos} y1={-pad} x2={g.pos} y2={dieline.height + pad} stroke="transparent" strokeWidth={10} vectorEffect="non-scaling-stroke" style={{ cursor: 'ew-resize' }} />
+            {guideDrag.current?.id === g.id && (
+              <text x={g.pos + 2} y={-pad + 8} fontSize={6} fill={GUIDE_COLOR} stroke="none">
+                {Math.round(g.pos)}
+              </text>
+            )}
+          </g>
+        ) : (
+          <g key={g.id} className="guide" onPointerDown={(e) => startGuideDrag(e, g)}>
+            <line x1={-pad} y1={g.pos} x2={dieline.width + pad} y2={g.pos} stroke={GUIDE_COLOR} strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
+            <line x1={-pad} y1={g.pos} x2={dieline.width + pad} y2={g.pos} stroke="transparent" strokeWidth={10} vectorEffect="non-scaling-stroke" style={{ cursor: 'ns-resize' }} />
+            {guideDrag.current?.id === g.id && (
+              <text x={-pad + 3} y={g.pos - 2} fontSize={6} fill={GUIDE_COLOR} stroke="none">
+                {Math.round(g.pos)}
+              </text>
+            )}
+          </g>
+        ),
       )}
 
       {showDims && dieline.dims.map((d, i) => <Dim key={i} d={d} />)}
