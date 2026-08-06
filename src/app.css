@@ -1092,7 +1092,12 @@ button[aria-disabled='true'] {
   cursor: pointer;
 }
 
-/* แถบ undo/redo ในหัว */
+/* แถบ undo/redo — ย้ายมาอยู่หัวบลูพรินต์ หน้า legend เส้นตัด/เส้นพับ */
+.bp-head-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .undo-bar {
   display: flex;
   gap: 4px;
@@ -1100,10 +1105,21 @@ button[aria-disabled='true'] {
 }
 .undo-btn {
   width: auto;
-  padding: 4px 12px;
-  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 9px;
   line-height: 1;
   border-radius: 8px;
+  color: var(--text-2);
+}
+.undo-btn:hover {
+  color: var(--accent);
+}
+.undo-btn[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
 }
 
 /* --- แถวฟอนต์ + ตัวหนา --- */

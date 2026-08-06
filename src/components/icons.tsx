@@ -57,3 +57,21 @@ export function IconLine({ size = 16 }: IconProps) {
     </svg>
   )
 }
+
+export function IconUndo({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M8 6L4 10l4 4" />
+      <path d="M4 10h9a6 6 0 0 1 0 12h-3" />
+    </svg>
+  )
+}
+
+export function IconRedo({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M16 6l4 4-4 4" />
+      <path d="M20 10h-9a6 6 0 0 0 0 12h3" />
+    </svg>
+  )
+}

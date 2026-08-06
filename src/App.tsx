@@ -64,7 +64,7 @@ const VesselViewer3D = lazy(() =>
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
 import { ColorField } from './components/ColorField'
-import { IconImage, IconText, IconRect, IconEllipse, IconLine } from './components/icons'
+import { IconImage, IconText, IconRect, IconEllipse, IconLine, IconUndo, IconRedo } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
 const PALETTE_KEY = 'gen-package-palette-v1'
@@ -1150,26 +1150,6 @@ export default function App() {
     <div className="app">
       <header>
         <h1>gen-package</h1>
-        <div className="undo-bar">
-          <button
-            className="undo-btn"
-            title="เลิกทำ (Ctrl+Z)"
-            aria-label="เลิกทำ"
-            aria-disabled={aiBusy || undoStack.length === 0}
-            onClick={undo}
-          >
-            ↶
-          </button>
-          <button
-            className="undo-btn"
-            title="ทำซ้ำ (Ctrl+Shift+Z)"
-            aria-label="ทำซ้ำ"
-            aria-disabled={aiBusy || redoStack.length === 0}
-            onClick={redo}
-          >
-            ↷
-          </button>
-        </div>
         <nav className="projects" aria-label="งานที่บันทึกไว้">
           <button className="proj-new" aria-disabled={aiBusy} onClick={newProject}>
             + งานใหม่
@@ -2197,10 +2177,32 @@ export default function App() {
             <div className="blueprint card">
               <div className="bp-head">
                 <span>{mat.foldable ? 'blueprint การพับ' : 'dieline ฉลาก'}</span>
-                <span className="legend">
-                  <i className="sw-cut" /> เส้นตัด
-                  <i className="sw-crease" /> {mat.foldable ? 'เส้นพับ' : 'แนวทับกาว'}
-                </span>
+                <div className="bp-head-right">
+                  <div className="undo-bar">
+                    <button
+                      className="undo-btn"
+                      title="เลิกทำ (Ctrl+Z)"
+                      aria-label="เลิกทำ"
+                      aria-disabled={aiBusy || undoStack.length === 0}
+                      onClick={undo}
+                    >
+                      <IconUndo />
+                    </button>
+                    <button
+                      className="undo-btn"
+                      title="ทำซ้ำ (Ctrl+Shift+Z)"
+                      aria-label="ทำซ้ำ"
+                      aria-disabled={aiBusy || redoStack.length === 0}
+                      onClick={redo}
+                    >
+                      <IconRedo />
+                    </button>
+                  </div>
+                  <span className="legend">
+                    <i className="sw-cut" /> เส้นตัด
+                    <i className="sw-crease" /> {mat.foldable ? 'เส้นพับ' : 'แนวทับกาว'}
+                  </span>
+                </div>
               </div>
               <DielineSVG
                 dieline={dieline}
