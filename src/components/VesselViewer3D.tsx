@@ -4,20 +4,26 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import type { Material } from '../core/types'
 import type { Vessel } from '../core/vessel'
-import { drawDeco2D, type Deco } from '../core/artwork'
+import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 
 // พรีวิวภาชนะขึ้นรูป: โปรไฟล์หมุนรอบแกน (LatheGeometry) + ฉลากพันรอบตัว
 // ฉลากเป็นทรงกระบอกบาง ๆ ลอยเหนือผิว เท็กซ์เจอร์วาดจาก dieline ฉลาก (สีขาว = กระดาษฉลาก)
 // จึงเห็นลาย (โลโก้/ข้อความ) พันรอบขวดตรงตำแหน่งเดียวกับบน blueprint
 
 // วาดแผ่นฉลากลง canvas — พื้นขาวเสมอ (ฉลากคือกระดาษพิมพ์ ไม่ใช่สีวัสดุภาชนะ)
-function useLabelTexture(vessel: Vessel, decos: Deco[], fillColor: string | null | undefined) {
+function useLabelTexture(
+  vessel: Vessel,
+  decos: Deco[],
+  fillColor: string | null | undefined,
+  fillImage: FillImage | null | undefined,
+) {
   const [tex, setTex] = useState<THREE.CanvasTexture | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const imgCache = useRef(new Map<string, HTMLImageElement>())
   const [imgReady, setImgReady] = useState(0)
 
   const srcs = decos.filter((d): d is Extract<Deco, { type: 'image' }> => d.type === 'image').map((d) => d.src)
+  if (fillImage) srcs.push(fillImage.src)
   const srcKey = srcs.join('|')
   useEffect(() => {
     let dead = false
@@ -55,6 +61,12 @@ function useLabelTexture(vessel: Vessel, decos: Deco[], fillColor: string | null
     if (!ctx) return
     ctx.fillStyle = fillColor || '#ffffff'
     ctx.fillRect(0, 0, w, h)
+    // รูปพื้น (ถ้ามี) คลุมทั้งฉลาก (สี่เหลี่ยมเดียว ไม่ต้อง clip แผง) แล้วลายทับ
+    const fimg = fillImage ? imgCache.current.get(fillImage.src) : undefined
+    if (fillImage && fimg) {
+      const r = fillImageRect({ x0: 0, y0: 0, x1: width, y1: height }, fillImage)
+      ctx.drawImage(fimg, r.x * s, r.y * s, r.w * s, r.h * s)
+    }
     // ผิวทรงกระบอกมองจากด้านนอก UV อ่านตรง — ไม่ต้องมิเรอร์แบบกล่อง
     for (const e of decos) drawDeco2D(ctx, e, s, (src) => imgCache.current.get(src))
     setTex((prev) => {
@@ -70,14 +82,26 @@ function useLabelTexture(vessel: Vessel, decos: Deco[], fillColor: string | null
       return t
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decoKey, imgReady, width, height, vessel.labelR])
+  }, [decoKey, imgReady, fillColor, fillImage, width, height, vessel.labelR])
 
   useEffect(() => () => tex?.dispose(), [tex])
   return tex
 }
 
-function VesselModel({ vessel, mat, decos, fillColor }: { vessel: Vessel; mat: Material; decos: Deco[]; fillColor: string | null | undefined }) {
-  const tex = useLabelTexture(vessel, decos, fillColor)
+function VesselModel({
+  vessel,
+  mat,
+  decos,
+  fillColor,
+  fillImage,
+}: {
+  vessel: Vessel
+  mat: Material
+  decos: Deco[]
+  fillColor: string | null | undefined
+  fillImage: FillImage | null | undefined
+}) {
+  const tex = useLabelTexture(vessel, decos, fillColor, fillImage)
 
   const body = useMemo(
     () => new THREE.LatheGeometry(vessel.profile.map((p) => new THREE.Vector2(p.x, p.y)), 64),
@@ -119,7 +143,19 @@ function VesselModel({ vessel, mat, decos, fillColor }: { vessel: Vessel; mat: M
   )
 }
 
-export function VesselViewer3D({ vessel, mat, decos, fillColor }: { vessel: Vessel; mat: Material; decos: Deco[]; fillColor?: string | null }) {
+export function VesselViewer3D({
+  vessel,
+  mat,
+  decos,
+  fillColor,
+  fillImage,
+}: {
+  vessel: Vessel
+  mat: Material
+  decos: Deco[]
+  fillColor?: string | null
+  fillImage?: FillImage | null
+}) {
   const dist = Math.max(vessel.H, vessel.labelR * 4) * 2.2
   return (
     <Canvas
@@ -131,7 +167,7 @@ export function VesselViewer3D({ vessel, mat, decos, fillColor }: { vessel: Vess
       <ambientLight intensity={0.85} />
       <directionalLight position={[250, 420, 300]} intensity={1.7} />
       <directionalLight position={[-220, 120, -260]} intensity={0.6} />
-      <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} />
+      <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} />
       <OrbitControls makeDefault enableDamping />
     </Canvas>
   )

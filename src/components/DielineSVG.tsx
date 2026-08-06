@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, type Deco } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
@@ -148,6 +148,7 @@ export const DielineSVG = memo(function DielineSVG({
   decos = [],
   guides,
   fillColor,
+  fillImage,
   selectedIds = [],
   onSelect,
   onMove,
@@ -159,6 +160,7 @@ export const DielineSVG = memo(function DielineSVG({
   decos?: Deco[]
   guides?: Guides | null
   fillColor?: string | null
+  fillImage?: FillImage | null
   selectedIds?: string[]
   onSelect?: (id: string | null, additive?: boolean) => void
   onMove?: (id: string, x: number, y: number) => void
@@ -418,12 +420,38 @@ export const DielineSVG = memo(function DielineSVG({
       // กดพื้นที่ว่าง = เริ่ม pan / คลิกเปล่า = ยกเลิกการเลือก
       onPointerDown={onBgDown}
     >
-      {fillColor && (
+      {fillImage ? (
         <g className="fill" pointerEvents="none">
-          {dieline.panels.map((p, i) => (
-            <polygon key={i} points={p.outline.map((q) => `${q.x},${q.y}`).join(' ')} fill={fillColor} />
-          ))}
+          <defs>
+            <clipPath id="bp-fillclip" clipPathUnits="userSpaceOnUse">
+              {dieline.panels.map((p, i) => (
+                <polygon key={i} points={p.outline.map((q) => `${q.x},${q.y}`).join(' ')} />
+              ))}
+            </clipPath>
+          </defs>
+          {(() => {
+            const r = fillImageRect(panelsBBox(dieline), fillImage)
+            return (
+              <image
+                clipPath="url(#bp-fillclip)"
+                href={fillImage.src}
+                x={r.x}
+                y={r.y}
+                width={r.w}
+                height={r.h}
+                preserveAspectRatio="none"
+              />
+            )
+          })()}
         </g>
+      ) : (
+        fillColor && (
+          <g className="fill" pointerEvents="none">
+            {dieline.panels.map((p, i) => (
+              <polygon key={i} points={p.outline.map((q) => `${q.x},${q.y}`).join(' ')} fill={fillColor} />
+            ))}
+          </g>
+        )
       )}
       {showGrid && (
         <g className="grid" pointerEvents="none">

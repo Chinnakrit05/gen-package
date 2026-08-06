@@ -1,6 +1,6 @@
 import { MATERIALS } from './materials'
 import { TEMPLATES } from './templates'
-import { parseDecos, type Deco } from './artwork'
+import { parseDecos, parseFillImage, type Deco, type FillImage } from './artwork'
 import type { CurrentSpec } from './ai'
 
 // โมเดลข้อมูลของ "งาน" หนึ่งชิ้น + ตัว parse ที่ตรวจ/ซ่อมข้อมูลจาก localStorage หรือไฟล์ที่นำเข้า
@@ -45,6 +45,7 @@ export interface Project {
   live: CurrentSpec
   qty: number
   fillColor: string | null
+  fillImage?: FillImage | null // รูปพื้นแพ็กเกจ (ถ้ามี = ใช้แทน/ทับ fillColor)
   decos: Deco[]
   history: DesignVersion[]
   histIdx: number
@@ -119,6 +120,7 @@ export function parseProject(v: unknown, idx: number): Project | null {
     live,
     qty: parseQty(o.qty),
     fillColor: typeof o.fillColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.fillColor) ? o.fillColor : null,
+    fillImage: parseFillImage(o.fillImage),
     decos: parseDecos(o.decos, o.artwork),
     history,
     histIdx: clampIdx(o.histIdx, history.length),

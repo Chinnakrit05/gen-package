@@ -3,7 +3,18 @@ import * as THREE from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import type { Dieline, Material } from '../core/types'
-import { drawFill, drawImageFit, drawShape2D, elW, elH, sheetUV, textFont, type Deco } from '../core/artwork'
+import {
+  drawFill,
+  drawFillImage,
+  drawImageFit,
+  drawShape2D,
+  elW,
+  elH,
+  sheetUV,
+  textFont,
+  type Deco,
+  type FillImage,
+} from '../core/artwork'
 import { computeMatrices, rollBeads } from '../core/fold'
 
 // วาดองค์ประกอบ (รูป/ข้อความ) ลง ctx ในพิกัดแผ่นคลี่ (สเกล s) พร้อมหมุนรอบจุดกึ่งกลาง
@@ -43,14 +54,21 @@ function drawDeco(
 // วาดสีวัสดุ + องค์ประกอบทั้งหมดลงผ้าใบขนาดเท่าแผ่นคลี่ แล้วใช้เป็น texture ผืนเดียวของทุกแผง
 // เพราะ UV ของทุกแผงอ้างพิกัดแผ่นคลี่ร่วมกัน (ดู uv ใน FoldedModel) องค์ประกอบจึงพาด
 // ข้ามรอยพับได้ถูกต้องเหมือนพิมพ์ลงแผ่นจริงแล้วค่อยพับ
-function useSheetTexture(dieline: Dieline, mat: Material, decos: Deco[], fillColor: string | null | undefined) {
+function useSheetTexture(
+  dieline: Dieline,
+  mat: Material,
+  decos: Deco[],
+  fillColor: string | null | undefined,
+  fillImage: FillImage | null | undefined,
+) {
   const [tex, setTex] = useState<THREE.CanvasTexture | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const imgCache = useRef(new Map<string, HTMLImageElement>())
   const [imgReady, setImgReady] = useState(0) // เพิ่มค่าเมื่อมีรูปโหลดเสร็จ เพื่อสั่งวาดใหม่
 
-  // ถอดรหัสรูปแต่ละ src ครั้งเดียว เก็บใน cache — ไม่ decode ซ้ำตอนลาก/หมุน
+  // ถอดรหัสรูปแต่ละ src ครั้งเดียว เก็บใน cache — ไม่ decode ซ้ำตอนลาก/หมุน (รวมรูปพื้นด้วย)
   const srcs = decos.filter((d): d is Extract<Deco, { type: 'image' }> => d.type === 'image').map((d) => d.src)
+  if (fillImage) srcs.push(fillImage.src)
   const srcKey = srcs.join('|')
   useEffect(() => {
     let dead = false
@@ -75,8 +93,8 @@ function useSheetTexture(dieline: Dieline, mat: Material, decos: Deco[], fillCol
   const decoKey = JSON.stringify(decos)
 
   useEffect(() => {
-    // ไม่มีทั้งลายและสีพื้น → ใช้สีวัสดุตรง ๆ ไม่ต้องมี texture
-    if (decos.length === 0 && !fillColor) {
+    // ไม่มีทั้งลาย สีพื้น และรูปพื้น → ใช้สีวัสดุตรง ๆ ไม่ต้องมี texture
+    if (decos.length === 0 && !fillColor && !fillImage) {
       setTex(null)
       return
     }
@@ -98,7 +116,10 @@ function useSheetTexture(dieline: Dieline, mat: Material, decos: Deco[], fillCol
     // พื้นสีวัสดุก่อน (ช่องว่าง/ขอบ) แล้วทับด้วยสีพื้นแพ็กเกจเฉพาะพื้นที่แผงจริง
     ctx.fillStyle = mat.color
     ctx.fillRect(0, 0, w, h)
-    if (fillColor) drawFill(ctx, dieline, fillColor, s)
+    // รูปพื้นมาก่อน (ถ้ามี) ไม่งั้นใช้สีพื้นทึบ — แล้วค่อยลายทับ
+    const fimg = fillImage ? imgCache.current.get(fillImage.src) : undefined
+    if (fillImage && fimg) drawFillImage(ctx, dieline, fimg, fillImage, s)
+    else if (fillColor) drawFill(ctx, dieline, fillColor, s)
     for (const e of decos) if (!e.hidden) drawDeco(ctx, e, s, (src) => imgCache.current.get(src))
 
     // ห้าม dispose ของเก่าตรงนี้ — StrictMode เรียกตัวอัปเดตซ้ำได้
@@ -113,7 +134,7 @@ function useSheetTexture(dieline: Dieline, mat: Material, decos: Deco[], fillCol
       return t
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decoKey, imgReady, fillColor, mat.color, dieline.width, dieline.height])
+  }, [decoKey, imgReady, fillColor, fillImage, mat.color, dieline.width, dieline.height])
 
   // คืนหน่วยความจำเมื่อ viewer ถูกถอด
   useEffect(() => () => tex?.dispose(), [tex])
@@ -228,10 +249,11 @@ interface ModelProps {
   tilt: number
   decos?: Deco[]
   fillColor?: string | null
+  fillImage?: FillImage | null
 }
 
-function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor }: ModelProps) {
-  const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor)
+function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillImage }: ModelProps) {
+  const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage)
 
   const geoms = useMemo(
     () =>

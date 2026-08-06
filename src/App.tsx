@@ -26,8 +26,10 @@ import {
   withTextW,
   svgArtworkLayer,
   fillSVGLayer,
+  fillImageSVGLayer,
   renderArtworkCanvas,
   type Deco,
+  type FillImage,
 } from './core/artwork'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import { generateVessel } from './core/vessel'
@@ -148,6 +150,7 @@ function dielineSVGString(
   decos: Deco[] = [],
   guides: Guides | null = null,
   fillColor: string | null = null,
+  fillImage: FillImage | null = null,
 ): string {
   const pathsOf = (kind: 'cut' | 'crease') =>
     d.segments
@@ -184,7 +187,8 @@ function dielineSVGString(
   }
 
   // สีพื้นอยู่ล่างสุด แล้วลาย แล้วเส้น cut/crease โชว์ทับเป็นไกด์ — ตรงกับที่เห็นบนจอ
-  const fillLayer = fillSVGLayer(d, fillColor)
+  // รูปพื้น (ถ้ามี) มาก่อนสีพื้น — ครอปตามแผงจริงเหมือนกัน
+  const fillLayer = fillImage ? fillImageSVGLayer(d, fillImage) : fillSVGLayer(d, fillColor)
   const artLayer = svgArtworkLayer(decos)
   const guideLayer = guides ? guidesSVGLayer(guides) : ''
 
@@ -257,6 +261,7 @@ interface EditSnapshot {
   handle: boolean
   qty: number
   fillColor: string | null
+  fillImage: FillImage | null
   decos: Deco[]
 }
 
@@ -269,6 +274,7 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.handle === b.handle &&
   a.qty === b.qty &&
   a.fillColor === b.fillColor &&
+  a.fillImage === b.fillImage &&
   a.decos === b.decos
 
 const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
@@ -440,6 +446,7 @@ export default function App() {
   const [handle, setHandle] = useState(active0.live.handle)
   const [qty, setQty] = useState(active0.qty)
   const [fillColor, setFillColor] = useState<string | null>(active0.fillColor)
+  const [fillImage, setFillImage] = useState<FillImage | null>(active0.fillImage ?? null)
   const [decos, setDecos] = useState<Deco[]>(active0.decos)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [fold, setFold] = useState(1)
@@ -505,6 +512,7 @@ export default function App() {
                 live: { template: templateId, materialId, W, D, H, handle },
                 qty,
                 fillColor,
+                fillImage,
                 decos,
                 history,
                 histIdx,
@@ -515,7 +523,7 @@ export default function App() {
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, decos, activeId])
 
   // save ทุกงานลง localStorage
   useEffect(() => {
@@ -600,6 +608,7 @@ export default function App() {
     handle,
     qty,
     fillColor,
+    fillImage,
     decos,
   })
 
@@ -622,7 +631,7 @@ export default function App() {
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, decos])
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -634,6 +643,7 @@ export default function App() {
     setHandle(s.handle)
     setQty(s.qty)
     setFillColor(s.fillColor)
+    setFillImage(s.fillImage ?? null)
     setDecos(s.decos)
     setSelectedIds([])
   }
@@ -716,7 +726,7 @@ export default function App() {
   const flushInto = (list: Project[]): Project[] =>
     list.map((p) =>
       p.id === activeId
-        ? { ...p, live: liveSpec(), qty, fillColor, decos, history, histIdx, updatedAt: Date.now() }
+        ? { ...p, live: liveSpec(), qty, fillColor, fillImage, decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -730,6 +740,7 @@ export default function App() {
     setSpec(p.live)
     setQty(p.qty)
     setFillColor(p.fillColor)
+    setFillImage(p.fillImage ?? null)
     setDecos(p.decos)
     setSelectedIds([])
     setHistory(p.history)
@@ -851,7 +862,7 @@ export default function App() {
 
   const downloadSVG = () => {
     if (!dieline) return
-    saveFile(dielineSVGString(dieline, showDims, decos, guides, fillColor), 'image/svg+xml', 'svg')
+    saveFile(dielineSVGString(dieline, showDims, decos, guides, fillColor, fillImage), 'image/svg+xml', 'svg')
   }
 
   // DXF คือไฟล์ที่โรงทำมีดไดคัทใช้จริง — มีแต่เลเยอร์ CUT/CREASE ไม่มีเส้นบอกขนาด
@@ -865,7 +876,9 @@ export default function App() {
   const downloadPDF = async () => {
     if (!dieline) return
     let art
-    const canvas = await renderArtworkCanvas(decos, dieline.width, dieline.height, 300)
+    // รูปพื้น (ถ้ามี) baked เข้า raster เป็นชั้นล่างสุด — จึงไม่ต้องวาดสีพื้น vector ซ้ำ
+    const base = fillImage ? { dieline, fillImage } : null
+    const canvas = await renderArtworkCanvas(decos, dieline.width, dieline.height, 300, base)
     if (canvas) {
       const b64 = canvas.toDataURL('image/jpeg', 0.92).split(',')[1]
       const bin = atob(b64)
@@ -873,7 +886,7 @@ export default function App() {
       for (let i = 0; i < bin.length; i++) jpeg[i] = bin.charCodeAt(i)
       art = { jpeg, w: canvas.width, h: canvas.height }
     }
-    saveFile(dielinePDFBytes(dieline, showDims, art, guides, fillColor), 'application/pdf', 'pdf')
+    saveFile(dielinePDFBytes(dieline, showDims, art, guides, fillImage ? null : fillColor), 'application/pdf', 'pdf')
   }
 
   // เลือกได้หลายชิ้น — เมื่อเลือกชิ้นเดียวจึงโชว์แผงแก้ไขรายชิ้น; หลายชิ้นโชว์แผงหลายชิ้น
@@ -939,6 +952,19 @@ export default function App() {
     setDecos((ds) => [...ds, el])
     setSelectedIds([el.id])
   }
+
+  // รูปพื้นแพ็กเกจ: โหลด+ย่อไฟล์เดียวกับโลโก้ แล้วตั้งเป็นพื้น (fit=cover ครอปพอดี blueprint)
+  const addFillImage = async (file: File | undefined) => {
+    if (!file) return
+    try {
+      const { src, aspect } = await loadImageFile(file)
+      setFillImage({ src, aspect, fit: 'cover' })
+    } catch {
+      window.alert('เปิดไฟล์รูปนี้ไม่ได้ ลองไฟล์ PNG หรือ JPG อีกครั้ง')
+    }
+  }
+  const patchFillImage = (patch: Partial<FillImage>) =>
+    setFillImage((fi) => (fi ? { ...fi, ...patch } : fi))
 
   const addShape = (shape: 'rect' | 'ellipse' | 'line') => {
     if (!dieline) return
@@ -1331,10 +1357,97 @@ export default function App() {
                     ไม่มีสี
                   </button>
                 </div>
+
+                {/* รูปพื้น: คลุมทั้งแพ็กเกจแล้วครอปตามรูปทรง blueprint */}
+                <div className="fill-img-row">
+                  <label className="file-pick inline">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={aiBusy}
+                      onChange={(e) => {
+                        void addFillImage(e.target.files?.[0])
+                        e.target.value = ''
+                      }}
+                    />
+                    <span className="ico-btn">
+                      <IconImage /> {fillImage ? 'เปลี่ยนรูปพื้น' : 'ใส่รูปพื้น'}
+                    </span>
+                  </label>
+                  {fillImage && (
+                    <button className="fill-none-btn" disabled={aiBusy} onClick={() => setFillImage(null)}>
+                      ลบรูป
+                    </button>
+                  )}
+                </div>
+
+                {fillImage && (
+                  <div className="fill-crop">
+                    <label className="crop-fit">
+                      การครอป
+                      <select
+                        value={fillImage.fit ?? 'cover'}
+                        disabled={aiBusy}
+                        onChange={(e) => patchFillImage({ fit: e.target.value as FillImage['fit'] })}
+                      >
+                        <option value="cover">พอดี–เต็ม (ครอป)</option>
+                        <option value="contain">เห็นทั้งรูป</option>
+                        <option value="stretch">ยืดเต็มกรอบ</option>
+                      </select>
+                    </label>
+                    <label className="crop-slider">
+                      <span>ซูม</span>
+                      <input
+                        type="range"
+                        min={100}
+                        max={300}
+                        step={1}
+                        disabled={aiBusy || fillImage.fit === 'stretch'}
+                        value={Math.round((fillImage.zoom ?? 1) * 100)}
+                        onChange={(e) => patchFillImage({ zoom: Number(e.target.value) / 100 })}
+                      />
+                      <span className="crop-val">{Math.round((fillImage.zoom ?? 1) * 100)}%</span>
+                    </label>
+                    <label className="crop-slider">
+                      <span>เลื่อน ↔</span>
+                      <input
+                        type="range"
+                        min={-100}
+                        max={100}
+                        step={1}
+                        disabled={aiBusy || fillImage.fit === 'stretch'}
+                        value={Math.round((fillImage.ox ?? 0) * 100)}
+                        onChange={(e) => patchFillImage({ ox: Number(e.target.value) / 100 })}
+                      />
+                    </label>
+                    <label className="crop-slider">
+                      <span>เลื่อน ↕</span>
+                      <input
+                        type="range"
+                        min={-100}
+                        max={100}
+                        step={1}
+                        disabled={aiBusy || fillImage.fit === 'stretch'}
+                        value={Math.round((fillImage.oy ?? 0) * 100)}
+                        onChange={(e) => patchFillImage({ oy: Number(e.target.value) / 100 })}
+                      />
+                    </label>
+                    <button
+                      className="crop-reset"
+                      disabled={aiBusy}
+                      onClick={() => patchFillImage({ zoom: 1, ox: 0, oy: 0 })}
+                    >
+                      รีเซ็ตการครอป
+                    </button>
+                  </div>
+                )}
+
                 <p className="hint">
-                  {mat.foldable
-                    ? 'ถมสีทั้งแผ่น (flood) เข้าไฟล์ .svg/.pdf จริง — ไม่ใส่ใน .dxf; “ไม่มีสี” = โชว์สีวัสดุ'
-                    : 'ถมสีพื้นฉลากทั้งแผ่น เข้าไฟล์ .svg/.pdf จริง; “ไม่มีสี” = ฉลากพื้นขาว'}
+                  {fillImage
+                    ? 'รูปพื้นคลุมทั้งแพ็กเกจแล้วครอปตามรูปทรง blueprint — เข้าไฟล์ .svg/.pdf จริง (ไม่ใส่ .dxf); ปรับซูม/เลื่อนให้รูปเข้ากรอบพอดี'
+                    : mat.foldable
+                      ? 'ถมสีทั้งแผ่น (flood) เข้าไฟล์ .svg/.pdf จริง — ไม่ใส่ใน .dxf; “ไม่มีสี” = โชว์สีวัสดุ · หรือใส่รูปเป็นพื้นก็ได้'
+                      : 'ถมสีพื้นฉลากทั้งแผ่น เข้าไฟล์ .svg/.pdf จริง; “ไม่มีสี” = ฉลากพื้นขาว · หรือใส่รูปเป็นพื้นก็ได้'}
                 </p>
               </section>
 
@@ -2210,6 +2323,7 @@ export default function App() {
                 decos={decos}
                 guides={guides}
                 fillColor={fillColor}
+                fillImage={fillImage}
                 selectedIds={selectedIds}
                 onSelect={selectDeco}
                 onMove={moveDeco}
@@ -2242,9 +2356,10 @@ export default function App() {
                       tilt={template.tilt}
                       decos={decos}
                       fillColor={fillColor}
+                      fillImage={fillImage}
                     />
                   ) : (
-                    <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} />
+                    <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} />
                   )}
                 </Suspense>
               </div>

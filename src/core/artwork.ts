@@ -78,6 +78,18 @@ export interface ShapeEl extends BaseEl {
 
 export type Deco = ImageEl | TextEl | ShapeEl
 
+// รูปที่ใช้เป็น "พื้นแพ็กเกจ" (แทน/ทับสีพื้น) — คลุมทั้งแผ่นแล้วครอปตามรูปทรงแผงจริง
+// ต่างจาก ImageEl (โลโก้แปะจุดเดียว) ตรงที่รูปนี้ยืดคลุม bounding box ของทุกแผงเป็นผืนเดียว
+// fit=cover ครอปให้เต็ม (ค่าเริ่มต้น "พอดี blueprint"); zoom>1 ซูมเข้า; ox/oy เลื่อนกรอบ (-1..1)
+export interface FillImage {
+  src: string // data URL (JPEG ย่อแล้วฝั่ง client)
+  aspect: number // กว้าง/สูง ของรูปต้นฉบับ
+  fit?: 'cover' | 'contain' | 'stretch'
+  zoom?: number // 1 = พอดีกรอบ; >1 ซูมเข้า (ครอปแคบลง)
+  ox?: number // เลื่อนแนวนอน สัดส่วนครึ่งกรอบ (-1..1), ไม่ใส่ = 0 (กึ่งกลาง)
+  oy?: number // เลื่อนแนวตั้ง
+}
+
 const LINE = 1.25 // อัตราส่วนความสูงบรรทัดต่อขนาดฟอนต์
 export const elW = (e: Deco) => e.w
 export const elH = (e: Deco) =>
@@ -437,6 +449,90 @@ export function drawFill(
   }
 }
 
+// กรอบครอบทุกแผงจริง (พิกัดแผ่นคลี่ มม.) — พื้นที่ที่รูปพื้นต้องคลุม
+export function panelsBBox(dieline: Dieline): { x0: number; y0: number; x1: number; y1: number } {
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity
+  for (const p of dieline.panels)
+    for (const q of p.outline) {
+      if (q.x < x0) x0 = q.x
+      if (q.y < y0) y0 = q.y
+      if (q.x > x1) x1 = q.x
+      if (q.y > y1) y1 = q.y
+    }
+  if (!Number.isFinite(x0)) return { x0: 0, y0: 0, x1: dieline.width, y1: dieline.height }
+  return { x0, y0, x1, y1 }
+}
+
+// สี่เหลี่ยมที่จะวางรูปพื้นลงไป (พิกัดแผ่นคลี่ มม.) ตามโหมด fit + zoom + pan
+// อัตราส่วน w/h = aspect เสมอ (ยกเว้น stretch) → วาดด้วย preserveAspectRatio="none"/drawImage
+// ลงกรอบนี้ได้โดยรูปไม่บิด และผลตรงกันทั้ง canvas (3D/PDF) และ SVG export
+export function fillImageRect(
+  box: { x0: number; y0: number; x1: number; y1: number },
+  fi: FillImage,
+): { x: number; y: number; w: number; h: number } {
+  const TW = box.x1 - box.x0
+  const TH = box.y1 - box.y0
+  const boxAspect = TW / TH
+  const fit = fi.fit ?? 'cover'
+  const zoom = fi.zoom ?? 1
+  let w: number
+  let h: number
+  if (fit === 'stretch') {
+    w = TW
+    h = TH
+  } else {
+    // cover = ให้ด้านที่ล้นออก, contain = ให้ด้านที่พอดี
+    const wide = fit === 'cover' ? fi.aspect > boxAspect : fi.aspect < boxAspect
+    w = wide ? TH * fi.aspect : TW
+    h = wide ? TH : TW / fi.aspect
+  }
+  w *= zoom
+  h *= zoom
+  const cx = box.x0 + TW / 2 + (fi.ox ?? 0) * (TW / 2)
+  const cy = box.y0 + TH / 2 + (fi.oy ?? 0) * (TH / 2)
+  return { x: cx - w / 2, y: cy - h / 2, w, h }
+}
+
+// เลเยอร์รูปพื้นสำหรับ SVG export — clipPath = ทุกแผงจริง, <image> วางตาม fillImageRect
+export function fillImageSVGLayer(dieline: Dieline, fi: FillImage): string {
+  const r = fillImageRect(panelsBBox(dieline), fi)
+  const clip = dieline.panels
+    .map((p) => `<polygon points="${p.outline.map((q) => `${q.x},${q.y}`).join(' ')}"/>`)
+    .join('')
+  const href = xmlEsc(fi.src)
+  return (
+    `  <g id="fill" inkscape:groupmode="layer" inkscape:label="fill">\n` +
+    `    <clipPath id="fillclip" clipPathUnits="userSpaceOnUse">${clip}</clipPath>\n` +
+    `    <image clip-path="url(#fillclip)" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}"` +
+    ` preserveAspectRatio="none" xlink:href="${href}" href="${href}"/>\n` +
+    `  </g>\n`
+  )
+}
+
+// วาดรูปพื้นลง canvas (พิกัดแผ่นคลี่ × s) — clip ตามทุกแผงจริงแล้ววางตาม fillImageRect
+// ใช้ทั้ง texture 3D และ raster ของ PDF; img ต้องโหลดเสร็จแล้ว
+export function drawFillImage(
+  ctx: CanvasRenderingContext2D,
+  dieline: Dieline,
+  img: CanvasImageSource,
+  fi: FillImage,
+  s: number,
+) {
+  const r = fillImageRect(panelsBBox(dieline), fi)
+  ctx.save()
+  ctx.beginPath()
+  for (const p of dieline.panels) {
+    p.outline.forEach((q, i) => (i ? ctx.lineTo(q.x * s, q.y * s) : ctx.moveTo(q.x * s, q.y * s)))
+    ctx.closePath()
+  }
+  ctx.clip()
+  ctx.drawImage(img, r.x * s, r.y * s, r.w * s, r.h * s)
+  ctx.restore()
+}
+
 // id ของ gradient สำหรับ SVG defs
 export const gradientId = (id: string) => `grad-${id}`
 
@@ -606,9 +702,11 @@ export async function renderArtworkCanvas(
   sheetW: number,
   sheetH: number,
   dpi: number,
+  base?: { dieline: Dieline; fillImage: FillImage } | null,
 ): Promise<HTMLCanvasElement | null> {
   const visible = decos.filter((d) => !d.hidden)
-  if (!visible.length) return null
+  // ไม่มีทั้งลายและรูปพื้น → ไม่ต้อง raster (สีพื้นทึบวาดเป็น vector ใน PDF เอง)
+  if (!visible.length && !base) return null
   await ensureThaiFont() // ให้ตัวอักษรไทยที่ฝังลง PDF ตรงกับที่เห็นบนจอ
   const s = dpi / 25.4
   const canvas = document.createElement('canvas')
@@ -619,9 +717,10 @@ export async function renderArtworkCanvas(
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
   const srcs = [...new Set(visible.filter((d) => d.type === 'image').map((d) => (d as { src: string }).src))]
+  if (base) srcs.push(base.fillImage.src)
   const imgs = new Map<string, HTMLImageElement>()
   await Promise.all(
-    srcs.map(
+    [...new Set(srcs)].map(
       (src) =>
         new Promise<void>((res) => {
           const im = new Image()
@@ -634,6 +733,11 @@ export async function renderArtworkCanvas(
         }),
     ),
   )
+  // รูปพื้นเป็นชั้นล่างสุด (ครอปตามแผงจริง) แล้วค่อยลายทับ
+  if (base) {
+    const img = imgs.get(base.fillImage.src)
+    if (img) drawFillImage(ctx, base.dieline, img, base.fillImage, s)
+  }
   for (const e of visible) drawDeco2D(ctx, e, s, (src) => imgs.get(src))
   return canvas
 }
@@ -728,3 +832,26 @@ export function parseDecos(v: unknown, legacyArtwork?: unknown): Deco[] {
   const one = parseDeco(legacyArtwork)
   return one ? [one] : []
 }
+
+// ตรวจ/ซ่อมรูปพื้นแพ็กเกจจาก store/ไฟล์ — เก็บเฉพาะฟิลด์ที่ไม่ใช่ค่าเริ่มต้น (กัน JSON บวม)
+export function parseFillImage(v: unknown): FillImage | null {
+  if (typeof v !== 'object' || v === null) return null
+  const o = v as Record<string, unknown>
+  if (typeof o.src !== 'string' || !o.src) return null
+  const aspect = Number(o.aspect)
+  if (!Number.isFinite(aspect) || aspect <= 0) return null
+  const fit = o.fit === 'contain' || o.fit === 'stretch' ? o.fit : undefined
+  const zoom = Number(o.zoom)
+  const ox = Number(o.ox)
+  const oy = Number(o.oy)
+  return {
+    src: o.src,
+    aspect,
+    ...(fit ? { fit } : {}),
+    ...(Number.isFinite(zoom) && zoom !== 1 ? { zoom: clampNum(zoom, 1, 5) } : {}),
+    ...(Number.isFinite(ox) && ox !== 0 ? { ox: clampNum(ox, -1, 1) } : {}),
+    ...(Number.isFinite(oy) && oy !== 0 ? { oy: clampNum(oy, -1, 1) } : {}),
+  }
+}
+
+const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
