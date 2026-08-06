@@ -435,7 +435,7 @@ function ImpositionDiagram({
 const store0 = loadStore()
 const active0 = store0.projects.find((p) => p.id === store0.activeId) ?? store0.projects[0]
 
-export default function App() {
+export default function App({ onLogout }: { onLogout?: () => void }) {
   const [projects, setProjects] = useState<Project[]>(store0.projects)
   const [activeId, setActiveId] = useState(active0.id)
   const [templateId, setTemplateId] = useState(active0.live.template)
@@ -1175,7 +1175,7 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <h1>gen-package</h1>
+        <h1>PackIt</h1>
         <nav className="projects" aria-label="งานที่บันทึกไว้">
           <button className="proj-new" aria-disabled={aiBusy} onClick={newProject}>
             + งานใหม่
@@ -1212,6 +1212,11 @@ export default function App() {
             </div>
           ))}
         </nav>
+        {onLogout && (
+          <button className="logout-btn" title="ออกจากระบบ" onClick={onLogout}>
+            ออกจากระบบ
+          </button>
+        )}
       </header>
       <div className="body">
         <aside>

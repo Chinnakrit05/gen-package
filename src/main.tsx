@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 // ฟอนต์ไทย self-host (เลิกพึ่ง Google CDN) — โหลดพร้อม bundle ใช้งานได้แม้ออฟไลน์
 // และไฟล์ที่ rasterize (PDF/ใบสเปก) ได้เมตริก/รูปตัวอักษรตรงกับที่เห็นบนจอเสมอ
@@ -14,10 +14,28 @@ import '@fontsource/prompt/700.css'
 import '@fontsource/kanit/400.css'
 import '@fontsource/kanit/700.css'
 import App from './App'
+import { Login } from './components/Login'
 import './app.css'
+
+const AUTH_KEY = 'packit-auth'
+
+// gate เข้าสู่ระบบก่อนเข้าแอป — เก็บสถานะไว้ใน localStorage จึงไม่ต้องล็อกอินซ้ำตอนรีเฟรช
+// (เป็นการจำลอง ยังไม่ต่อ OAuth จริง — กดปุ่ม Google แล้วเข้าเลย)
+function Root() {
+  const [authed, setAuthed] = useState(() => localStorage.getItem(AUTH_KEY) === '1')
+  const login = () => {
+    localStorage.setItem(AUTH_KEY, '1')
+    setAuthed(true)
+  }
+  const logout = () => {
+    localStorage.removeItem(AUTH_KEY)
+    setAuthed(false)
+  }
+  return authed ? <App onLogout={logout} /> : <Login onLogin={login} />
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <Root />
   </StrictMode>,
 )
