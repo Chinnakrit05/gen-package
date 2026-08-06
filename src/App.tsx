@@ -449,6 +449,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [fillImage, setFillImage] = useState<FillImage | null>(active0.fillImage ?? null)
   const [decos, setDecos] = useState<Deco[]>(active0.decos)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [renamingId, setRenamingId] = useState<string | null>(null) // เลเยอร์ที่กำลังแก้ชื่อ (ดับเบิลคลิก)
   const [fold, setFold] = useState(1)
   const [showDims, setShowDims] = useState(store0.showDims)
   const [showGuides, setShowGuides] = useState(false)
@@ -1103,6 +1104,11 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setDecos((ds) => ds.map((d) => (d.id === id ? { ...d, hidden: !d.hidden } : d)))
   const toggleLocked = (id: string) =>
     setDecos((ds) => ds.map((d) => (d.id === id ? { ...d, locked: !d.locked } : d)))
+  // ตั้งชื่อชิ้นด้วยดับเบิลคลิกที่เลเยอร์ (ชื่อว่าง = ใช้ป้ายอัตโนมัติตามชนิด)
+  const renameDeco = (id: string, name: string) =>
+    setDecos((ds) =>
+      ds.map((d) => (d.id === id ? { ...d, name: name.trim() ? name.trim().slice(0, 40) : undefined } : d)),
+    )
 
   // คีย์ลัด: Ctrl+Z/Ctrl+Shift+Z undo/redo, Delete ลบ, Esc เลิกเลือก, ลูกศรเลื่อน, Ctrl+D สำเนา
   // ข้ามเมื่อกำลังพิมพ์ในช่อง input/textarea (ไม่แย่งคีย์)
@@ -1490,30 +1496,60 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 {decos.length > 0 && (
                   <ul className="deco-list">
                     {/* บนสุด = หน้าสุด (กลับลำดับ array ที่ท้าย = วาดทับ) */}
-                    {[...decos].reverse().map((d) => (
+                    {[...decos].reverse().map((d) => {
+                      const thumb =
+                        d.type === 'image' ? (
+                          <img className="deco-thumb" src={d.src} alt="" />
+                        ) : d.type === 'shape' ? (
+                          <span
+                            className={`deco-sw${d.shape === 'ellipse' ? ' round' : ''}`}
+                            style={{
+                              background: d.fill && d.fill !== 'none' ? d.fill : 'transparent',
+                              borderColor: d.stroke && d.stroke !== 'none' ? d.stroke : d.fill,
+                            }}
+                          />
+                        ) : (
+                          <span className="deco-tico" style={{ color: d.color }}>
+                            T
+                          </span>
+                        )
+                      return (
                       <li key={d.id} className={`deco-row${d.hidden ? ' is-hidden' : ''}`}>
-                        <button
-                          className={`deco-item${isSelected(d.id) ? ' active' : ''}`}
-                          onClick={(e) => selectDeco(d.id, e.shiftKey || e.ctrlKey || e.metaKey)}
-                          title={`${decoLabel(d)} — Shift/Ctrl คลิกเพื่อเลือกหลายชิ้น`}
-                        >
-                          {d.type === 'image' ? (
-                            <img className="deco-thumb" src={d.src} alt="" />
-                          ) : d.type === 'shape' ? (
-                            <span
-                              className={`deco-sw${d.shape === 'ellipse' ? ' round' : ''}`}
-                              style={{
-                                background: d.fill && d.fill !== 'none' ? d.fill : 'transparent',
-                                borderColor: d.stroke && d.stroke !== 'none' ? d.stroke : d.fill,
+                        {renamingId === d.id ? (
+                          <div className="deco-item renaming">
+                            {thumb}
+                            <input
+                              className="deco-name-edit"
+                              defaultValue={d.name ?? ''}
+                              maxLength={40}
+                              placeholder={decoLabel(d)}
+                              autoFocus
+                              onFocus={(e) => e.currentTarget.select()}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  renameDeco(d.id, e.currentTarget.value)
+                                  setRenamingId(null)
+                                } else if (e.key === 'Escape') {
+                                  setRenamingId(null)
+                                }
+                              }}
+                              onBlur={(e) => {
+                                renameDeco(d.id, e.currentTarget.value)
+                                setRenamingId(null)
                               }}
                             />
-                          ) : (
-                            <span className="deco-tico" style={{ color: d.color }}>
-                              T
-                            </span>
-                          )}
-                          <span className="deco-name">{decoLabel(d)}</span>
-                        </button>
+                          </div>
+                        ) : (
+                          <button
+                            className={`deco-item${isSelected(d.id) ? ' active' : ''}`}
+                            onClick={(e) => selectDeco(d.id, e.shiftKey || e.ctrlKey || e.metaKey)}
+                            onDoubleClick={() => setRenamingId(d.id)}
+                            title={`${decoLabel(d)} — คลิกเลือก · ดับเบิลคลิกเพื่อตั้งชื่อ · Shift/Ctrl เลือกหลายชิ้น`}
+                          >
+                            {thumb}
+                            <span className="deco-name">{decoLabel(d)}</span>
+                          </button>
+                        )}
                         <button
                           className="deco-toggle"
                           title={d.hidden ? 'แสดง' : 'ซ่อน'}
@@ -1533,7 +1569,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           {d.locked ? '🔒' : '🔓'}
                         </button>
                       </li>
-                    ))}
+                      )
+                    })}
                   </ul>
                 )}
 
@@ -1577,16 +1614,6 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
 
                 {selected && (
                   <div className="deco-edit">
-                    <input
-                      type="text"
-                      className="deco-name-input"
-                      value={selected.name ?? ''}
-                      disabled={aiBusy}
-                      maxLength={40}
-                      placeholder="ตั้งชื่อชิ้น (ไม่บังคับ)"
-                      aria-label="ชื่อชิ้น"
-                      onChange={(e) => patchSelected((d) => ({ ...d, name: e.target.value }))}
-                    />
                     {selected.type === 'text' && (
                       <>
                         <input

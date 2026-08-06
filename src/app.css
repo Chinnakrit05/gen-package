@@ -879,18 +879,24 @@ button[aria-disabled='true'] {
   font-weight: 700;
   flex-shrink: 0;
 }
-.deco-name-input {
-  width: 100%;
-  padding: 7px 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  font-size: 13px;
-  margin-bottom: 8px;
-  color: var(--text-2);
-}
-.deco-name-input:focus {
-  outline: none;
+/* ตั้งชื่อเลเยอร์ inline (ดับเบิลคลิก) — กล่องเหมือน .deco-item แต่กำลังแก้ */
+.deco-item.renaming {
+  cursor: default;
   border-color: var(--accent);
+  background: var(--surface);
+}
+.deco-name-edit {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+}
+.deco-name-edit:focus {
+  outline: none;
 }
 .deco-item.active {
   border-color: #1b6ea8;
