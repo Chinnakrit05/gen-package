@@ -769,6 +769,41 @@ button[aria-disabled='true'] {
   background: var(--border);
 }
 
+/* ถังขยะลบเส้นไกด์ ที่ขอบ canvas — โผล่ตามแกนของเส้นที่โฟกัส */
+.guide-del {
+  position: absolute;
+  z-index: 3;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--danger);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--danger);
+  box-shadow: 0 2px 8px rgba(16, 24, 32, 0.12);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.12s ease;
+}
+.guide-del:hover {
+  background: var(--danger);
+  color: #fff;
+  transform: scale(1.08);
+}
+/* จัดกึ่งกลางด้วย margin ลบ (ครึ่งขนาด 40/2) — เว้น transform ไว้ให้เอฟเฟกต์ hover อย่างเดียว */
+.guide-del-v {
+  right: 14px;
+  top: 50%;
+  margin-top: -20px;
+}
+.guide-del-h {
+  bottom: 14px;
+  left: 50%;
+  margin-left: -20px;
+}
+
 .notfoldable {
   grid-column: 1 / -1;
   align-self: start;
