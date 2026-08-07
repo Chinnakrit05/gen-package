@@ -166,7 +166,7 @@ function sanitize(raw: Record<string, unknown>, mock: boolean): BoxSpecResult {
 
 // สร้าง CurrentSpec ใหม่จากค่า client แบบไม่เชื่ออะไรเลย — กัน bypass validation
 // (client ส่ง string อิสระมาใน current ไม่ได้ ทุก field ถูก rebuild)
-function parseCurrent(v: unknown): CurrentSpec | undefined {
+export function parseCurrent(v: unknown): CurrentSpec | undefined {
   if (typeof v !== 'object' || v === null) return undefined
   const o = v as Record<string, unknown>
   const W = Number(o.W)
@@ -194,7 +194,7 @@ export interface RefImage {
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 
 // รูปอ้างอิงจาก client: base64 (ไม่มี data: prefix) ขนาดไม่เกิน ~3.7MB หลัง decode
-function parseImage(v: unknown): RefImage | undefined {
+export function parseImage(v: unknown): RefImage | undefined {
   if (typeof v !== 'object' || v === null) return undefined
   const o = v as Record<string, unknown>
   if (typeof o.data !== 'string' || o.data.length < 100 || o.data.length > 5_000_000) return undefined
@@ -205,7 +205,7 @@ function parseImage(v: unknown): RefImage | undefined {
 }
 
 // โหมดจำลอง: ใช้ตอนยังไม่ได้ตั้ง ANTHROPIC_API_KEY เพื่อให้ทดสอบ UX ได้ครบวงจร
-function mockSpec(prompt: string, current?: CurrentSpec, image?: RefImage): BoxSpecResult {
+export function mockSpec(prompt: string, current?: CurrentSpec, image?: RefImage): BoxSpecResult {
   const assumptions: string[] = []
   if (image) assumptions.push('แนบรูปมา แต่โหมดจำลองยังวิเคราะห์รูปไม่ได้ — ใช้ข้อความอย่างเดียว')
   let materialId = current?.materialId ?? 'carton-300'
@@ -293,7 +293,7 @@ function buildUserContent(prompt: string, current?: CurrentSpec): string {
 
 let client: Anthropic | null = null
 
-async function askClaude(
+export async function askClaude(
   apiKey: string,
   model: string,
   prompt: string,
