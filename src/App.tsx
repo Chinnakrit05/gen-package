@@ -944,7 +944,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
       setDecos((ds) => [...ds, el])
       setSelectedIds([el.id])
     } catch {
-      window.alert('เปิดไฟล์รูปนี้ไม่ได้ ลองไฟล์ PNG หรือ JPG อีกครั้ง')
+      window.alert('เปิดไฟล์รูปนี้ไม่ได้ ลองไฟล์ PNG, JPG หรือ SVG อีกครั้ง')
     }
   }
 
@@ -1375,7 +1375,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   <label className="file-pick inline">
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.svg"
                       disabled={aiBusy}
                       onChange={(e) => {
                         void addFillImage(e.target.files?.[0])
@@ -1469,7 +1469,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   <label className="file-pick inline">
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.svg"
                       disabled={aiBusy}
                       onChange={(e) => {
                         void addImage(e.target.files?.[0])

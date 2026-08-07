@@ -135,6 +135,8 @@ const MAX_BYTES = 700_000
 const SIZES = [1200, 900, 640, 480]
 
 export async function loadImageFile(file: File): Promise<{ src: string; aspect: number }> {
+  // SVG = เวกเตอร์: เก็บเป็น data URL ตรง ๆ (คมทุกสเกล + ฝังลง .svg/.pdf ได้แบบเวกเตอร์)
+  if (file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)) return loadSVGFile(file)
   const bmp = await createImageBitmap(file)
   const aspect = bmp.width / bmp.height
   let src = ''
@@ -153,6 +155,40 @@ export async function loadImageFile(file: File): Promise<{ src: string; aspect: 
     if (src.length <= MAX_BYTES) break
   }
   bmp.close()
+  return { src, aspect }
+}
+
+// นำเข้าโลโก้แบบเวกเตอร์ (SVG): อ่าน viewBox หาสัดส่วน, ตั้ง width/height เป็นพิกเซล
+// (สเกลด้านยาว ~1024) ให้ rasterize ลง canvas (3D/PDF) คมชัดแน่นอนทุก browser,
+// แล้วเก็บเป็น data URL ใช้ร่วมกับระบบรูปเดิม (fit/ครอป/มาสก์/ล็อกสัดส่วน) ได้ทั้งหมด
+async function loadSVGFile(file: File): Promise<{ src: string; aspect: number }> {
+  const text = await file.text()
+  // ตัด <script> ออกกันสคริปต์ฝัง (โหลดเป็น <image> ไม่รันอยู่แล้ว แต่กันไว้ชั้นหนึ่ง)
+  const clean = text.replace(/<script[\s\S]*?<\/script>/gi, '')
+  const doc = new DOMParser().parseFromString(clean, 'image/svg+xml')
+  const root = doc.documentElement
+  if (root.nodeName.toLowerCase() !== 'svg' || doc.querySelector('parsererror')) {
+    throw new Error('ไฟล์ SVG ไม่ถูกต้อง')
+  }
+  // หาขนาดต้นฉบับจาก viewBox ก่อน ไม่งั้นใช้ width/height (px)
+  const vb = (root.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number).filter((n) => !isNaN(n))
+  const wAttr = parseFloat(root.getAttribute('width') || '')
+  const hAttr = parseFloat(root.getAttribute('height') || '')
+  let vw = vb.length === 4 && vb[2] > 0 ? vb[2] : wAttr
+  let vh = vb.length === 4 && vb[3] > 0 ? vb[3] : hAttr
+  if (!(vw > 0) || !(vh > 0)) {
+    vw = 100
+    vh = 100
+  }
+  const aspect = vw / vh
+  // ตั้งขนาดพิกเซลให้ด้านยาว ~1024 เพื่อ raster คม (เก็บ viewBox ไว้ให้พิกัดตรง)
+  const scale = 1024 / Math.max(vw, vh)
+  root.setAttribute('width', String(Math.round(vw * scale)))
+  root.setAttribute('height', String(Math.round(vh * scale)))
+  if (vb.length !== 4) root.setAttribute('viewBox', `0 0 ${vw} ${vh}`)
+  const out = new XMLSerializer().serializeToString(root)
+  const src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(out)))
+  if (src.length > MAX_BYTES * 3) throw new Error('ไฟล์ SVG ใหญ่เกินไป')
   return { src, aspect }
 }
 
