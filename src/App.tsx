@@ -1501,10 +1501,36 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         onChange={(e) => patchFillImage({ oy: Number(e.target.value) / 100 })}
                       />
                     </label>
+                    <label className="crop-slider">
+                      <span>หมุน</span>
+                      <input
+                        type="range"
+                        min={-180}
+                        max={180}
+                        step={1}
+                        disabled={aiBusy}
+                        value={Math.round(fillImage.rot ?? 0)}
+                        onChange={(e) => patchFillImage({ rot: Number(e.target.value) })}
+                      />
+                      <span className="crop-val">{Math.round(fillImage.rot ?? 0)}°</span>
+                    </label>
+                    <label className="crop-slider">
+                      <span>ความทึบ</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        disabled={aiBusy}
+                        value={Math.round((fillImage.opacity ?? 1) * 100)}
+                        onChange={(e) => patchFillImage({ opacity: Number(e.target.value) / 100 })}
+                      />
+                      <span className="crop-val">{Math.round((fillImage.opacity ?? 1) * 100)}%</span>
+                    </label>
                     <button
                       className="crop-reset"
                       disabled={aiBusy}
-                      onClick={() => patchFillImage({ zoom: 1, ox: 0, oy: 0 })}
+                      onClick={() => patchFillImage({ zoom: 1, ox: 0, oy: 0, rot: 0 })}
                     >
                       รีเซ็ตการครอป
                     </button>

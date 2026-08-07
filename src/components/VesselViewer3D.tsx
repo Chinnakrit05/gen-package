@@ -65,7 +65,17 @@ function useLabelTexture(
     const fimg = fillImage ? imgCache.current.get(fillImage.src) : undefined
     if (fillImage && fimg) {
       const r = fillImageRect({ x0: 0, y0: 0, x1: width, y1: height }, fillImage)
+      ctx.save()
+      if (fillImage.opacity !== undefined && fillImage.opacity < 1) ctx.globalAlpha = fillImage.opacity
+      if (fillImage.rot) {
+        const cx = (width / 2) * s
+        const cy = (height / 2) * s
+        ctx.translate(cx, cy)
+        ctx.rotate((fillImage.rot * Math.PI) / 180)
+        ctx.translate(-cx, -cy)
+      }
       ctx.drawImage(fimg, r.x * s, r.y * s, r.w * s, r.h * s)
+      ctx.restore()
     }
     // ผิวทรงกระบอกมองจากด้านนอก UV อ่านตรง — ไม่ต้องมิเรอร์แบบกล่อง
     for (const e of decos) drawDeco2D(ctx, e, s, (src) => imgCache.current.get(src))

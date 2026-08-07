@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { panelsBBox, fillImageRect, type FillImage } from './artwork'
+import { panelsBBox, fillImageRect, fillImageSVGLayer, parseFillImage, type FillImage } from './artwork'
 import type { Dieline } from './types'
 
 // dieline จำลอง: สองแผงต่อกันเป็นกรอบ 0..100 × 0..100
@@ -79,5 +79,32 @@ describe('fillImageRect', () => {
       const r = fillImageRect(box, { src: 'x', aspect: 1.6, fit })
       expect(r.w / r.h).toBeCloseTo(1.6, 6)
     }
+  })
+})
+
+describe('รูปพื้น: หมุน + ความทึบ', () => {
+  it('parseFillImage เก็บ rot/opacity เฉพาะเมื่อไม่ใช่ค่าเริ่มต้น + clamp', () => {
+    expect(parseFillImage({ src: 'x', aspect: 1, rot: 30, opacity: 0.5 })).toMatchObject({ rot: 30, opacity: 0.5 })
+    // ค่าเริ่มต้น (rot 0, opacity 1) ไม่ถูกเก็บ
+    const base = parseFillImage({ src: 'x', aspect: 1, rot: 0, opacity: 1 })
+    expect(base && 'rot' in base).toBe(false)
+    expect(base && 'opacity' in base).toBe(false)
+    // clamp เกินช่วง
+    expect(parseFillImage({ src: 'x', aspect: 1, rot: 999, opacity: 5 })).toMatchObject({ rot: 180 })
+    expect(parseFillImage({ src: 'x', aspect: 1, opacity: -2 })).toMatchObject({ opacity: 0 })
+  })
+
+  it('fillImageSVGLayer ใส่ rotate รอบกึ่งกลางกรอบ + opacity บนเลเยอร์ (clip ไม่หมุนตาม)', () => {
+    const svg = fillImageSVGLayer(d, { src: 'x', aspect: 1, rot: 45, opacity: 0.4 })
+    expect(svg).toContain('opacity="0.4"')
+    expect(svg).toContain('transform="rotate(45 50 50)"') // กึ่งกลางกรอบ 100×100
+    // clip อยู่บน <g> ครอบ image (ไม่ได้อยู่บน image ที่หมุน)
+    expect(svg).toContain('<g clip-path="url(#fillclip)">')
+  })
+
+  it('ไม่มี rot/opacity → ไม่ใส่ transform/opacity', () => {
+    const svg = fillImageSVGLayer(d, { src: 'x', aspect: 1 })
+    expect(svg).not.toContain('transform="rotate')
+    expect(svg).not.toContain('opacity=')
   })
 })

@@ -442,7 +442,7 @@ export const DielineSVG = memo(function DielineSVG({
       onPointerDown={onBgDown}
     >
       {fillImage ? (
-        <g className="fill" pointerEvents="none">
+        <g className="fill" pointerEvents="none" opacity={fillImage.opacity ?? 1}>
           <defs>
             <clipPath id="bp-fillclip" clipPathUnits="userSpaceOnUse">
               {dieline.panels.map((p, i) => (
@@ -451,17 +451,23 @@ export const DielineSVG = memo(function DielineSVG({
             </clipPath>
           </defs>
           {(() => {
-            const r = fillImageRect(panelsBBox(dieline), fillImage)
+            const box = panelsBBox(dieline)
+            const r = fillImageRect(box, fillImage)
+            const cx = (box.x0 + box.x1) / 2
+            const cy = (box.y0 + box.y1) / 2
             return (
-              <image
-                clipPath="url(#bp-fillclip)"
-                href={fillImage.src}
-                x={r.x}
-                y={r.y}
-                width={r.w}
-                height={r.h}
-                preserveAspectRatio="none"
-              />
+              // clip บน <g> ชั้นนอก (ไม่หมุน) แล้วหมุนเฉพาะ <image> ข้างใน
+              <g clipPath="url(#bp-fillclip)">
+                <image
+                  href={fillImage.src}
+                  x={r.x}
+                  y={r.y}
+                  width={r.w}
+                  height={r.h}
+                  preserveAspectRatio="none"
+                  transform={fillImage.rot ? `rotate(${fillImage.rot} ${cx} ${cy})` : undefined}
+                />
+              </g>
             )
           })()}
         </g>

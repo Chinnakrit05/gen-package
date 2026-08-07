@@ -92,6 +92,8 @@ export interface FillImage {
   zoom?: number // 1 = พอดีกรอบ; >1 ซูมเข้า (ครอปแคบลง)
   ox?: number // เลื่อนแนวนอน สัดส่วนครึ่งกรอบ (-1..1), ไม่ใส่ = 0 (กึ่งกลาง)
   oy?: number // เลื่อนแนวตั้ง
+  rot?: number // องศา หมุนรอบจุดกึ่งกลางกรอบ (ไม่ใส่ = 0)
+  opacity?: number // ความทึบ 0..1 (ไม่ใส่ = 1 ทึบเต็ม)
 }
 
 const LINE = 1.25 // อัตราส่วนความสูงบรรทัดต่อขนาดฟอนต์ (ค่าเริ่มต้น)
@@ -571,16 +573,24 @@ export function fillImageRect(
 
 // เลเยอร์รูปพื้นสำหรับ SVG export — clipPath = ทุกแผงจริง, <image> วางตาม fillImageRect
 export function fillImageSVGLayer(dieline: Dieline, fi: FillImage): string {
-  const r = fillImageRect(panelsBBox(dieline), fi)
+  const box = panelsBBox(dieline)
+  const r = fillImageRect(box, fi)
   const clip = dieline.panels
     .map((p) => `<polygon points="${p.outline.map((q) => `${q.x},${q.y}`).join(' ')}"/>`)
     .join('')
   const href = xmlEsc(fi.src)
+  // หมุนรอบจุดกึ่งกลางกรอบ (clip อยู่บน <g> ชั้นนอกจึงไม่หมุนตาม), ความทึบบนเลเยอร์
+  const cx = (box.x0 + box.x1) / 2
+  const cy = (box.y0 + box.y1) / 2
+  const rot = fi.rot ? ` transform="rotate(${fi.rot} ${cx} ${cy})"` : ''
+  const op = fi.opacity !== undefined && fi.opacity < 1 ? ` opacity="${fi.opacity}"` : ''
   return (
-    `  <g id="fill" inkscape:groupmode="layer" inkscape:label="fill">\n` +
+    `  <g id="fill" inkscape:groupmode="layer" inkscape:label="fill"${op}>\n` +
     `    <clipPath id="fillclip" clipPathUnits="userSpaceOnUse">${clip}</clipPath>\n` +
-    `    <image clip-path="url(#fillclip)" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}"` +
+    `    <g clip-path="url(#fillclip)">\n` +
+    `      <image${rot} x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}"` +
     ` preserveAspectRatio="none" xlink:href="${href}" href="${href}"/>\n` +
+    `    </g>\n` +
     `  </g>\n`
   )
 }
@@ -594,14 +604,23 @@ export function drawFillImage(
   fi: FillImage,
   s: number,
 ) {
-  const r = fillImageRect(panelsBBox(dieline), fi)
+  const box = panelsBBox(dieline)
+  const r = fillImageRect(box, fi)
   ctx.save()
   ctx.beginPath()
   for (const p of dieline.panels) {
     p.outline.forEach((q, i) => (i ? ctx.lineTo(q.x * s, q.y * s) : ctx.moveTo(q.x * s, q.y * s)))
     ctx.closePath()
   }
-  ctx.clip()
+  ctx.clip() // clip อยู่ในพิกัดตอนนี้ ไม่หมุนตาม transform ที่ตามมา
+  if (fi.opacity !== undefined && fi.opacity < 1) ctx.globalAlpha = fi.opacity
+  if (fi.rot) {
+    const cx = ((box.x0 + box.x1) / 2) * s
+    const cy = ((box.y0 + box.y1) / 2) * s
+    ctx.translate(cx, cy)
+    ctx.rotate((fi.rot * Math.PI) / 180)
+    ctx.translate(-cx, -cy)
+  }
   ctx.drawImage(img, r.x * s, r.y * s, r.w * s, r.h * s)
   ctx.restore()
 }
@@ -938,6 +957,8 @@ export function parseFillImage(v: unknown): FillImage | null {
   const zoom = Number(o.zoom)
   const ox = Number(o.ox)
   const oy = Number(o.oy)
+  const rot = Number(o.rot)
+  const opacity = Number(o.opacity)
   return {
     src: o.src,
     aspect,
@@ -945,6 +966,8 @@ export function parseFillImage(v: unknown): FillImage | null {
     ...(Number.isFinite(zoom) && zoom !== 1 ? { zoom: clampNum(zoom, 1, 5) } : {}),
     ...(Number.isFinite(ox) && ox !== 0 ? { ox: clampNum(ox, -1, 1) } : {}),
     ...(Number.isFinite(oy) && oy !== 0 ? { oy: clampNum(oy, -1, 1) } : {}),
+    ...(Number.isFinite(rot) && rot !== 0 ? { rot: clampNum(rot, -180, 180) } : {}),
+    ...(Number.isFinite(opacity) && opacity < 1 ? { opacity: clampNum(opacity, 0, 1) } : {}),
   }
 }
 
