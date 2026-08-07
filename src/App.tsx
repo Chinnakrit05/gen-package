@@ -49,6 +49,7 @@ import {
   type Project,
 } from './core/project'
 import { serializeProject, parseProjectFile, projectFileName } from './core/projectFile'
+import { PRESETS, PRESET_CATS, presetById, presetDataUrl, type Preset } from './core/presets'
 import {
   SHEET_PRESETS,
   DEFAULT_OPT,
@@ -463,6 +464,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [renamingId, setRenamingId] = useState<string | null>(null) // เลเยอร์ที่กำลังแก้ชื่อ (ดับเบิลคลิก)
   const [lockAspect, setLockAspect] = useState(true) // ล็อกสัดส่วนกรอบรูป: ปรับกว้าง/สูงพร้อมกันตามสัดส่วนรูปจริง
+  const [presetColor, setPresetColor] = useState('#0f6e56') // สีเริ่มต้นของลายจากไลบรารี
   const [fold, setFold] = useState(1)
   const [showDims, setShowDims] = useState(store0.showDims)
   const [showGuides, setShowGuides] = useState(false)
@@ -963,6 +965,14 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const addText = () => {
     if (!dieline) return
     const el = makeTextEl(dieline, 'ข้อความ')
+    setDecos((ds) => [...ds, el])
+    setSelectedIds([el.id])
+  }
+
+  // วางลายจากไลบรารี — เก็บ preset id + สีไว้บนชิ้น เพื่อเปลี่ยนสีทีหลังได้
+  const addPreset = (p: Preset) => {
+    if (!dieline) return
+    const el = { ...makeImageEl(dieline, presetDataUrl(p.svg(presetColor)), p.aspect), preset: p.id, presetColor }
     setDecos((ds) => [...ds, el])
     setSelectedIds([el.id])
   }
@@ -1506,6 +1516,39 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   </button>
                 </div>
 
+                <div className="preset-lib">
+                  <div className="preset-head">
+                    <span className="preset-title">ไลบรารีลาย</span>
+                    <ColorField
+                      value={presetColor}
+                      onChange={setPresetColor}
+                      palette={palette}
+                      onSave={saveSwatch}
+                      disabled={aiBusy}
+                      label="สีลาย"
+                    />
+                  </div>
+                  {PRESET_CATS.map((cat) => (
+                    <div key={cat.id} className="preset-cat">
+                      <span className="preset-cat-name">{cat.nameTh}</span>
+                      <div className="preset-grid">
+                        {PRESETS.filter((p) => p.cat === cat.id).map((p) => (
+                          <button
+                            key={p.id}
+                            className="preset-item"
+                            title={p.nameTh}
+                            aria-label={`เพิ่ม ${p.nameTh}`}
+                            disabled={aiBusy}
+                            onClick={() => addPreset(p)}
+                          >
+                            <img src={presetDataUrl(p.svg(presetColor))} alt={p.nameTh} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
                 {decos.length > 0 && (
                   <ul className="deco-list">
                     {/* บนสุด = หน้าสุด (กลับลำดับ array ที่ท้าย = วาดทับ) */}
@@ -1876,6 +1919,25 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         disabled={aiBusy}
                         onChange={(v) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, size: v }) : d))}
                       />
+                    )}
+                    {selected.type === 'image' && selected.preset && (
+                      <div className="deco-color">
+                        <span>สีลาย</span>
+                        <ColorField
+                          value={selected.presetColor ?? '#0f6e56'}
+                          onChange={(hex) =>
+                            patchSelected((d) => {
+                              if (d.type !== 'image' || !d.preset) return d
+                              const p = presetById(d.preset)
+                              return p ? { ...d, presetColor: hex, src: presetDataUrl(p.svg(hex)) } : { ...d, presetColor: hex }
+                            })
+                          }
+                          palette={palette}
+                          onSave={saveSwatch}
+                          disabled={aiBusy}
+                          label="สีลาย"
+                        />
+                      </div>
                     )}
                     {selected.type === 'image' && (
                       <>

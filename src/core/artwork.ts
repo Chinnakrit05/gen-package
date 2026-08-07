@@ -30,6 +30,8 @@ export interface ImageEl extends BaseEl {
   fit?: 'cover' | 'contain' | 'stretch' // วิธีวางรูปในกรอบ (ไม่ใส่ = cover ครอปให้เต็ม)
   radius?: number // มุมโค้งของกรอบ (มม.)
   circle?: boolean // มาสก์เป็นวงรีตามกรอบ
+  preset?: string // ถ้ามาจากไลบรารีลาย = id พรีเซ็ต (เปลี่ยนสีแล้ว regen src ได้)
+  presetColor?: string // สีที่ใช้สร้างลายพรีเซ็ตนี้
 }
 
 export interface TextEl extends BaseEl {
@@ -853,11 +855,16 @@ export function parseDeco(v: unknown): Deco | null {
     const h = Number(o.h) > 0 ? Number(o.h) : w / aspect // ข้อมูลเก่าไม่มี h → สัดส่วนเดิม
     const fit = o.fit === 'contain' || o.fit === 'stretch' ? o.fit : undefined
     const radius = Number(o.radius) > 0 ? Number(o.radius) : undefined
+    const preset = typeof o.preset === 'string' && o.preset ? o.preset.slice(0, 40) : undefined
+    const presetColor =
+      typeof o.presetColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.presetColor) ? o.presetColor : undefined
     return {
       id, type: 'image', src, aspect, w, h,
       ...(fit ? { fit } : {}),
       ...(radius ? { radius } : {}),
       ...(o.circle === true ? { circle: true } : {}),
+      ...(preset ? { preset } : {}),
+      ...(presetColor ? { presetColor } : {}),
       ...base,
     }
   }
