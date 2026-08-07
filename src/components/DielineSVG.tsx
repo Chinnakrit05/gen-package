@@ -139,6 +139,34 @@ function DecoBody({ e }: { e: Deco }) {
   return e.opacity !== undefined && e.opacity < 1 ? <g opacity={e.opacity}>{flipped}</g> : flipped
 }
 
+// ไอคอนถังขยะบนเส้นไกด์ — โผล่ตอนชี้/ลากเส้น เป็นไกด์ว่าลากออก/คลิกเพื่อลบได้
+function GuideTrash({ x, y, onDelete }: { x: number; y: number; onDelete: () => void }) {
+  return (
+    <g
+      className="guide-trash"
+      transform={`translate(${x} ${y})`}
+      style={{ cursor: 'pointer' }}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        e.preventDefault()
+        onDelete()
+      }}
+    >
+      <title>ลบเส้นไกด์นี้ (หรือลากออกนอกแผ่น)</title>
+      <circle r={4.6} fill="#fff" stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      <path
+        d="M-2 -1.4 H2 M-1.1 -1.4 V-2.2 H1.1 V-1.4 M-1.5 -1.4 L-1.2 2.3 H1.2 L1.5 -1.4 M-0.4 -0.5 V1.4 M0.4 -0.5 V1.4"
+        fill="none"
+        stroke={DEL_COLOR}
+        strokeWidth={1}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </g>
+  )
+}
+
 type Grab =
   | { mode: 'move'; id: string; dx: number; dy: number }
   | { mode: 'rotate'; id: string }
@@ -182,7 +210,12 @@ export const DielineSVG = memo(function DielineSVG({
   const [showGrid, setShowGrid] = useState(false)
   // เส้นไกด์ที่ผู้ใช้ลากวางเอง — axis 'x' = เส้นตั้ง (คงค่า x), 'y' = เส้นนอน (คงค่า y)
   const [guideLines, setGuideLines] = useState<{ id: string; axis: 'x' | 'y'; pos: number }[]>([])
+  const [hoverGuide, setHoverGuide] = useState<string | null>(null) // เส้นไกด์ที่เมาส์ชี้อยู่ (โชว์ถังขยะ)
   const guideDrag = useRef<{ id: string; axis: 'x' | 'y' } | null>(null)
+  const deleteGuide = (id: string) => {
+    setGuideLines((gs) => gs.filter((g) => g.id !== id))
+    setHoverGuide((h) => (h === id ? null : h))
+  }
   const pan = useRef<{ sx: number; sy: number; cx: number; cy: number; moved: boolean } | null>(null)
   const editable = !!(onMove && onRotate && onSelect)
 
@@ -637,30 +670,47 @@ export const DielineSVG = memo(function DielineSVG({
         </g>
       )}
 
-      {/* เส้นไกด์ลากเอง (สีฟ้า) — ลากย้าย, ลากออกนอกแผ่นเพื่อลบ */}
-      {guideLines.map((g) =>
-        g.axis === 'x' ? (
-          <g key={g.id} className="guide" onPointerDown={(e) => startGuideDrag(e, g)}>
+      {/* เส้นไกด์ลากเอง (สีฟ้า) — ลากย้าย, ชี้/ลากเพื่อโชว์ถังขยะ แล้วลากออกหรือคลิกถังเพื่อลบ */}
+      {guideLines.map((g) => {
+        const showTrash = hoverGuide === g.id || guideDrag.current?.id === g.id
+        return g.axis === 'x' ? (
+          <g
+            key={g.id}
+            className="guide"
+            onPointerDown={(e) => startGuideDrag(e, g)}
+            onPointerEnter={() => setHoverGuide(g.id)}
+            onPointerLeave={() => setHoverGuide((h) => (h === g.id ? null : h))}
+          >
+            <title>ลากออกนอกแผ่น หรือคลิกถังขยะเพื่อลบเส้นไกด์</title>
             <line x1={g.pos} y1={-pad} x2={g.pos} y2={dieline.height + pad} stroke={GUIDE_COLOR} strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
             <line x1={g.pos} y1={-pad} x2={g.pos} y2={dieline.height + pad} stroke="transparent" strokeWidth={10} vectorEffect="non-scaling-stroke" style={{ cursor: 'ew-resize' }} />
             {guideDrag.current?.id === g.id && (
-              <text x={g.pos + 2} y={-pad + 8} fontSize={6} fill={GUIDE_COLOR} stroke="none">
+              <text x={g.pos + 7} y={-pad + 8} fontSize={6} fill={GUIDE_COLOR} stroke="none">
                 {Math.round(g.pos)}
               </text>
             )}
+            {showTrash && <GuideTrash x={g.pos} y={-pad + 5.5} onDelete={() => deleteGuide(g.id)} />}
           </g>
         ) : (
-          <g key={g.id} className="guide" onPointerDown={(e) => startGuideDrag(e, g)}>
+          <g
+            key={g.id}
+            className="guide"
+            onPointerDown={(e) => startGuideDrag(e, g)}
+            onPointerEnter={() => setHoverGuide(g.id)}
+            onPointerLeave={() => setHoverGuide((h) => (h === g.id ? null : h))}
+          >
+            <title>ลากออกนอกแผ่น หรือคลิกถังขยะเพื่อลบเส้นไกด์</title>
             <line x1={-pad} y1={g.pos} x2={dieline.width + pad} y2={g.pos} stroke={GUIDE_COLOR} strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
             <line x1={-pad} y1={g.pos} x2={dieline.width + pad} y2={g.pos} stroke="transparent" strokeWidth={10} vectorEffect="non-scaling-stroke" style={{ cursor: 'ns-resize' }} />
             {guideDrag.current?.id === g.id && (
-              <text x={-pad + 3} y={g.pos - 2} fontSize={6} fill={GUIDE_COLOR} stroke="none">
+              <text x={-pad + 12} y={g.pos - 2} fontSize={6} fill={GUIDE_COLOR} stroke="none">
                 {Math.round(g.pos)}
               </text>
             )}
+            {showTrash && <GuideTrash x={-pad + 5.5} y={g.pos} onDelete={() => deleteGuide(g.id)} />}
           </g>
-        ),
-      )}
+        )
+      })}
 
       {showDims && dieline.dims.map((d, i) => <Dim key={i} d={d} />)}
     </svg>
