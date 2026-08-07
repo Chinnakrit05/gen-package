@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, type Deco, type FillImage } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, type Deco, type FillImage } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
@@ -112,12 +112,9 @@ function decoInner(e: Deco) {
       </>
     )
   }
-  const c = elCenter(e)
   return (
     <text
-      x={c.x}
-      y={c.y}
-      textAnchor="middle"
+      textAnchor={textAnchor(e)}
       dominantBaseline="central"
       fontSize={e.size}
       fontWeight={e.weight ?? 400}
@@ -126,7 +123,11 @@ function decoInner(e: Deco) {
       stroke="none"
       style={{ userSelect: 'none' }}
     >
-      {e.text}
+      {textLinesOf(e).map((ln, i) => (
+        <tspan key={i} x={textAnchorX(e)} y={textLineY(e, i)}>
+          {ln}
+        </tspan>
+      ))}
     </text>
   )
 }

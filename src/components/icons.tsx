@@ -58,6 +58,30 @@ export function IconLine({ size = 16 }: IconProps) {
   )
 }
 
+export function IconAlignLeft({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M4 7h16M4 12h9M4 17h13" />
+    </svg>
+  )
+}
+
+export function IconAlignCenter({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M4 7h16M7.5 12h9M6 17h12" />
+    </svg>
+  )
+}
+
+export function IconAlignRight({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M4 7h16M11 12h9M7 17h13" />
+    </svg>
+  )
+}
+
 export function IconUndo({ size = 16 }: IconProps) {
   return (
     <svg {...base(size)}>

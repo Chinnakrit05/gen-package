@@ -66,7 +66,18 @@ const VesselViewer3D = lazy(() =>
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
 import { ColorField } from './components/ColorField'
-import { IconImage, IconText, IconRect, IconEllipse, IconLine, IconUndo, IconRedo } from './components/icons'
+import {
+  IconImage,
+  IconText,
+  IconRect,
+  IconEllipse,
+  IconLine,
+  IconUndo,
+  IconRedo,
+  IconAlignLeft,
+  IconAlignCenter,
+  IconAlignRight,
+} from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
 const PALETTE_KEY = 'gen-package-palette-v1'
@@ -95,10 +106,11 @@ interface DimFieldProps {
   max: number
   disabled?: boolean
   unit?: string
+  step?: number
   onChange: (v: number) => void
 }
 
-function DimField({ label, value, min, max, disabled, unit = 'มม.', onChange }: DimFieldProps) {
+function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange }: DimFieldProps) {
   const commit = (v: number) => onChange(clamp(Number.isFinite(v) ? v : min, min, max))
   return (
     <div className="field">
@@ -109,7 +121,7 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', onChange
             type="number"
             min={min}
             max={max}
-            step={0.5}
+            step={step}
             value={value}
             disabled={disabled}
             aria-label={label}
@@ -122,7 +134,7 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', onChange
         type="range"
         min={min}
         max={max}
-        step={0.5}
+        step={step}
         value={value}
         disabled={disabled}
         aria-label={label}
@@ -1617,13 +1629,49 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   <div className="deco-edit">
                     {selected.type === 'text' && (
                       <>
-                        <input
-                          type="text"
+                        <textarea
                           className="deco-text-input"
+                          rows={2}
                           value={selected.text}
                           disabled={aiBusy}
-                          aria-label="ข้อความ"
+                          aria-label="ข้อความ (Enter = ขึ้นบรรทัดใหม่)"
                           onChange={(e) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, text: e.target.value }) : d))}
+                        />
+                        <div className="align-seg" role="group" aria-label="จัดชิดข้อความ">
+                          {(
+                            [
+                              ['left', 'ชิดซ้าย', <IconAlignLeft key="l" />],
+                              ['center', 'กึ่งกลาง', <IconAlignCenter key="c" />],
+                              ['right', 'ชิดขวา', <IconAlignRight key="r" />],
+                            ] as const
+                          ).map(([a, title, icon]) => (
+                            <button
+                              key={a}
+                              aria-pressed={(selected.align ?? 'left') === a}
+                              title={title}
+                              aria-label={title}
+                              disabled={aiBusy}
+                              onClick={() =>
+                                patchSelected((d) =>
+                                  d.type === 'text' ? { ...d, align: a === 'left' ? undefined : a } : d,
+                                )
+                              }
+                            >
+                              {icon}
+                            </button>
+                          ))}
+                        </div>
+                        <DimField
+                          label="ระยะบรรทัด"
+                          value={Math.round((selected.lh ?? 1.25) * 100) / 100}
+                          min={0.8}
+                          max={3}
+                          step={0.05}
+                          unit="×"
+                          disabled={aiBusy}
+                          onChange={(v) =>
+                            patchSelected((d) => (d.type === 'text' ? { ...d, lh: v === 1.25 ? undefined : v } : d))
+                          }
                         />
                         <div className="deco-color">
                           <span>สี</span>

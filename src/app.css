@@ -925,6 +925,30 @@ button[aria-disabled='true'] {
   border-radius: 6px;
   font-size: 14px;
   margin-bottom: 8px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 40px;
+  line-height: 1.4;
+}
+.deco-text-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+/* จัดชิดข้อความ — ปุ่มไอคอน 3 อันเรียงเป็น segmented (aria-pressed ได้สีเน้นจากกฎ deco-edit) */
+.align-seg {
+  display: flex;
+  gap: 4px;
+}
+.align-seg button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 0;
+  color: var(--text-2);
+}
+.align-seg button[aria-pressed='true'] svg {
+  color: inherit;
 }
 .deco-color {
   display: flex;

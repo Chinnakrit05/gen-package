@@ -8,10 +8,10 @@ import {
   drawFillImage,
   drawImageFit,
   drawShape2D,
+  drawText2D,
   elW,
   elH,
   sheetUV,
-  textFont,
   type Deco,
   type FillImage,
 } from '../core/artwork'
@@ -42,11 +42,7 @@ function drawDeco(
   } else if (e.type === 'shape') {
     drawShape2D(ctx, e, s)
   } else {
-    ctx.fillStyle = e.color
-    ctx.font = textFont(e, s)
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(e.text, 0, 0)
+    drawText2D(ctx, e, s)
   }
   ctx.restore()
 }

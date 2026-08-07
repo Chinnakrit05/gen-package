@@ -34,12 +34,14 @@ export interface ImageEl extends BaseEl {
 
 export interface TextEl extends BaseEl {
   type: 'text'
-  text: string
+  text: string // รองรับหลายบรรทัดด้วย \n
   color: string
   size: number // ความสูงฟอนต์ (มม.)
-  w: number // ความกว้างที่วัดได้ (เก็บไว้เพื่อลาก/หมุน/จัดกลาง) — คำนวณใหม่เมื่อ text/size/font/weight เปลี่ยน
+  w: number // ความกว้างที่วัดได้ = บรรทัดที่กว้างสุด — คำนวณใหม่เมื่อ text/size/font/weight เปลี่ยน
   font?: string // id ฟอนต์ (ดู FONTS) — ไม่ใส่ = 'noto'
   weight?: number // น้ำหนัก 400/700 — ไม่ใส่ = 400
+  align?: 'left' | 'center' | 'right' // จัดชิดหลายบรรทัด — ไม่ใส่ = 'left'
+  lh?: number // ตัวคูณระยะบรรทัด — ไม่ใส่ = LINE (1.25)
 }
 
 // ฟอนต์ไทยที่ให้เลือก — ต้อง import ไฟล์น้ำหนัก 400/700 ใน main.tsx ให้ครบทุกตัว
@@ -90,11 +92,40 @@ export interface FillImage {
   oy?: number // เลื่อนแนวตั้ง
 }
 
-const LINE = 1.25 // อัตราส่วนความสูงบรรทัดต่อขนาดฟอนต์
+const LINE = 1.25 // อัตราส่วนความสูงบรรทัดต่อขนาดฟอนต์ (ค่าเริ่มต้น)
 export const elW = (e: Deco) => e.w
 export const elH = (e: Deco) =>
-  e.type === 'image' ? e.h : e.type === 'text' ? e.size * LINE : e.h
+  e.type === 'image' ? e.h : e.type === 'text' ? textLinesOf(e).length * textLineH(e) : e.h
 export const elCenter = (e: Deco): Vec2 => ({ x: e.x + elW(e) / 2, y: e.y + elH(e) / 2 })
+
+// --- ข้อความหลายบรรทัด: ตัวช่วยที่ทุกเส้นทางเรนเดอร์ (blueprint/3D/SVG/PDF) ใช้ร่วมกัน ---
+export const textLinesOf = (e: TextEl): string[] => e.text.split('\n')
+export const textLineH = (e: TextEl): number => e.size * (e.lh ?? LINE)
+// จุดยึด SVG ตามการจัดชิด (start/middle/end) + พิกัด x ของจุดยึด (มม. สัมบูรณ์)
+export const textAnchor = (e: TextEl): 'start' | 'middle' | 'end' =>
+  (e.align ?? 'left') === 'left' ? 'start' : (e.align ?? 'left') === 'right' ? 'end' : 'middle'
+export const textAnchorX = (e: TextEl): number =>
+  (e.align ?? 'left') === 'left' ? e.x : (e.align ?? 'left') === 'right' ? e.x + e.w : e.x + e.w / 2
+// y กึ่งกลางของบรรทัดที่ i (ใช้กับ dominant-baseline central)
+export const textLineY = (e: TextEl, i: number): number => e.y + textLineH(e) * (i + 0.5)
+
+// วาดข้อความ (อาจหลายบรรทัด) ลง canvas — ctx ถูก translate ไปกึ่งกลาง+หมุน+พลิกไว้แล้ว
+// พิกัดท้องถิ่น: กึ่งกลางชิ้น = (0,0); ใช้ทั้ง Viewer3D และ export (drawDeco2D)
+export function drawText2D(ctx: CanvasRenderingContext2D, e: TextEl, s: number) {
+  const lines = textLinesOf(e)
+  const lineH = textLineH(e)
+  const totalH = lines.length * lineH
+  const align = e.align ?? 'left'
+  ctx.fillStyle = e.color
+  ctx.font = textFont(e, s)
+  ctx.textAlign = align === 'left' ? 'left' : align === 'right' ? 'right' : 'center'
+  ctx.textBaseline = 'middle'
+  const x = align === 'left' ? (-e.w / 2) * s : align === 'right' ? (e.w / 2) * s : 0
+  lines.forEach((ln, i) => {
+    const cy = (-totalH / 2 + lineH * (i + 0.5)) * s
+    ctx.fillText(ln, x, cy)
+  })
+}
 
 // วัดความกว้างข้อความด้วย canvas (ในหน่วย px = มม. เพราะวัดที่สเกล 1:1)
 // ใช้ฟอนต์/น้ำหนักเดียวกับที่ render จริง ไม่งั้น bbox/จุดกึ่งกลาง/snap ของข้อความจะเพี้ยน
@@ -125,7 +156,11 @@ export async function ensureThaiFont(): Promise<void> {
 }
 
 // อัปเดตความกว้างที่เก็บของ text element หลังแก้ข้อความ/ขนาด/ฟอนต์/น้ำหนัก
-export const withTextW = (e: TextEl): TextEl => ({ ...e, w: measureText(e.text, e.size, e.font, e.weight) })
+// = บรรทัดที่กว้างสุด (รองรับหลายบรรทัด)
+export const withTextW = (e: TextEl): TextEl => ({
+  ...e,
+  w: Math.max(...e.text.split('\n').map((ln) => measureText(ln, e.size, e.font, e.weight))),
+})
 
 // --- โหลดไฟล์รูป ---
 // เก็บลง localStorage รวมกับข้อมูลงาน จึงต้องคุมขนาดไม่ให้ชน quota (~5MB ทั้ง origin)
@@ -688,10 +723,13 @@ export function svgArtworkLayer(decos: Deco[]): string {
       } else if (e.type === 'shape') {
         el = shapeSVG(e, rot)
       } else {
+        const tspans = textLinesOf(e)
+          .map((ln, i) => `<tspan x="${textAnchorX(e)}" y="${textLineY(e, i)}">${xmlEsc(ln)}</tspan>`)
+          .join('')
         el =
-          `<text x="${c.x}" y="${c.y}" font-size="${e.size}" fill="${e.color}"` +
-          ` text-anchor="middle" dominant-baseline="central" font-weight="${e.weight ?? 400}"` +
-          ` font-family="${fontCss(e.font)}, sans-serif"${rot}>${xmlEsc(e.text)}</text>`
+          `<text font-size="${e.size}" fill="${e.color}"` +
+          ` text-anchor="${textAnchor(e)}" dominant-baseline="central" font-weight="${e.weight ?? 400}"` +
+          ` font-family="${fontCss(e.font)}, sans-serif"${rot}>${tspans}</text>`
       }
       // ความทึบ: ครอบด้วย <g opacity> เมื่อ < 1
       return e.opacity !== undefined && e.opacity < 1 ? `    <g opacity="${e.opacity}">${el}</g>` : `    ${el}`
@@ -721,11 +759,7 @@ export function drawDeco2D(
   } else if (e.type === 'shape') {
     drawShape2D(ctx, e, s)
   } else {
-    ctx.fillStyle = e.color
-    ctx.font = textFont(e, s)
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(e.text, 0, 0)
+    drawText2D(ctx, e, s)
   }
   ctx.restore()
 }
@@ -834,8 +868,25 @@ export function parseDeco(v: unknown): Deco | null {
     if (!(size > 0)) return null
     const font = FONTS.some((f) => f.id === o.font) ? (o.font as string) : undefined
     const weight = Number(o.weight) === 700 ? 700 : undefined
-    const w = Number(o.w) > 0 ? Number(o.w) : measureText(text, size, font, weight)
-    return { id, type: 'text', text, size, color, w, ...(font ? { font } : {}), ...(weight ? { weight } : {}), ...base }
+    const align = o.align === 'center' || o.align === 'right' ? o.align : undefined
+    const lh = Number(o.lh) > 0 && Number(o.lh) !== LINE ? clampNum(Number(o.lh), 0.8, 3) : undefined
+    const w =
+      Number(o.w) > 0
+        ? Number(o.w)
+        : Math.max(...text.split('\n').map((ln) => measureText(ln, size, font, weight)))
+    return {
+      id,
+      type: 'text',
+      text,
+      size,
+      color,
+      w,
+      ...(font ? { font } : {}),
+      ...(weight ? { weight } : {}),
+      ...(align ? { align } : {}),
+      ...(lh ? { lh } : {}),
+      ...base,
+    }
   }
   if (o.type === 'shape') {
     const shape = o.shape === 'ellipse' || o.shape === 'line' ? o.shape : 'rect'
