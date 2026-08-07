@@ -145,6 +145,34 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
   )
 }
 
+// กลุ่มเครื่องมือแบบพับเก็บได้ (accordion) — หัวคลิกเพื่อเปิด/ปิด, มีป้ายจำนวน (badge) ได้
+function Group({
+  title,
+  open,
+  onToggle,
+  badge,
+  children,
+}: {
+  title: string
+  open: boolean
+  onToggle: () => void
+  badge?: number
+  children: React.ReactNode
+}) {
+  return (
+    <section className={`tgroup${open ? ' open' : ''}`}>
+      <button className="tgroup-head" aria-expanded={open} onClick={onToggle}>
+        <span className="tgroup-chev" aria-hidden>
+          ▸
+        </span>
+        <span className="tgroup-title">{title}</span>
+        {badge ? <span className="tgroup-badge">{badge}</span> : null}
+      </button>
+      {open && <div className="tgroup-body">{children}</div>}
+    </section>
+  )
+}
+
 // จัดเป็นเลเยอร์ตั้งชื่อ cut/crease/dims เพื่อให้เปิดใน Illustrator/CorelDRAW แล้วแยกชั้นได้
 // (โปรแกรมพวกนี้เอา id ของ <g> ไปเป็นชื่อเลเยอร์) ส่วน attribute inkscape:* ทำให้
 // Inkscape มองเป็นเลเยอร์จริงด้วย — สำคัญตรงที่เลเยอร์ dims ต้องปิด/ลบทิ้งได้ในคลิกเดียว
@@ -465,6 +493,13 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [renamingId, setRenamingId] = useState<string | null>(null) // เลเยอร์ที่กำลังแก้ชื่อ (ดับเบิลคลิก)
   const [lockAspect, setLockAspect] = useState(true) // ล็อกสัดส่วนกรอบรูป: ปรับกว้าง/สูงพร้อมกันตามสัดส่วนรูปจริง
   const [presetColor, setPresetColor] = useState('#0f6e56') // สีเริ่มต้นของลายจากไลบรารี
+  // กลุ่มเครื่องมือหน้าตกแต่งที่เปิดอยู่ (accordion) — เก็บค่าเริ่มต้นตามการใช้งานบ่อย
+  const [groups, setGroups] = useState({ bg: false, add: true, lib: false, layers: true, props: true })
+  const toggleGroup = (k: keyof typeof groups) => setGroups((g) => ({ ...g, [k]: !g[k] }))
+  // เลือกชิ้น → เปิดกลุ่ม "ปรับแต่งที่เลือก" ให้อัตโนมัติ (ไม่ปิดกลุ่มอื่น)
+  useEffect(() => {
+    if (selectedIds.length) setGroups((g) => (g.props ? g : { ...g, props: true }))
+  }, [selectedIds.length])
   const [fold, setFold] = useState(1)
   const [showDims, setShowDims] = useState(store0.showDims)
   const [showGuides, setShowGuides] = useState(false)
@@ -917,6 +952,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
       setSelectedIds([])
       return
     }
+    setGroups((g) => (g.props ? g : { ...g, props: true })) // คลิกเลือก = เปิดกลุ่มปรับแต่งให้เห็นเครื่องมือ
     const grp = expandGroups(decos, [id])
     setSelectedIds((cur) => {
       if (!additive) return grp
@@ -1376,8 +1412,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
 
           {sideTab === 'artwork' && (
           <>
-              <section>
-                <h2>สีพื้นแพ็กเกจ</h2>
+              <Group title="พื้นหลังแพ็กเกจ" open={groups.bg} onToggle={() => toggleGroup('bg')}>
                 <div className="fill-color-row">
                   <ColorField
                     value={fillColor ?? '#0f6e56'}
@@ -1483,10 +1518,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                       ? 'ถมสีทั้งแผ่น (flood) เข้าไฟล์ .svg/.pdf จริง — ไม่ใส่ใน .dxf; “ไม่มีสี” = โชว์สีวัสดุ · หรือใส่รูปเป็นพื้นก็ได้'
                       : 'ถมสีพื้นฉลากทั้งแผ่น เข้าไฟล์ .svg/.pdf จริง; “ไม่มีสี” = ฉลากพื้นขาว · หรือใส่รูปเป็นพื้นก็ได้'}
                 </p>
-              </section>
+              </Group>
 
-              <section>
-                <h2>โลโก้ / ข้อความ / รูปทรง</h2>
+              <Group title="เพิ่มองค์ประกอบ" open={groups.add} onToggle={() => toggleGroup('add')}>
                 <div className="art-actions">
                   <label className="file-pick inline">
                     <input
@@ -1515,10 +1549,12 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     <IconLine /> เส้น
                   </button>
                 </div>
+              </Group>
 
+              <Group title="ไลบรารีลาย" open={groups.lib} onToggle={() => toggleGroup('lib')}>
                 <div className="preset-lib">
                   <div className="preset-head">
-                    <span className="preset-title">ไลบรารีลาย</span>
+                    <span className="preset-title">สีลาย</span>
                     <ColorField
                       value={presetColor}
                       onChange={setPresetColor}
@@ -1548,7 +1584,10 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     </div>
                   ))}
                 </div>
+              </Group>
 
+              <Group title="เลเยอร์" open={groups.layers} onToggle={() => toggleGroup('layers')} badge={decos.length}>
+                {decos.length === 0 && <p className="hint">ยังไม่มีองค์ประกอบ — เพิ่มได้จากกลุ่มด้านบน</p>}
                 {decos.length > 0 && (
                   <ul className="deco-list">
                     {/* บนสุด = หน้าสุด (กลับลำดับ array ที่ท้าย = วาดทับ) */}
@@ -1629,7 +1668,12 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     })}
                   </ul>
                 )}
+              </Group>
 
+              <Group title="ปรับแต่งที่เลือก" open={groups.props} onToggle={() => toggleGroup('props')}>
+                {!selected && !multi && (
+                  <p className="hint">เลือกชิ้นบนเลเยอร์หรือ blueprint เพื่อปรับแต่ง</p>
+                )}
                 {multi && (
                   <div className="deco-edit">
                     <div className="multi-head">เลือก {selectedIds.length} ชิ้น</div>
@@ -2201,11 +2245,11 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     </button>
                   </div>
                 )}
+              </Group>
 
-                <p className="hint">
-                  ลายจะถูกใส่ลงไฟล์ .svg (vector) และ .pdf (300 dpi) แล้ว — ไม่ใส่ใน .dxf เพราะเป็นไฟล์มีดตัด
-                </p>
-              </section>
+              <p className="hint">
+                ลายจะถูกใส่ลงไฟล์ .svg (vector) และ .pdf (300 dpi) แล้ว — ไม่ใส่ใน .dxf เพราะเป็นไฟล์มีดตัด
+              </p>
           </>
           )}
 
