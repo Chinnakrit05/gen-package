@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Vector3 } from 'three'
+import { Quaternion, Vector3 } from 'three'
 import { computeMatrices, to3D } from '../fold'
 import { getTemplate } from './index'
 import { getMaterial } from '../materials'
@@ -93,6 +93,35 @@ describe('gable: ตำแหน่งหลังพับสุด (fold=1)', 
     const mid = hb.clone().add(hf).multiplyScalar(0.5)
     expect(Math.abs(mid.x - centerX)).toBeLessThan(1)
     expect(Math.abs(mid.y - centerYworld)).toBeLessThan(2)
+  })
+})
+
+describe('gable: ลำดับจังหวะพับ', () => {
+  const ownAngle = (id: string, fold: number) => {
+    const p = d.panels.find((q) => q.id === id)!
+    const m = computeMatrices(d.panels, fold)
+    const own = m.get(id)!.clone()
+    if (p.parentId) own.premultiply(m.get(p.parentId)!.clone().invert())
+    const q = new Quaternion().setFromRotationMatrix(own)
+    return 2 * Math.acos(Math.min(1, Math.abs(q.w)))
+  }
+  const progressAt = (id: string, fold: number) => {
+    const full = ownAngle(id, 1)
+    return full < 1e-9 ? 1 : ownAngle(id, fold) / full
+  }
+  const startsAt = (id: string) => {
+    for (let f = 0; f <= 1.0001; f += 0.01) if (progressAt(id, f) > 0.01) return f
+    return 1
+  }
+
+  it('ผนังหน้า-หลังยังไม่พับจนผนังข้าง(ปีก)เก็บไปแล้วเกิน 90%', () => {
+    expect(progressAt('left', startsAt('front'))).toBeGreaterThan(0.9)
+  })
+  it('จั่วยังไม่ปิดจนผนังหน้า-หลังพับไปแล้วเกิน 80%', () => {
+    expect(progressAt('back', startsAt('gable-back'))).toBeGreaterThan(0.8)
+  })
+  it('ทุกแผงพับครบเมื่อ fold=1', () => {
+    for (const p of d.panels) expect(progressAt(p.id, 1)).toBeCloseTo(1, 6)
   })
 })
 

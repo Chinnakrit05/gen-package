@@ -53,16 +53,10 @@ export function generateGableBox(box: BoxParams, mat: Material): Dieline {
     P(xb - tabIn, y),
   ]
 
+  // ลำดับพับ: ผนังข้าง(ปีก) ก่อน → ลิ้นมุมเก็บเข้า → ผนังหน้า-หลังปิดทับ → จั่วเอียงชนกัน
   const panels: Panel[] = [
     { id: 'base', parentId: null, outline: rect(cx0, by0, cx1, by1), stage: 0 },
-    {
-      id: 'back', parentId: 'base', outline: rect(cx0, backRim, cx1, by0),
-      hingeA: P(cx0, by0), hingeB: P(cx1, by0), foldAngle: 90, stage: 0,
-    },
-    {
-      id: 'front', parentId: 'base', outline: rect(cx0, by1, cx1, frontRim),
-      hingeA: P(cx0, by1), hingeB: P(cx1, by1), foldAngle: -90, stage: 0,
-    },
+    // ผนังข้าง (ปีก) — พับขึ้นก่อน (stage 0)
     {
       id: 'left', parentId: 'base', outline: rect(0, by0, cx0, by1),
       hingeA: P(cx0, by0), hingeB: P(cx0, by1), foldAngle: -90, stage: 0,
@@ -70,6 +64,15 @@ export function generateGableBox(box: BoxParams, mat: Material): Dieline {
     {
       id: 'right', parentId: 'base', outline: rect(cx1, by0, width, by1),
       hingeA: P(cx1, by0), hingeB: P(cx1, by1), foldAngle: 90, stage: 0,
+    },
+    // ผนังหน้า-หลัง — พับขึ้นทีหลัง (stage 2) ปิดทับลิ้นมุม
+    {
+      id: 'back', parentId: 'base', outline: rect(cx0, backRim, cx1, by0),
+      hingeA: P(cx0, by0), hingeB: P(cx1, by0), foldAngle: 90, stage: 2,
+    },
+    {
+      id: 'front', parentId: 'base', outline: rect(cx0, by1, cx1, frontRim),
+      hingeA: P(cx0, by1), hingeB: P(cx1, by1), foldAngle: -90, stage: 2,
     },
     // ลิ้นมุม (stage 1) — พับเข้าหลังผนังหน้า-หลัง ล็อกมุม
     {
@@ -88,18 +91,18 @@ export function generateGableBox(box: BoxParams, mat: Material): Dieline {
       id: 'tab-rf', parentId: 'right', outline: tab(cx1, width, by1, 1),
       hingeA: P(cx1, by1), hingeB: P(width, by1), foldAngle: -90, stage: 1, zOffset: layer,
     },
-    // แผงจั่ว (stage 2) — เอียงเข้าจากขอบผนังมาชนที่สัน + รูหิ้ว
+    // แผงจั่ว (stage 3) — เอียงเข้าจากขอบผนังมาชนที่สัน + รูหิ้ว
     // foldAngle=0 = ต่อจากผนัง (ตั้งดิ่ง); เอียงเข้าหากึ่งกลาง = หมุนต่อในทิศเดียวกับผนัง
     // (ผนังหลังพับ +90 → จั่วหลัง +lean, ผนังหน้าพับ -90 → จั่วหน้า -lean)
     {
       id: 'gable-back', parentId: 'back', outline: rect(cx0, 0, cx1, backRim),
       holes: hasHandle ? [obroundPts(holeCx, backHoleCy, holeLen, holeThick)] : undefined,
-      hingeA: P(cx0, backRim), hingeB: P(cx1, backRim), foldAngle: lean, stage: 2,
+      hingeA: P(cx0, backRim), hingeB: P(cx1, backRim), foldAngle: lean, stage: 3,
     },
     {
       id: 'gable-front', parentId: 'front', outline: rect(cx0, frontRim, cx1, height),
       holes: hasHandle ? [obroundPts(holeCx, frontHoleCy, holeLen, holeThick)] : undefined,
-      hingeA: P(cx0, frontRim), hingeB: P(cx1, frontRim), foldAngle: -lean, stage: 2,
+      hingeA: P(cx0, frontRim), hingeB: P(cx1, frontRim), foldAngle: -lean, stage: 3,
     },
   ]
 
