@@ -494,7 +494,18 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [lockAspect, setLockAspect] = useState(true) // ล็อกสัดส่วนกรอบรูป: ปรับกว้าง/สูงพร้อมกันตามสัดส่วนรูปจริง
   const [presetColor, setPresetColor] = useState('#0f6e56') // สีเริ่มต้นของลายจากไลบรารี
   // กลุ่มเครื่องมือหน้าตกแต่งที่เปิดอยู่ (accordion) — เก็บค่าเริ่มต้นตามการใช้งานบ่อย
-  const [groups, setGroups] = useState({ bg: false, add: true, lib: false, layers: true, props: true })
+  const [groups, setGroups] = useState({
+    // หน้าออกแบบ
+    tpl: true,
+    mat: true,
+    size: true,
+    // หน้าตกแต่ง
+    bg: false,
+    add: true,
+    lib: false,
+    layers: true,
+    props: true,
+  })
   const toggleGroup = (k: keyof typeof groups) => setGroups((g) => ({ ...g, [k]: !g[k] }))
   // เลือกชิ้น → เปิดกลุ่ม "ปรับแต่งที่เลือก" ให้อัตโนมัติ (ไม่ปิดกลุ่มอื่น)
   useEffect(() => {
@@ -1307,106 +1318,113 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
 
           {sideTab === 'design' && (
           <>
-          <section>
-            <h2>รูปแบบบรรจุภัณฑ์</h2>
-            <select
-              value={templateId}
-              disabled={aiBusy || !mat.foldable}
-              aria-label="รูปแบบบรรจุภัณฑ์"
-              onChange={(e) => changeTemplate(e.target.value)}
-            >
-              {TEMPLATES.map((tp) => (
-                <option key={tp.id} value={tp.id}>
-                  {tp.nameTh}
-                </option>
-              ))}
-            </select>
-            <p className="hint">
-              {mat.foldable
-                ? template.detail
-                : 'วัสดุภาชนะไม่ใช้รูปแบบกล่อง — ระบบขึ้นทรง revolve และ blueprint คือ dieline ฉลากพันรอบตัว'}
-            </p>
-            {mat.foldable && (
+          <Group title="รูปแบบบรรจุภัณฑ์" open={groups.tpl} onToggle={() => toggleGroup('tpl')}>
+            {mat.foldable ? (
+              <>
+                <div className="pick-list">
+                  {TEMPLATES.map((tp) => (
+                    <button
+                      key={tp.id}
+                      className={`pick-item${templateId === tp.id ? ' active' : ''}`}
+                      disabled={aiBusy}
+                      aria-pressed={templateId === tp.id}
+                      onClick={() => changeTemplate(tp.id)}
+                    >
+                      <span className="pick-name">{tp.nameTh}</span>
+                      <span className="pick-detail">{tp.detail}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="hint">อยากทำตัวขวด/โหล/กระป๋องเอง? เลือกในกลุ่ม “วัสดุ” → ภาชนะขึ้นรูป</p>
+              </>
+            ) : (
               <p className="hint">
-                อยากทำตัวขวด/โหล/กระป๋องเอง? เลือกที่ช่อง “วัสดุ” กลุ่มภาชนะขึ้นรูป
+                วัสดุภาชนะไม่ใช้รูปแบบกล่อง — ระบบขึ้นทรง revolve และ blueprint คือ dieline ฉลากพันรอบตัว
               </p>
             )}
-          </section>
+          </Group>
 
-          <section>
-            <h2>วัสดุ</h2>
-            <select
-              value={materialId}
-              disabled={aiBusy}
-              aria-label="เลือกวัสดุ"
-              onChange={(e) => changeMaterial(e.target.value)}
-            >
-              <optgroup label="กล่อง (เลือกรูปแบบด้านบน)">
-                {MATERIALS.filter((m) => m.foldable).map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.nameTh}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="ภาชนะขึ้นรูป + ฉลาก (ขวด/โหล/กระป๋อง)">
-                {MATERIALS.filter((m) => !m.foldable).map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.nameTh}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
+          <Group title="วัสดุ" open={groups.mat} onToggle={() => toggleGroup('mat')}>
+            <div className="pick-group-label">กล่อง (เลือกรูปแบบด้านบน)</div>
+            <div className="pick-list">
+              {MATERIALS.filter((m) => m.foldable).map((m) => (
+                <button
+                  key={m.id}
+                  className={`pick-item mat${materialId === m.id ? ' active' : ''}`}
+                  disabled={aiBusy}
+                  aria-pressed={materialId === m.id}
+                  onClick={() => changeMaterial(m.id)}
+                >
+                  <span className="mat-sw" style={{ background: m.color }} />
+                  <span className="pick-body">
+                    <span className="pick-name">{m.nameTh}</span>
+                    <span className="pick-detail">หนา {m.thickness} มม. · พับได้</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="pick-group-label">ภาชนะขึ้นรูป + ฉลาก (ขวด/โหล/กระป๋อง)</div>
+            <div className="pick-list">
+              {MATERIALS.filter((m) => !m.foldable).map((m) => (
+                <button
+                  key={m.id}
+                  className={`pick-item mat${materialId === m.id ? ' active' : ''}`}
+                  disabled={aiBusy}
+                  aria-pressed={materialId === m.id}
+                  onClick={() => changeMaterial(m.id)}
+                >
+                  <span className="mat-sw" style={{ background: m.color }} />
+                  <span className="pick-body">
+                    <span className="pick-name">{m.nameTh}</span>
+                    <span className="pick-detail">{m.process}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
             <div className="mat-info">
               <div>{mat.detail}</div>
-              <div>
-                ความหนา {mat.thickness} มม. · {mat.process}
-              </div>
               {mat.foldable ? (
                 <div className="ok">พับได้ — dieline เผื่อระยะตามความหนาให้อัตโนมัติ</div>
               ) : (
                 <div className="warn">{mat.note}</div>
               )}
             </div>
-          </section>
+          </Group>
 
-              <section>
-                <h2>{mat.foldable ? 'ขนาดกล่อง (ด้านใน)' : 'ขนาดภาชนะ'}</h2>
-                <DimField
-                  label={mat.foldable ? 'กว้าง W' : '⌀ ตัว W'}
-                  value={W}
-                  min={30}
-                  max={250}
+          <Group
+            title={mat.foldable ? 'ขนาดกล่อง (ด้านใน)' : 'ขนาดภาชนะ'}
+            open={groups.size}
+            onToggle={() => toggleGroup('size')}
+          >
+            <DimField
+              label={mat.foldable ? 'กว้าง W' : '⌀ ตัว W'}
+              value={W}
+              min={30}
+              max={250}
+              disabled={aiBusy}
+              onChange={setW}
+            />
+            <DimField
+              label={mat.foldable ? 'ลึก D' : '⌀ ปาก/คอ D'}
+              value={D}
+              min={20}
+              max={150}
+              disabled={aiBusy}
+              onChange={setD}
+            />
+            <DimField label="สูง H" value={H} min={30} max={300} disabled={aiBusy} onChange={setH} />
+            {mat.foldable && template.supportsHandle && (
+              <label className="check" style={{ marginTop: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={handle}
                   disabled={aiBusy}
-                  onChange={setW}
+                  onChange={(e) => setHandle(e.target.checked)}
                 />
-                <DimField
-                  label={mat.foldable ? 'ลึก D' : '⌀ ปาก/คอ D'}
-                  value={D}
-                  min={20}
-                  max={150}
-                  disabled={aiBusy}
-                  onChange={setD}
-                />
-                <DimField
-                  label={mat.foldable ? 'สูง H' : 'สูง H'}
-                  value={H}
-                  min={30}
-                  max={300}
-                  disabled={aiBusy}
-                  onChange={setH}
-                />
-                {mat.foldable && template.supportsHandle && (
-                  <label className="check" style={{ marginTop: 12 }}>
-                    <input
-                      type="checkbox"
-                      checked={handle}
-                      disabled={aiBusy}
-                      onChange={(e) => setHandle(e.target.checked)}
-                    />
-                    เจาะรูหิ้ว (die-cut handle)
-                  </label>
-                )}
-              </section>
+                เจาะรูหิ้ว (die-cut handle)
+              </label>
+            )}
+          </Group>
           </>
           )}
 

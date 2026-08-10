@@ -222,6 +222,75 @@ aside h2 {
   margin-top: 10px;
 }
 
+/* --- ตัวเลือกแบบไทล์ (รูปแบบกล่อง/วัสดุ) แทน dropdown --- */
+.pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pick-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 9px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.pick-item:hover:not(:disabled),
+.pick-item.active {
+  border-color: var(--accent);
+  background: var(--accent-weak);
+}
+.pick-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.pick-item.active .pick-name {
+  color: var(--accent);
+}
+.pick-detail {
+  font-size: 11.5px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+.pick-item:hover .pick-detail {
+  color: var(--text-3);
+}
+/* วัสดุ: swatch สีซ้าย + เนื้อหาขวา (เรียงแนวนอน) */
+.pick-item.mat {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.pick-item.mat .pick-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mat-sw {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid var(--border-strong);
+}
+.pick-group-label {
+  font-size: 11px;
+  color: var(--text-3);
+  margin: 10px 0 4px;
+}
+.pick-group-label:first-child {
+  margin-top: 0;
+}
+
 select {
   width: 100%;
   padding: 8px 10px;
