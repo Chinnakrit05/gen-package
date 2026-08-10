@@ -5,6 +5,7 @@ import { generateFefco0427 } from './fefco0427'
 import { generateSleeve } from './sleeve'
 import { generateBottleCarrier } from './bottleCarrier'
 import { generateTrayBox } from './tray'
+import { generateGableBox } from './gable'
 
 export interface BoxTemplate {
   id: string
@@ -77,6 +78,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: false,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateTrayBox,
+  },
+  {
+    id: 'gable',
+    nameTh: 'กล่องหูหิ้วทรงจั่ว (gable)',
+    detail: 'กล่องหลังคาทรงจั่ว หูหิ้วในตัวที่สัน — ของขวัญ/เบเกอรี่/อาหาร ดูพรีเมียม',
+    defaults: { W: 120, D: 100, H: 150 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b) => b.H + b.D * 0.6,
+    generate: generateGableBox,
   },
 ]
 
