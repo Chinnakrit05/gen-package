@@ -520,6 +520,17 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [showGuides, setShowGuides] = useState(false)
   const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
   const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>('design')
+  const asideRef = useRef<HTMLElement>(null)
+  // สลับขั้นตอน + เลื่อน sidebar ขึ้นบนสุด (จะได้ไม่ต้องเลื่อนหาแท็บเอง)
+  const goStep = (tab: 'design' | 'artwork' | 'export') => {
+    setSideTab(tab)
+    requestAnimationFrame(() => {
+      const el = asideRef.current
+      if (!el) return
+      el.scrollTop = 0 // เดสก์ท็อป: aside เลื่อนภายในตัวเอง
+      el.scrollIntoView({ block: 'start' }) // มือถือ: ดึงหัว sidebar กลับเข้าจอ
+    })
+  }
   const [palette, setPalette] = useState<string[]>(loadPalette)
   const [sr, setSr] = useState({ cols: 3, rows: 1, dx: 30, dy: 30, brick: false })
   const [split, setSplit] = useState<number>(loadSplit)
@@ -1299,7 +1310,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
         )}
       </header>
       <div className="body">
-        <aside>
+        <aside ref={asideRef}>
           <div className="tabbar" role="tablist">
             {(
               [
@@ -1429,6 +1440,15 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               </label>
             )}
           </Group>
+
+          <div className="step-nav">
+            <span className="step-saved">✓ บันทึกงานอัตโนมัติ</span>
+            <div className="step-btns">
+              <button className="step-next" onClick={() => goStep('artwork')}>
+                ไปต่อ: ตกแต่ง →
+              </button>
+            </div>
+          </div>
           </>
           )}
 
@@ -2298,6 +2318,18 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               <p className="hint">
                 ลายจะถูกใส่ลงไฟล์ .svg (vector) และ .pdf (300 dpi) แล้ว — ไม่ใส่ใน .dxf เพราะเป็นไฟล์มีดตัด
               </p>
+
+              <div className="step-nav">
+                <span className="step-saved">✓ บันทึกงานอัตโนมัติ</span>
+                <div className="step-btns">
+                  <button className="step-back" onClick={() => goStep('design')}>
+                    ← ออกแบบ
+                  </button>
+                  <button className="step-next" onClick={() => goStep('export')}>
+                    ไปต่อ: ส่งออก →
+                  </button>
+                </div>
+              </div>
           </>
           )}
 
@@ -2491,6 +2523,15 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   ไม่ทับงานเดิม
                 </p>
               </Group>
+
+              <div className="step-nav">
+                <span className="step-saved">✓ บันทึกงานอัตโนมัติ · ครบทุกขั้นตอนแล้ว</span>
+                <div className="step-btns">
+                  <button className="step-back" onClick={() => goStep('artwork')}>
+                    ← ตกแต่ง
+                  </button>
+                </div>
+              </div>
             </>
           )}
         </aside>
