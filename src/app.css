@@ -291,6 +291,94 @@ aside h2 {
   margin-top: 0;
 }
 
+/* หัวข้อย่อยในกลุ่ม (accordion) */
+.grp-sub {
+  display: block;
+  font-size: 11px;
+  color: var(--text-3);
+  margin: 12px 0 4px;
+}
+
+/* --- การ์ดดาวน์โหลดไฟล์ในหน้าส่งออก --- */
+.export-opts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin-bottom: 10px;
+}
+.export-opts .grp-sub {
+  margin: 0;
+}
+.export-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.export-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 9px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.export-item:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-weak);
+}
+.export-item:hover .export-desc {
+  color: var(--text-3);
+}
+.export-badge {
+  flex: none;
+  width: 40px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 700;
+}
+.export-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.export-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.export-desc {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+/* ใบสเปกขอราคา = ปุ่มหลัก เน้น accent */
+.export-item.primary {
+  border-color: var(--accent-border);
+  background: var(--accent-weak);
+}
+.export-item.primary .export-badge {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.export-item.primary .export-name {
+  color: var(--accent);
+}
+
 select {
   width: 100%;
   padding: 8px 10px;

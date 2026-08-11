@@ -505,6 +505,10 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     lib: false,
     layers: true,
     props: true,
+    // หน้าส่งออก
+    exp: true,
+    qty: true,
+    backup: false,
   })
   const toggleGroup = (k: keyof typeof groups) => setGroups((g) => ({ ...g, [k]: !g[k] }))
   // เลือกชิ้น → เปิดกลุ่ม "ปรับแต่งที่เลือก" ให้อัตโนมัติ (ไม่ปิดกลุ่มอื่น)
@@ -2299,24 +2303,66 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
 
           {sideTab === 'export' && (
           <>
-              <section>
-                <h2>จำนวนที่จะสั่ง</h2>
+              <Group title="ดาวน์โหลดไฟล์" open={groups.exp} onToggle={() => toggleGroup('exp')}>
+                <div className="export-opts">
+                  <span className="grp-sub">ใส่ในแบบ</span>
+                  <label className="check">
+                    <input type="checkbox" checked={showDims} onChange={(e) => setShowDims(e.target.checked)} />
+                    เส้นบอกขนาด (มม.)
+                  </label>
+                  <label className="check">
+                    <input type="checkbox" checked={showGuides} onChange={(e) => setShowGuides(e.target.checked)} />
+                    เส้นเผื่อตัด / ปลอดภัย
+                  </label>
+                </div>
+                <div className="export-list">
+                  <button className="export-item primary" onClick={() => void downloadSpecSheet()}>
+                    <span className="export-badge">PDF</span>
+                    <span className="export-body">
+                      <span className="export-name">ใบสเปกขอราคา</span>
+                      <span className="export-desc">สรุปขนาด/วัสดุ/จำนวน/ข้อสันนิษฐาน + แบบย่อ — ส่งโรงงานขอราคาได้เลย</span>
+                    </span>
+                  </button>
+                  <button className="export-item" onClick={downloadDXF}>
+                    <span className="export-badge">DXF</span>
+                    <span className="export-body">
+                      <span className="export-name">ไฟล์ผลิต · ส่งโรงไดคัท</span>
+                      <span className="export-desc">เลเยอร์ CUT/CREASE แยก · หน่วย มม. · ไม่มีเส้นบอกขนาด</span>
+                    </span>
+                  </button>
+                  <button className="export-item" onClick={() => void downloadPDF()}>
+                    <span className="export-badge">PDF</span>
+                    <span className="export-body">
+                      <span className="export-name">แบบพิมพ์ 1:1</span>
+                      <span className="export-desc">ลายพิมพ์ฝัง 300 dpi · เลเยอร์ artwork/cut/crease/dims ปิด-เปิดได้ใน Acrobat</span>
+                    </span>
+                  </button>
+                  <button className="export-item" onClick={downloadSVG}>
+                    <span className="export-badge">SVG</span>
+                    <span className="export-body">
+                      <span className="export-name">dieline เวกเตอร์</span>
+                      <span className="export-desc">เปิด/แก้ต่อใน Illustrator, CorelDRAW, Inkscape</span>
+                    </span>
+                  </button>
+                </div>
+                <p className="hint">
+                  ขนาดแผ่น {Math.ceil(dieline.width)} × {Math.ceil(dieline.height)} มม. · สเกลจริง 1:1 ·
+                  ตัวเลขบนแบบรวมเผื่อความหนา {mat.thickness} มม.แล้ว จึงใหญ่กว่าขนาดด้านในเล็กน้อย
+                </p>
+              </Group>
+
+              <Group title="จำนวน & จำนวนต่อแผ่น" open={groups.qty} onToggle={() => toggleGroup('qty')}>
                 <div className="field">
                   <span className="field-head">
-                    จำนวน
+                    จำนวนที่จะสั่ง
                     <span className="field-num">
                       <QtyField value={qty} disabled={aiBusy} onChange={setQty} />
                       ใบ
                     </span>
                   </span>
                 </div>
-                <p className="hint">
-                  ใช้ตอนขอราคาจากโรงงาน — ไม่มีผลกับรูปกล่องหรือไฟล์ไดคัท
-                </p>
-              </section>
-
-              <section>
-                <h2>จำนวนต่อแผ่น (imposition)</h2>
+                <p className="hint">ใช้ตอนขอราคาจากโรงงาน — ไม่มีผลกับรูปกล่องหรือไฟล์ไดคัท</p>
+                <div className="grp-sub">จำนวนต่อแผ่น (imposition)</div>
                 <select
                   value={sheetId}
                   disabled={aiBusy}
@@ -2419,50 +2465,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   ขอบแผ่น {DEFAULT_OPT.margin} มม.รอบด้าน · เทียบวางตั้ง/หมุน 90° เลือกที่ได้มากสุด —
                   ประมาณการเบื้องต้น ยังไม่รวมการวางสลับทิศในแผ่นเดียว
                 </p>
-              </section>
+              </Group>
 
-              <section>
-                <h2>Blueprint</h2>
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={showDims}
-                    onChange={(e) => setShowDims(e.target.checked)}
-                  />
-                  แสดงขนาดกำกับเส้น (มม.)
-                </label>
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={showGuides}
-                    onChange={(e) => setShowGuides(e.target.checked)}
-                  />
-                  แสดงเส้นเผื่อตัด (bleed) / ระยะปลอดภัย
-                </label>
-                <button onClick={downloadSVG}>ดาวน์โหลด dieline (.svg)</button>
-                <button onClick={downloadDXF}>ดาวน์โหลดไฟล์ผลิต (.dxf)</button>
-                <button onClick={() => void downloadPDF()}>ดาวน์โหลดแบบพิมพ์ (.pdf)</button>
-                <button className="primary" onClick={() => void downloadSpecSheet()}>
-                  ดาวน์โหลดใบสเปกขอราคา (.pdf)
-                </button>
-                <p className="hint">
-                  .dxf สำหรับส่งโรงทำมีดไดคัท — เลเยอร์ CUT/CREASE แยกกัน หน่วย มม. ไม่มีเส้นบอกขนาด
-                  <br />
-                  .pdf สเกล 1:1 + ลายพิมพ์ฝัง 300 dpi — เลเยอร์ artwork/cut/crease/dims ปิด-เปิดได้ใน Acrobat
-                  <br />
-                  ใบสเปก = สรุปขนาด/วัสดุ/จำนวน/ข้อสันนิษฐาน + แบบย่อ ส่งโรงงานขอราคาได้เลย
-                </p>
-                <p className="hint">
-                  ขนาดแผ่น {Math.ceil(dieline.width)} × {Math.ceil(dieline.height)} มม. · สเกลจริง 1:1
-                </p>
-                <p className="hint">
-                  ตัวเลขบนแบบคือระยะจริงบนแผ่น (บวกเผื่อความหนา {mat.thickness} มม. แล้ว)
-                  จึงใหญ่กว่าขนาดด้านในที่ตั้งไว้เล็กน้อย
-                </p>
-              </section>
-
-              <section>
-                <h2>สำรอง / ย้ายงาน (.genpkg.json)</h2>
+              <Group title="สำรอง / ย้ายงาน" open={groups.backup} onToggle={() => toggleGroup('backup')}>
                 <div className="art-actions">
                   <button disabled={aiBusy} onClick={exportProject}>
                     ⬇ ส่งออกงานนี้
@@ -2485,7 +2490,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   สำรองไว้ ย้ายไปเครื่องอื่น หรือส่งให้ลูกค้า/โรงงานเปิดต่อได้ นำเข้าแล้วเพิ่มเป็นงานใหม่
                   ไม่ทับงานเดิม
                 </p>
-              </section>
+              </Group>
             </>
           )}
         </aside>
