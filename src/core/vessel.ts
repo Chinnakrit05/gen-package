@@ -22,6 +22,15 @@ export const isVessel = (m: Material) => !m.foldable
 
 export const LABEL_OVERLAP = 8 // ระยะทับซ้อนปลายฉลากสำหรับทากาว (มม.)
 
+// รูปแบบฉลาก = ฉลากพันรอบตัวคลุมช่วงความสูงแค่ไหน (คำนวณจากช่วงลำตัวตรงของภาชนะ)
+export type LabelStyle = 'body' | 'full' | 'band' | 'neck'
+export const LABEL_STYLES: { id: LabelStyle; nameTh: string; detail: string }[] = [
+  { id: 'body', nameTh: 'คลุมลำตัว (มาตรฐาน)', detail: 'ฉลากคลุมช่วงลำตัวหลักของภาชนะ' },
+  { id: 'full', nameTh: 'สูงเต็มตัว', detail: 'คลุมเกือบทั้งลำตัว คล้ายชริงค์สลีฟ' },
+  { id: 'band', nameTh: 'แถบกลางเตี้ย', detail: 'ฉลากแถบเตี้ยกลางลำตัว' },
+  { id: 'neck', nameTh: 'แถบบน (ใกล้คอ)', detail: 'ฉลากแถบเตี้ยช่วงบนของลำตัว' },
+]
+
 // เก็บจุดบนเส้นโค้งกำลังสอง ใช้ทำบ่า/ไหล่ของภาชนะให้มน
 function shoulder(p0: Vec2, c: Vec2, p1: Vec2, n = 6): Vec2[] {
   const out: Vec2[] = []
@@ -81,14 +90,33 @@ function profileFor(matId: string, R: number, rn: number, H: number): { pts: Vec
   }
 }
 
-export function generateVessel(box: BoxParams, mat: Material): Vessel {
+export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelStyle = 'body'): Vessel {
   const { W, D, H } = box
   const R = W / 2
   // ปาก/คอต้องเล็กกว่าตัวเสมอ (กันผู้ใช้/AI ใส่ D เกิน W)
   const rn = Math.min(Math.max(D / 2, 5), R * 0.9)
 
   const { pts, band } = profileFor(mat.id, R, rn, H)
-  const [labelY0, labelY1] = band
+  // ช่วงลำตัวตรง (รัศมี ~R) = ขอบเขตที่ฉลากติดได้จริง ใช้คำนวณรูปแบบฉลากแต่ละแบบ
+  const straightYs = pts.filter((p) => p.x >= R * 0.98).map((p) => p.y)
+  const b0 = straightYs.length ? Math.min(...straightYs) : band[0]
+  const b1 = straightYs.length ? Math.max(...straightYs) : band[1]
+  const span = Math.max(1, b1 - b0)
+  let labelY0: number
+  let labelY1: number
+  if (labelStyle === 'full') {
+    labelY0 = b0 + span * 0.03
+    labelY1 = b1
+  } else if (labelStyle === 'band') {
+    const m = (b0 + b1) / 2
+    labelY0 = m - span * 0.2
+    labelY1 = m + span * 0.2
+  } else if (labelStyle === 'neck') {
+    labelY1 = b1 - span * 0.05
+    labelY0 = labelY1 - span * 0.26
+  } else {
+    ;[labelY0, labelY1] = band
+  }
 
   // --- dieline ฉลาก: แผ่นพันรอบตัว = เส้นรอบวง + ระยะทับซ้อน ---
   const circ = 2 * Math.PI * R

@@ -17,6 +17,7 @@ interface ProjectFile {
     qty: number
     fillColor: string | null
     fillImage?: Project['fillImage']
+    labelStyle?: Project['labelStyle']
     decos: Project['decos']
     history: Project['history']
     histIdx: number
@@ -42,6 +43,7 @@ export function serializeProject(p: Project): string {
       fillColor: p.fillColor,
       // เก็บเฉพาะเมื่อมีรูปพื้น — งานปกติ round-trip เหมือนเดิม
       ...(p.fillImage ? { fillImage: p.fillImage } : {}),
+      ...(p.labelStyle && p.labelStyle !== 'body' ? { labelStyle: p.labelStyle } : {}),
       decos: p.decos,
       history: p.history,
       histIdx: p.histIdx,

@@ -32,7 +32,7 @@ import {
   type FillImage,
 } from './core/artwork'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
-import { generateVessel } from './core/vessel'
+import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
 import {
   clamp,
   freshProject,
@@ -305,6 +305,7 @@ interface EditSnapshot {
   qty: number
   fillColor: string | null
   fillImage: FillImage | null
+  labelStyle: LabelStyle
   decos: Deco[]
 }
 
@@ -318,6 +319,7 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.qty === b.qty &&
   a.fillColor === b.fillColor &&
   a.fillImage === b.fillImage &&
+  a.labelStyle === b.labelStyle &&
   a.decos === b.decos
 
 const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
@@ -490,6 +492,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [qty, setQty] = useState(active0.qty)
   const [fillColor, setFillColor] = useState<string | null>(active0.fillColor)
   const [fillImage, setFillImage] = useState<FillImage | null>(active0.fillImage ?? null)
+  const [labelStyle, setLabelStyle] = useState<LabelStyle>(active0.labelStyle ?? 'body')
   const [decos, setDecos] = useState<Deco[]>(active0.decos)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [renamingId, setRenamingId] = useState<string | null>(null) // เลเยอร์ที่กำลังแก้ชื่อ (ดับเบิลคลิก)
@@ -501,6 +504,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     mode: true,
     tpl: true,
     mat: true,
+    label: true,
     size: true,
     // หน้าตกแต่ง
     bg: false,
@@ -557,8 +561,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   // วัสดุกลุ่มพับไม่ได้ → เส้นทางภาชนะ: ทรง revolve + dieline ของ "ฉลาก"
   // ฉลากเป็น Dieline ธรรมดา ระบบเดิมทั้งหมด (artwork/export/guides/ใบสเปก) จึงใช้ต่อได้เลย
   const vessel = useMemo(
-    () => (mat.foldable ? null : generateVessel({ W, D, H, handle }, mat)),
-    [W, D, H, handle, mat],
+    () => (mat.foldable ? null : generateVessel({ W, D, H, handle }, mat, labelStyle)),
+    [W, D, H, handle, mat, labelStyle],
   )
   const dieline = useMemo(
     () => (mat.foldable ? template.generate({ W, D, H, handle }, mat) : vessel!.label),
@@ -593,6 +597,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 qty,
                 fillColor,
                 fillImage,
+                labelStyle,
                 decos,
                 history,
                 histIdx,
@@ -603,7 +608,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, decos, activeId])
 
   // save ทุกงานลง localStorage
   useEffect(() => {
@@ -689,6 +694,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     qty,
     fillColor,
     fillImage,
+    labelStyle,
     decos,
   })
 
@@ -711,7 +717,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, decos])
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -724,6 +730,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setQty(s.qty)
     setFillColor(s.fillColor)
     setFillImage(s.fillImage ?? null)
+    setLabelStyle(s.labelStyle ?? 'body')
     setDecos(s.decos)
     setSelectedIds([])
   }
@@ -806,7 +813,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const flushInto = (list: Project[]): Project[] =>
     list.map((p) =>
       p.id === activeId
-        ? { ...p, live: liveSpec(), qty, fillColor, fillImage, decos, history, histIdx, updatedAt: Date.now() }
+        ? { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -821,6 +828,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setQty(p.qty)
     setFillColor(p.fillColor)
     setFillImage(p.fillImage ?? null)
+    setLabelStyle(p.labelStyle ?? 'body')
     setDecos(p.decos)
     setSelectedIds([])
     setHistory(p.history)
@@ -1425,6 +1433,28 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               )}
             </div>
           </Group>
+
+          {!mat.foldable && (
+            <Group title="รูปแบบฉลาก" open={groups.label} onToggle={() => toggleGroup('label')}>
+              <div className="pick-list">
+                {LABEL_STYLES.map((s) => (
+                  <button
+                    key={s.id}
+                    className={`pick-item${labelStyle === s.id ? ' active' : ''}`}
+                    disabled={aiBusy}
+                    aria-pressed={labelStyle === s.id}
+                    onClick={() => setLabelStyle(s.id)}
+                  >
+                    <span className="pick-name">{s.nameTh}</span>
+                    <span className="pick-detail">{s.detail}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="hint">
+                ฉลากพันรอบตัว — เลือกว่าคลุมช่วงความสูงแค่ไหน ความสูงฉลากในไฟล์ปรับตามนี้
+              </p>
+            </Group>
+          )}
 
           <Group
             title={mat.foldable ? 'ขนาดกล่อง (ด้านใน)' : 'ขนาดภาชนะ'}

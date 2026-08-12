@@ -77,6 +77,44 @@ describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: dieline ฉลา�
   })
 })
 
+describe('vessel: รูปแบบฉลาก (label style)', () => {
+  const g = getMaterial('glass')
+  const bodyV = generateVessel(box, g, 'body')
+  const fullV = generateVessel(box, g, 'full')
+  const bandV = generateVessel(box, g, 'band')
+  const neckV = generateVessel(box, g, 'neck')
+
+  it('“สูงเต็มตัว” สูงสุด, “แถบกลาง/แถบบน” เตี้ยกว่ามาตรฐาน', () => {
+    const h = (v: ReturnType<typeof generateVessel>) => v.labelY1 - v.labelY0
+    expect(h(fullV)).toBeGreaterThan(h(bodyV))
+    expect(h(bandV)).toBeLessThan(h(bodyV))
+    expect(h(neckV)).toBeLessThan(h(bodyV))
+    // ความสูงฉลากใน dieline เปลี่ยนตาม (ไฟล์ที่ export ต่างกันจริง)
+    expect(fullV.label.height).toBeCloseTo(h(fullV))
+    expect(bandV.label.height).toBeCloseTo(h(bandV))
+  })
+
+  it('“แถบบน (ใกล้คอ)” อยู่สูงกว่า “แถบกลาง”', () => {
+    const mid = (v: ReturnType<typeof generateVessel>) => (v.labelY0 + v.labelY1) / 2
+    expect(mid(neckV)).toBeGreaterThan(mid(bandV))
+  })
+
+  it('ทุกแบบยังอยู่บนลำตัว (0 < y < H) และกว้าง = เส้นรอบวงเดิม', () => {
+    for (const v of [bodyV, fullV, bandV, neckV]) {
+      expect(v.labelY0).toBeGreaterThanOrEqual(0)
+      expect(v.labelY1).toBeLessThanOrEqual(box.H)
+      expect(v.labelY1).toBeGreaterThan(v.labelY0)
+      expect(v.label.width).toBeCloseTo(Math.PI * box.W + LABEL_OVERLAP)
+    }
+  })
+
+  it('ไม่ใส่ style = เท่ากับ body', () => {
+    const def = generateVessel(box, g)
+    expect(def.labelY0).toBeCloseTo(bodyV.labelY0)
+    expect(def.labelY1).toBeCloseTo(bodyV.labelY1)
+  })
+})
+
 describe('vessel: กันข้อมูลพิลึก', () => {
   it('D ใหญ่กว่า W ถูกบีบให้คอเล็กกว่าตัวเสมอ', () => {
     const v = generateVessel({ W: 60, D: 150, H: 100, handle: false }, getMaterial('glass'))
