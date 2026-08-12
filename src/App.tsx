@@ -80,6 +80,7 @@ import {
   IconAlignRight,
   IconBox,
   IconBottle,
+  IconTrash,
 } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
@@ -1780,6 +1781,14 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           onClick={() => toggleLocked(d.id)}
                         >
                           {d.locked ? '🔒' : '🔓'}
+                        </button>
+                        <button
+                          className="deco-toggle deco-del"
+                          title="ลบชิ้นนี้"
+                          aria-label="ลบชิ้นนี้"
+                          onClick={() => removeDeco(d.id)}
+                        >
+                          <IconTrash size={15} />
                         </button>
                       </li>
                       )

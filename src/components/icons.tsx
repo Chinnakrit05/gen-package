@@ -58,6 +58,14 @@ export function IconLine({ size = 16 }: IconProps) {
   )
 }
 
+export function IconTrash({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v5M14 11v5" />
+    </svg>
+  )
+}
+
 export function IconAlignLeft({ size = 16 }: IconProps) {
   return (
     <svg {...base(size)}>

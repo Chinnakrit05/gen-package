@@ -1129,6 +1129,17 @@ button[aria-disabled='true'] {
 .deco-toggle:hover {
   border-color: var(--accent);
 }
+/* ปุ่มลบเลเยอร์ — ไอคอนถังขยะ hover เป็นสีอันตราย */
+.deco-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+}
+.deco-del:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
 .deco-item {
   width: 100%;
   display: flex;
