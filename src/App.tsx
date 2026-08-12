@@ -78,6 +78,8 @@ import {
   IconAlignLeft,
   IconAlignCenter,
   IconAlignRight,
+  IconBox,
+  IconBottle,
 } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
@@ -496,6 +498,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   // กลุ่มเครื่องมือหน้าตกแต่งที่เปิดอยู่ (accordion) — เก็บค่าเริ่มต้นตามการใช้งานบ่อย
   const [groups, setGroups] = useState({
     // หน้าออกแบบ
+    mode: true,
     tpl: true,
     mat: true,
     size: true,
@@ -1333,36 +1336,69 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
 
           {sideTab === 'design' && (
           <>
-          <Group title="รูปแบบบรรจุภัณฑ์" open={groups.tpl} onToggle={() => toggleGroup('tpl')}>
-            {mat.foldable ? (
-              <>
-                <div className="pick-list">
-                  {TEMPLATES.map((tp) => (
-                    <button
-                      key={tp.id}
-                      className={`pick-item${templateId === tp.id ? ' active' : ''}`}
-                      disabled={aiBusy}
-                      aria-pressed={templateId === tp.id}
-                      onClick={() => changeTemplate(tp.id)}
-                    >
-                      <span className="pick-name">{tp.nameTh}</span>
-                      <span className="pick-detail">{tp.detail}</span>
-                    </button>
-                  ))}
-                </div>
-                <p className="hint">อยากทำตัวขวด/โหล/กระป๋องเอง? เลือกในกลุ่ม “วัสดุ” → ภาชนะขึ้นรูป</p>
-              </>
-            ) : (
-              <p className="hint">
-                วัสดุภาชนะไม่ใช้รูปแบบกล่อง — ระบบขึ้นทรง revolve และ blueprint คือ dieline ฉลากพันรอบตัว
-              </p>
-            )}
+          <Group title="ประเภทงาน" open={groups.mode} onToggle={() => toggleGroup('mode')}>
+            <div className="pick-list">
+              <button
+                className={`pick-item mode${mat.foldable ? ' active' : ''}`}
+                disabled={aiBusy}
+                aria-pressed={mat.foldable}
+                onClick={() => {
+                  if (!mat.foldable) changeMaterial('carton-300')
+                }}
+              >
+                <span className="mode-ic">
+                  <IconBox size={20} />
+                </span>
+                <span className="pick-body">
+                  <span className="pick-name">กล่องพับ</span>
+                  <span className="pick-detail">กล่องกระดาษพับขึ้นรูป — เลือกทรง + วัสดุ</span>
+                </span>
+              </button>
+              <button
+                className={`pick-item mode${!mat.foldable ? ' active' : ''}`}
+                disabled={aiBusy}
+                aria-pressed={!mat.foldable}
+                onClick={() => {
+                  if (mat.foldable) changeMaterial('pet-bottle')
+                }}
+              >
+                <span className="mode-ic">
+                  <IconBottle size={20} />
+                </span>
+                <span className="pick-body">
+                  <span className="pick-name">ภาชนะ + ฉลาก</span>
+                  <span className="pick-detail">ผลิตตัวขวด/โหล/กระป๋อง + ฉลากพันรอบ</span>
+                </span>
+              </button>
+            </div>
           </Group>
 
-          <Group title="วัสดุ" open={groups.mat} onToggle={() => toggleGroup('mat')}>
-            <div className="pick-group-label">กล่อง (เลือกรูปแบบด้านบน)</div>
+          {mat.foldable && (
+            <Group title="รูปแบบบรรจุภัณฑ์" open={groups.tpl} onToggle={() => toggleGroup('tpl')}>
+              <div className="pick-list">
+                {TEMPLATES.map((tp) => (
+                  <button
+                    key={tp.id}
+                    className={`pick-item${templateId === tp.id ? ' active' : ''}`}
+                    disabled={aiBusy}
+                    aria-pressed={templateId === tp.id}
+                    onClick={() => changeTemplate(tp.id)}
+                  >
+                    <span className="pick-name">{tp.nameTh}</span>
+                    <span className="pick-detail">{tp.detail}</span>
+                  </button>
+                ))}
+              </div>
+            </Group>
+          )}
+
+          <Group
+            title={mat.foldable ? 'วัสดุกล่อง' : 'ชนิดภาชนะ'}
+            open={groups.mat}
+            onToggle={() => toggleGroup('mat')}
+          >
             <div className="pick-list">
-              {MATERIALS.filter((m) => m.foldable).map((m) => (
+              {MATERIALS.filter((m) => m.foldable === mat.foldable).map((m) => (
                 <button
                   key={m.id}
                   className={`pick-item mat${materialId === m.id ? ' active' : ''}`}
@@ -1373,25 +1409,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   <span className="mat-sw" style={{ background: m.color }} />
                   <span className="pick-body">
                     <span className="pick-name">{m.nameTh}</span>
-                    <span className="pick-detail">หนา {m.thickness} มม. · พับได้</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-            <div className="pick-group-label">ภาชนะขึ้นรูป + ฉลาก (ขวด/โหล/กระป๋อง)</div>
-            <div className="pick-list">
-              {MATERIALS.filter((m) => !m.foldable).map((m) => (
-                <button
-                  key={m.id}
-                  className={`pick-item mat${materialId === m.id ? ' active' : ''}`}
-                  disabled={aiBusy}
-                  aria-pressed={materialId === m.id}
-                  onClick={() => changeMaterial(m.id)}
-                >
-                  <span className="mat-sw" style={{ background: m.color }} />
-                  <span className="pick-body">
-                    <span className="pick-name">{m.nameTh}</span>
-                    <span className="pick-detail">{m.process}</span>
+                    <span className="pick-detail">
+                      {m.foldable ? `หนา ${m.thickness} มม. · พับได้` : m.process}
+                    </span>
                   </span>
                 </button>
               ))}

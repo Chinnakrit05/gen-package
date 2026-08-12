@@ -291,6 +291,28 @@ aside h2 {
   margin-top: 0;
 }
 
+/* ตัวเลือกประเภทงาน (กล่องพับ / ภาชนะ) — ไอคอนซ้าย + เนื้อหาขวา */
+.pick-item.mode {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+.pick-item.mode .mode-ic {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.pick-item.mode.active .mode-ic {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
 /* --- แถบไปต่อขั้นถัดไป (ท้าย sidebar แต่ละแท็บ) --- */
 .step-nav {
   padding-top: 14px;

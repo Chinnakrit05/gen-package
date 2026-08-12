@@ -82,6 +82,25 @@ export function IconAlignRight({ size = 16 }: IconProps) {
   )
 }
 
+export function IconBox({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M12 3 20 7.2v9.6L12 21l-8-4.2V7.2z" />
+      <path d="M4 7.2 12 11.4l8-4.2" />
+      <path d="M12 11.4V21" />
+    </svg>
+  )
+}
+
+export function IconBottle({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M10 3h4v2.4c0 .8.3 1.3 1 1.9 1 .9 1.5 2 1.5 3.3V19a2 2 0 0 1-2 2H9.5a2 2 0 0 1-2-2v-8.4c0-1.3.5-2.4 1.5-3.3.7-.6 1-1.1 1-1.9z" />
+      <path d="M9.5 12.5h5" />
+    </svg>
+  )
+}
+
 export function IconUndo({ size = 16 }: IconProps) {
   return (
     <svg {...base(size)}>
