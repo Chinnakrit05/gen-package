@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
@@ -113,6 +113,14 @@ function VesselModel({
 }) {
   const tex = useLabelTexture(vessel, decos, fillColor, fillImage)
 
+  // three คอมไพล์ shader ตาม define ตอนสร้าง — พอ map เปลี่ยนจาก null → texture
+  // ต้องสั่ง needsUpdate ให้ recompile ไม่งั้นลาย/สีบนฉลากจะไม่ขึ้น (เหมือน PanelMesh ของกล่อง)
+  const labelMatRef = useRef<THREE.MeshStandardMaterial>(null!)
+  const hasTex = !!tex
+  useLayoutEffect(() => {
+    if (labelMatRef.current) labelMatRef.current.needsUpdate = true
+  }, [hasTex])
+
   const body = useMemo(
     () => new THREE.LatheGeometry(vessel.profile.map((p) => new THREE.Vector2(p.x, p.y)), 64),
     [vessel],
@@ -147,7 +155,7 @@ function VesselModel({
       </mesh>
       {/* หมุนรอยต่อฉลากไปด้านหลัง ไม่ให้บังหน้าลาย */}
       <mesh geometry={labelGeo} position={[0, (vessel.labelY0 + vessel.labelY1) / 2, 0]} rotation={[0, Math.PI, 0]}>
-        <meshStandardMaterial map={tex} color={tex ? '#ffffff' : '#f5f2ea'} roughness={0.8} metalness={0} />
+        <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} roughness={0.8} metalness={0} />
       </mesh>
     </group>
   )
