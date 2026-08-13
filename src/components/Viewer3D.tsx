@@ -31,11 +31,9 @@ function drawDeco(
   if (e.opacity !== undefined && e.opacity < 1) ctx.globalAlpha = e.opacity
   ctx.translate((e.x + w / 2) * s, (e.y + h / 2) * s)
   ctx.rotate((e.rot * Math.PI) / 180)
-  // ผิวที่กล้องเห็น (ด้านนอกกล่อง) เป็น "หลัง" ของ UV — ถ้าวาดปกติจะอ่านกลับซ้าย-ขวา
-  // มิเรอร์เนื้อของแต่ละชิ้นรอบจุดกึ่งกลางตัวเอง (scale -1) ให้ผิวนอกอ่านถูก โดย "ตำแหน่ง"
-  // ของชิ้นไม่ขยับ (จุดกึ่งกลางคงเดิม) — ต่างจากมิเรอร์ทั้งผืนที่ทำให้ตำแหน่งเลื่อนตามไปด้วย
-  // มิเรอร์ฐาน (ให้ผิวนอกอ่านถูก) คูณกับการพลิกของผู้ใช้: flipX สลับแกน x, flipY แกน y
-  ctx.scale(e.flipX ? 1 : -1, e.flipY ? -1 : 1)
+  // วาดปกติ (ไม่มิเรอร์ฐาน) — โมเดลถูกพลิก scale x=-1 ให้กล้องมองฝั่งพิมพ์/ด้านนอก
+  // ตำแหน่งซ้าย-ขวาจึงตรงกับ blueprint พอดี; เหลือแค่การพลิกของผู้ใช้ (flipX/flipY)
+  if (e.flipX || e.flipY) ctx.scale(e.flipX ? -1 : 1, e.flipY ? -1 : 1)
   if (e.type === 'image') {
     const img = imgOf(e.src)
     if (img) drawImageFit(ctx, img, e, s)
@@ -300,8 +298,9 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillIm
   const cy = (Math.min(...ys) + Math.max(...ys)) / 2
 
   // เอียงโมเดลตามจังหวะพับ (เช่น mailer พับเสร็จแล้วฐานควรอยู่ล่าง)
+  // scale x=-1: พลิกให้กล้องมอง "ฝั่งพิมพ์/ด้านนอก" ตำแหน่งลาย ซ้าย-ขวา จึงตรงกับ blueprint
   return (
-    <group rotation={[tilt * fold, 0, 0]}>
+    <group scale={[-1, 1, 1]} rotation={[tilt * fold, 0, 0]}>
       <group position={[-cx, cy, -depth / 2]}>
         {dieline.panels.map((p, i) => (
           <PanelMesh
