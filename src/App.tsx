@@ -1020,6 +1020,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
       layoutNote: currentAi?.layoutNote ?? '',
       reasoning: currentAi?.reasoning ?? '',
       dieline,
+      decos,
+      fillColor,
+      fillImage,
     })
     saveFile(bytes, 'application/pdf', 'spec.pdf')
   }

@@ -1,6 +1,6 @@
 import type { Dieline } from './types'
 import { pathToPolylines } from './dxf'
-import { ensureThaiFont } from './artwork'
+import { ensureThaiFont, drawFill, drawFillImage, drawDeco2D, type Deco, type FillImage } from './artwork'
 
 // ใบสรุปสเปก 1 หน้า (A4) สำหรับส่งโรงงานขอราคา — ไม่ใช่ไฟล์ผลิต
 //
@@ -24,6 +24,10 @@ export interface SpecSheetInput {
   layoutNote: string
   reasoning: string
   dieline: Dieline
+  // ลายบนแผ่น (โลโก้/ข้อความ/รูปทรง) + พื้นสี/รูปพื้น — ให้พรีวิว dieline โชว์ดีไซน์จริงตอนขอราคา
+  decos?: Deco[]
+  fillColor?: string | null
+  fillImage?: FillImage | null
 }
 
 // A4 150dpi (210×297 มม.)
@@ -69,6 +73,7 @@ function drawDielinePreview(
   y: number,
   w: number,
   h: number,
+  art?: { decos: Deco[]; fillColor?: string | null; fillImage?: FillImage | null; imgs: Map<string, HTMLImageElement> },
 ) {
   const pad = 6
   const s = Math.min((w - pad * 2) / d.width, (h - pad * 2) / d.height)
@@ -79,6 +84,13 @@ function drawDielinePreview(
   ctx.scale(s, s)
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
+  // ลายเป็นชั้นล่าง (พิกัดแผ่นคลี่ มม. เพราะ ctx ถูกสเกลด้วย s แล้ว จึงส่ง s=1) แล้ววาดเส้น dieline ทับเป็นไกด์
+  if (art) {
+    if (art.fillColor) drawFill(ctx, d, art.fillColor, 1)
+    const fimg = art.fillImage ? art.imgs.get(art.fillImage.src) : undefined
+    if (art.fillImage && fimg) drawFillImage(ctx, d, fimg, art.fillImage, 1)
+    for (const e of art.decos) if (!e.hidden) drawDeco2D(ctx, e, 1, (src) => art.imgs.get(src))
+  }
   for (const seg of d.segments) {
     ctx.beginPath()
     for (const poly of pathToPolylines(seg.d)) {
@@ -92,7 +104,7 @@ function drawDielinePreview(
   ctx.restore()
 }
 
-function renderCanvas(input: SpecSheetInput): HTMLCanvasElement {
+function renderCanvas(input: SpecSheetInput, imgs: Map<string, HTMLImageElement>): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
   canvas.width = CW
   canvas.height = CH
@@ -201,7 +213,12 @@ function renderCanvas(input: SpecSheetInput): HTMLCanvasElement {
   y += 20
 
   const previewH = CH - M - y - 70
-  drawDielinePreview(ctx, input.dieline, M, y + 14, CW - M * 2, previewH)
+  const decos = (input.decos ?? []).filter((e) => !e.hidden)
+  const art =
+    decos.length || input.fillColor || input.fillImage
+      ? { decos, fillColor: input.fillColor, fillImage: input.fillImage, imgs }
+      : undefined
+  drawDielinePreview(ctx, input.dieline, M, y + 14, CW - M * 2, previewH, art)
 
   // --- ท้ายเอกสาร ---
   ctx.fillStyle = SUB
@@ -277,6 +294,25 @@ function assemblePDF(jpeg: Uint8Array, imgW: number, imgH: number): Uint8Array {
 
 export async function specSheetPDFBytes(input: SpecSheetInput): Promise<Uint8Array> {
   await ensureThaiFont() // รอฟอนต์ไทยก่อน rasterize ไม่งั้นข้อความในใบสเปกเพี้ยน
-  const canvas = renderCanvas(input)
+  // โหลดรูปที่ลายอ้างถึง (โลโก้ภาพ + รูปพื้น) ก่อน rasterize ไม่งั้นพรีวิวจะขาดรูป
+  const srcs = new Set<string>()
+  for (const e of input.decos ?? []) if (!e.hidden && e.type === 'image') srcs.add(e.src)
+  if (input.fillImage) srcs.add(input.fillImage.src)
+  const imgs = new Map<string, HTMLImageElement>()
+  await Promise.all(
+    [...srcs].map(
+      (src) =>
+        new Promise<void>((res) => {
+          const im = new Image()
+          im.onload = () => {
+            imgs.set(src, im)
+            res()
+          }
+          im.onerror = () => res()
+          im.src = src
+        }),
+    ),
+  )
+  const canvas = renderCanvas(input, imgs)
   return assemblePDF(jpegBytes(canvas), canvas.width, canvas.height)
 }
