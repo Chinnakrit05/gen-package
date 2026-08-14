@@ -124,17 +124,26 @@ describe('pdf: เลเยอร์เสริม', () => {
     expect(x.size - 1).toBe(11) // ครบทุกเลเยอร์ = 11 objects
   })
 
-  it('fill: สีพื้นเป็น OCG vector (rg + f) และ xref ถูกเมื่อรวมทุกเลเยอร์', () => {
+  it('fill: สีพื้นเป็น OCG vector (CMYK k + f) และ xref ถูกเมื่อรวมทุกเลเยอร์', () => {
     const g = computeGuides(d.panels)
     const s = dec(dielinePDFBytes(d, true, { jpeg: fakeJpeg(), w: 10, h: 10 }, g, '#0f6e56'))
     expect(s.includes('(fill)')).toBe(true)
     expect(s.includes('/OC /OCf BDC')).toBe(true)
-    expect(/[\d.]+ [\d.]+ [\d.]+ rg/.test(s)).toBe(true) // ตั้งสีเติม
+    expect(/[\d.]+ [\d.]+ [\d.]+ [\d.]+ k\b/.test(s)).toBe(true) // ตั้งสีเติม CMYK
     expect(xrefOffsetsOk(s).ok).toBe(true)
     expect(xrefOffsetsOk(s).size - 1).toBe(12) // + fill OCG = 12 objects
   })
 
   it('ไม่มีสีพื้น → ไม่มีเลเยอร์ fill', () => {
     expect(dec(dielinePDFBytes(d, false)).includes('(fill)')).toBe(false)
+  })
+
+  it('สีเป็น CMYK: เส้น/เติมใช้ K/k (4 ค่า) ไม่มี operator RGB (RG/rg) หลงเหลือ', () => {
+    const g = computeGuides(d.panels)
+    const s = dec(dielinePDFBytes(d, true, undefined, g, '#0f6e56'))
+    expect(/[\d.]+ [\d.]+ [\d.]+ [\d.]+ K\b/.test(s)).toBe(true) // เส้น cut/crease/guide CMYK
+    expect(/[\d.]+ [\d.]+ [\d.]+ [\d.]+ k\b/.test(s)).toBe(true) // สีพื้น/ป้าย CMYK
+    expect(/[\d.]+ [\d.]+ [\d.]+ RG\b/.test(s)).toBe(false) // ไม่มีเส้น DeviceRGB
+    expect(/[\d.]+ [\d.]+ [\d.]+ rg\b/.test(s)).toBe(false) // ไม่มีเติม DeviceRGB
   })
 })

@@ -20,8 +20,18 @@ const K = 72 / 25.4 // มม. → point (หน่วยของ PDF)
 
 const n = (v: number) => (Math.abs(v) < 1e-6 ? 0 : v).toFixed(3)
 
-const rgb = (hex: string) =>
-  [1, 3, 5].map((i) => (parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(3)).join(' ')
+// ไฟล์ผลิตใช้ CMYK (งานพิมพ์บรรจุภัณฑ์คิดสีเป็น CMYK) — แปลง RGB hex → C M Y K แบบตรง
+// (ไม่มี ICC profile) พอสำหรับสีเส้น die-line/สีพื้นเวกเตอร์; โรงพิมพ์ที่ต้องการสีแม่นมาก
+// ค่อยแปลงซ้ำด้วยโปรไฟล์ของตัวเอง ส่วนภาพลาย (raster) ยังเป็น RGB (canvas พ่น CMYK JPEG ไม่ได้)
+// ใช้คู่กับ operator K (เส้น) / k (เติม) แทน RG / rg
+const cmyk = (hex: string) => {
+  const r = parseInt(hex.slice(1, 3), 16) / 255
+  const g = parseInt(hex.slice(3, 5), 16) / 255
+  const b = parseInt(hex.slice(5, 7), 16) / 255
+  const k = 1 - Math.max(r, g, b)
+  const f = (v: number) => (k >= 1 ? 0 : (1 - v - k) / (1 - k))
+  return [f(r), f(g), f(b), k].map((v) => v.toFixed(3)).join(' ')
+}
 
 const CUT = '#e30613'
 const CREASE = '#009640'
@@ -79,10 +89,10 @@ export function dielinePDFBytes(
   const layer = (ocName: string, setup: string, body: string) =>
     body ? `q\n/OC /${ocName} BDC\n${setup}\n${body}\nEMC\nQ\n` : ''
 
-  const cutBody = layer('OC1', `${rgb(CUT)} RG\n0.35 w\n1 J\n1 j`, strokeOf('cut'))
+  const cutBody = layer('OC1', `${cmyk(CUT)} K\n0.35 w\n1 J\n1 j`, strokeOf('cut'))
   const creaseBody = layer(
     'OC2',
-    `${rgb(CREASE)} RG\n0.35 w\n1 J\n1 j\n[4 2.5] 0 d`,
+    `${cmyk(CREASE)} K\n0.35 w\n1 J\n1 j\n[4 2.5] 0 d`,
     strokeOf('crease'),
   )
 
@@ -122,7 +132,7 @@ export function dielinePDFBytes(
       })
       .join('\n')
 
-    dimsBody = layer('OC3', `${rgb(DIM)} RG\n${rgb(DIM)} rg\n0.25 w`, `${strokes}\n${labels}`)
+    dimsBody = layer('OC3', `${cmyk(DIM)} K\n${cmyk(DIM)} k\n0.25 w`, `${strokes}\n${labels}`)
   }
 
   // เลขวัตถุ: 1-5 คงที่ (catalog/pages/page/contents/font) จากนั้น OCG แล้วปิดท้ายด้วยภาพ
@@ -141,7 +151,7 @@ export function dielinePDFBytes(
   // เลเยอร์สีพื้น: เติมสีลง polygon ของทุกแผงจริง (ล่างสุด) — vector
   let fillBody = ''
   if (hasFill && fillColor) {
-    const parts: string[] = [`${rgb(fillColor)} rg`]
+    const parts: string[] = [`${cmyk(fillColor)} k`]
     for (const p of d.panels) {
       if (p.outline.length < 3) continue
       parts.push(`${n(tx(p.outline[0].x))} ${n(ty(p.outline[0].y))} m`)
@@ -158,7 +168,7 @@ export function dielinePDFBytes(
   // เปลี่ยนสี/เส้นประกลางเลเยอร์ได้เพราะ state ค้างอยู่ใน q/Q เดียวกัน
   let guideBody = ''
   if (hasGuides && guides) {
-    const parts: string[] = [`${rgb(SAFE)} RG`, '0.3 w', '[2 2] 0 d']
+    const parts: string[] = [`${cmyk(SAFE)} K`, '0.3 w', '[2 2] 0 d']
     for (const poly of guides.safe) {
       if (poly.length < 3) continue
       parts.push(`${n(tx(poly[0].x))} ${n(ty(poly[0].y))} m`)
@@ -168,7 +178,7 @@ export function dielinePDFBytes(
       parts.push('h')
     }
     parts.push('S')
-    parts.push(`${rgb(BLEED)} RG`, '[3 2] 0 d')
+    parts.push(`${cmyk(BLEED)} K`, '[3 2] 0 d')
     for (const [a, b] of guides.bleed) {
       parts.push(`${n(tx(a.x))} ${n(ty(a.y))} m\n${n(tx(b.x))} ${n(ty(b.y))} l`)
     }
