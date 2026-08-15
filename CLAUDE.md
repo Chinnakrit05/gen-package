@@ -58,6 +58,9 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   หน้าตัดวงรีเปลี่ยนตามความสูง (`pouchWidthFactor`/`pouchDepthFactor` เป็น pure ทดสอบได้: ก้นแบนตั้งได้
   พุงกลางป่อง ปากซีลแบน) + UV แม็พ frontRect/backRect ให้ลายอ่านไม่กลับด้านเมื่อมองจาก +Z (texture flipY=false)
   ความหมายขนาด: W = กว้างถุง, D = ลึกก้น (clamp ≤ W, ≥10), H = สูงลำตัว (template ถูกละเลย)
+  ออปชัน `zipper` (ซิปล็อก + รอยฉีก) เป็นฟิลด์ระดับ Project แบบเดียวกับ `labelStyle` (thread ผ่าน
+  snapshot/sync/openProject/parseProject/projectFile — เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION=3);
+  เก็บเฉพาะเมื่อ true; ตั้งผ่าน checkbox หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° (แผ่นม้วน FEFCO 0427) ได้สันโค้งจาก `rollBeads` ใน fold.ts — ทรงกระบอกบาง
   รัศมี = ครึ่งของระยะสองชั้น เรนเดอร์เป็น `Bead` ใน Viewer3D โตตามการพับเอง; fold อื่นที่ใช้
   foldAngle ±180 จะได้สันนี้อัตโนมัติ (ปัจจุบันมีแค่ roll)

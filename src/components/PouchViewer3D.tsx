@@ -186,6 +186,17 @@ function PouchModel({
     if (matRef.current) matRef.current.needsUpdate = true
   }, [hasTex])
 
+  // แถบซิปล็อก: วงรีบาง ๆ พาดรอบใกล้ปาก ที่ระดับความสูงเดียวกับแนวซิปบน dieline
+  let zip: { y: number; ax: number; bz: number } | null = null
+  if (pouch.zipper && pouch.zipY !== undefined) {
+    const vzip = Math.min(0.98, Math.max(0.02, 1 - (pouch.zipY - pouch.frontRect.y) / pouch.H))
+    zip = {
+      y: vzip * pouch.H,
+      ax: (pouch.W / 2) * pouchWidthFactor(vzip) * 1.03,
+      bz: (pouch.gusset / 2) * pouchDepthFactor(vzip) * POUCH_DEPTH_SCALE * 1.03,
+    }
+  }
+
   return (
     <group position={[0, -pouch.H / 2, 0]}>
       <mesh geometry={geo}>
@@ -200,6 +211,12 @@ function PouchModel({
           side={THREE.DoubleSide}
         />
       </mesh>
+      {zip && (
+        <mesh position={[0, zip.y, 0]} scale={[zip.ax, 1, zip.bz]}>
+          <cylinderGeometry args={[1, 1, 5, 48, 1, true]} />
+          <meshStandardMaterial color="#6f685c" roughness={0.5} metalness={0} side={THREE.DoubleSide} />
+        </mesh>
+      )}
     </group>
   )
 }

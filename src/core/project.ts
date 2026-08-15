@@ -48,6 +48,7 @@ export interface Project {
   fillColor: string | null
   fillImage?: FillImage | null // รูปพื้นแพ็กเกจ (ถ้ามี = ใช้แทน/ทับ fillColor)
   labelStyle?: LabelStyle // รูปแบบฉลาก (เฉพาะโหมดภาชนะ) — ไม่ใส่ = 'body'
+  zipper?: boolean // ซิปล็อก + รอยฉีก (เฉพาะโหมดถุง) — เก็บเฉพาะเมื่อ true
   decos: Deco[]
   history: DesignVersion[]
   histIdx: number
@@ -124,6 +125,7 @@ export function parseProject(v: unknown, idx: number): Project | null {
     fillColor: typeof o.fillColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.fillColor) ? o.fillColor : null,
     fillImage: parseFillImage(o.fillImage),
     labelStyle: LABEL_STYLES.some((s) => s.id === o.labelStyle) ? (o.labelStyle as LabelStyle) : undefined,
+    zipper: o.zipper === true ? true : undefined,
     decos: parseDecos(o.decos, o.artwork),
     history,
     histIdx: clampIdx(o.histIdx, history.length),

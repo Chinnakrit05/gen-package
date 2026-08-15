@@ -14,6 +14,7 @@ export const isPouch = (m: Material) => !m.foldable && m.form === 'pouch'
 
 export const POUCH_SIDE_SEAL = 6 // ริมซีล/ลิ้นทากาวข้าง (มม.)
 export const POUCH_TOP_SEAL = 10 // ริมซีลปากบน (มม.)
+export const POUCH_ZIP_INSET = 18 // ระยะจากปากบนลงมาถึงแนวซิปล็อก (มม.)
 // ตัวคูณความลึก 3D: ถุงจริงพองไม่เต็ม gusset — หรี่ความป่อง (หน้า-หลัง) ให้ดูแบนสมจริง
 // มีผลเฉพาะทรง 3D ไม่แตะ dieline/ก้นที่ส่งผลิต; ปรับค่านี้ตัวเดียวเพื่อเพิ่ม/ลดความป่อง
 export const POUCH_DEPTH_SCALE = 0.62
@@ -25,14 +26,18 @@ export interface Pouch {
   gusset: number // ความลึกก้น
   frontRect: { x: number; y: number; w: number; h: number } // พื้นที่พิมพ์หน้าถุง (พิกัดแผ่นคลี่) สำหรับ map texture 3D
   backRect: { x: number; y: number; w: number; h: number }
+  zipper: boolean // มีซิปล็อก + รอยฉีกไหม
+  zipY?: number // พิกัดแผ่นคลี่ y ของแนวซิป (เมื่อ zipper=true) — ใช้วางแถบซิปใน 3D
 }
 
-export function generatePouch(box: BoxParams, _mat: Material): Pouch {
+export function generatePouch(box: BoxParams, _mat: Material, zipper = false): Pouch {
   const { W, D, H } = box
   const g = Math.min(Math.max(D, 10), W) // ก้นไม่ลึกเกินความกว้างถุง และไม่ต่ำกว่า 10
   const ss = POUCH_SIDE_SEAL
   const st = POUCH_TOP_SEAL
   const filmH = st + H + g
+  // แนวซิปอยู่ใต้ปากบน แต่ต้องไม่ต่ำเกินครึ่งลำตัว (ถุงเตี้ยมาก ๆ)
+  const zipY = zipper ? st + Math.min(POUCH_ZIP_INSET, H * 0.5) : undefined
 
   // แผ่นฟิล์มแบน: [หน้า W][หลัง W][ลิ้นทากาว ss] แนวนอน; แนวตั้ง = ริมซีลบน + ลำตัว + ก้น
   // แยกลิ้นกาวเป็นแผงต่างหาก (ขอบร่วม x=2W เป็นรอยต่อ ไม่ใช่ขอบนอก) เหมือน dieline ฉลาก
@@ -59,6 +64,16 @@ export function generatePouch(box: BoxParams, _mat: Material): Pouch {
     { a: P(2 * W + ss + 12, st + H), b: P(2 * W + ss + 12, filmH), label: `ก้น ${fmt(g)}` },
   ]
 
+  if (zipper && zipY !== undefined) {
+    // แนวซิปล็อกพาดขวางหน้า+หลัง + รอยฉีก (V) ที่ขอบซีลสองข้าง เหนือซิปเล็กน้อยเพื่อฉีกเปิด
+    segments.push(crease(`M 0 ${zipY} L ${2 * W} ${zipY}`))
+    const tearY = zipY - 4
+    const nz = 4 // ความลึกรอยฉีก
+    segments.push(cut(`M 0 ${tearY - 2.5} L ${nz} ${tearY} L 0 ${tearY + 2.5}`)) // ขอบซ้าย (ริมกาว)
+    segments.push(cut(`M ${2 * W + ss} ${tearY - 2.5} L ${2 * W + ss - nz} ${tearY} L ${2 * W + ss} ${tearY + 2.5}`)) // ขอบขวา
+    dims.push({ a: P(0, zipY), b: P(2 * W, zipY), label: 'ซิปล็อก + รอยฉีก' })
+  }
+
   return {
     label: { width: 2 * W + ss, height: filmH, segments, panels, dims },
     W,
@@ -66,6 +81,8 @@ export function generatePouch(box: BoxParams, _mat: Material): Pouch {
     gusset: g,
     frontRect: { x: 0, y: st, w: W, h: H },
     backRect: { x: W, y: st, w: W, h: H },
+    zipper,
+    zipY,
   }
 }
 

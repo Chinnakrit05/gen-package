@@ -38,6 +38,28 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
     expect(p.label.panels.map((pp) => pp.id)).toEqual(['film', 'glue'])
   })
 
+  it('ไม่ใส่ซิป (ค่าเริ่มต้น) → ไม่มี zipY และไม่มีเส้น/รอยฉีกเพิ่ม', () => {
+    const p = generatePouch({ W: 120, D: 70, H: 180 }, mat)
+    expect(p.zipper).toBe(false)
+    expect(p.zipY).toBeUndefined()
+    expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(5)
+    expect(p.label.segments.filter((s) => s.kind === 'cut').length).toBe(1)
+  })
+
+  it('ใส่ซิป → เพิ่มแนวซิป (crease) + รอยฉีกสองข้าง (cut) + zipY อยู่ใต้ปากบน', () => {
+    const p = generatePouch({ W: 120, D: 70, H: 180 }, mat, true)
+    expect(p.zipper).toBe(true)
+    expect(p.zipY).toBe(POUCH_TOP_SEAL + 18) // inset 18 (H สูงพอ)
+    expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(6) // +แนวซิป
+    expect(p.label.segments.filter((s) => s.kind === 'cut').length).toBe(3) // +รอยฉีก 2 ข้าง
+    expect(p.label.dims.some((d) => d.label.includes('ซิป'))).toBe(true)
+  })
+
+  it('ถุงเตี้ยมาก: แนวซิปไม่ต่ำกว่าครึ่งลำตัว', () => {
+    const p = generatePouch({ W: 120, D: 70, H: 20 }, mat, true) // H เล็ก → inset ถูกจำกัด
+    expect(p.zipY! - POUCH_TOP_SEAL).toBeLessThanOrEqual(10) // ≤ H*0.5
+  })
+
   it('dieline ไหลผ่าน guides + export PDF (CMYK) ได้เหมือน Dieline ปกติ', () => {
     const p = generatePouch({ W: 120, D: 70, H: 180 }, mat)
     expect(() => computeGuides(p.label.panels)).not.toThrow()

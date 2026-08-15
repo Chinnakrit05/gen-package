@@ -312,6 +312,7 @@ interface EditSnapshot {
   fillColor: string | null
   fillImage: FillImage | null
   labelStyle: LabelStyle
+  zipper: boolean
   decos: Deco[]
 }
 
@@ -326,6 +327,7 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.fillColor === b.fillColor &&
   a.fillImage === b.fillImage &&
   a.labelStyle === b.labelStyle &&
+  a.zipper === b.zipper &&
   a.decos === b.decos
 
 const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
@@ -499,6 +501,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [fillColor, setFillColor] = useState<string | null>(active0.fillColor)
   const [fillImage, setFillImage] = useState<FillImage | null>(active0.fillImage ?? null)
   const [labelStyle, setLabelStyle] = useState<LabelStyle>(active0.labelStyle ?? 'body')
+  const [zipper, setZipper] = useState<boolean>(active0.zipper ?? false)
   const [decos, setDecos] = useState<Deco[]>(active0.decos)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [renamingId, setRenamingId] = useState<string | null>(null) // เลเยอร์ที่กำลังแก้ชื่อ (ดับเบิลคลิก)
@@ -572,8 +575,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     [W, D, H, handle, mat, labelStyle, kind],
   )
   const pouch = useMemo(
-    () => (kind === 'pouch' ? generatePouch({ W, D, H, handle }, mat) : null),
-    [W, D, H, handle, mat, kind],
+    () => (kind === 'pouch' ? generatePouch({ W, D, H, handle }, mat, zipper) : null),
+    [W, D, H, handle, mat, kind, zipper],
   )
   const dieline = useMemo(
     () =>
@@ -614,6 +617,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 fillColor,
                 fillImage,
                 labelStyle,
+                zipper,
                 decos,
                 history,
                 histIdx,
@@ -624,7 +628,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, zipper, decos, activeId])
 
   // save ทุกงานลง localStorage
   useEffect(() => {
@@ -711,6 +715,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     fillColor,
     fillImage,
     labelStyle,
+    zipper,
     decos,
   })
 
@@ -733,7 +738,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, decos])
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, zipper, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -747,6 +752,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setFillColor(s.fillColor)
     setFillImage(s.fillImage ?? null)
     setLabelStyle(s.labelStyle ?? 'body')
+    setZipper(s.zipper ?? false)
     setDecos(s.decos)
     setSelectedIds([])
   }
@@ -829,7 +835,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const flushInto = (list: Project[]): Project[] =>
     list.map((p) =>
       p.id === activeId
-        ? { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, decos, history, histIdx, updatedAt: Date.now() }
+        ? { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, zipper, decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -845,6 +851,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setFillColor(p.fillColor)
     setFillImage(p.fillImage ?? null)
     setLabelStyle(p.labelStyle ?? 'body')
+    setZipper(p.zipper ?? false)
     setDecos(p.decos)
     setSelectedIds([])
     setHistory(p.history)
@@ -1534,6 +1541,17 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   onChange={(e) => setHandle(e.target.checked)}
                 />
                 เจาะรูหิ้ว (die-cut handle)
+              </label>
+            )}
+            {kind === 'pouch' && (
+              <label className="check" style={{ marginTop: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={zipper}
+                  disabled={aiBusy}
+                  onChange={(e) => setZipper(e.target.checked)}
+                />
+                ซิปล็อก + รอยฉีก (เปิด-ปิดซ้ำได้)
               </label>
             )}
           </Group>
