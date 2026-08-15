@@ -47,7 +47,7 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
   })
 
   it('ใส่ซิป → เพิ่มแนวซิป (crease) + รอยฉีกสองข้าง (cut) + zipY อยู่ใต้ปากบน', () => {
-    const p = generatePouch({ W: 120, D: 70, H: 180 }, mat, true)
+    const p = generatePouch({ W: 120, D: 70, H: 180 }, mat, { zipper: true })
     expect(p.zipper).toBe(true)
     expect(p.zipY).toBe(POUCH_TOP_SEAL + 18) // inset 18 (H สูงพอ)
     expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(6) // +แนวซิป
@@ -56,8 +56,27 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
   })
 
   it('ถุงเตี้ยมาก: แนวซิปไม่ต่ำกว่าครึ่งลำตัว', () => {
-    const p = generatePouch({ W: 120, D: 70, H: 20 }, mat, true) // H เล็ก → inset ถูกจำกัด
+    const p = generatePouch({ W: 120, D: 70, H: 20 }, mat, { zipper: true }) // H เล็ก → inset ถูกจำกัด
     expect(p.zipY! - POUCH_TOP_SEAL).toBeLessThanOrEqual(10) // ≤ H*0.5
+  })
+
+  it('รูปแบบซองแบน (flat): ไม่มีก้น — สูงแผ่น = ริมบน+ตัว+ริมล่าง, ไม่มีเส้นพับกลางก้น', () => {
+    const W = 100,
+      D = 70,
+      H = 140
+    const p = generatePouch({ W, D, H }, mat, { style: 'flat' })
+    expect(p.style).toBe('flat')
+    expect(p.gusset).toBe(0) // ไม่มีก้น (ไม่ใช้ D)
+    expect(p.label.height).toBe(POUCH_TOP_SEAL + H + POUCH_TOP_SEAL) // ริมบน + ตัว + ริมล่าง
+    // ซองแบน = crease 4 เส้น (สันข้าง/กาว/ซีลบน/ซีลล่าง) ไม่มีพับกลางก้น
+    expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(4)
+    expect(p.label.dims.some((d) => d.label.includes('ก้น'))).toBe(false)
+    expect(p.label.dims.some((d) => d.label.includes('กว้างซอง'))).toBe(true)
+    expect(p.depth3D).toBeGreaterThan(0) // ยังพองบาง ๆ ใน 3D
+  })
+
+  it('ค่าเริ่มต้น (ไม่ระบุ opts) = ถุงตั้ง', () => {
+    expect(generatePouch({ W: 100, D: 70, H: 140 }, mat).style).toBe('stand')
   })
 
   it('dieline ไหลผ่าน guides + export PDF (CMYK) ได้เหมือน Dieline ปกติ', () => {
@@ -92,5 +111,11 @@ describe('pouch: หน้าตัด 3D (ยืนได้/พุงป่อ
     }
     expect(pouchWidthFactor(0.5)).toBe(1)
     expect(pouchWidthFactor(1)).toBeLessThan(1) // ปากคอดเข้าซีล
+  })
+
+  it('ซองแบน (flat): วงรีสมมาตร ซีลแบนทั้งบน-ล่าง พองสุดกลาง', () => {
+    expect(pouchDepthFactor(0, 'flat')).toBeLessThan(0.1) // ซีลล่างแบน
+    expect(pouchDepthFactor(1, 'flat')).toBeLessThan(0.1) // ซีลบนแบน
+    expect(pouchDepthFactor(0.5, 'flat')).toBeCloseTo(1, 5) // พองสุดกลาง
   })
 })

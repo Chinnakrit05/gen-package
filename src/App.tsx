@@ -33,7 +33,7 @@ import {
 } from './core/artwork'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
-import { generatePouch } from './core/pouch'
+import { generatePouch, POUCH_STYLES, type PouchStyle } from './core/pouch'
 import {
   clamp,
   freshProject,
@@ -312,6 +312,7 @@ interface EditSnapshot {
   fillColor: string | null
   fillImage: FillImage | null
   labelStyle: LabelStyle
+  pouchStyle: PouchStyle
   zipper: boolean
   decos: Deco[]
 }
@@ -327,6 +328,7 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.fillColor === b.fillColor &&
   a.fillImage === b.fillImage &&
   a.labelStyle === b.labelStyle &&
+  a.pouchStyle === b.pouchStyle &&
   a.zipper === b.zipper &&
   a.decos === b.decos
 
@@ -501,6 +503,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [fillColor, setFillColor] = useState<string | null>(active0.fillColor)
   const [fillImage, setFillImage] = useState<FillImage | null>(active0.fillImage ?? null)
   const [labelStyle, setLabelStyle] = useState<LabelStyle>(active0.labelStyle ?? 'body')
+  const [pouchStyle, setPouchStyle] = useState<PouchStyle>(active0.pouchStyle ?? 'stand')
   const [zipper, setZipper] = useState<boolean>(active0.zipper ?? false)
   const [decos, setDecos] = useState<Deco[]>(active0.decos)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -575,8 +578,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     [W, D, H, handle, mat, labelStyle, kind],
   )
   const pouch = useMemo(
-    () => (kind === 'pouch' ? generatePouch({ W, D, H, handle }, mat, zipper) : null),
-    [W, D, H, handle, mat, kind, zipper],
+    () => (kind === 'pouch' ? generatePouch({ W, D, H, handle }, mat, { style: pouchStyle, zipper }) : null),
+    [W, D, H, handle, mat, kind, pouchStyle, zipper],
   )
   const dieline = useMemo(
     () =>
@@ -617,6 +620,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 fillColor,
                 fillImage,
                 labelStyle,
+                pouchStyle,
                 zipper,
                 decos,
                 history,
@@ -628,7 +632,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, zipper, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, decos, activeId])
 
   // save ทุกงานลง localStorage
   useEffect(() => {
@@ -715,6 +719,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     fillColor,
     fillImage,
     labelStyle,
+    pouchStyle,
     zipper,
     decos,
   })
@@ -738,7 +743,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, zipper, decos])
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -752,6 +757,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setFillColor(s.fillColor)
     setFillImage(s.fillImage ?? null)
     setLabelStyle(s.labelStyle ?? 'body')
+    setPouchStyle(s.pouchStyle ?? 'stand')
     setZipper(s.zipper ?? false)
     setDecos(s.decos)
     setSelectedIds([])
@@ -835,7 +841,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const flushInto = (list: Project[]): Project[] =>
     list.map((p) =>
       p.id === activeId
-        ? { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, zipper, decos, history, histIdx, updatedAt: Date.now() }
+        ? { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -851,6 +857,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setFillColor(p.fillColor)
     setFillImage(p.fillImage ?? null)
     setLabelStyle(p.labelStyle ?? 'body')
+    setPouchStyle(p.pouchStyle ?? 'stand')
     setZipper(p.zipper ?? false)
     setDecos(p.decos)
     setSelectedIds([])
@@ -1503,27 +1510,62 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
             </Group>
           )}
 
+          {kind === 'pouch' && (
+            <Group title="รูปแบบถุง" open={groups.label} onToggle={() => toggleGroup('label')}>
+              <div className="pick-list">
+                {POUCH_STYLES.map((s) => (
+                  <button
+                    key={s.id}
+                    className={`pick-item${pouchStyle === s.id ? ' active' : ''}`}
+                    disabled={aiBusy}
+                    aria-pressed={pouchStyle === s.id}
+                    onClick={() => setPouchStyle(s.id)}
+                  >
+                    <span className="pick-name">{s.nameTh}</span>
+                    <span className="pick-detail">{s.detail}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="hint">
+                {pouchStyle === 'flat'
+                  ? 'ซองแบน 3 ด้าน — ไม่มีก้น ไม่ใช้ค่า “ลึกก้น”'
+                  : 'ถุงตั้งได้ — ค่า “ลึกก้น” ยิ่งมากยิ่งตั้งมั่น/จุมาก'}
+              </p>
+            </Group>
+          )}
+
           <Group
             title={kind === 'box' ? 'ขนาดกล่อง (ด้านใน)' : kind === 'pouch' ? 'ขนาดถุง' : 'ขนาดภาชนะ'}
             open={groups.size}
             onToggle={() => toggleGroup('size')}
           >
             <DimField
-              label={kind === 'box' ? 'กว้าง W' : kind === 'pouch' ? 'กว้างถุง W' : '⌀ ตัว W'}
+              label={
+                kind === 'box'
+                  ? 'กว้าง W'
+                  : kind === 'pouch'
+                    ? pouchStyle === 'flat'
+                      ? 'กว้างซอง W'
+                      : 'กว้างถุง W'
+                    : '⌀ ตัว W'
+              }
               value={W}
               min={30}
               max={250}
               disabled={aiBusy}
               onChange={setW}
             />
-            <DimField
-              label={kind === 'box' ? 'ลึก D' : kind === 'pouch' ? 'ลึกก้น D' : '⌀ ปาก/คอ D'}
-              value={D}
-              min={20}
-              max={150}
-              disabled={aiBusy}
-              onChange={setD}
-            />
+            {/* ซองแบนไม่มีก้น → ซ่อนช่อง "ลึกก้น" */}
+            {!(kind === 'pouch' && pouchStyle === 'flat') && (
+              <DimField
+                label={kind === 'box' ? 'ลึก D' : kind === 'pouch' ? 'ลึกก้น D' : '⌀ ปาก/คอ D'}
+                value={D}
+                min={20}
+                max={150}
+                disabled={aiBusy}
+                onChange={setD}
+              />
+            )}
             <DimField
               label={kind === 'pouch' ? 'สูงลำตัว H' : 'สูง H'}
               value={H}

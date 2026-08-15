@@ -2,6 +2,7 @@ import { MATERIALS } from './materials'
 import { TEMPLATES } from './templates'
 import { parseDecos, parseFillImage, type Deco, type FillImage } from './artwork'
 import { LABEL_STYLES, type LabelStyle } from './vessel'
+import { POUCH_STYLES, type PouchStyle } from './pouch'
 import type { CurrentSpec } from './ai'
 
 // โมเดลข้อมูลของ "งาน" หนึ่งชิ้น + ตัว parse ที่ตรวจ/ซ่อมข้อมูลจาก localStorage หรือไฟล์ที่นำเข้า
@@ -48,6 +49,7 @@ export interface Project {
   fillColor: string | null
   fillImage?: FillImage | null // รูปพื้นแพ็กเกจ (ถ้ามี = ใช้แทน/ทับ fillColor)
   labelStyle?: LabelStyle // รูปแบบฉลาก (เฉพาะโหมดภาชนะ) — ไม่ใส่ = 'body'
+  pouchStyle?: PouchStyle // รูปแบบถุง (เฉพาะโหมดถุง) — ไม่ใส่ = 'stand'
   zipper?: boolean // ซิปล็อก + รอยฉีก (เฉพาะโหมดถุง) — เก็บเฉพาะเมื่อ true
   decos: Deco[]
   history: DesignVersion[]
@@ -125,6 +127,7 @@ export function parseProject(v: unknown, idx: number): Project | null {
     fillColor: typeof o.fillColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.fillColor) ? o.fillColor : null,
     fillImage: parseFillImage(o.fillImage),
     labelStyle: LABEL_STYLES.some((s) => s.id === o.labelStyle) ? (o.labelStyle as LabelStyle) : undefined,
+    pouchStyle: POUCH_STYLES.some((s) => s.id === o.pouchStyle) ? (o.pouchStyle as PouchStyle) : undefined,
     zipper: o.zipper === true ? true : undefined,
     decos: parseDecos(o.decos, o.artwork),
     history,
