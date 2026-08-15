@@ -109,6 +109,17 @@ export function IconBottle({ size = 16 }: IconProps) {
   )
 }
 
+export function IconPouch({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      {/* ปากซีลด้านบน + ลำตัวถุงป่องเล็กน้อย + ก้นตั้ง */}
+      <path d="M8 3h8l-.5 2.5M8 3l.5 2.5M8 3H7v1.5h10V3h-1" />
+      <path d="M8.5 5.5C7.4 8 7 11 7 14c0 3 .3 5 .8 6.2.2.5.7.8 1.2.8h6c.5 0 1-.3 1.2-.8.5-1.2.8-3.2.8-6.2 0-3-.4-6-1.5-8.5" />
+      <path d="M7.6 19.5h8.8" />
+    </svg>
+  )
+}
+
 export function IconUndo({ size = 16 }: IconProps) {
   return (
     <svg {...base(size)}>

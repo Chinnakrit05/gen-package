@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
-import { MATERIALS, getMaterial } from './core/materials'
+import { MATERIALS, getMaterial, packKind } from './core/materials'
 import { TEMPLATES, getTemplate } from './core/templates'
 import type { Dieline } from './core/types'
 import type { AiBoxSpec, CurrentSpec } from './core/ai'
@@ -33,6 +33,7 @@ import {
 } from './core/artwork'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
+import { generatePouch } from './core/pouch'
 import {
   clamp,
   freshProject,
@@ -64,6 +65,9 @@ const Viewer3D = lazy(() => import('./components/Viewer3D').then((m) => ({ defau
 const VesselViewer3D = lazy(() =>
   import('./components/VesselViewer3D').then((m) => ({ default: m.VesselViewer3D })),
 )
+const PouchViewer3D = lazy(() =>
+  import('./components/PouchViewer3D').then((m) => ({ default: m.PouchViewer3D })),
+)
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
 import { ColorField } from './components/ColorField'
@@ -80,6 +84,7 @@ import {
   IconAlignRight,
   IconBox,
   IconBottle,
+  IconPouch,
   IconTrash,
 } from './components/icons'
 
@@ -559,15 +564,25 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
 
   const template = getTemplate(templateId)
   const mat = getMaterial(materialId)
-  // วัสดุกลุ่มพับไม่ได้ → เส้นทางภาชนะ: ทรง revolve + dieline ของ "ฉลาก"
-  // ฉลากเป็น Dieline ธรรมดา ระบบเดิมทั้งหมด (artwork/export/guides/ใบสเปก) จึงใช้ต่อได้เลย
+  const kind = packKind(mat) // 'box' | 'vessel' | 'pouch' — เลือก path dieline/3D
+  // วัสดุพับไม่ได้แยกเป็น 2 เส้นทาง: ภาชนะ (revolve + ฉลากพันรอบ) กับ ถุงฟิล์ม (doypack)
+  // ทั้งคู่ผลิต Dieline ธรรมดา ระบบเดิม (artwork/export/guides/ใบสเปก/CMYK) จึงใช้ต่อได้เลย
   const vessel = useMemo(
-    () => (mat.foldable ? null : generateVessel({ W, D, H, handle }, mat, labelStyle)),
-    [W, D, H, handle, mat, labelStyle],
+    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle) : null),
+    [W, D, H, handle, mat, labelStyle, kind],
+  )
+  const pouch = useMemo(
+    () => (kind === 'pouch' ? generatePouch({ W, D, H, handle }, mat) : null),
+    [W, D, H, handle, mat, kind],
   )
   const dieline = useMemo(
-    () => (mat.foldable ? template.generate({ W, D, H, handle }, mat) : vessel!.label),
-    [W, D, H, handle, mat, template, vessel],
+    () =>
+      kind === 'box'
+        ? template.generate({ W, D, H, handle }, mat)
+        : kind === 'vessel'
+          ? vessel!.label
+          : pouch!.label,
+    [W, D, H, handle, mat, template, vessel, pouch, kind],
   )
   const guides = useMemo(
     () => (showGuides && dieline ? computeGuides(dieline.panels) : null),
@@ -1008,7 +1023,12 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     if (!dieline) return
     const bytes = await specSheetPDFBytes({
       projectName: activeName,
-      templateNameTh: mat.foldable ? template.nameTh : `ภาชนะ ${mat.nameTh} + ฉลากพันรอบ`,
+      templateNameTh:
+        kind === 'box'
+          ? template.nameTh
+          : kind === 'pouch'
+            ? `ถุงตั้งได้ (doypack) — ${mat.nameTh}`
+            : `ภาชนะ ${mat.nameTh} + ฉลากพันรอบ`,
       materialNameTh: mat.nameTh,
       materialThickness: mat.thickness,
       W,
@@ -1351,11 +1371,11 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
           <Group title="ประเภทงาน" open={groups.mode} onToggle={() => toggleGroup('mode')}>
             <div className="pick-list">
               <button
-                className={`pick-item mode${mat.foldable ? ' active' : ''}`}
+                className={`pick-item mode${kind === 'box' ? ' active' : ''}`}
                 disabled={aiBusy}
-                aria-pressed={mat.foldable}
+                aria-pressed={kind === 'box'}
                 onClick={() => {
-                  if (!mat.foldable) changeMaterial('carton-300')
+                  if (kind !== 'box') changeMaterial('carton-300')
                 }}
               >
                 <span className="mode-ic">
@@ -1367,11 +1387,11 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 </span>
               </button>
               <button
-                className={`pick-item mode${!mat.foldable ? ' active' : ''}`}
+                className={`pick-item mode${kind === 'vessel' ? ' active' : ''}`}
                 disabled={aiBusy}
-                aria-pressed={!mat.foldable}
+                aria-pressed={kind === 'vessel'}
                 onClick={() => {
-                  if (mat.foldable) changeMaterial('pet-bottle')
+                  if (kind !== 'vessel') changeMaterial('pet-bottle')
                 }}
               >
                 <span className="mode-ic">
@@ -1380,6 +1400,22 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 <span className="pick-body">
                   <span className="pick-name">ภาชนะ + ฉลาก</span>
                   <span className="pick-detail">ผลิตตัวขวด/โหล/กระป๋อง + ฉลากพันรอบ</span>
+                </span>
+              </button>
+              <button
+                className={`pick-item mode${kind === 'pouch' ? ' active' : ''}`}
+                disabled={aiBusy}
+                aria-pressed={kind === 'pouch'}
+                onClick={() => {
+                  if (kind !== 'pouch') changeMaterial('pouch-foil')
+                }}
+              >
+                <span className="mode-ic">
+                  <IconPouch size={20} />
+                </span>
+                <span className="pick-body">
+                  <span className="pick-name">ถุงฟิล์ม (ตั้งได้)</span>
+                  <span className="pick-detail">ถุง doypack ก้นตั้ง — พิมพ์ฟิล์มซีลขอบ</span>
                 </span>
               </button>
             </div>
@@ -1405,12 +1441,12 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
           )}
 
           <Group
-            title={mat.foldable ? 'วัสดุกล่อง' : 'ชนิดภาชนะ'}
+            title={kind === 'box' ? 'วัสดุกล่อง' : kind === 'pouch' ? 'ชนิดถุง' : 'ชนิดภาชนะ'}
             open={groups.mat}
             onToggle={() => toggleGroup('mat')}
           >
             <div className="pick-list">
-              {MATERIALS.filter((m) => m.foldable === mat.foldable).map((m) => (
+              {MATERIALS.filter((m) => packKind(m) === kind).map((m) => (
                 <button
                   key={m.id}
                   className={`pick-item mat${materialId === m.id ? ' active' : ''}`}
@@ -1438,7 +1474,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
             </div>
           </Group>
 
-          {!mat.foldable && (
+          {kind === 'vessel' && (
             <Group title="รูปแบบฉลาก" open={groups.label} onToggle={() => toggleGroup('label')}>
               <div className="pick-list">
                 {LABEL_STYLES.map((s) => (
@@ -1461,12 +1497,12 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
           )}
 
           <Group
-            title={mat.foldable ? 'ขนาดกล่อง (ด้านใน)' : 'ขนาดภาชนะ'}
+            title={kind === 'box' ? 'ขนาดกล่อง (ด้านใน)' : kind === 'pouch' ? 'ขนาดถุง' : 'ขนาดภาชนะ'}
             open={groups.size}
             onToggle={() => toggleGroup('size')}
           >
             <DimField
-              label={mat.foldable ? 'กว้าง W' : '⌀ ตัว W'}
+              label={kind === 'box' ? 'กว้าง W' : kind === 'pouch' ? 'กว้างถุง W' : '⌀ ตัว W'}
               value={W}
               min={30}
               max={250}
@@ -1474,14 +1510,21 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               onChange={setW}
             />
             <DimField
-              label={mat.foldable ? 'ลึก D' : '⌀ ปาก/คอ D'}
+              label={kind === 'box' ? 'ลึก D' : kind === 'pouch' ? 'ลึกก้น D' : '⌀ ปาก/คอ D'}
               value={D}
               min={20}
               max={150}
               disabled={aiBusy}
               onChange={setD}
             />
-            <DimField label="สูง H" value={H} min={30} max={300} disabled={aiBusy} onChange={setH} />
+            <DimField
+              label={kind === 'pouch' ? 'สูงลำตัว H' : 'สูง H'}
+              value={H}
+              min={30}
+              max={300}
+              disabled={aiBusy}
+              onChange={setH}
+            />
             {mat.foldable && template.supportsHandle && (
               <label className="check" style={{ marginTop: 12 }}>
                 <input
@@ -1636,9 +1679,11 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 <p className="hint">
                   {fillImage
                     ? 'รูปพื้นคลุมทั้งแพ็กเกจแล้วครอปตามรูปทรง blueprint — เข้าไฟล์ .svg/.pdf จริง (ไม่ใส่ .dxf); ปรับซูม/เลื่อนให้รูปเข้ากรอบพอดี'
-                    : mat.foldable
+                    : kind === 'box'
                       ? 'ถมสีทั้งแผ่น (flood) เข้าไฟล์ .svg/.pdf จริง — ไม่ใส่ใน .dxf; “ไม่มีสี” = โชว์สีวัสดุ · หรือใส่รูปเป็นพื้นก็ได้'
-                      : 'ถมสีพื้นฉลากทั้งแผ่น เข้าไฟล์ .svg/.pdf จริง; “ไม่มีสี” = ฉลากพื้นขาว · หรือใส่รูปเป็นพื้นก็ได้'}
+                      : kind === 'pouch'
+                        ? 'ถมสีพื้นถุงทั้งแผ่น เข้าไฟล์ .svg/.pdf จริง; “ไม่มีสี” = ฟิล์มพื้นขาว · หรือใส่รูปเป็นพื้นก็ได้'
+                        : 'ถมสีพื้นฉลากทั้งแผ่น เข้าไฟล์ .svg/.pdf จริง; “ไม่มีสี” = ฉลากพื้นขาว · หรือใส่รูปเป็นพื้นก็ได้'}
                 </p>
               </Group>
 
@@ -2671,7 +2716,13 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
           >
             <div className="blueprint card">
               <div className="bp-head">
-                <span>{mat.foldable ? 'blueprint การพับ' : 'dieline ฉลาก'}</span>
+                <span>
+                  {kind === 'box'
+                    ? 'blueprint การพับ'
+                    : kind === 'pouch'
+                      ? 'dieline ถุง (ฟิล์มแบน)'
+                      : 'dieline ฉลาก'}
+                </span>
                 <div className="bp-head-right">
                   <div className="undo-bar">
                     <button
@@ -2695,7 +2746,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   </div>
                   <span className="legend">
                     <i className="sw-cut" /> เส้นตัด
-                    <i className="sw-crease" /> {mat.foldable ? 'เส้นพับ' : 'แนวทับกาว'}
+                    <i className="sw-crease" />{' '}
+                    {kind === 'box' ? 'เส้นพับ' : kind === 'pouch' ? 'รอยพับ/ซีล' : 'แนวทับกาว'}
                   </span>
                 </div>
               </div>
@@ -2729,7 +2781,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               {foldBar}
               <div className="viewer-3d">
                 <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
-                  {mat.foldable ? (
+                  {kind === 'box' ? (
                     <Viewer3D
                       dieline={dieline}
                       mat={mat}
@@ -2740,8 +2792,10 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                       fillColor={fillColor}
                       fillImage={fillImage}
                     />
-                  ) : (
+                  ) : kind === 'vessel' ? (
                     <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} />
+                  ) : (
+                    <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} />
                   )}
                 </Suspense>
               </div>

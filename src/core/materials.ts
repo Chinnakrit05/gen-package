@@ -97,6 +97,43 @@ export const MATERIALS: Material[] = [
     roughness: 0.3,
     note: 'ดึงขึ้นรูปจากแผ่น — blueprint ที่เห็นคือ dieline ของฉลาก/สติกเกอร์พันรอบกระป๋อง พร้อมส่งพิมพ์',
   },
+  {
+    id: 'pouch-foil',
+    nameTh: 'ถุงฟอยล์ตั้งได้ (doypack)',
+    detail: 'ฟิล์มลามิเนตฟอยล์ ก้นตั้งได้ กันความชื้น — กาแฟ/ขนม/ผงชง',
+    thickness: 0.12,
+    foldable: false,
+    form: 'pouch',
+    process: 'พิมพ์ + ลามิเนต + ซีลขอบขึ้นรูปถุง',
+    color: '#e7e3d8',
+    roughness: 0.55,
+    note: 'ถุงฟิล์มซีลขอบ — blueprint ที่เห็นคือแผ่นฟิล์มแบน (หน้า+หลัง+ก้น) พร้อมส่งพิมพ์',
+  },
+  {
+    id: 'pouch-kraft',
+    nameTh: 'ถุงคราฟท์ตั้งได้',
+    detail: 'ฟิล์มคราฟท์สายอีโค่ ก้นตั้งได้ — ชา/ธัญพืช/สินค้าออร์แกนิก',
+    thickness: 0.14,
+    foldable: false,
+    form: 'pouch',
+    process: 'พิมพ์ + ลามิเนต + ซีลขอบขึ้นรูปถุง',
+    color: '#c8a778',
+    roughness: 0.85,
+    note: 'ถุงฟิล์มซีลขอบ — blueprint ที่เห็นคือแผ่นฟิล์มแบน (หน้า+หลัง+ก้น) พร้อมส่งพิมพ์',
+  },
+  {
+    id: 'pouch-clear',
+    nameTh: 'ถุงใสตั้งได้',
+    detail: 'ฟิล์มใสโชว์สินค้า ก้นตั้งได้ — ลูกอม/ขนม/ของแห้ง',
+    thickness: 0.1,
+    foldable: false,
+    form: 'pouch',
+    process: 'พิมพ์ + ซีลขอบขึ้นรูปถุง',
+    color: '#dbe7ec',
+    opacity: 0.4,
+    roughness: 0.2,
+    note: 'ถุงฟิล์มซีลขอบ — blueprint ที่เห็นคือแผ่นฟิล์มแบน (หน้า+หลัง+ก้น) พร้อมส่งพิมพ์',
+  },
 ]
 
 export function getMaterial(id: string): Material {
@@ -104,3 +141,8 @@ export function getMaterial(id: string): Material {
   if (!m) throw new Error(`unknown material: ${id}`)
   return m
 }
+
+// ชนิดงานที่ตัดสินใจ path (dieline/3D) จากวัสดุ: กล่องพับ / ภาชนะ revolve / ถุงฟิล์ม
+export type PackKind = 'box' | 'vessel' | 'pouch'
+export const packKind = (m: Material): PackKind =>
+  m.foldable ? 'box' : m.form === 'pouch' ? 'pouch' : 'vessel'

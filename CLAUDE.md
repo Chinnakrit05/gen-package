@@ -45,10 +45,19 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - ฟอนต์ไทย self-host ผ่าน `@fontsource/*` (import ใน main.tsx, ไม่พึ่ง Google CDN); ข้อความเลือกได้หลายฟอนต์ (registry `FONTS` ใน artwork.ts: noto/sarabun/prompt/kanit) + น้ำหนัก 400/700 — เพิ่มฟอนต์ใหม่ต้องทำ 3 จุด: import css ใน main.tsx, เพิ่มใน `FONTS`, และ `ensureThaiFont` โหลดให้; ก่อน rasterize ลง canvas (renderArtworkCanvas/ใบสเปก) ต้อง `await ensureThaiFont()` เพราะ fontsource โหลด subset ต่อน้ำหนักแบบ lazy — ถ้าไม่รอ canvas จะ fallback ทำให้ไทยในไฟล์ export เพี้ยน
 - ตัวเลขบน blueprint คือระยะ score จริง (บวกเผื่อความหนาแล้ว) จึงใหญ่กว่าค่าที่ผู้ใช้ตั้งเล็กน้อย — ตั้งใจ ไม่ใช่บั๊ก
 - แผนเฟสเดิม (FEFCO 0427, sleeve, export PDF/DXF, โลโก้/ข้อความ, ขวด revolve + ฉลาก) เสร็จครบแล้ว
+- ชนิดงาน (packKind ใน materials.ts) แยก 3 path จากวัสดุ: `box` (foldable) / `vessel` (revolve) /
+  `pouch` (form==='pouch') — App เลือก generator + viewer + label UI ตาม kind ไม่ใช่ `mat.foldable` ตรง ๆ
+  แล้ว (ถุงกับภาชนะต่างเป็น !foldable ทั้งคู่); เพิ่มชนิดงานใหม่ต้องเพิ่ม kind + แตะจุดที่เช็ค kind ใน App
 - วัสดุพับไม่ได้ (pet-bottle/glass/aluminum) → เส้นทางภาชนะใน `src/core/vessel.ts`:
   โปรไฟล์ revolve ต่อชนิดวัสดุ (LatheGeometry ใน VesselViewer3D) + dieline "ฉลาก" พันรอบตัว
   — ฉลากเป็น Dieline ธรรมดา ระบบ artwork/export/guides/ใบสเปกเดิมจึงใช้ได้หมด
-  ความหมายขนาด: W = ⌀ตัว, D = ⌀ปาก/คอ, H = สูง (template ถูกละเลย)
+  ความหมายขนาด: W = ⌀ตัว, D = ⌀ปาก/คอ, H = สูง (template ถูกละเลย); `isVessel` = !foldable && form≠pouch
+- วัสดุถุงฟิล์ม (pouch-foil/pouch-kraft/pouch-clear, form==='pouch') → `src/core/pouch.ts`:
+  ถุงตั้งได้ (doypack) — (1) dieline แผ่นฟิล์มแบน [หน้า W][หลัง W][ลิ้นกาว] × [ริมบน+ลำตัว+ก้น] เป็น
+  Dieline ปกติ ไหลผ่าน artwork/export/CMYK/ใบสเปกได้เลย (2) ทรง 3D ใน PouchViewer3D = พื้นผิว loft
+  หน้าตัดวงรีเปลี่ยนตามความสูง (`pouchWidthFactor`/`pouchDepthFactor` เป็น pure ทดสอบได้: ก้นแบนตั้งได้
+  พุงกลางป่อง ปากซีลแบน) + UV แม็พ frontRect/backRect ให้ลายอ่านไม่กลับด้านเมื่อมองจาก +Z (texture flipY=false)
+  ความหมายขนาด: W = กว้างถุง, D = ลึกก้น (clamp ≤ W, ≥10), H = สูงลำตัว (template ถูกละเลย)
 - รอยพับ 180° (แผ่นม้วน FEFCO 0427) ได้สันโค้งจาก `rollBeads` ใน fold.ts — ทรงกระบอกบาง
   รัศมี = ครึ่งของระยะสองชั้น เรนเดอร์เป็น `Bead` ใน Viewer3D โตตามการพับเอง; fold อื่นที่ใช้
   foldAngle ±180 จะได้สันนี้อัตโนมัติ (ปัจจุบันมีแค่ roll)

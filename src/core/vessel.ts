@@ -18,7 +18,8 @@ export interface Vessel {
   H: number
 }
 
-export const isVessel = (m: Material) => !m.foldable
+// ภาชนะ = พับไม่ได้ และไม่ใช่ถุงฟิล์ม (doypack) — ถุงเป็น path แยก
+export const isVessel = (m: Material) => !m.foldable && m.form !== 'pouch'
 
 export const LABEL_OVERLAP = 8 // ระยะทับซ้อนปลายฉลากสำหรับทากาว (มม.)
 
