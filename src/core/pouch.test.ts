@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { generatePouch, pouchDepthFactor, pouchWidthFactor, isPouch, POUCH_SIDE_SEAL, POUCH_TOP_SEAL } from './pouch'
+import {
+  generatePouch,
+  pouchDepthFactor,
+  pouchWidthFactor,
+  pouchSection,
+  isPouch,
+  POUCH_SIDE_SEAL,
+  POUCH_TOP_SEAL,
+} from './pouch'
 import { getMaterial } from './materials'
 import { dielinePDFBytes } from './pdf'
 import { computeGuides } from './guides'
@@ -79,6 +87,24 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
     expect(generatePouch({ W: 100, D: 70, H: 140 }, mat).style).toBe('stand')
   })
 
+  it('รูปแบบซองข้างจีบ (gusset): กว้างแผ่น = 2W + จีบสองข้าง + ซีล, มีเส้นจีบ, ก้นซีลแบน', () => {
+    const W = 90,
+      D = 60,
+      H = 200
+    const p = generatePouch({ W, D, H }, mat, { style: 'gusset' })
+    expect(p.style).toBe('gusset')
+    expect(p.gusset).toBe(D) // จีบข้าง = D (clamp 10..W)
+    expect(p.label.width).toBe(2 * W + 2 * D + POUCH_SIDE_SEAL) // หน้า+หลัง+จีบสองข้าง+ซีล
+    expect(p.label.height).toBe(POUCH_TOP_SEAL + H + POUCH_TOP_SEAL) // ริมบน+ตัว+ริมล่าง (ไม่มีก้น)
+    // หลังอยู่ถัดจากหน้า+จีบซ้าย
+    expect(p.frontRect).toEqual({ x: 0, y: POUCH_TOP_SEAL, w: W, h: H })
+    expect(p.backRect).toEqual({ x: W + D, y: POUCH_TOP_SEAL, w: W, h: H })
+    // crease: ซีลข้าง(กาว) + สันพับ 3 + จีบกลาง 2 + ซีลบน + ซีลล่าง = 8
+    expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(8)
+    expect(p.label.dims.some((d) => d.label.includes('จีบข้าง'))).toBe(true)
+    expect(p.label.dims.some((d) => d.label.includes('ก้น'))).toBe(false)
+  })
+
   it('dieline ไหลผ่าน guides + export PDF (CMYK) ได้เหมือน Dieline ปกติ', () => {
     const p = generatePouch({ W: 120, D: 70, H: 180 }, mat)
     expect(() => computeGuides(p.label.panels)).not.toThrow()
@@ -117,5 +143,14 @@ describe('pouch: หน้าตัด 3D (ยืนได้/พุงป่อ
     expect(pouchDepthFactor(0, 'flat')).toBeLessThan(0.1) // ซีลล่างแบน
     expect(pouchDepthFactor(1, 'flat')).toBeLessThan(0.1) // ซีลบนแบน
     expect(pouchDepthFactor(0.5, 'flat')).toBeCloseTo(1, 5) // พองสุดกลาง
+  })
+
+  it('ซองข้างจีบ (gusset): ลำตัวเต็ม (แท่ง) + หน้าตัดเหลี่ยมกว่าวงรี', () => {
+    expect(pouchDepthFactor(0.5, 'gusset')).toBe(1) // ลำตัวเต็ม
+    expect(pouchDepthFactor(0.02, 'gusset')).toBeLessThan(0.4) // ริมล่างบีบแบน
+    // หน้าตัดที่ 45°: superellipse เหลี่ยมกว่าวงรี (ค่าเข้าใกล้ 1 มากกว่า)
+    const box = pouchSection(Math.PI / 4, 'gusset')
+    const ell = pouchSection(Math.PI / 4, 'stand')
+    expect(Math.abs(box.cx)).toBeGreaterThan(Math.abs(ell.cx))
   })
 })

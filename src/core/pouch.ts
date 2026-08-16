@@ -12,11 +12,13 @@ import { P, fmt, rect } from './templates/shared'
 
 export const isPouch = (m: Material) => !m.foldable && m.form === 'pouch'
 
-// รูปแบบถุง: stand = ถุงตั้งได้ (doypack, ก้น gusset), flat = ซองแบน 3 ด้าน (ไม่มีก้น)
-export type PouchStyle = 'stand' | 'flat'
+// รูปแบบถุง: stand = ถุงตั้งได้ (doypack, ก้น gusset), flat = ซองแบน 3 ด้าน (ไม่มีก้น),
+// gusset = ซองข้างจีบ (side-gusset brick, ถุงกาแฟคลาสสิก — จีบพับสองข้าง ทรงแท่ง)
+export type PouchStyle = 'stand' | 'flat' | 'gusset'
 export const POUCH_STYLES: { id: PouchStyle; nameTh: string; detail: string }[] = [
   { id: 'stand', nameTh: 'ถุงตั้งได้ (doypack)', detail: 'ก้นตั้งได้ จุเยอะ — กาแฟ ขนม ผงชง' },
   { id: 'flat', nameTh: 'ซองแบน 3 ด้าน', detail: 'แบนราบ ไม่มีก้น — ของเล็ก ตัวอย่าง มาส์ก ซองซอส' },
+  { id: 'gusset', nameTh: 'ซองข้างจีบ (brick)', detail: 'ถุงกาแฟคลาสสิก ทรงแท่ง มีจีบพับสองข้าง' },
 ]
 
 export const POUCH_SIDE_SEAL = 6 // ริมซีล/ลิ้นทากาวข้าง (มม.)
@@ -49,64 +51,80 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const style = opts.style ?? 'stand'
   const zipper = opts.zipper ?? false
   const flat = style === 'flat'
-  const g = flat ? 0 : Math.min(Math.max(D, 10), W) // ซองแบน: ไม่มีก้น; ถุงตั้ง: ก้น 10..W
+  const gus = style === 'gusset'
+  const gVal = flat ? 0 : Math.min(Math.max(D, 10), W) // ก้น (stand) หรือ จีบข้าง (gusset): 10..W
+  const bottomGusset = style === 'stand' ? gVal : 0 // เฉพาะถุงตั้งที่มีก้น gusset
+  const sideGusset = gus ? gVal : 0 // เฉพาะซองข้างจีบ
   const ss = POUCH_SIDE_SEAL
   const st = POUCH_TOP_SEAL
-  const sb = flat ? POUCH_TOP_SEAL : 0 // ซองแบนมีริมซีลล่างแทนก้น
-  const filmH = st + H + g + sb
-  // ความลึก 3D: ถุงตั้ง = ครึ่งก้น × สเกล; ซองแบน = พองบางตามด้านที่สั้นกว่า
-  const depth3D = flat ? Math.min(W, H) * 0.12 : (g / 2) * POUCH_DEPTH_SCALE
+  const sb = flat || gus ? POUCH_TOP_SEAL : 0 // ซองแบน/ซองข้างจีบมีริมซีลล่างแทนก้น
+  const filmH = st + H + bottomGusset + sb
+  // ความกว้างพิมพ์ = หน้า + หลัง + จีบข้างสองด้าน (stand/flat: sideGusset=0 → 2W)
+  const Wp = 2 * W + 2 * sideGusset
+  const width = Wp + ss
+  // ความลึก 3D: ถุงตั้ง = ครึ่งก้น × สเกล; ซองแบน = พองบาง; ซองข้างจีบ = ทรงแท่งลึกเท่าจีบ
+  const depth3D = flat ? Math.min(W, H) * 0.12 : gus ? gVal / 2 : (gVal / 2) * POUCH_DEPTH_SCALE
   // แนวซิปอยู่ใต้ปากบน แต่ต้องไม่ต่ำเกินครึ่งลำตัว (ถุงเตี้ยมาก ๆ)
   const zipY = zipper ? st + Math.min(POUCH_ZIP_INSET, H * 0.5) : undefined
 
-  // แผ่นฟิล์มแบน: [หน้า W][หลัง W][ลิ้นทากาว ss] แนวนอน; แนวตั้ง = ริมซีลบน + ลำตัว + ก้น/ริมล่าง
-  // แยกลิ้นกาวเป็นแผงต่างหาก (ขอบร่วม x=2W เป็นรอยต่อ ไม่ใช่ขอบนอก) เหมือน dieline ฉลาก
+  // แผ่นฟิล์มแบน: [หน้า][…จีบ…][หลัง][…จีบ…][ลิ้นทากาว ss]; แนวตั้ง = ริมบน + ลำตัว + ก้น/ริมล่าง
+  // แยกลิ้นกาวเป็นแผงต่างหาก (ขอบร่วม x=Wp เป็นรอยต่อ ไม่ใช่ขอบนอก) เหมือน dieline ฉลาก
   const panels: Panel[] = [
-    { id: 'film', parentId: null, outline: rect(0, 0, 2 * W, filmH), stage: 0 },
-    { id: 'glue', parentId: 'film', outline: rect(2 * W, 0, 2 * W + ss, filmH), stage: 0 },
+    { id: 'film', parentId: null, outline: rect(0, 0, Wp, filmH), stage: 0 },
+    { id: 'glue', parentId: 'film', outline: rect(Wp, 0, width, filmH), stage: 0 },
   ]
 
   const cut = (d: string): Segment => ({ kind: 'cut', d })
   const crease = (d: string): Segment => ({ kind: 'crease', d })
+  const vfold = (x: number) => crease(`M ${x} 0 L ${x} ${filmH}`)
   const segments: Segment[] = [
-    cut(`M 0 0 L ${2 * W + ss} 0 L ${2 * W + ss} ${filmH} L 0 ${filmH} Z`),
-    crease(`M ${W} 0 L ${W} ${filmH}`), // พับข้าง (สันข้างถุง) แบ่งหน้า/หลัง
-    crease(`M ${2 * W} 0 L ${2 * W} ${filmH}`), // แนวทากาว/ซีลข้าง
-    crease(`M 0 ${st} L ${2 * W} ${st}`), // ริมซีลปากบน
-    crease(`M 0 ${st + H} L ${2 * W} ${st + H}`), // รอยพับก้น (ลำตัว↔gusset) / ริมซีลล่าง
+    cut(`M 0 0 L ${width} 0 L ${width} ${filmH} L 0 ${filmH} Z`),
+    vfold(Wp), // แนวทากาว/ซีลข้าง
+    crease(`M 0 ${st} L ${Wp} ${st}`), // ริมซีลปากบน
+    crease(`M 0 ${st + H} L ${Wp} ${st + H}`), // รอยพับก้น (stand) / ริมซีลล่าง (flat/gusset)
   ]
-  if (!flat) {
-    segments.push(crease(`M 0 ${st + H + g / 2} L ${2 * W} ${st + H + g / 2}`)) // พับกลางก้น (gusset ยืดออกให้ตั้ง)
+  if (gus) {
+    // [หน้า W][จีบ g][หลัง W][จีบ g] — สันพับ + เส้นจีบกลางของแต่ละข้าง
+    segments.push(vfold(W), vfold(W + sideGusset), vfold(2 * W + sideGusset))
+    segments.push(vfold(W + sideGusset / 2), vfold(2 * W + sideGusset + sideGusset / 2)) // จีบกลาง
+  } else {
+    segments.push(vfold(W)) // สันข้างเดียว แบ่งหน้า/หลัง
+  }
+  if (style === 'stand') {
+    segments.push(crease(`M 0 ${st + H + bottomGusset / 2} L ${Wp} ${st + H + bottomGusset / 2}`)) // พับกลางก้น
   }
 
+  const wLabel = flat ? 'กว้างซอง' : gus ? 'กว้างหน้า' : 'กว้างถุง'
   const dims: DimMark[] = [
-    { a: P(0, filmH + 12), b: P(W, filmH + 12), label: `${flat ? 'กว้างซอง' : 'กว้างถุง'} ${fmt(W)}` },
-    { a: P(2 * W, filmH + 12), b: P(2 * W + ss, filmH + 12), label: `ซีล ${fmt(ss)}` },
-    { a: P(2 * W + ss + 12, st), b: P(2 * W + ss + 12, st + H), label: `สูง ${fmt(H)}` },
+    { a: P(0, filmH + 12), b: P(W, filmH + 12), label: `${wLabel} ${fmt(W)}` },
+    { a: P(Wp, filmH + 12), b: P(width, filmH + 12), label: `ซีล ${fmt(ss)}` },
+    { a: P(width + 12, st), b: P(width + 12, st + H), label: `สูง ${fmt(H)}` },
   ]
-  if (!flat) {
-    dims.push({ a: P(2 * W + ss + 12, st + H), b: P(2 * W + ss + 12, filmH), label: `ก้น ${fmt(g)}` })
+  if (style === 'stand') {
+    dims.push({ a: P(width + 12, st + H), b: P(width + 12, filmH), label: `ก้น ${fmt(gVal)}` })
+  } else if (gus) {
+    dims.push({ a: P(W, filmH + 12), b: P(W + sideGusset, filmH + 12), label: `จีบข้าง ${fmt(sideGusset)}` })
   }
 
   if (zipper && zipY !== undefined) {
     // แนวซิปล็อกพาดขวางหน้า+หลัง + รอยฉีก (V) ที่ขอบซีลสองข้าง เหนือซิปเล็กน้อยเพื่อฉีกเปิด
-    segments.push(crease(`M 0 ${zipY} L ${2 * W} ${zipY}`))
+    segments.push(crease(`M 0 ${zipY} L ${Wp} ${zipY}`))
     const tearY = zipY - 4
     const nz = 4 // ความลึกรอยฉีก
     segments.push(cut(`M 0 ${tearY - 2.5} L ${nz} ${tearY} L 0 ${tearY + 2.5}`)) // ขอบซ้าย (ริมกาว)
-    segments.push(cut(`M ${2 * W + ss} ${tearY - 2.5} L ${2 * W + ss - nz} ${tearY} L ${2 * W + ss} ${tearY + 2.5}`)) // ขอบขวา
-    dims.push({ a: P(0, zipY), b: P(2 * W, zipY), label: 'ซิปล็อก + รอยฉีก' })
+    segments.push(cut(`M ${width} ${tearY - 2.5} L ${width - nz} ${tearY} L ${width} ${tearY + 2.5}`)) // ขอบขวา
+    dims.push({ a: P(0, zipY), b: P(Wp, zipY), label: 'ซิปล็อก + รอยฉีก' })
   }
 
   return {
-    label: { width: 2 * W + ss, height: filmH, segments, panels, dims },
+    label: { width, height: filmH, segments, panels, dims },
     style,
     W,
     H,
-    gusset: g,
+    gusset: gVal,
     depth3D,
     frontRect: { x: 0, y: st, w: W, h: H },
-    backRect: { x: W, y: st, w: W, h: H },
+    backRect: { x: W + sideGusset, y: st, w: W, h: H },
     zipper,
     zipY,
   }
@@ -126,14 +144,39 @@ const lerpS = (a: number, b: number, t: number) => a + (b - a) * smooth(t)
 // - flat: วงรีสมมาตร ซีลแบนทั้งบน-ล่าง (v→0/1 ≈ 0) พองสุดกลางลำตัว — ซองแบนไม่ตั้ง
 export function pouchDepthFactor(v: number, style: PouchStyle = 'stand'): number {
   if (style === 'flat') return Math.max(0.04, Math.sin(Math.PI * clamp01(v)) ** 0.6)
+  if (style === 'gusset') {
+    // ทรงแท่ง: ลำตัวเต็มเกือบตลอด บีบแบนเฉพาะที่ริมซีลบน-ล่าง (brick)
+    if (v < 0.08) return lerpS(0.12, 1.0, v / 0.08)
+    if (v > 0.92) return lerpS(1.0, 0.12, (v - 0.92) / 0.08)
+    return 1.0
+  }
   if (v < 0.4) return lerpS(0.82, 1.0, v / 0.4)
   if (v < 0.85) return lerpS(1.0, 0.35, (v - 0.4) / 0.45)
   return lerpS(0.35, 0.05, (v - 0.85) / 0.15)
 }
 
-// ครึ่งความกว้าง (สัดส่วนของ W/2): เต็มเกือบตลอด คอดเล็กน้อยที่ก้นและปากซีล
-export function pouchWidthFactor(v: number): number {
+// ครึ่งความกว้าง (สัดส่วนของ W/2): เต็มเกือบตลอด คอดเล็กน้อยที่ปลาย
+export function pouchWidthFactor(v: number, style: PouchStyle = 'stand'): number {
+  if (style === 'gusset') {
+    // ทรงแท่ง: กว้างเต็มเกือบตลอด บีบเฉพาะปลายซีลบน-ล่างเล็กน้อย
+    if (v < 0.06) return lerpS(0.85, 1.0, v / 0.06)
+    if (v > 0.94) return lerpS(1.0, 0.85, (v - 0.94) / 0.06)
+    return 1.0
+  }
   if (v < 0.06) return lerpS(0.9, 1.0, v / 0.06)
   if (v > 0.9) return lerpS(1.0, 0.82, (v - 0.9) / 0.1)
   return 1.0
+}
+
+// รูปหน้าตัดรอบวงที่มุม theta: วงรี (stand/flat) หรือสี่เหลี่ยมมน superellipse (gusset = ทรงแท่ง)
+// คืนสัดส่วน (cx, cz) ∈ [-1,1] ก่อนคูณครึ่งกว้าง/ครึ่งลึก
+export function pouchSection(theta: number, style: PouchStyle = 'stand'): { cx: number; cz: number } {
+  const c = Math.cos(theta)
+  const s = Math.sin(theta)
+  if (style === 'gusset') {
+    // superellopse เลขชี้กำลัง 0.5 → สี่เหลี่ยมมุมมน (หน้า-หลังแบน ด้านข้างเป็นสัน = แนวจีบ)
+    const e = 0.5
+    return { cx: Math.sign(c) * Math.abs(c) ** e, cz: Math.sign(s) * Math.abs(s) ** e }
+  }
+  return { cx: c, cz: s }
 }

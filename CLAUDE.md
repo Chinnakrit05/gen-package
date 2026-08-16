@@ -59,8 +59,10 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   พุงกลางป่อง ปากซีลแบน) + UV แม็พ frontRect/backRect ให้ลายอ่านไม่กลับด้านเมื่อมองจาก +Z (texture flipY=false)
   ความหมายขนาด: W = กว้างถุง, D = ลึกก้น (clamp ≤ W, ≥10; ซองแบนไม่ใช้ D), H = สูงลำตัว (template ถูกละเลย)
   รูปแบบถุง `pouchStyle` (`POUCH_STYLES`): 'stand' = doypack ก้นตั้ง (gusset + พับกลางก้น) / 'flat' =
-  ซองแบน 3 ด้าน (ไม่มีก้น มีริมซีลล่างแทน) — โปรไฟล์ 3D ต่างกันผ่าน `pouchDepthFactor(v, style)` +
-  `Pouch.depth3D`; `generatePouch(box, mat, { style, zipper })`
+  ซองแบน 3 ด้าน (ไม่มีก้น มีริมซีลล่างแทน) / 'gusset' = ซองข้างจีบ brick (ถุงกาแฟ; front+จีบ+back+จีบ,
+  แผ่นกว้าง 2W+2D, D=ความลึกจีบ, ก้นซีลแบน) — โปรไฟล์ 3D ต่างกันผ่าน `pouchDepthFactor(v, style)` +
+  `pouchWidthFactor(v, style)` + `pouchSection(θ, style)` (gusset ใช้ superellipse = ทรงแท่ง) + `Pouch.depth3D`;
+  `generatePouch(box, mat, { style, zipper })` — ความกว้างพิมพ์ Wp = 2W + 2·จีบข้าง, frontRect/backRect เลื่อนตาม
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น;
   เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 4); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI

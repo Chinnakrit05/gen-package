@@ -1528,8 +1528,10 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               </div>
               <p className="hint">
                 {pouchStyle === 'flat'
-                  ? 'ซองแบน 3 ด้าน — ไม่มีก้น ไม่ใช้ค่า “ลึกก้น”'
-                  : 'ถุงตั้งได้ — ค่า “ลึกก้น” ยิ่งมากยิ่งตั้งมั่น/จุมาก'}
+                  ? 'ซองแบน 3 ด้าน — ไม่มีก้น ไม่ใช้ค่า D'
+                  : pouchStyle === 'gusset'
+                    ? 'ซองข้างจีบ — ค่า “จีบข้าง” = ความลึกทรงแท่ง (ถุงกาแฟ)'
+                    : 'ถุงตั้งได้ — ค่า “ลึกก้น” ยิ่งมากยิ่งตั้งมั่น/จุมาก'}
               </p>
             </Group>
           )}
@@ -1546,7 +1548,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   : kind === 'pouch'
                     ? pouchStyle === 'flat'
                       ? 'กว้างซอง W'
-                      : 'กว้างถุง W'
+                      : pouchStyle === 'gusset'
+                        ? 'กว้างหน้า W'
+                        : 'กว้างถุง W'
                     : '⌀ ตัว W'
               }
               value={W}
@@ -1555,10 +1559,18 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               disabled={aiBusy}
               onChange={setW}
             />
-            {/* ซองแบนไม่มีก้น → ซ่อนช่อง "ลึกก้น" */}
+            {/* ซองแบนไม่มีก้น/จีบ → ซ่อนช่อง D */}
             {!(kind === 'pouch' && pouchStyle === 'flat') && (
               <DimField
-                label={kind === 'box' ? 'ลึก D' : kind === 'pouch' ? 'ลึกก้น D' : '⌀ ปาก/คอ D'}
+                label={
+                  kind === 'box'
+                    ? 'ลึก D'
+                    : kind === 'pouch'
+                      ? pouchStyle === 'gusset'
+                        ? 'จีบข้าง D'
+                        : 'ลึกก้น D'
+                      : '⌀ ปาก/คอ D'
+                }
                 value={D}
                 min={20}
                 max={150}

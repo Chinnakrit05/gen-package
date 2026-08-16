@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import type { Material } from '../core/types'
-import { type Pouch, pouchDepthFactor, pouchWidthFactor } from '../core/pouch'
+import { type Pouch, pouchDepthFactor, pouchWidthFactor, pouchSection } from '../core/pouch'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 
 // พรีวิวถุงฟิล์มตั้งได้ (doypack): พื้นผิว loft หน้าตัดวงรีเปลี่ยนตามความสูง
@@ -106,10 +106,11 @@ function usePouchGeometry(pouch: Pouch) {
     const idx: number[] = []
 
     const ringVert = (v: number, theta: number) => {
-      const a = (W / 2) * pouchWidthFactor(v)
+      const a = (W / 2) * pouchWidthFactor(v, style)
       const b = depth3D * pouchDepthFactor(v, style)
-      const x = a * Math.cos(theta)
-      const z = b * Math.sin(theta)
+      const sec = pouchSection(theta, style)
+      const x = a * sec.cx
+      const z = b * sec.cz
       const y = v * H
       // UV: front (θ∈[0,π]) แม็พ frontRect ขวา→ซ้าย (ให้อ่านไม่กลับด้านเมื่อมองจาก +Z),
       // back (θ∈[π,2π]) แม็พ backRect ต่อเนื่องที่รอยพับข้าง (x=W) และรอยกาว (x=0/2W)
@@ -192,7 +193,7 @@ function PouchModel({
     const vzip = Math.min(0.98, Math.max(0.02, 1 - (pouch.zipY - pouch.frontRect.y) / pouch.H))
     zip = {
       y: vzip * pouch.H,
-      ax: (pouch.W / 2) * pouchWidthFactor(vzip) * 1.03,
+      ax: (pouch.W / 2) * pouchWidthFactor(vzip, pouch.style) * 1.03,
       bz: pouch.depth3D * pouchDepthFactor(vzip, pouch.style) * 1.03,
     }
   }
