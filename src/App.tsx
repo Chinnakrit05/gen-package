@@ -1454,6 +1454,38 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
             </Group>
           )}
 
+          {kind === 'pouch' && (
+            <Group title="รูปแบบถุง" open={groups.label} onToggle={() => toggleGroup('label')}>
+              <div className="pick-list">
+                {POUCH_STYLES.map((s) => (
+                  <button
+                    key={s.id}
+                    className={`pick-item${pouchStyle === s.id ? ' active' : ''}`}
+                    disabled={aiBusy}
+                    aria-pressed={pouchStyle === s.id}
+                    onClick={() => setPouchStyle(s.id)}
+                  >
+                    <span className="pick-name">{s.nameTh}</span>
+                    <span className="pick-detail">{s.detail}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="hint">
+                {pouchStyle === 'flat'
+                  ? 'ซองแบน 3 ด้าน — ไม่มีก้น ไม่ใช้ค่า D'
+                  : pouchStyle === 'pillow'
+                    ? 'ซองหลังกลาง — พองนุ่ม ซีลหลังกลาง ไม่ใช้ค่า D'
+                    : pouchStyle === 'gusset'
+                      ? 'ซองข้างจีบ — ค่า “จีบข้าง” = ความลึกทรงแท่ง (ถุงกาแฟ)'
+                      : pouchStyle === 'box'
+                        ? 'ถุงก้นแบนตั้งเหลี่ยม — ค่า “จีบข้าง” = ความลึกทรงกล่อง (ตั้งได้)'
+                        : pouchStyle === 'spout'
+                          ? 'ถุงมีจุก — ก้นตั้งได้ + จุก/ฝาที่ปากบน ค่า “ลึกก้น” = ความจุ'
+                          : 'ถุงตั้งได้ — ค่า “ลึกก้น” ยิ่งมากยิ่งตั้งมั่น/จุมาก'}
+              </p>
+            </Group>
+          )}
+
           <Group
             title={kind === 'box' ? 'วัสดุกล่อง' : kind === 'pouch' ? 'ชนิดถุง' : 'ชนิดภาชนะ'}
             open={groups.mat}
@@ -1506,38 +1538,6 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               </div>
               <p className="hint">
                 ฉลากพันรอบตัว — เลือกว่าคลุมช่วงความสูงแค่ไหน ความสูงฉลากในไฟล์ปรับตามนี้
-              </p>
-            </Group>
-          )}
-
-          {kind === 'pouch' && (
-            <Group title="รูปแบบถุง" open={groups.label} onToggle={() => toggleGroup('label')}>
-              <div className="pick-list">
-                {POUCH_STYLES.map((s) => (
-                  <button
-                    key={s.id}
-                    className={`pick-item${pouchStyle === s.id ? ' active' : ''}`}
-                    disabled={aiBusy}
-                    aria-pressed={pouchStyle === s.id}
-                    onClick={() => setPouchStyle(s.id)}
-                  >
-                    <span className="pick-name">{s.nameTh}</span>
-                    <span className="pick-detail">{s.detail}</span>
-                  </button>
-                ))}
-              </div>
-              <p className="hint">
-                {pouchStyle === 'flat'
-                  ? 'ซองแบน 3 ด้าน — ไม่มีก้น ไม่ใช้ค่า D'
-                  : pouchStyle === 'pillow'
-                    ? 'ซองหลังกลาง — พองนุ่ม ซีลหลังกลาง ไม่ใช้ค่า D'
-                    : pouchStyle === 'gusset'
-                      ? 'ซองข้างจีบ — ค่า “จีบข้าง” = ความลึกทรงแท่ง (ถุงกาแฟ)'
-                      : pouchStyle === 'box'
-                        ? 'ถุงก้นแบนตั้งเหลี่ยม — ค่า “จีบข้าง” = ความลึกทรงกล่อง (ตั้งได้)'
-                        : pouchStyle === 'spout'
-                          ? 'ถุงมีจุก — ก้นตั้งได้ + จุก/ฝาที่ปากบน ค่า “ลึกก้น” = ความจุ'
-                          : 'ถุงตั้งได้ — ค่า “ลึกก้น” ยิ่งมากยิ่งตั้งมั่น/จุมาก'}
               </p>
             </Group>
           )}
