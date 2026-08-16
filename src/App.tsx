@@ -1529,9 +1529,15 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               <p className="hint">
                 {pouchStyle === 'flat'
                   ? 'ซองแบน 3 ด้าน — ไม่มีก้น ไม่ใช้ค่า D'
-                  : pouchStyle === 'gusset'
-                    ? 'ซองข้างจีบ — ค่า “จีบข้าง” = ความลึกทรงแท่ง (ถุงกาแฟ)'
-                    : 'ถุงตั้งได้ — ค่า “ลึกก้น” ยิ่งมากยิ่งตั้งมั่น/จุมาก'}
+                  : pouchStyle === 'pillow'
+                    ? 'ซองหลังกลาง — พองนุ่ม ซีลหลังกลาง ไม่ใช้ค่า D'
+                    : pouchStyle === 'gusset'
+                      ? 'ซองข้างจีบ — ค่า “จีบข้าง” = ความลึกทรงแท่ง (ถุงกาแฟ)'
+                      : pouchStyle === 'box'
+                        ? 'ถุงก้นแบนตั้งเหลี่ยม — ค่า “จีบข้าง” = ความลึกทรงกล่อง (ตั้งได้)'
+                        : pouchStyle === 'spout'
+                          ? 'ถุงมีจุก — ก้นตั้งได้ + จุก/ฝาที่ปากบน ค่า “ลึกก้น” = ความจุ'
+                          : 'ถุงตั้งได้ — ค่า “ลึกก้น” ยิ่งมากยิ่งตั้งมั่น/จุมาก'}
               </p>
             </Group>
           )}
@@ -1548,9 +1554,11 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   : kind === 'pouch'
                     ? pouchStyle === 'flat'
                       ? 'กว้างซอง W'
-                      : pouchStyle === 'gusset'
+                      : pouchStyle === 'gusset' || pouchStyle === 'box'
                         ? 'กว้างหน้า W'
-                        : 'กว้างถุง W'
+                        : pouchStyle === 'pillow'
+                          ? 'กว้าง W'
+                          : 'กว้างถุง W'
                     : '⌀ ตัว W'
               }
               value={W}
@@ -1559,14 +1567,14 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               disabled={aiBusy}
               onChange={setW}
             />
-            {/* ซองแบนไม่มีก้น/จีบ → ซ่อนช่อง D */}
-            {!(kind === 'pouch' && pouchStyle === 'flat') && (
+            {/* ซองแบน/หลังกลางไม่มีก้น-จีบ → ซ่อนช่อง D */}
+            {!(kind === 'pouch' && (pouchStyle === 'flat' || pouchStyle === 'pillow')) && (
               <DimField
                 label={
                   kind === 'box'
                     ? 'ลึก D'
                     : kind === 'pouch'
-                      ? pouchStyle === 'gusset'
+                      ? pouchStyle === 'gusset' || pouchStyle === 'box'
                         ? 'จีบข้าง D'
                         : 'ลึกก้น D'
                       : '⌀ ปาก/คอ D'

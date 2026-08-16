@@ -87,6 +87,31 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
     expect(generatePouch({ W: 100, D: 70, H: 140 }, mat).style).toBe('stand')
   })
 
+  it('ถุงก้นแบนตั้งเหลี่ยม (box): มีทั้งจีบข้างและก้น + ตั้งได้', () => {
+    const p = generatePouch({ W: 90, D: 60, H: 200 }, mat, { style: 'box' })
+    expect(p.stands).toBe(true)
+    expect(p.label.width).toBe(2 * 90 + 2 * 60 + POUCH_SIDE_SEAL) // มีจีบข้าง
+    expect(p.label.height).toBe(POUCH_TOP_SEAL + 200 + 60) // ริมบน + ตัว + ก้น
+    expect(p.label.dims.some((d) => d.label.includes('จีบข้าง'))).toBe(true)
+    expect(p.label.dims.some((d) => d.label.includes('ก้น'))).toBe(true)
+  })
+
+  it('ซองหลังกลาง (pillow): ไม่มีก้น/จีบ + มีเส้นซีลหลังกลาง + พองมากกว่าซองแบน', () => {
+    const p = generatePouch({ W: 100, D: 70, H: 150 }, mat, { style: 'pillow' })
+    expect(p.stands).toBe(false)
+    expect(p.gusset).toBe(0)
+    expect(p.label.width).toBe(2 * 100 + POUCH_SIDE_SEAL) // ไม่มีจีบข้าง
+    expect(p.depth3D).toBeGreaterThan(generatePouch({ W: 100, D: 70, H: 150 }, mat, { style: 'flat' }).depth3D)
+  })
+
+  it('ถุงมีจุก (spout): ตั้งได้เหมือน doypack + spout=true + มีป้ายจุก', () => {
+    const p = generatePouch({ W: 110, D: 70, H: 180 }, mat, { style: 'spout' })
+    expect(p.spout).toBe(true)
+    expect(p.stands).toBe(true)
+    expect(p.label.height).toBe(POUCH_TOP_SEAL + 180 + 70) // ก้น gusset เหมือน stand
+    expect(p.label.dims.some((d) => d.label.includes('จุก'))).toBe(true)
+  })
+
   it('รูปแบบซองข้างจีบ (gusset): กว้างแผ่น = 2W + จีบสองข้าง + ซีล, มีเส้นจีบ, ก้นซีลแบน', () => {
     const W = 90,
       D = 60,

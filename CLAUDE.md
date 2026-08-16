@@ -58,11 +58,12 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   หน้าตัดวงรีเปลี่ยนตามความสูง (`pouchWidthFactor`/`pouchDepthFactor` เป็น pure ทดสอบได้: ก้นแบนตั้งได้
   พุงกลางป่อง ปากซีลแบน) + UV แม็พ frontRect/backRect ให้ลายอ่านไม่กลับด้านเมื่อมองจาก +Z (texture flipY=false)
   ความหมายขนาด: W = กว้างถุง, D = ลึกก้น (clamp ≤ W, ≥10; ซองแบนไม่ใช้ D), H = สูงลำตัว (template ถูกละเลย)
-  รูปแบบถุง `pouchStyle` (`POUCH_STYLES`): 'stand' = doypack ก้นตั้ง (gusset + พับกลางก้น) / 'flat' =
-  ซองแบน 3 ด้าน (ไม่มีก้น มีริมซีลล่างแทน) / 'gusset' = ซองข้างจีบ brick (ถุงกาแฟ; front+จีบ+back+จีบ,
-  แผ่นกว้าง 2W+2D, D=ความลึกจีบ, ก้นซีลแบน) — โปรไฟล์ 3D ต่างกันผ่าน `pouchDepthFactor(v, style)` +
-  `pouchWidthFactor(v, style)` + `pouchSection(θ, style)` (gusset ใช้ superellipse = ทรงแท่ง) + `Pouch.depth3D`;
-  `generatePouch(box, mat, { style, zipper })` — ความกว้างพิมพ์ Wp = 2W + 2·จีบข้าง, frontRect/backRect เลื่อนตาม
+  รูปแบบถุง `pouchStyle` (`POUCH_STYLES`) 6 แบบ: 'stand' doypack ก้นตั้ง / 'flat' ซองแบน 3 ด้าน (ไม่ใช้ D) /
+  'gusset' ซองข้างจีบ brick (front+จีบ+back+จีบ, ทรงแท่ง) / 'box' ก้นแบนตั้งเหลี่ยม (จีบข้าง+ก้น gusset, ตั้งได้) /
+  'pillow' ซองหลังกลาง (ไม่ใช้ D, fin seal กลางหลัง, พองนุ่ม) / 'spout' ถุงมีจุก (ก้นตั้งเหมือน stand + จุก 3D + marker บน dieline)
+  — dieline คุมด้วย sideGusset (gusset/box) + bottomGusset (stand/box/spout) + sb (flat/gusset/pillow);
+  โปรไฟล์ 3D ผ่าน `pouchDepthFactor(v, style)` + `pouchWidthFactor(v, style)` + `pouchSection(θ, style)`
+  (gusset/box ใช้ superellipse = ทรงเหลี่ยม) + `Pouch.depth3D`/`stands`/`spout`; `generatePouch(box, mat, { style, zipper })`
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น;
   เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 4); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI

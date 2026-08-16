@@ -198,6 +198,11 @@ function PouchModel({
     }
   }
 
+  // จุก + ฝาเกลียว ที่ปากบน (spout pouch)
+  const spoutR = Math.min(pouch.W, 90) * 0.09
+  const neckH = pouch.H * 0.08
+  const capH = neckH * 0.6
+
   return (
     <group position={[0, -pouch.H / 2, 0]}>
       <mesh geometry={geo}>
@@ -217,6 +222,20 @@ function PouchModel({
           <cylinderGeometry args={[1, 1, 5, 48, 1, true]} />
           <meshStandardMaterial color="#6f685c" roughness={0.5} metalness={0} side={THREE.DoubleSide} />
         </mesh>
+      )}
+      {pouch.spout && (
+        <group position={[0, pouch.H, 0]}>
+          {/* คอจุก */}
+          <mesh position={[0, neckH / 2, 0]}>
+            <cylinderGeometry args={[spoutR, spoutR, neckH, 24]} />
+            <meshStandardMaterial color="#d6cfbf" roughness={0.45} metalness={0} />
+          </mesh>
+          {/* ฝาเกลียว */}
+          <mesh position={[0, neckH + capH / 2, 0]}>
+            <cylinderGeometry args={[spoutR * 1.4, spoutR * 1.4, capH, 24]} />
+            <meshStandardMaterial color="#b7ae99" roughness={0.5} metalness={0} />
+          </mesh>
+        </group>
       )}
     </group>
   )
