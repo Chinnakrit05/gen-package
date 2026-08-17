@@ -33,7 +33,7 @@ import {
 } from './core/artwork'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
-import { generatePouch, POUCH_STYLES, type PouchStyle } from './core/pouch'
+import { generatePouch, POUCH_STYLES, type PouchStyle, type PouchAddons } from './core/pouch'
 import {
   clamp,
   freshProject,
@@ -314,6 +314,7 @@ interface EditSnapshot {
   labelStyle: LabelStyle
   pouchStyle: PouchStyle
   zipper: boolean
+  pouchAddons: PouchAddons
   decos: Deco[]
 }
 
@@ -330,6 +331,7 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.labelStyle === b.labelStyle &&
   a.pouchStyle === b.pouchStyle &&
   a.zipper === b.zipper &&
+  a.pouchAddons === b.pouchAddons &&
   a.decos === b.decos
 
 const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
@@ -505,6 +507,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [labelStyle, setLabelStyle] = useState<LabelStyle>(active0.labelStyle ?? 'body')
   const [pouchStyle, setPouchStyle] = useState<PouchStyle>(active0.pouchStyle ?? 'stand')
   const [zipper, setZipper] = useState<boolean>(active0.zipper ?? false)
+  const [pouchAddons, setPouchAddons] = useState<PouchAddons>(active0.pouchAddons ?? {})
   const [decos, setDecos] = useState<Deco[]>(active0.decos)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [renamingId, setRenamingId] = useState<string | null>(null) // เลเยอร์ที่กำลังแก้ชื่อ (ดับเบิลคลิก)
@@ -578,8 +581,11 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     [W, D, H, handle, mat, labelStyle, kind],
   )
   const pouch = useMemo(
-    () => (kind === 'pouch' ? generatePouch({ W, D, H, handle }, mat, { style: pouchStyle, zipper }) : null),
-    [W, D, H, handle, mat, kind, pouchStyle, zipper],
+    () =>
+      kind === 'pouch'
+        ? generatePouch({ W, D, H, handle }, mat, { style: pouchStyle, zipper, addons: pouchAddons })
+        : null,
+    [W, D, H, handle, mat, kind, pouchStyle, zipper, pouchAddons],
   )
   const dieline = useMemo(
     () =>
@@ -622,6 +628,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 labelStyle,
                 pouchStyle,
                 zipper,
+                pouchAddons,
                 decos,
                 history,
                 histIdx,
@@ -632,7 +639,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, decos, activeId])
 
   // save ทุกงานลง localStorage
   useEffect(() => {
@@ -721,6 +728,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     labelStyle,
     pouchStyle,
     zipper,
+    pouchAddons,
     decos,
   })
 
@@ -743,7 +751,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, decos])
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -759,6 +767,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setLabelStyle(s.labelStyle ?? 'body')
     setPouchStyle(s.pouchStyle ?? 'stand')
     setZipper(s.zipper ?? false)
+    setPouchAddons(s.pouchAddons ?? {})
     setDecos(s.decos)
     setSelectedIds([])
   }
@@ -841,7 +850,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const flushInto = (list: Project[]): Project[] =>
     list.map((p) =>
       p.id === activeId
-        ? { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, decos, history, histIdx, updatedAt: Date.now() }
+        ? { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -859,6 +868,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setLabelStyle(p.labelStyle ?? 'body')
     setPouchStyle(p.pouchStyle ?? 'stand')
     setZipper(p.zipper ?? false)
+    setPouchAddons(p.pouchAddons ?? {})
     setDecos(p.decos)
     setSelectedIds([])
     setHistory(p.history)
@@ -1606,15 +1616,44 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               </label>
             )}
             {kind === 'pouch' && (
-              <label className="check" style={{ marginTop: 12 }}>
-                <input
-                  type="checkbox"
-                  checked={zipper}
-                  disabled={aiBusy}
-                  onChange={(e) => setZipper(e.target.checked)}
-                />
-                ซิปล็อก + รอยฉีก (เปิด-ปิดซ้ำได้)
-              </label>
+              <>
+                <label className="check" style={{ marginTop: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={zipper}
+                    disabled={aiBusy}
+                    onChange={(e) => setZipper(e.target.checked)}
+                  />
+                  ซิปล็อก + รอยฉีก (เปิด-ปิดซ้ำได้)
+                </label>
+                <label className="check" style={{ marginTop: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={pouchAddons.hangHole ?? false}
+                    disabled={aiBusy}
+                    onChange={(e) => setPouchAddons((a) => ({ ...a, hangHole: e.target.checked }))}
+                  />
+                  รูแขวน (euro-hole)
+                </label>
+                <label className="check" style={{ marginTop: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={pouchAddons.valve ?? false}
+                    disabled={aiBusy}
+                    onChange={(e) => setPouchAddons((a) => ({ ...a, valve: e.target.checked }))}
+                  />
+                  วาล์วกาแฟ (degassing valve)
+                </label>
+                <label className="check" style={{ marginTop: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={pouchAddons.tinTie ?? false}
+                    disabled={aiBusy}
+                    onChange={(e) => setPouchAddons((a) => ({ ...a, tinTie: e.target.checked }))}
+                  />
+                  ที่รัดปาก (tin-tie)
+                </label>
+              </>
             )}
           </Group>
 

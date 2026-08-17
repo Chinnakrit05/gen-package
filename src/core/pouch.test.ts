@@ -112,6 +112,24 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
     expect(p.label.dims.some((d) => d.label.includes('จุก'))).toBe(true)
   })
 
+  it('ออปชันเสริม: รูแขวน/วาล์ว/tin-tie เพิ่มเส้นและป้ายเมื่อเปิด', () => {
+    const base = generatePouch({ W: 120, D: 70, H: 180 }, mat)
+    expect(base.hangHole).toBe(false)
+    expect(base.valve).toBe(false)
+    expect(base.tinTie).toBe(false)
+    const p = generatePouch({ W: 120, D: 70, H: 180 }, mat, {
+      addons: { hangHole: true, valve: true, tinTie: true },
+    })
+    expect(p.hangHole).toBe(true)
+    expect(p.valve).toBe(true)
+    expect(p.tinTie).toBe(true)
+    // รูแขวนเป็นการตัดจริง (cut) — เพิ่มวงตัด 1 วง
+    expect(p.label.segments.filter((s) => s.kind === 'cut').length).toBe(base.label.segments.filter((s) => s.kind === 'cut').length + 1)
+    expect(p.label.dims.some((d) => d.label.includes('รูแขวน'))).toBe(true)
+    expect(p.label.dims.some((d) => d.label.includes('วาล์ว'))).toBe(true)
+    expect(p.label.dims.some((d) => d.label.includes('tin-tie'))).toBe(true)
+  })
+
   it('รูปแบบซองข้างจีบ (gusset): กว้างแผ่น = 2W + จีบสองข้าง + ซีล, มีเส้นจีบ, ก้นซีลแบน', () => {
     const W = 90,
       D = 60,

@@ -3,7 +3,15 @@ import * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import type { Material } from '../core/types'
-import { type Pouch, pouchDepthFactor, pouchWidthFactor, pouchSection } from '../core/pouch'
+import {
+  type Pouch,
+  pouchDepthFactor,
+  pouchWidthFactor,
+  pouchSection,
+  valveR,
+  VALVE_V,
+  TINTIE_INSET,
+} from '../core/pouch'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 
 // พรีวิวถุงฟิล์มตั้งได้ (doypack): พื้นผิว loft หน้าตัดวงรีเปลี่ยนตามความสูง
@@ -203,6 +211,14 @@ function PouchModel({
   const neckH = pouch.H * 0.08
   const capH = neckH * 0.6
 
+  // วาล์วกาแฟ: จานกลมนูนบนหน้าถุงส่วนบน (z = ผิวหน้าที่ระดับ VALVE_V)
+  const valveZ = pouch.depth3D * pouchDepthFactor(VALVE_V, pouch.style)
+  const vR = valveR(pouch.W)
+  // ที่รัดปาก: แถบบางพาดขวางหน้าใกล้ปาก
+  const ttV = Math.min(0.97, Math.max(0.03, 1 - (TINTIE_INSET + 3) / pouch.H))
+  const ttZ = pouch.depth3D * pouchDepthFactor(ttV, pouch.style)
+  const ttW = pouch.W * pouchWidthFactor(ttV, pouch.style) * 0.9
+
   return (
     <group position={[0, -pouch.H / 2, 0]}>
       <mesh geometry={geo}>
@@ -236,6 +252,20 @@ function PouchModel({
             <meshStandardMaterial color="#b7ae99" roughness={0.5} metalness={0} />
           </mesh>
         </group>
+      )}
+      {pouch.valve && (
+        // วาล์วกาแฟ: จานกลมนูนออกจากผิวหน้า (แกนตามแนว z)
+        <mesh position={[0, VALVE_V * pouch.H, valveZ + 1]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[vR, vR, 3, 24]} />
+          <meshStandardMaterial color="#2f2c28" roughness={0.5} metalness={0.1} />
+        </mesh>
+      )}
+      {pouch.tinTie && (
+        // ที่รัดปาก: แถบบางพาดขวางหน้าถุงใกล้ปาก
+        <mesh position={[0, ttV * pouch.H, ttZ + 1]}>
+          <boxGeometry args={[ttW, 6, 2]} />
+          <meshStandardMaterial color="#a89a7a" roughness={0.6} metalness={0.2} />
+        </mesh>
       )}
     </group>
   )

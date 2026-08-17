@@ -2,7 +2,7 @@ import { MATERIALS } from './materials'
 import { TEMPLATES } from './templates'
 import { parseDecos, parseFillImage, type Deco, type FillImage } from './artwork'
 import { LABEL_STYLES, type LabelStyle } from './vessel'
-import { POUCH_STYLES, type PouchStyle } from './pouch'
+import { POUCH_STYLES, type PouchStyle, type PouchAddons } from './pouch'
 import type { CurrentSpec } from './ai'
 
 // โมเดลข้อมูลของ "งาน" หนึ่งชิ้น + ตัว parse ที่ตรวจ/ซ่อมข้อมูลจาก localStorage หรือไฟล์ที่นำเข้า
@@ -51,6 +51,7 @@ export interface Project {
   labelStyle?: LabelStyle // รูปแบบฉลาก (เฉพาะโหมดภาชนะ) — ไม่ใส่ = 'body'
   pouchStyle?: PouchStyle // รูปแบบถุง (เฉพาะโหมดถุง) — ไม่ใส่ = 'stand'
   zipper?: boolean // ซิปล็อก + รอยฉีก (เฉพาะโหมดถุง) — เก็บเฉพาะเมื่อ true
+  pouchAddons?: PouchAddons // ออปชันเสริมถุง (รูแขวน/วาล์ว/tin-tie) — เก็บเฉพาะที่เปิด
   decos: Deco[]
   history: DesignVersion[]
   histIdx: number
@@ -112,6 +113,17 @@ export function clampIdx(raw: unknown, len: number): number {
   return Math.min(Math.max(-1, Number.isInteger(n) ? n : len - 1), len - 1)
 }
 
+// ออปชันเสริมถุง — เก็บเฉพาะคีย์ที่เป็น true; คืน undefined ถ้าไม่มีอันไหนเปิด (JSON ไม่บวม)
+function parsePouchAddons(v: unknown): PouchAddons | undefined {
+  if (typeof v !== 'object' || v === null) return undefined
+  const o = v as Record<string, unknown>
+  const a: PouchAddons = {}
+  if (o.hangHole === true) a.hangHole = true
+  if (o.valve === true) a.valve = true
+  if (o.tinTie === true) a.tinTie = true
+  return Object.keys(a).length ? a : undefined
+}
+
 export function parseProject(v: unknown, idx: number): Project | null {
   if (typeof v !== 'object' || v === null) return null
   const o = v as Record<string, unknown>
@@ -129,6 +141,7 @@ export function parseProject(v: unknown, idx: number): Project | null {
     labelStyle: LABEL_STYLES.some((s) => s.id === o.labelStyle) ? (o.labelStyle as LabelStyle) : undefined,
     pouchStyle: POUCH_STYLES.some((s) => s.id === o.pouchStyle) ? (o.pouchStyle as PouchStyle) : undefined,
     zipper: o.zipper === true ? true : undefined,
+    pouchAddons: parsePouchAddons(o.pouchAddons),
     decos: parseDecos(o.decos, o.artwork),
     history,
     histIdx: clampIdx(o.histIdx, history.length),

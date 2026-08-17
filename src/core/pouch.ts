@@ -44,12 +44,28 @@ export interface Pouch {
   backRect: { x: number; y: number; w: number; h: number }
   zipper: boolean // มีซิปล็อก + รอยฉีกไหม
   zipY?: number // พิกัดแผ่นคลี่ y ของแนวซิป (เมื่อ zipper=true) — ใช้วางแถบซิปใน 3D
+  hangHole: boolean // รูแขวน (euro-hole) ที่ริมซีลบน
+  valve: boolean // วาล์วระบายแก๊ส (กาแฟ) บนหน้าถุง
+  tinTie: boolean // ที่รัดปาก (tin-tie) ใกล้ปากถุง
+}
+
+// ออปชันเสริมบนถุง (เก็บเฉพาะที่เปิด) — thread แบบเดียวกับ zipper
+export interface PouchAddons {
+  hangHole?: boolean
+  valve?: boolean
+  tinTie?: boolean
 }
 
 export interface PouchOpts {
   style?: PouchStyle
   zipper?: boolean
+  addons?: PouchAddons
 }
+
+// ตำแหน่ง/ขนาดออปชันเสริม (คงที่เชิงสัดส่วน) — dieline กับ 3D ต้องใช้ค่าชุดเดียวกัน
+export const VALVE_V = 0.72 // ระดับความสูง (v) ของวาล์วบนหน้าถุง (จากก้น)
+export const TINTIE_INSET = 12 // ระยะจากปากบนลงมาถึงแถบ tin-tie (มม.)
+export const valveR = (W: number) => Math.min(W, 90) * 0.11 // รัศมีวาล์ว
 
 export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = {}): Pouch {
   const { W, D, H } = box
@@ -93,6 +109,8 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const cut = (d: string): Segment => ({ kind: 'cut', d })
   const crease = (d: string): Segment => ({ kind: 'crease', d })
   const vfold = (x: number) => crease(`M ${x} 0 L ${x} ${filmH}`)
+  const circlePath = (cx: number, cy: number, r: number) =>
+    `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`
   const segments: Segment[] = [
     cut(`M 0 0 L ${width} 0 L ${width} ${filmH} L 0 ${filmH} Z`),
     vfold(Wp), // แนวทากาว/ซีลข้าง
@@ -131,8 +149,32 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     const sr = Math.min(W, 90) * 0.09
     const cx = W / 2
     const cy = st + sr + 3
-    segments.push(crease(`M ${cx - sr} ${cy} a ${sr} ${sr} 0 1 0 ${2 * sr} 0 a ${sr} ${sr} 0 1 0 ${-2 * sr} 0`))
+    segments.push(crease(circlePath(cx, cy, sr)))
     dims.push({ a: P(cx - sr, cy - sr - 6), b: P(cx + sr, cy - sr - 6), label: `จุก ⌀${fmt(2 * sr)}` })
+  }
+
+  const addons = opts.addons ?? {}
+  const hangHole = addons.hangHole === true
+  const valve = addons.valve === true
+  const tinTie = addons.tinTie === true
+  if (hangHole) {
+    // รูแขวน (euro-hole) กลางริมซีลบน — เจาะจริง (cut) ให้เครื่องปั๊มตัด
+    const hr = 4
+    segments.push(cut(circlePath(W / 2, Math.min(st * 0.5, st - hr - 1), hr)))
+    dims.push({ a: P(W / 2 - hr, 0), b: P(W / 2 + hr, 0), label: `รูแขวน ⌀${fmt(2 * hr)}` })
+  }
+  if (valve) {
+    // วาล์วระบายแก๊สกลางหน้าถุงส่วนบน — marker (welded ไม่ตัด) + ป้าย
+    const vr = valveR(W)
+    const vy = st + (1 - VALVE_V) * H
+    segments.push(crease(circlePath(W / 2, vy, vr)))
+    dims.push({ a: P(W / 2 - vr, vy - vr - 6), b: P(W / 2 + vr, vy - vr - 6), label: `วาล์ว ⌀${fmt(2 * vr)}` })
+  }
+  if (tinTie) {
+    // ที่รัดปาก (tin-tie) — แถบลวดพาดขวางหน้า+หลัง ใกล้ปากถุง
+    const ty = st + TINTIE_INSET
+    segments.push(crease(`M 0 ${ty} L ${Wp} ${ty}`), crease(`M 0 ${ty + 6} L ${Wp} ${ty + 6}`))
+    dims.push({ a: P(0, ty + 3), b: P(Wp, ty + 3), label: 'ที่รัดปาก (tin-tie)' })
   }
 
   if (zipper && zipY !== undefined) {
@@ -158,6 +200,9 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     backRect: { x: W + sideGusset, y: st, w: W, h: H },
     zipper,
     zipY,
+    hangHole,
+    valve,
+    tinTie,
   }
 }
 
