@@ -30,6 +30,7 @@ import {
   renderArtworkCanvas,
   type Deco,
   type FillImage,
+  type ShapeKind,
 } from './core/artwork'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
@@ -77,6 +78,9 @@ import {
   IconRect,
   IconEllipse,
   IconLine,
+  IconTriangle,
+  IconPolygon,
+  IconStar,
   IconUndo,
   IconRedo,
   IconAlignLeft,
@@ -1111,7 +1115,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const patchFillImage = (patch: Partial<FillImage>) =>
     setFillImage((fi) => (fi ? { ...fi, ...patch } : fi))
 
-  const addShape = (shape: 'rect' | 'ellipse' | 'line') => {
+  const addShape = (shape: ShapeKind) => {
     if (!dieline) return
     const el = makeShapeEl(dieline, shape)
     setDecos((ds) => [...ds, el])
@@ -1838,6 +1842,15 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   <button className="ico-btn" disabled={aiBusy} title="เส้น" onClick={() => addShape('line')}>
                     <IconLine /> เส้น
                   </button>
+                  <button className="ico-btn" disabled={aiBusy} title="สามเหลี่ยม" onClick={() => addShape('triangle')}>
+                    <IconTriangle /> สามเหลี่ยม
+                  </button>
+                  <button className="ico-btn" disabled={aiBusy} title="หลายเหลี่ยม" onClick={() => addShape('polygon')}>
+                    <IconPolygon /> หลายเหลี่ยม
+                  </button>
+                  <button className="ico-btn" disabled={aiBusy} title="ดาว" onClick={() => addShape('star')}>
+                    <IconStar /> ดาว
+                  </button>
                 </div>
               </Group>
 
@@ -2233,6 +2246,27 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           disabled={aiBusy}
                           onChange={(v) => patchSelected((d) => (d.type === 'shape' ? { ...d, strokeW: v, stroke: v > 0 && d.stroke === 'none' ? '#222222' : d.stroke } : d))}
                         />
+                        {selected.strokeW > 0 && (
+                          <label className="check">
+                            <input
+                              type="checkbox"
+                              checked={!!selected.dash}
+                              disabled={aiBusy}
+                              onChange={(e) => patchSelected((d) => (d.type === 'shape' ? { ...d, dash: e.target.checked || undefined } : d))}
+                            />
+                            เส้นขอบประ (dashed)
+                          </label>
+                        )}
+                        {(selected.shape === 'polygon' || selected.shape === 'star') && (
+                          <DimField
+                            label={selected.shape === 'star' ? 'จำนวนแฉก' : 'จำนวนด้าน'}
+                            value={selected.sides ?? (selected.shape === 'star' ? 5 : 6)}
+                            min={3}
+                            max={12}
+                            disabled={aiBusy}
+                            onChange={(v) => patchSelected((d) => (d.type === 'shape' ? { ...d, sides: Math.round(v) } : d))}
+                          />
+                        )}
                         <DimField
                           label="กว้าง"
                           value={Math.round(selected.w * 10) / 10}

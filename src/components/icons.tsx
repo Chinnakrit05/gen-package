@@ -58,6 +58,30 @@ export function IconLine({ size = 16 }: IconProps) {
   )
 }
 
+export function IconTriangle({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M12 4 21 20H3z" />
+    </svg>
+  )
+}
+
+export function IconPolygon({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z" />
+    </svg>
+  )
+}
+
+export function IconStar({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M12 3l2.6 5.6 6.1.7-4.5 4.1 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.3l6.1-.7z" />
+    </svg>
+  )
+}
+
 export function IconTrash({ size = 16 }: IconProps) {
   return (
     <svg {...base(size)}>

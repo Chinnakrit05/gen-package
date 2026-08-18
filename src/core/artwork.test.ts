@@ -26,9 +26,12 @@ import {
   parseDecos,
   recenter,
   shapeSVG,
+  shapeVertices,
+  isPolyShape,
   sheetUV,
   withTextW,
   type Deco,
+  type ShapeEl,
 } from './artwork'
 import { TEMPLATES } from './templates'
 import { getMaterial } from './materials'
@@ -434,5 +437,44 @@ describe('persistence + migration', () => {
     const noFlags = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', x: 0, y: 0, rot: 0 })!
     expect(noFlags.hidden).toBeUndefined()
     expect(noFlags.locked).toBeUndefined()
+  })
+})
+
+describe('รูปทรงเพิ่ม (triangle/polygon/star) + เส้นประ', () => {
+  it('shapeVertices: จำนวนจุดถูกต้อง + อยู่ในกรอบกึ่งกลาง', () => {
+    expect(shapeVertices('triangle', 100, 100)).toHaveLength(3)
+    expect(shapeVertices('polygon', 100, 100, 6)).toHaveLength(6)
+    expect(shapeVertices('star', 100, 100, 5)).toHaveLength(10) // 5 แฉก = 10 จุด
+    // จุดยอดอยู่ในกรอบ ±w/2, ±h/2
+    for (const p of shapeVertices('polygon', 80, 60, 5)) {
+      expect(Math.abs(p.x)).toBeLessThanOrEqual(40 + 1e-6)
+      expect(Math.abs(p.y)).toBeLessThanOrEqual(30 + 1e-6)
+    }
+  })
+
+  it('isPolyShape แยกรูปปิดมีพื้นจาก line/rect/ellipse', () => {
+    expect(isPolyShape('triangle')).toBe(true)
+    expect(isPolyShape('star')).toBe(true)
+    expect(isPolyShape('rect')).toBe(false)
+    expect(isPolyShape('line')).toBe(false)
+  })
+
+  it('shapeSVG: รูปหลายเหลี่ยมออกเป็น <polygon> + เส้นประใส่ dasharray', () => {
+    const star: ShapeEl = { id: 's', type: 'shape', shape: 'star', sides: 5, w: 60, h: 60, fill: '#f00', stroke: '#000', strokeW: 2, dash: true, x: 10, y: 10, rot: 0 }
+    const svg = shapeSVG(star, '')
+    expect(svg.includes('<polygon')).toBe(true)
+    expect(svg.includes('stroke-dasharray=')).toBe(true)
+    // 5 แฉก = 10 คู่พิกัด
+    expect((svg.match(/points="([^"]+)"/)![1].trim().split(/\s+/)).length).toBe(10)
+  })
+
+  it('parseDeco: รับรูปทรงใหม่ + sides + dash และปัด sides ให้อยู่ 3..12', () => {
+    const p = parseDeco({ type: 'shape', shape: 'polygon', sides: 99, dash: true, w: 40, h: 40, fill: '#000', stroke: '#000', strokeW: 1, x: 0, y: 0, rot: 0 }) as ShapeEl
+    expect(p.shape).toBe('polygon')
+    expect(p.sides).toBe(12) // clamp
+    expect(p.dash).toBe(true)
+    // รูปทรงไม่รู้จัก → fallback rect
+    const bad = parseDeco({ type: 'shape', shape: 'blob', w: 10, h: 10, fill: '#000', stroke: 'none', strokeW: 0, x: 0, y: 0, rot: 0 }) as ShapeEl
+    expect(bad.shape).toBe('rect')
   })
 })

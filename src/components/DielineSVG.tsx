@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, type Deco, type FillImage } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, type Deco, type FillImage } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
@@ -87,11 +87,25 @@ function decoInner(e: Deco) {
     )
   }
   if (e.type === 'shape') {
+    const dashProps = e.dash && e.strokeW > 0 ? { strokeDasharray: dashArray(e.strokeW) } : {}
     const strokeProps =
-      e.stroke !== 'none' && e.strokeW > 0 ? { stroke: e.stroke, strokeWidth: e.strokeW } : {}
+      e.stroke !== 'none' && e.strokeW > 0
+        ? { stroke: e.stroke, strokeWidth: e.strokeW, ...dashProps }
+        : {}
     if (e.shape === 'line') {
       const cy = e.y + e.h / 2
-      return <line x1={e.x} y1={cy} x2={e.x + e.w} y2={cy} stroke={e.stroke} strokeWidth={e.strokeW} strokeLinecap="round" />
+      return (
+        <line
+          x1={e.x}
+          y1={cy}
+          x2={e.x + e.w}
+          y2={cy}
+          stroke={e.stroke}
+          strokeWidth={e.strokeW}
+          strokeLinecap="round"
+          {...dashProps}
+        />
+      )
     }
     const gid = gradientId(e.id)
     const fill = e.grad ? `url(#${gid})` : e.fill
@@ -99,12 +113,22 @@ function decoInner(e: Deco) {
     const defs = e.grad ? (
       <g dangerouslySetInnerHTML={{ __html: `<defs>${gradientSVGString(e)}</defs>` }} />
     ) : null
-    const body =
-      e.shape === 'ellipse' ? (
-        <ellipse cx={e.x + w / 2} cy={e.y + h / 2} rx={w / 2} ry={h / 2} fill={fill} {...strokeProps} />
-      ) : (
-        <rect x={e.x} y={e.y} width={w} height={h} fill={fill} {...strokeProps} />
-      )
+    const cx = e.x + w / 2
+    const cy = e.y + h / 2
+    const body = isPolyShape(e.shape) ? (
+      <polygon
+        points={shapeVertices(e.shape, w, h, e.sides)
+          .map((p) => `${cx + p.x},${cy + p.y}`)
+          .join(' ')}
+        fill={fill}
+        strokeLinejoin="round"
+        {...strokeProps}
+      />
+    ) : e.shape === 'ellipse' ? (
+      <ellipse cx={cx} cy={cy} rx={w / 2} ry={h / 2} fill={fill} {...strokeProps} />
+    ) : (
+      <rect x={e.x} y={e.y} width={w} height={h} fill={fill} {...strokeProps} />
+    )
     return (
       <>
         {defs}

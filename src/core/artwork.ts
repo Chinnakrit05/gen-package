@@ -69,16 +69,50 @@ export interface GradientDef {
   radial?: boolean
 }
 
+export type ShapeKind = 'rect' | 'ellipse' | 'line' | 'triangle' | 'polygon' | 'star'
 export interface ShapeEl extends BaseEl {
   type: 'shape'
-  shape: 'rect' | 'ellipse' | 'line'
+  shape: ShapeKind
   w: number // ความกว้าง/ความยาว (มม.)
   h: number // ความสูง (มม.) — สำหรับ line = ความหนาเส้น
   fill: string // สีพื้น หรือ 'none'
   stroke: string // สีเส้นขอบ หรือ 'none'
   strokeW: number // ความหนาเส้น (มม.)
-  grad?: GradientDef // ถ้ามี = ใช้ไล่สีแทนสีพื้นทึบ (เฉพาะ rect/ellipse)
+  grad?: GradientDef // ถ้ามี = ใช้ไล่สีแทนสีพื้นทึบ (เฉพาะรูปทรงมีพื้น)
+  sides?: number // จำนวนด้าน/แฉก (polygon/star) — ไม่ใส่ = 6 (polygon) / 5 (star)
+  dash?: boolean // เส้นขอบแบบประ
 }
+
+// จุดยอดรูปทรงหลายเหลี่ยม/สามเหลี่ยม/ดาว ในกรอบ w×h กึ่งกลางที่ (0,0) — ใช้ร่วมทุก path
+// (canvas ใช้พิกัดกึ่งกลางตรง ๆ; SVG/จอ บวกจุดกึ่งกลางของชิ้นเข้าไป)
+export function shapeVertices(shape: ShapeKind, w: number, h: number, sides?: number): Vec2[] {
+  const rx = w / 2
+  const ry = h / 2
+  if (shape === 'triangle') return [{ x: 0, y: -ry }, { x: rx, y: ry }, { x: -rx, y: ry }]
+  const top = -Math.PI / 2
+  if (shape === 'star') {
+    const n = Math.max(3, sides ?? 5)
+    const inner = 0.42
+    const pts: Vec2[] = []
+    for (let i = 0; i < n * 2; i++) {
+      const a = top + (i * Math.PI) / n
+      const r = i % 2 === 0 ? 1 : inner
+      pts.push({ x: Math.cos(a) * rx * r, y: Math.sin(a) * ry * r })
+    }
+    return pts
+  }
+  // polygon (n เหลี่ยม)
+  const n = Math.max(3, sides ?? 6)
+  const pts: Vec2[] = []
+  for (let i = 0; i < n; i++) {
+    const a = top + (i * 2 * Math.PI) / n
+    pts.push({ x: Math.cos(a) * rx, y: Math.sin(a) * ry })
+  }
+  return pts
+}
+
+// รูปทรงที่เป็น "รูปปิดมีพื้น" (ไม่ใช่ line) — ใช้ตัดสินใจ fill/gradient/มุมมน
+export const isPolyShape = (s: ShapeKind) => s === 'triangle' || s === 'polygon' || s === 'star'
 
 export type Deco = ImageEl | TextEl | ShapeEl
 
@@ -325,10 +359,18 @@ export function decoLabel(e: Deco): string {
   if (e.name && e.name.trim()) return e.name
   if (e.type === 'image') return 'รูป'
   if (e.type === 'text') return e.text || 'ข้อความ'
-  return e.shape === 'rect' ? 'สี่เหลี่ยม' : e.shape === 'ellipse' ? 'วงกลม' : 'เส้น'
+  const names: Record<ShapeKind, string> = {
+    rect: 'สี่เหลี่ยม',
+    ellipse: 'วงกลม',
+    line: 'เส้น',
+    triangle: 'สามเหลี่ยม',
+    polygon: 'หลายเหลี่ยม',
+    star: 'ดาว',
+  }
+  return names[e.shape] ?? 'รูปทรง'
 }
 
-export function makeShapeEl(dieline: Dieline, shape: 'rect' | 'ellipse' | 'line'): ShapeEl {
+export function makeShapeEl(dieline: Dieline, shape: ShapeKind): ShapeEl {
   const b = bbox(showFace(dieline).outline)
   const fw = b.x1 - b.x0
   const fh = b.y1 - b.y0
@@ -339,9 +381,11 @@ export function makeShapeEl(dieline: Dieline, shape: 'rect' | 'ellipse' | 'line'
     return { id: newId(), type: 'shape', shape, w, h: strokeW, fill: 'none', stroke: '#222222', strokeW, x, y, rot: 0 }
   }
   const w = Math.max(10, fw * 0.4)
-  const h = Math.max(10, fh * 0.3)
+  // รูปหลายเหลี่ยม/ดาว/สามเหลี่ยม ใช้กรอบจัตุรัสให้ดูสมส่วน (regular)
+  const h = isPolyShape(shape) ? w : Math.max(10, fh * 0.3)
   const { x, y } = centerOnFace(dieline, w, h)
-  return { id: newId(), type: 'shape', shape, w, h, fill: '#0f6e56', stroke: 'none', strokeW: 0, x, y, rot: 0 }
+  const base = { id: newId(), type: 'shape' as const, shape, w, h, fill: '#0f6e56', stroke: 'none', strokeW: 0, x, y, rot: 0 }
+  return shape === 'star' ? { ...base, sides: 5 } : shape === 'polygon' ? { ...base, sides: 6 } : base
 }
 
 // จัดองค์ประกอบให้กลับไปกลางหน้าโชว์ (คงขนาด/มุมเดิม) — เผื่อลากหลุด
@@ -670,18 +714,35 @@ export function shapeGradient(
 
 // รูปทรงเป็น SVG element (พิกัดแผ่นคลี่ มม.) — ใช้ทั้ง blueprint (DielineSVG อ้าง shapeSVG ไม่ได้
 // เพราะเป็น JSX แยก) และ export; rot = attribute transform ที่คำนวณไว้แล้ว
+// ระยะเส้นประตามความหนาเส้น (มม.) — ให้จังหวะประสม่ำเสมอทุกขนาด
+export const dashArray = (strokeW: number) => {
+  const d = Math.max(1.5, strokeW * 2.5)
+  return `${d} ${d * 0.7}`
+}
+
 export function shapeSVG(e: ShapeEl, rot: string): string {
-  const stroke = e.stroke !== 'none' && e.strokeW > 0 ? ` stroke="${e.stroke}" stroke-width="${e.strokeW}"` : ''
+  const dash = e.dash && e.strokeW > 0 ? ` stroke-dasharray="${dashArray(e.strokeW)}"` : ''
+  const stroke =
+    e.stroke !== 'none' && e.strokeW > 0 ? ` stroke="${e.stroke}" stroke-width="${e.strokeW}"${dash}` : ''
   if (e.shape === 'line') {
     const cy = e.y + e.h / 2
-    return `<line x1="${e.x}" y1="${cy}" x2="${e.x + e.w}" y2="${cy}" stroke="${e.stroke}" stroke-width="${e.strokeW}" stroke-linecap="round"${rot}/>`
+    return `<line x1="${e.x}" y1="${cy}" x2="${e.x + e.w}" y2="${cy}" stroke="${e.stroke}" stroke-width="${e.strokeW}" stroke-linecap="round"${dash}${rot}/>`
   }
   const defs = e.grad ? `<defs>${gradientSVGString(e)}</defs>` : ''
   const fill = e.grad ? `url(#${gradientId(e.id)})` : e.fill !== 'none' ? e.fill : 'none'
-  const body =
-    e.shape === 'ellipse'
-      ? `<ellipse cx="${e.x + e.w / 2}" cy="${e.y + e.h / 2}" rx="${e.w / 2}" ry="${e.h / 2}" fill="${fill}"${stroke}${rot}/>`
-      : `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="${fill}"${stroke}${rot}/>`
+  let body: string
+  if (isPolyShape(e.shape)) {
+    const cx = e.x + e.w / 2
+    const cy = e.y + e.h / 2
+    const pts = shapeVertices(e.shape, e.w, e.h, e.sides)
+      .map((p) => `${cx + p.x},${cy + p.y}`)
+      .join(' ')
+    body = `<polygon points="${pts}" fill="${fill}"${stroke} stroke-linejoin="round"${rot}/>`
+  } else if (e.shape === 'ellipse') {
+    body = `<ellipse cx="${e.x + e.w / 2}" cy="${e.y + e.h / 2}" rx="${e.w / 2}" ry="${e.h / 2}" fill="${fill}"${stroke}${rot}/>`
+  } else {
+    body = `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="${fill}"${stroke}${rot}/>`
+  }
   return defs + body
 }
 
@@ -693,14 +754,21 @@ export function drawShape2D(ctx: CanvasRenderingContext2D, e: ShapeEl, s: number
     ctx.strokeStyle = e.stroke
     ctx.lineWidth = Math.max(0.5, e.strokeW * s)
     ctx.lineCap = 'round'
+    if (e.dash) ctx.setLineDash(dashArray(e.strokeW).split(' ').map((n) => Number(n) * s))
     ctx.beginPath()
     ctx.moveTo(-hw, 0)
     ctx.lineTo(hw, 0)
     ctx.stroke()
+    ctx.setLineDash([])
     return
   }
   ctx.beginPath()
-  if (e.shape === 'ellipse') ctx.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2)
+  if (isPolyShape(e.shape)) {
+    const pts = shapeVertices(e.shape, e.w, e.h, e.sides)
+    pts.forEach((p, i) => (i ? ctx.lineTo(p.x * s, p.y * s) : ctx.moveTo(p.x * s, p.y * s)))
+    ctx.closePath()
+    ctx.lineJoin = 'round'
+  } else if (e.shape === 'ellipse') ctx.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2)
   else ctx.rect(-hw, -hh, hw * 2, hh * 2)
   const grad = shapeGradient(ctx, e, hw, hh)
   if (grad || e.fill !== 'none') {
@@ -710,7 +778,9 @@ export function drawShape2D(ctx: CanvasRenderingContext2D, e: ShapeEl, s: number
   if (e.stroke !== 'none' && e.strokeW > 0) {
     ctx.strokeStyle = e.stroke
     ctx.lineWidth = e.strokeW * s
+    if (e.dash) ctx.setLineDash(dashArray(e.strokeW).split(' ').map((n) => Number(n) * s))
     ctx.stroke()
+    ctx.setLineDash([])
   }
 }
 
@@ -915,7 +985,8 @@ export function parseDeco(v: unknown): Deco | null {
     }
   }
   if (o.type === 'shape') {
-    const shape = o.shape === 'ellipse' || o.shape === 'line' ? o.shape : 'rect'
+    const KINDS: ShapeKind[] = ['rect', 'ellipse', 'line', 'triangle', 'polygon', 'star']
+    const shape: ShapeKind = KINDS.includes(o.shape as ShapeKind) ? (o.shape as ShapeKind) : 'rect'
     const w = Number(o.w)
     const h = Number(o.h)
     if (!(w > 0) || !(h > 0)) return null
@@ -932,7 +1003,21 @@ export function parseDeco(v: unknown): Deco | null {
             ...(gr.radial === true ? { radial: true } : {}),
           }
         : undefined
-    return { id, type: 'shape', shape, w, h, fill, stroke, strokeW, ...(grad ? { grad } : {}), ...base }
+    const sides = Number.isFinite(Number(o.sides)) ? Math.max(3, Math.min(12, Math.round(Number(o.sides)))) : undefined
+    return {
+      id,
+      type: 'shape',
+      shape,
+      w,
+      h,
+      fill,
+      stroke,
+      strokeW,
+      ...(grad ? { grad } : {}),
+      ...((shape === 'polygon' || shape === 'star') && sides ? { sides } : {}),
+      ...(o.dash === true ? { dash: true } : {}),
+      ...base,
+    }
   }
   return null
 }
