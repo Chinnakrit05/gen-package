@@ -2324,6 +2324,15 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           />
                           เงาใต้ตัวอักษร
                         </label>
+                        <DimField
+                          label="โค้ง (0=ตรง, +ขึ้น −ลง)"
+                          value={selected.curve ?? 0}
+                          min={-300}
+                          max={300}
+                          unit="°"
+                          disabled={aiBusy}
+                          onChange={(v) => patchSelected((d) => (d.type === 'text' ? { ...d, curve: Math.abs(v) >= 1 ? v : undefined } : d))}
+                        />
                       </>
                     )}
                     {selected.type === 'image' && selected.preset && (

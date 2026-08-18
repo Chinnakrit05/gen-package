@@ -31,10 +31,14 @@ import {
   textFxAttrs,
   textShadowSVG,
   textShadowId,
+  isCurvedText,
+  curvedGlyphs,
+  svgArtworkLayer,
   sheetUV,
   withTextW,
   type Deco,
   type ShapeEl,
+  type TextEl,
 } from './artwork'
 import { TEMPLATES } from './templates'
 import { getMaterial } from './materials'
@@ -523,5 +527,42 @@ describe('มาสก์รูปตามทรง + ข้อความเ�
     // strokeW โดยไม่มีสี → ไม่เก็บ
     const noColor = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', strokeW: 2, x: 0, y: 0, rot: 0 }) as { strokeW?: number }
     expect(noColor.strokeW).toBeUndefined()
+  })
+})
+
+describe('ข้อความโค้ง (curved text)', () => {
+  const t = (over = {}): TextEl => ({ id: 'c', type: 'text', text: 'ABCDE', size: 10, color: '#000', w: 30, x: 10, y: 10, rot: 0, ...over }) as TextEl
+
+  it('isCurvedText: ต้องมี curve และ |curve|>=1', () => {
+    expect(isCurvedText(t())).toBe(false)
+    expect(isCurvedText(t({ curve: 0.4 }))).toBe(false)
+    expect(isCurvedText(t({ curve: 90 }))).toBe(true)
+    expect(isCurvedText(t({ curve: -120 }))).toBe(true)
+  })
+
+  it('curvedGlyphs: จำนวนอักษรตรง, x เรียงซ้าย→ขวา, มุมกลาง≈0 สมมาตร', () => {
+    const gs = curvedGlyphs(t({ curve: 120 }))
+    expect(gs).toHaveLength(5)
+    for (let i = 1; i < gs.length; i++) expect(gs[i].x).toBeGreaterThan(gs[i - 1].x)
+    // อักษรกลาง (index 2) อยู่ยอดโค้ง มุม≈0
+    expect(Math.abs(gs[2].rot)).toBeLessThan(15)
+    // สมมาตร: มุมหัว-ท้ายตรงข้ามกัน
+    expect(gs[0].rot).toBeCloseTo(-gs[4].rot, 5)
+  })
+
+  it('curve บวก vs ลบ กลับด้านโก่ง (y ปลายสลับเครื่องหมาย)', () => {
+    const up = curvedGlyphs(t({ curve: 120 }))
+    const down = curvedGlyphs(t({ curve: -120 }))
+    expect(Math.sign(up[0].y)).toBe(-Math.sign(down[0].y))
+  })
+
+  it('svgArtworkLayer: โค้ง = หลาย <text> ต่ออักษร ในกลุ่มเดียว', () => {
+    const svg = svgArtworkLayer([t({ curve: 120 })])
+    expect((svg.match(/<text /g) || []).length).toBe(5) // 5 อักษร = 5 text
+  })
+
+  it('parseDeco: รับ curve + clamp -300..300, ปัดค่าน้อย(<1)ทิ้ง', () => {
+    expect((parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', curve: 999, x: 0, y: 0, rot: 0 }) as TextEl).curve).toBe(300)
+    expect((parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', curve: 0.3, x: 0, y: 0, rot: 0 }) as TextEl).curve).toBeUndefined()
   })
 })

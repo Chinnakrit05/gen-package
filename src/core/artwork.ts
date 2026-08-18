@@ -49,6 +49,7 @@ export interface TextEl extends BaseEl {
   strokeColor?: string // สีเส้นขอบตัวอักษร (ไม่ใส่ = ไม่มีขอบ)
   strokeW?: number // ความหนาขอบ (มม.) — ต้องมี strokeColor ด้วย
   shadow?: boolean // เงาใต้ตัวอักษร (ค่าคงที่: เยื้อง+เบลอตามขนาดฟอนต์)
+  curve?: number // ดัดข้อความเป็นส่วนโค้ง: องศารวมของส่วนโค้ง (+ = โก่งขึ้น, − = โก่งลง; 0 = ตรง)
 }
 
 // ฟอนต์ไทยที่ให้เลือก — ต้อง import ไฟล์น้ำหนัก 400/700 ใน main.tsx ให้ครบทุกตัว
@@ -180,15 +181,37 @@ const textHasStroke = (e: TextEl) => !!e.strokeColor && (e.strokeW ?? 0) > 0
 // ค่าเงา (มม.) อิงขนาดฟอนต์ — dieline/SVG/canvas ใช้ชุดเดียวกัน
 export const textShadow = (e: TextEl) => ({ dx: e.size * 0.05, dy: e.size * 0.05, blur: e.size * 0.05 })
 
+// --- ข้อความโค้ง (arc) : เรนเดอร์ทีละอักษรเหมือนกันทั้ง canvas และ SVG ให้ตรงกันเป๊ะ ---
+export const isCurvedText = (e: TextEl) => !!e.curve && Math.abs(e.curve) >= 1
+const curvedString = (e: TextEl) => textLinesOf(e).join(' ') // โค้งใช้บรรทัดเดียว
+
+// เรขาคณิตส่วนโค้ง (พิกัดท้องถิ่นกึ่งกลางชิ้น): วางอักษรบนวงกลมรัศมี |Rs|, จัดกึ่งกลางแนวตั้งด้วย yOff
+// คืนตำแหน่ง+มุมหมุนของแต่ละอักษร (มม./องศา) — total = ความกว้างข้อความตรง (มม.)
+export function curvedGlyphs(e: TextEl): { ch: string; x: number; y: number; rot: number }[] {
+  const chars = [...curvedString(e)]
+  const widths = chars.map((c) => measureText(c, e.size, e.font, e.weight))
+  const total = widths.reduce((a, b) => a + b, 0) || 1
+  const theta = (Math.max(-300, Math.min(300, e.curve!)) * Math.PI) / 180
+  const Rs = total / theta // รัศมีมีเครื่องหมาย (+ โก่งลง/rainbow, − โก่งขึ้น)
+  const yOff = (Rs * (1 - Math.cos(theta / 2))) / 2
+  const out: { ch: string; x: number; y: number; rot: number }[] = []
+  let d = 0
+  for (let i = 0; i < chars.length; i++) {
+    const phi = ((d + widths[i] / 2) / total - 0.5) * theta
+    out.push({
+      ch: chars[i],
+      x: Rs * Math.sin(phi),
+      y: Rs * (1 - Math.cos(phi)) - yOff,
+      rot: (phi * 180) / Math.PI,
+    })
+    d += widths[i]
+  }
+  return out
+}
+
+// วาดข้อความ (อาจหลายบรรทัด/โค้ง) ลง canvas — ctx ถูก translate ไปกึ่งกลาง+หมุน+พลิกไว้แล้ว
+// พิกัดท้องถิ่น: กึ่งกลางชิ้น = (0,0); ใช้ทั้ง Viewer3D และ export (drawDeco2D)
 export function drawText2D(ctx: CanvasRenderingContext2D, e: TextEl, s: number) {
-  const lines = textLinesOf(e)
-  const lineH = textLineH(e)
-  const totalH = lines.length * lineH
-  const align = e.align ?? 'left'
-  ctx.font = textFont(e, s)
-  ctx.textAlign = align === 'left' ? 'left' : align === 'right' ? 'right' : 'center'
-  ctx.textBaseline = 'middle'
-  const x = align === 'left' ? (-e.w / 2) * s : align === 'right' ? (e.w / 2) * s : 0
   const stroked = textHasStroke(e)
   const setShadow = () => {
     if (!e.shadow) return
@@ -204,24 +227,44 @@ export function drawText2D(ctx: CanvasRenderingContext2D, e: TextEl, s: number) 
     ctx.shadowOffsetX = 0
     ctx.shadowOffsetY = 0
   }
-  lines.forEach((ln, i) => {
-    const cy = (-totalH / 2 + lineH * (i + 0.5)) * s
+  // วาดสตริงหนึ่งชิ้นที่ตำแหน่ง (px,py) — ขอบใต้พื้น + เงาใต้สุด
+  const paint = (str: string, px: number, py: number) => {
     if (stroked) {
-      setShadow() // เงาอยู่ใต้ขอบ (ชั้นล่างสุด)
+      setShadow()
       ctx.lineJoin = 'round'
       ctx.lineWidth = (e.strokeW as number) * TEXT_STROKE_MUL * s
       ctx.strokeStyle = e.strokeColor as string
-      ctx.strokeText(ln, x, cy)
+      ctx.strokeText(str, px, py)
       clearShadow()
       ctx.fillStyle = e.color
-      ctx.fillText(ln, x, cy) // พื้นทับกลางขอบ → ขอบเหลือครึ่งนอก
+      ctx.fillText(str, px, py)
     } else {
       setShadow()
       ctx.fillStyle = e.color
-      ctx.fillText(ln, x, cy)
+      ctx.fillText(str, px, py)
       clearShadow()
     }
-  })
+  }
+  ctx.font = textFont(e, s)
+  ctx.textBaseline = 'middle'
+  if (isCurvedText(e)) {
+    ctx.textAlign = 'center'
+    for (const g of curvedGlyphs(e)) {
+      ctx.save()
+      ctx.translate(g.x * s, g.y * s)
+      ctx.rotate((g.rot * Math.PI) / 180)
+      paint(g.ch, 0, 0)
+      ctx.restore()
+    }
+    return
+  }
+  const lines = textLinesOf(e)
+  const lineH = textLineH(e)
+  const totalH = lines.length * lineH
+  const align = e.align ?? 'left'
+  ctx.textAlign = align === 'left' ? 'left' : align === 'right' ? 'right' : 'center'
+  const x = align === 'left' ? (-e.w / 2) * s : align === 'right' ? (e.w / 2) * s : 0
+  lines.forEach((ln, i) => paint(ln, x, (-totalH / 2 + lineH * (i + 0.5)) * s))
 }
 
 // วัดความกว้างข้อความด้วย canvas (ในหน่วย px = มม. เพราะวัดที่สเกล 1:1)
@@ -888,6 +931,19 @@ export function svgArtworkLayer(decos: Deco[]): string {
           `<image href="${e.src}" x="${e.x}" y="${e.y}" width="${w}" height="${h}" preserveAspectRatio="${imgPAR(e.fit)}"${clip}${rot}/>`
       } else if (e.type === 'shape') {
         el = shapeSVG(e, rot)
+      } else if (isCurvedText(e)) {
+        // โค้ง: <text> ต่ออักษร ในกรอบที่หมุน/พลิกด้วย <g> (เงาไว้บนกลุ่ม, ขอบต่ออักษร)
+        const strokeA = textHasStroke(e)
+          ? ` stroke="${e.strokeColor}" stroke-width="${(e.strokeW as number) * TEXT_STROKE_MUL}" paint-order="stroke" stroke-linejoin="round"`
+          : ''
+        const common =
+          `font-size="${e.size}" fill="${e.color}" font-weight="${e.weight ?? 400}"` +
+          ` font-family="${fontCss(e.font)}, sans-serif" text-anchor="middle" dominant-baseline="central"${strokeA}`
+        const glyphs = curvedGlyphs(e)
+          .map((g) => `<text ${common} transform="translate(${c.x + g.x} ${c.y + g.y}) rotate(${g.rot})">${xmlEsc(g.ch)}</text>`)
+          .join('')
+        const filterA = e.shadow ? ` filter="url(#${textShadowId(e.id)})"` : ''
+        el = textShadowSVG(e) + `<g${rot}${filterA}>${glyphs}</g>`
       } else {
         const tspans = textLinesOf(e)
           .map((ln, i) => `<tspan x="${textAnchorX(e)}" y="${textLineY(e, i)}">${xmlEsc(ln)}</tspan>`)
@@ -1066,6 +1122,9 @@ export function parseDeco(v: unknown): Deco | null {
       ...(lh ? { lh } : {}),
       ...(strokeColor && strokeW ? { strokeColor, strokeW } : {}),
       ...(o.shadow === true ? { shadow: true } : {}),
+      ...(Number.isFinite(Number(o.curve)) && Math.abs(Number(o.curve)) >= 1
+        ? { curve: clampNum(Number(o.curve), -300, 300) }
+        : {}),
       ...base,
     }
   }

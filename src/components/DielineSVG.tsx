@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, TEXT_STROKE_MUL, textShadowSVG, textShadowId, type Deco, type FillImage } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, TEXT_STROKE_MUL, textShadowSVG, textShadowId, isCurvedText, curvedGlyphs, type Deco, type FillImage } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
@@ -141,16 +141,41 @@ function decoInner(e: Deco) {
       ? { stroke: e.strokeColor, strokeWidth: (e.strokeW as number) * TEXT_STROKE_MUL, paintOrder: 'stroke' as const, strokeLinejoin: 'round' as const }
       : { stroke: 'none' as const }
   const shDefs = e.shadow ? <g dangerouslySetInnerHTML={{ __html: textShadowSVG(e) }} /> : null
+  const fontProps = {
+    fontSize: e.size,
+    fontWeight: e.weight ?? 400,
+    fontFamily: `${fontCss(e.font)}, sans-serif`,
+    fill: e.color,
+  }
+  if (isCurvedText(e)) {
+    const c = elCenter(e)
+    return (
+      <>
+        {shDefs}
+        <g filter={e.shadow ? `url(#${textShadowId(e.id)})` : undefined} style={{ userSelect: 'none' }}>
+          {curvedGlyphs(e).map((g, i) => (
+            <text
+              key={i}
+              transform={`translate(${c.x + g.x} ${c.y + g.y}) rotate(${g.rot})`}
+              textAnchor="middle"
+              dominantBaseline="central"
+              {...fontProps}
+              {...tStroke}
+            >
+              {g.ch}
+            </text>
+          ))}
+        </g>
+      </>
+    )
+  }
   return (
     <>
       {shDefs}
       <text
         textAnchor={textAnchor(e)}
         dominantBaseline="central"
-        fontSize={e.size}
-        fontWeight={e.weight ?? 400}
-        fontFamily={`${fontCss(e.font)}, sans-serif`}
-        fill={e.color}
+        {...fontProps}
         filter={e.shadow ? `url(#${textShadowId(e.id)})` : undefined}
         {...tStroke}
         style={{ userSelect: 'none' }}
