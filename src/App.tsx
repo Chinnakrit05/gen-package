@@ -1979,6 +1979,62 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     })}
                   </ul>
                 )}
+                {selected && (
+                  <div className="layer-quick">
+                    <DimField
+                      label="ความทึบ (%)"
+                      value={Math.round((selected.opacity ?? 1) * 100)}
+                      min={0}
+                      max={100}
+                      unit="%"
+                      disabled={aiBusy}
+                      onChange={(v) =>
+                        patchSelected((d) => ({ ...d, opacity: Math.min(1, Math.max(0, v / 100)) }))
+                      }
+                    />
+                    {decos.length > 1 && (
+                      <div className="layer-row">
+                        <span className="layer-label">
+                          เลเยอร์ {selIdx + 1}/{decos.length}
+                        </span>
+                        <div className="layer-btns">
+                          <button
+                            title="ไปหลังสุด"
+                            aria-label="ไปหลังสุด"
+                            disabled={aiBusy || selIdx <= 0}
+                            onClick={() => restackSelected(-1, true)}
+                          >
+                            ⤓
+                          </button>
+                          <button
+                            title="ลงหลังหนึ่งชั้น"
+                            aria-label="ลงหลัง"
+                            disabled={aiBusy || selIdx <= 0}
+                            onClick={() => restackSelected(-1)}
+                          >
+                            ▼
+                          </button>
+                          <button
+                            title="ขึ้นหน้าหนึ่งชั้น"
+                            aria-label="ขึ้นหน้า"
+                            disabled={aiBusy || selIdx >= decos.length - 1}
+                            onClick={() => restackSelected(1)}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            title="ไปหน้าสุด"
+                            aria-label="ไปหน้าสุด"
+                            disabled={aiBusy || selIdx >= decos.length - 1}
+                            onClick={() => restackSelected(1, true)}
+                          >
+                            ⤒
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </Group>
 
               <Group title="ปรับแต่งที่เลือก" open={groups.props} onToggle={() => toggleGroup('props')}>
@@ -2536,58 +2592,6 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         ⥯ พลิกแนวตั้ง
                       </button>
                     </div>
-                    <DimField
-                      label="ความทึบ (%)"
-                      value={Math.round((selected.opacity ?? 1) * 100)}
-                      min={0}
-                      max={100}
-                      unit="%"
-                      disabled={aiBusy}
-                      onChange={(v) =>
-                        patchSelected((d) => ({ ...d, opacity: Math.min(1, Math.max(0, v / 100)) }))
-                      }
-                    />
-                    {decos.length > 1 && (
-                      <div className="layer-row">
-                        <span className="layer-label">
-                          เลเยอร์ {selIdx + 1}/{decos.length}
-                        </span>
-                        <div className="layer-btns">
-                          <button
-                            title="ไปหลังสุด"
-                            aria-label="ไปหลังสุด"
-                            disabled={aiBusy || selIdx <= 0}
-                            onClick={() => restackSelected(-1, true)}
-                          >
-                            ⤓
-                          </button>
-                          <button
-                            title="ลงหลังหนึ่งชั้น"
-                            aria-label="ลงหลัง"
-                            disabled={aiBusy || selIdx <= 0}
-                            onClick={() => restackSelected(-1)}
-                          >
-                            ▼
-                          </button>
-                          <button
-                            title="ขึ้นหน้าหนึ่งชั้น"
-                            aria-label="ขึ้นหน้า"
-                            disabled={aiBusy || selIdx >= decos.length - 1}
-                            onClick={() => restackSelected(1)}
-                          >
-                            ▲
-                          </button>
-                          <button
-                            title="ไปหน้าสุด"
-                            aria-label="ไปหน้าสุด"
-                            disabled={aiBusy || selIdx >= decos.length - 1}
-                            onClick={() => restackSelected(1, true)}
-                          >
-                            ⤒
-                          </button>
-                        </div>
-                      </div>
-                    )}
                     <div className="align-box">
                       <span className="align-title">จัดแนวในแผงหน้า</span>
                       <div className="align-grid">

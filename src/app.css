@@ -1777,6 +1777,15 @@ button[aria-disabled='true'] {
 }
 
 /* --- จัดเลเยอร์ artwork หน้า-หลัง --- */
+/* ปุ่มด่วนต่อชิ้นที่เลือก (ความทึบ + เลื่อนเลเยอร์) — ต่อท้ายรายการเลเยอร์ */
+.layer-quick {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .layer-row {
   display: flex;
   align-items: center;
