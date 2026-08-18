@@ -30,6 +30,8 @@ export interface ImageEl extends BaseEl {
   fit?: 'cover' | 'contain' | 'stretch' // วิธีวางรูปในกรอบ (ไม่ใส่ = cover ครอปให้เต็ม)
   radius?: number // มุมโค้งของกรอบ (มม.)
   circle?: boolean // มาสก์เป็นวงรีตามกรอบ
+  maskShape?: 'triangle' | 'polygon' | 'star' // มาสก์เป็นรูปทรง (ทับ circle/radius)
+  maskSides?: number // จำนวนด้าน/แฉกของมาสก์ (polygon/star)
   preset?: string // ถ้ามาจากไลบรารีลาย = id พรีเซ็ต (เปลี่ยนสีแล้ว regen src ได้)
   presetColor?: string // สีที่ใช้สร้างลายพรีเซ็ตนี้
 }
@@ -44,6 +46,9 @@ export interface TextEl extends BaseEl {
   weight?: number // น้ำหนัก 400/700 — ไม่ใส่ = 400
   align?: 'left' | 'center' | 'right' // จัดชิดหลายบรรทัด — ไม่ใส่ = 'left'
   lh?: number // ตัวคูณระยะบรรทัด — ไม่ใส่ = LINE (1.25)
+  strokeColor?: string // สีเส้นขอบตัวอักษร (ไม่ใส่ = ไม่มีขอบ)
+  strokeW?: number // ความหนาขอบ (มม.) — ต้องมี strokeColor ด้วย
+  shadow?: boolean // เงาใต้ตัวอักษร (ค่าคงที่: เยื้อง+เบลอตามขนาดฟอนต์)
 }
 
 // ฟอนต์ไทยที่ให้เลือก — ต้อง import ไฟล์น้ำหนัก 400/700 ใน main.tsx ให้ครบทุกตัว
@@ -147,21 +152,75 @@ export const textAnchorX = (e: TextEl): number =>
 // y กึ่งกลางของบรรทัดที่ i (ใช้กับ dominant-baseline central)
 export const textLineY = (e: TextEl, i: number): number => e.y + textLineH(e) * (i + 0.5)
 
+// id ฟิลเตอร์เงาข้อความ + สตริง <defs><filter> (SVG จอ/ส่งออกใช้ร่วมกัน)
+export const textShadowId = (id: string) => `tsh-${id}`
+export function textShadowSVG(e: TextEl): string {
+  if (!e.shadow) return ''
+  const sh = textShadow(e)
+  return (
+    `<defs><filter id="${textShadowId(e.id)}" x="-30%" y="-30%" width="160%" height="160%">` +
+    `<feDropShadow dx="${sh.dx}" dy="${sh.dy}" stdDeviation="${sh.blur}" flood-color="black" flood-opacity="0.4"/>` +
+    `</filter></defs>`
+  )
+}
+// แอตทริบิวต์ขอบ+เงาสำหรับ <text> — ขอบวาดใต้พื้นด้วย paint-order="stroke"
+export function textFxAttrs(e: TextEl): string {
+  const stroke = textHasStroke(e)
+    ? ` stroke="${e.strokeColor}" stroke-width="${(e.strokeW as number) * TEXT_STROKE_MUL}" paint-order="stroke" stroke-linejoin="round"`
+    : ''
+  const filter = e.shadow ? ` filter="url(#${textShadowId(e.id)})"` : ''
+  return stroke + filter
+}
+
 // วาดข้อความ (อาจหลายบรรทัด) ลง canvas — ctx ถูก translate ไปกึ่งกลาง+หมุน+พลิกไว้แล้ว
 // พิกัดท้องถิ่น: กึ่งกลางชิ้น = (0,0); ใช้ทั้ง Viewer3D และ export (drawDeco2D)
+// ตัวคูณความหนาขอบ: canvas/SVG วาดขอบคร่อมเส้น (ครึ่งถูก fill ทับ) → ×2 ให้ "ความหนาที่เห็น" ≈ strokeW มม.
+export const TEXT_STROKE_MUL = 2
+const textHasStroke = (e: TextEl) => !!e.strokeColor && (e.strokeW ?? 0) > 0
+// ค่าเงา (มม.) อิงขนาดฟอนต์ — dieline/SVG/canvas ใช้ชุดเดียวกัน
+export const textShadow = (e: TextEl) => ({ dx: e.size * 0.05, dy: e.size * 0.05, blur: e.size * 0.05 })
+
 export function drawText2D(ctx: CanvasRenderingContext2D, e: TextEl, s: number) {
   const lines = textLinesOf(e)
   const lineH = textLineH(e)
   const totalH = lines.length * lineH
   const align = e.align ?? 'left'
-  ctx.fillStyle = e.color
   ctx.font = textFont(e, s)
   ctx.textAlign = align === 'left' ? 'left' : align === 'right' ? 'right' : 'center'
   ctx.textBaseline = 'middle'
   const x = align === 'left' ? (-e.w / 2) * s : align === 'right' ? (e.w / 2) * s : 0
+  const stroked = textHasStroke(e)
+  const setShadow = () => {
+    if (!e.shadow) return
+    const sh = textShadow(e)
+    ctx.shadowColor = 'rgba(0,0,0,0.4)'
+    ctx.shadowBlur = sh.blur * s
+    ctx.shadowOffsetX = sh.dx * s
+    ctx.shadowOffsetY = sh.dy * s
+  }
+  const clearShadow = () => {
+    ctx.shadowColor = 'transparent'
+    ctx.shadowBlur = 0
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 0
+  }
   lines.forEach((ln, i) => {
     const cy = (-totalH / 2 + lineH * (i + 0.5)) * s
-    ctx.fillText(ln, x, cy)
+    if (stroked) {
+      setShadow() // เงาอยู่ใต้ขอบ (ชั้นล่างสุด)
+      ctx.lineJoin = 'round'
+      ctx.lineWidth = (e.strokeW as number) * TEXT_STROKE_MUL * s
+      ctx.strokeStyle = e.strokeColor as string
+      ctx.strokeText(ln, x, cy)
+      clearShadow()
+      ctx.fillStyle = e.color
+      ctx.fillText(ln, x, cy) // พื้นทับกลางขอบ → ขอบเหลือครึ่งนอก
+    } else {
+      setShadow()
+      ctx.fillStyle = e.color
+      ctx.fillText(ln, x, cy)
+      clearShadow()
+    }
   })
 }
 
@@ -311,10 +370,19 @@ export const imgPAR = (fit?: string) =>
 export const maskId = (id: string) => `mask-${id}`
 // clipPath (มุมโค้ง/วงรี) เป็นสตริงใส่ใน <defs> — พิกัดจริงบนแผ่น (userSpaceOnUse)
 export function imageMaskSVG(e: ImageEl): string {
-  if (!e.circle && !(e.radius && e.radius > 0)) return ''
-  const inner = e.circle
-    ? `<ellipse cx="${e.x + e.w / 2}" cy="${e.y + e.h / 2}" rx="${e.w / 2}" ry="${e.h / 2}"/>`
-    : `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx="${e.radius}" ry="${e.radius}"/>`
+  let inner: string
+  if (e.maskShape) {
+    const cx = e.x + e.w / 2
+    const cy = e.y + e.h / 2
+    const pts = shapeVertices(e.maskShape, e.w, e.h, e.maskSides)
+      .map((p) => `${cx + p.x},${cy + p.y}`)
+      .join(' ')
+    inner = `<polygon points="${pts}"/>`
+  } else if (e.circle) {
+    inner = `<ellipse cx="${e.x + e.w / 2}" cy="${e.y + e.h / 2}" rx="${e.w / 2}" ry="${e.h / 2}"/>`
+  } else if (e.radius && e.radius > 0) {
+    inner = `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx="${e.radius}" ry="${e.radius}"/>`
+  } else return ''
   return `<clipPath id="${maskId(e.id)}">${inner}</clipPath>`
 }
 
@@ -324,7 +392,14 @@ export function drawImageFit(ctx: CanvasRenderingContext2D, img: CanvasImageSour
   const hh = (e.h / 2) * s
   ctx.save()
   // มาสก์
-  if (e.circle) {
+  if (e.maskShape) {
+    ctx.beginPath()
+    shapeVertices(e.maskShape, e.w, e.h, e.maskSides).forEach((p, i) =>
+      i ? ctx.lineTo(p.x * s, p.y * s) : ctx.moveTo(p.x * s, p.y * s),
+    )
+    ctx.closePath()
+    ctx.clip()
+  } else if (e.circle) {
     ctx.beginPath()
     ctx.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2)
     ctx.clip()
@@ -817,8 +892,7 @@ export function svgArtworkLayer(decos: Deco[]): string {
         const tspans = textLinesOf(e)
           .map((ln, i) => `<tspan x="${textAnchorX(e)}" y="${textLineY(e, i)}">${xmlEsc(ln)}</tspan>`)
           .join('')
-        el =
-          `<text font-size="${e.size}" fill="${e.color}"` +
+        el = textShadowSVG(e) + `<text font-size="${e.size}" fill="${e.color}"${textFxAttrs(e)}` +
           ` text-anchor="${textAnchor(e)}" dominant-baseline="central" font-weight="${e.weight ?? 400}"` +
           ` font-family="${fontCss(e.font)}, sans-serif"${rot}>${tspans}</text>`
       }
@@ -947,11 +1021,18 @@ export function parseDeco(v: unknown): Deco | null {
     const preset = typeof o.preset === 'string' && o.preset ? o.preset.slice(0, 40) : undefined
     const presetColor =
       typeof o.presetColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.presetColor) ? o.presetColor : undefined
+    const maskShape =
+      o.maskShape === 'triangle' || o.maskShape === 'polygon' || o.maskShape === 'star' ? o.maskShape : undefined
+    const maskSides = Number.isFinite(Number(o.maskSides))
+      ? Math.max(3, Math.min(12, Math.round(Number(o.maskSides))))
+      : undefined
     return {
       id, type: 'image', src, aspect, w, h,
       ...(fit ? { fit } : {}),
       ...(radius ? { radius } : {}),
       ...(o.circle === true ? { circle: true } : {}),
+      ...(maskShape ? { maskShape } : {}),
+      ...(maskShape && maskSides ? { maskSides } : {}),
       ...(preset ? { preset } : {}),
       ...(presetColor ? { presetColor } : {}),
       ...base,
@@ -970,6 +1051,8 @@ export function parseDeco(v: unknown): Deco | null {
       Number(o.w) > 0
         ? Number(o.w)
         : Math.max(...text.split('\n').map((ln) => measureText(ln, size, font, weight)))
+    const strokeColor = typeof o.strokeColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.strokeColor) ? o.strokeColor : undefined
+    const strokeW = strokeColor && Number(o.strokeW) > 0 ? clampNum(Number(o.strokeW), 0, 10) : undefined
     return {
       id,
       type: 'text',
@@ -981,6 +1064,8 @@ export function parseDeco(v: unknown): Deco | null {
       ...(weight ? { weight } : {}),
       ...(align ? { align } : {}),
       ...(lh ? { lh } : {}),
+      ...(strokeColor && strokeW ? { strokeColor, strokeW } : {}),
+      ...(o.shadow === true ? { shadow: true } : {}),
       ...base,
     }
   }

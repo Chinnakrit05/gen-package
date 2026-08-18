@@ -2287,14 +2287,44 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     )}
 
                     {selected.type === 'text' && (
-                      <DimField
-                        label="ขนาดตัวอักษร"
-                        value={selected.size}
-                        min={3}
-                        max={120}
-                        disabled={aiBusy}
-                        onChange={(v) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, size: v }) : d))}
-                      />
+                      <>
+                        <DimField
+                          label="ขนาดตัวอักษร"
+                          value={selected.size}
+                          min={3}
+                          max={120}
+                          disabled={aiBusy}
+                          onChange={(v) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, size: v }) : d))}
+                        />
+                        <div className="deco-color">
+                          <span>เส้นขอบ</span>
+                          <ColorField
+                            value={selected.strokeColor ?? '#ffffff'}
+                            onChange={(hex) => patchSelected((d) => (d.type === 'text' ? { ...d, strokeColor: hex, strokeW: d.strokeW && d.strokeW > 0 ? d.strokeW : 0.8 } : d))}
+                            palette={palette}
+                            onSave={saveSwatch}
+                            disabled={aiBusy}
+                            label="สีเส้นขอบตัวอักษร"
+                          />
+                        </div>
+                        <DimField
+                          label="เส้นขอบหนา (0=ไม่มี)"
+                          value={selected.strokeW ?? 0}
+                          min={0}
+                          max={5}
+                          disabled={aiBusy}
+                          onChange={(v) => patchSelected((d) => (d.type === 'text' ? { ...d, strokeW: v || undefined, strokeColor: v > 0 ? d.strokeColor ?? '#ffffff' : d.strokeColor } : d))}
+                        />
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked={!!selected.shadow}
+                            disabled={aiBusy}
+                            onChange={(e) => patchSelected((d) => (d.type === 'text' ? { ...d, shadow: e.target.checked || undefined } : d))}
+                          />
+                          เงาใต้ตัวอักษร
+                        </label>
+                      </>
                     )}
                     {selected.type === 'image' && selected.preset && (
                       <div className="deco-color">
@@ -2401,18 +2431,50 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           value={selected.radius ?? 0}
                           min={0}
                           max={Math.round(Math.min(selected.w, selected.h) / 2)}
-                          disabled={aiBusy || !!selected.circle}
-                          onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, radius: v || undefined } : d))}
+                          disabled={aiBusy || !!selected.circle || !!selected.maskShape}
+                          onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, radius: v || undefined, maskShape: undefined } : d))}
                         />
                         <label className="check">
                           <input
                             type="checkbox"
                             checked={!!selected.circle}
                             disabled={aiBusy}
-                            onChange={(e) => patchSelected((d) => (d.type === 'image' ? { ...d, circle: e.target.checked || undefined } : d))}
+                            onChange={(e) => patchSelected((d) => (d.type === 'image' ? { ...d, circle: e.target.checked || undefined, maskShape: undefined, maskSides: undefined } : d))}
                           />
                           มาสก์วงรี
                         </label>
+                        <div className="art-actions" style={{ marginTop: 6 }}>
+                          <span className="hint" style={{ alignSelf: 'center' }}>มาสก์ทรง:</span>
+                          {(['triangle', 'polygon', 'star'] as const).map((sh) => (
+                            <button
+                              key={sh}
+                              className="ico-btn"
+                              disabled={aiBusy}
+                              aria-pressed={selected.maskShape === sh}
+                              style={selected.maskShape === sh ? { borderColor: '#0f6e56', color: '#0f6e56' } : undefined}
+                              onClick={() =>
+                                patchSelected((d) =>
+                                  d.type === 'image'
+                                    ? { ...d, maskShape: d.maskShape === sh ? undefined : sh, circle: undefined, radius: undefined }
+                                    : d,
+                                )
+                              }
+                            >
+                              {sh === 'triangle' ? <IconTriangle /> : sh === 'polygon' ? <IconPolygon /> : <IconStar />}
+                              {sh === 'triangle' ? 'สามเหลี่ยม' : sh === 'polygon' ? 'หลายเหลี่ยม' : 'ดาว'}
+                            </button>
+                          ))}
+                        </div>
+                        {(selected.maskShape === 'polygon' || selected.maskShape === 'star') && (
+                          <DimField
+                            label={selected.maskShape === 'star' ? 'จำนวนแฉก' : 'จำนวนด้าน'}
+                            value={selected.maskSides ?? (selected.maskShape === 'star' ? 5 : 6)}
+                            min={3}
+                            max={12}
+                            disabled={aiBusy}
+                            onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, maskSides: Math.round(v) } : d))}
+                          />
+                        )}
                       </>
                     )}
                     <DimField

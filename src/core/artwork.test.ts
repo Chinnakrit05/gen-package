@@ -28,6 +28,9 @@ import {
   shapeSVG,
   shapeVertices,
   isPolyShape,
+  textFxAttrs,
+  textShadowSVG,
+  textShadowId,
   sheetUV,
   withTextW,
   type Deco,
@@ -476,5 +479,49 @@ describe('รูปทรงเพิ่ม (triangle/polygon/star) + เส้�
     // รูปทรงไม่รู้จัก → fallback rect
     const bad = parseDeco({ type: 'shape', shape: 'blob', w: 10, h: 10, fill: '#000', stroke: 'none', strokeW: 0, x: 0, y: 0, rot: 0 }) as ShapeEl
     expect(bad.shape).toBe('rect')
+  })
+})
+
+describe('มาสก์รูปตามทรง + ข้อความเส้นขอบ/เงา', () => {
+  const imgMask = (over = {}) => ({ id: 'im', type: 'image' as const, src: 'data:image/png;base64,AAA', aspect: 1, w: 40, h: 40, x: 10, y: 10, rot: 0, ...over })
+
+  it('imageMaskSVG: maskShape → clipPath polygon (จำนวนจุดตาม sides)', () => {
+    const svg = imageMaskSVG(imgMask({ maskShape: 'star', maskSides: 6 }) as never)
+    expect(svg).toContain('<clipPath')
+    expect(svg).toContain('<polygon')
+    expect(svg.match(/points="([^"]+)"/)![1].trim().split(/\s+/).length).toBe(12) // 6 แฉก
+  })
+
+  it('imageMaskSVG: maskShape ทับ circle/radius (โพลิกอนชนะ)', () => {
+    expect(imageMaskSVG(imgMask({ circle: true, maskShape: 'triangle' }) as never)).toContain('<polygon')
+  })
+
+  it('parseDeco: image รับ maskShape + clamp maskSides 3..12', () => {
+    const p = parseDeco({ type: 'image', src: 'data:image/png;base64,A', aspect: 1, w: 20, h: 20, maskShape: 'polygon', maskSides: 99, x: 0, y: 0, rot: 0 }) as { maskShape?: string; maskSides?: number }
+    expect(p.maskShape).toBe('polygon')
+    expect(p.maskSides).toBe(12)
+    const bad = parseDeco({ type: 'image', src: 'data:image/png;base64,A', aspect: 1, w: 20, h: 20, maskShape: 'blob', x: 0, y: 0, rot: 0 }) as { maskShape?: string }
+    expect(bad.maskShape).toBeUndefined()
+  })
+
+  it('textFxAttrs/textShadowSVG: ขอบใช้ paint-order, เงาสร้าง filter + feDropShadow', () => {
+    const t = { id: 't', type: 'text' as const, text: 'HI', size: 20, color: '#000', w: 30, x: 0, y: 0, rot: 0, strokeColor: '#fff', strokeW: 1, shadow: true }
+    const attrs = textFxAttrs(t)
+    expect(attrs).toContain('paint-order="stroke"')
+    expect(attrs).toContain('stroke="#fff"')
+    expect(attrs).toContain(`url(#${textShadowId('t')})`)
+    const defs = textShadowSVG(t)
+    expect(defs).toContain('<feDropShadow')
+    expect(textShadowSVG({ ...t, shadow: false })).toBe('') // ไม่มีเงา → ว่าง
+  })
+
+  it('parseDeco: text รับ strokeColor+strokeW (คู่กัน) และ shadow', () => {
+    const p = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', strokeColor: '#ffffff', strokeW: 2, shadow: true, x: 0, y: 0, rot: 0 }) as { strokeColor?: string; strokeW?: number; shadow?: boolean }
+    expect(p.strokeColor).toBe('#ffffff')
+    expect(p.strokeW).toBe(2)
+    expect(p.shadow).toBe(true)
+    // strokeW โดยไม่มีสี → ไม่เก็บ
+    const noColor = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', strokeW: 2, x: 0, y: 0, rot: 0 }) as { strokeW?: number }
+    expect(noColor.strokeW).toBeUndefined()
   })
 })

@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, type Deco, type FillImage } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, TEXT_STROKE_MUL, textShadowSVG, textShadowId, type Deco, type FillImage } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
@@ -136,23 +136,32 @@ function decoInner(e: Deco) {
       </>
     )
   }
+  const tStroke =
+    e.strokeColor && (e.strokeW ?? 0) > 0
+      ? { stroke: e.strokeColor, strokeWidth: (e.strokeW as number) * TEXT_STROKE_MUL, paintOrder: 'stroke' as const, strokeLinejoin: 'round' as const }
+      : { stroke: 'none' as const }
+  const shDefs = e.shadow ? <g dangerouslySetInnerHTML={{ __html: textShadowSVG(e) }} /> : null
   return (
-    <text
-      textAnchor={textAnchor(e)}
-      dominantBaseline="central"
-      fontSize={e.size}
-      fontWeight={e.weight ?? 400}
-      fontFamily={`${fontCss(e.font)}, sans-serif`}
-      fill={e.color}
-      stroke="none"
-      style={{ userSelect: 'none' }}
-    >
-      {textLinesOf(e).map((ln, i) => (
-        <tspan key={i} x={textAnchorX(e)} y={textLineY(e, i)}>
-          {ln}
-        </tspan>
-      ))}
-    </text>
+    <>
+      {shDefs}
+      <text
+        textAnchor={textAnchor(e)}
+        dominantBaseline="central"
+        fontSize={e.size}
+        fontWeight={e.weight ?? 400}
+        fontFamily={`${fontCss(e.font)}, sans-serif`}
+        fill={e.color}
+        filter={e.shadow ? `url(#${textShadowId(e.id)})` : undefined}
+        {...tStroke}
+        style={{ userSelect: 'none' }}
+      >
+        {textLinesOf(e).map((ln, i) => (
+          <tspan key={i} x={textAnchorX(e)} y={textLineY(e, i)}>
+            {ln}
+          </tspan>
+        ))}
+      </text>
+    </>
   )
 }
 
