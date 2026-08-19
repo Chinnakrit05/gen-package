@@ -175,7 +175,8 @@ export const elH = (e: Deco) =>
 export const elCenter = (e: Deco): Vec2 => ({ x: e.x + elW(e) / 2, y: e.y + elH(e) / 2 })
 
 // --- ข้อความหลายบรรทัด: ตัวช่วยที่ทุกเส้นทางเรนเดอร์ (blueprint/3D/SVG/PDF) ใช้ร่วมกัน ---
-export const textLinesOf = (e: TextEl): string[] => e.text.split('\n')
+// ป้องกันไว้: ระหว่าง hot-reload อาจมีชิ้นที่ไม่ใช่ text หลุดเข้ามาชั่วขณะ — กันจอขาว
+export const textLinesOf = (e: TextEl): string[] => (e.text ?? '').split('\n')
 export const textLineH = (e: TextEl): number => e.size * (e.lh ?? LINE)
 // จุดยึด SVG ตามการจัดชิด (start/middle/end) + พิกัด x ของจุดยึด (มม. สัมบูรณ์)
 export const textAnchor = (e: TextEl): 'start' | 'middle' | 'end' =>
@@ -331,7 +332,7 @@ export async function ensureThaiFont(): Promise<void> {
 // = บรรทัดที่กว้างสุด (รองรับหลายบรรทัด)
 export const withTextW = (e: TextEl): TextEl => ({
   ...e,
-  w: Math.max(...e.text.split('\n').map((ln) => measureText(ln, e.size, e.font, e.weight))),
+  w: Math.max(...(e.text ?? '').split('\n').map((ln) => measureText(ln, e.size, e.font, e.weight))),
 })
 
 // --- โหลดไฟล์รูป ---
