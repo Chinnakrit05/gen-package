@@ -1777,6 +1777,33 @@ button[aria-disabled='true'] {
 }
 
 /* --- จัดเลเยอร์ artwork หน้า-หลัง --- */
+/* ช่องกรอกข้อความ/ตาราง (ตารางโภชนาการ) */
+.fld {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.txt-in {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-1, #fff);
+  color: var(--text-1);
+  resize: vertical;
+}
+.txt-in:focus {
+  outline: none;
+  border-color: var(--accent, #0f6e56);
+}
+
 /* ปุ่มด่วนต่อชิ้นที่เลือก (ความทึบ + เลื่อนเลเยอร์) — ต่อท้ายรายการเลเยอร์ */
 .layer-quick {
   margin-top: 10px;

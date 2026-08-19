@@ -120,7 +120,33 @@ export function shapeVertices(shape: ShapeKind, w: number, h: number, sides?: nu
 // รูปทรงที่เป็น "รูปปิดมีพื้น" (ไม่ใช่ line) — ใช้ตัดสินใจ fill/gradient/มุมมน
 export const isPolyShape = (s: ShapeKind) => s === 'triangle' || s === 'polygon' || s === 'star'
 
-export type Deco = ImageEl | TextEl | ShapeEl
+// แถวสารอาหารในตารางโภชนาการ
+export interface NutriRow {
+  label: string
+  value: string // เช่น "3 ก." / "150 มก."
+  rdi?: string // ร้อยละ Thai RDI (ตัวเลขล้วน) — ไม่ใส่ = ไม่โชว์คอลัมน์ %
+  indent?: boolean // ย่อหน้า (สารอาหารย่อย)
+  bold?: boolean
+}
+
+// ตารางข้อมูลโภชนาการ (อย. แบบเต็ม) — เป็น Deco ชนิดหนึ่ง เลเยอร์เดียว แก้ไขได้
+// ความสูงคำนวณอัตโนมัติจากจำนวนแถว (elH ใช้ nutritionLayout) — w = ความกว้างตาราง (มม.)
+export interface NutritionEl extends BaseEl {
+  type: 'nutrition'
+  w: number
+  serving: string // หนึ่งหน่วยบริโภค
+  servings: string // จำนวนหน่วยบริโภคต่อภาชนะ
+  energy: string // พลังงานทั้งหมด (กิโลแคลอรี)
+  energyFat?: string // พลังงานจากไขมัน
+  rows: NutriRow[]
+  vitamins: NutriRow[] // วิตามิน/แร่ธาตุ (label + rdi)
+  footnote: string
+  ink?: string // สีตัวอักษร/เส้น (ไม่ใส่ = ดำ)
+  paper?: boolean // วาดพื้นขาว (ไม่ใส่ = true)
+  scale?: number // ตัวคูณขนาดตัวอักษร (ไม่ใส่ = 1)
+}
+
+export type Deco = ImageEl | TextEl | ShapeEl | NutritionEl
 
 // รูปที่ใช้เป็น "พื้นแพ็กเกจ" (แทน/ทับสีพื้น) — คลุมทั้งแผ่นแล้วครอปตามรูปทรงแผงจริง
 // ต่างจาก ImageEl (โลโก้แปะจุดเดียว) ตรงที่รูปนี้ยืดคลุม bounding box ของทุกแผงเป็นผืนเดียว
@@ -139,7 +165,13 @@ export interface FillImage {
 const LINE = 1.25 // อัตราส่วนความสูงบรรทัดต่อขนาดฟอนต์ (ค่าเริ่มต้น)
 export const elW = (e: Deco) => e.w
 export const elH = (e: Deco) =>
-  e.type === 'image' ? e.h : e.type === 'text' ? textLinesOf(e).length * textLineH(e) : e.h
+  e.type === 'image'
+    ? e.h
+    : e.type === 'text'
+      ? textLinesOf(e).length * textLineH(e)
+      : e.type === 'nutrition'
+        ? nutritionLayout(e).h
+        : e.h
 export const elCenter = (e: Deco): Vec2 => ({ x: e.x + elW(e) / 2, y: e.y + elH(e) / 2 })
 
 // --- ข้อความหลายบรรทัด: ตัวช่วยที่ทุกเส้นทางเรนเดอร์ (blueprint/3D/SVG/PDF) ใช้ร่วมกัน ---
@@ -477,6 +509,7 @@ export function decoLabel(e: Deco): string {
   if (e.name && e.name.trim()) return e.name
   if (e.type === 'image') return 'รูป'
   if (e.type === 'text') return e.text || 'ข้อความ'
+  if (e.type === 'nutrition') return 'ตารางโภชนาการ'
   const names: Record<ShapeKind, string> = {
     rect: 'สี่เหลี่ยม',
     ellipse: 'วงกลม',
@@ -902,6 +935,181 @@ export function drawShape2D(ctx: CanvasRenderingContext2D, e: ShapeEl, s: number
   }
 }
 
+// ================= ตารางข้อมูลโภชนาการ (อย.) =================
+// ค่าเริ่มต้นแบบมาตรฐานไทย (ตัวเลขตัวอย่าง ให้ผู้ใช้แก้)
+export function makeNutritionEl(dieline: Dieline): NutritionEl {
+  const b = bbox(showFace(dieline).outline)
+  const w = Math.max(40, Math.min(70, (b.x1 - b.x0) * 0.55))
+  const el: NutritionEl = {
+    id: newId(),
+    type: 'nutrition',
+    w,
+    x: 0,
+    y: 0,
+    rot: 0,
+    serving: '1 ซอง (30 ก.)',
+    servings: '1',
+    energy: '150',
+    energyFat: '30',
+    rows: [
+      { label: 'ไขมันทั้งหมด', value: '3 ก.', rdi: '5' },
+      { label: 'ไขมันอิ่มตัว', value: '1 ก.', rdi: '5', indent: true },
+      { label: 'โคเลสเตอรอล', value: '0 มก.', rdi: '0' },
+      { label: 'โปรตีน', value: '5 ก.' },
+      { label: 'คาร์โบไฮเดรตทั้งหมด', value: '25 ก.', rdi: '8' },
+      { label: 'ใยอาหาร', value: '1 ก.', rdi: '4', indent: true },
+      { label: 'น้ำตาล', value: '10 ก.', indent: true },
+      { label: 'โซเดียม', value: '150 มก.', rdi: '6' },
+    ],
+    vitamins: [
+      { label: 'วิตามินเอ', value: '', rdi: '8' },
+      { label: 'วิตามินบี1', value: '', rdi: '10' },
+      { label: 'วิตามินบี2', value: '', rdi: '8' },
+      { label: 'แคลเซียม', value: '', rdi: '6' },
+      { label: 'เหล็ก', value: '', rdi: '4' },
+    ],
+    footnote: '* ร้อยละของปริมาณสารอาหารที่แนะนำต่อวัน สำหรับพลังงาน 2,000 กิโลแคลอรี',
+  }
+  const { x, y } = centerOnFace(dieline, w, nutritionLayout(el).h)
+  return { ...el, x, y }
+}
+
+interface NutriPrim {
+  lines: { x1: number; y1: number; x2: number; y2: number; wt: number }[]
+  texts: { x: number; y: number; str: string; size: number; bold: boolean; align: 'l' | 'r' | 'c' }[]
+  h: number
+}
+
+// ตัดข้อความเป็นบรรทัดตามความกว้าง (รองรับไทย — ตัดทีละอักขระ)
+function wrapNutri(text: string, maxW: number, size: number): string[] {
+  const out: string[] = []
+  let cur = ''
+  for (const ch of text) {
+    if (measureText(cur + ch, size) > maxW && cur) {
+      out.push(cur)
+      cur = ch
+    } else cur += ch
+  }
+  if (cur) out.push(cur)
+  return out
+}
+
+// เลย์เอาต์ตาราง (พิกัดมุมซ้ายบน 0..w × 0..h, มม.) — pure ใช้ร่วม canvas/SVG/จอ + คำนวณความสูง
+export function nutritionLayout(e: NutritionEl): NutriPrim {
+  const w = e.w
+  const scale = e.scale ?? 1
+  const fs = Math.max(1.4, w * 0.05) * scale
+  const pad = fs * 0.7
+  const lh = fs * 1.4
+  const thin = Math.max(0.15, fs * 0.06)
+  const thick = Math.max(0.5, fs * 0.26)
+  const texts: NutriPrim['texts'] = []
+  const lines: NutriPrim['lines'] = []
+  let y = pad
+  const T = (str: string, size: number, align: 'l' | 'r' | 'c', bold = false, x?: number) =>
+    texts.push({ str, size, align, bold, x: x ?? (align === 'r' ? w - pad : align === 'c' ? w / 2 : pad), y: y + size * 0.5 })
+  const rule = (wt: number) => {
+    y += fs * 0.28
+    lines.push({ x1: 0, y1: y, x2: w, y2: y, wt })
+    y += fs * 0.28
+  }
+  T('ข้อมูลโภชนาการ', fs * 1.85, 'c', true)
+  y += fs * 1.85 * 1.15
+  rule(thin)
+  T(`หนึ่งหน่วยบริโภค : ${e.serving}`, fs, 'l')
+  y += lh
+  T(`จำนวนหน่วยบริโภคต่อภาชนะบรรจุ : ${e.servings}`, fs, 'l')
+  y += lh
+  rule(thick)
+  T('คุณค่าทางโภชนาการต่อหนึ่งหน่วยบริโภค', fs * 0.92, 'l')
+  y += lh
+  T('พลังงานทั้งหมด', fs, 'l', true)
+  T(`${e.energy} กิโลแคลอรี`, fs, 'r', true)
+  y += lh
+  if (e.energyFat) {
+    T(`(พลังงานจากไขมัน ${e.energyFat} กิโลแคลอรี)`, fs * 0.88, 'r')
+    y += lh * 0.95
+  }
+  rule(thick)
+  T('ร้อยละของปริมาณที่แนะนำต่อวัน*', fs * 0.8, 'r')
+  y += lh * 0.9
+  rule(thin)
+  for (const r of e.rows) {
+    T(`${r.label} ${r.value}`.trim(), fs, 'l', r.bold, pad + (r.indent ? fs * 1.5 : 0))
+    if (r.rdi) T(`${r.rdi} %`, fs, 'r', r.bold)
+    y += lh
+    rule(thin)
+  }
+  rule(thick)
+  for (const v of e.vitamins) {
+    T(v.label, fs, 'l')
+    if (v.rdi) T(`${v.rdi} %`, fs, 'r')
+    y += lh
+    rule(thin)
+  }
+  rule(thick)
+  for (const ln of wrapNutri(e.footnote, w - pad * 2, fs * 0.78)) {
+    T(ln, fs * 0.78, 'l')
+    y += fs * 0.78 * 1.3
+  }
+  y += pad
+  const h = y
+  // กรอบนอกหนา
+  lines.push(
+    { x1: 0, y1: 0, x2: w, y2: 0, wt: thick },
+    { x1: 0, y1: h, x2: w, y2: h, wt: thick },
+    { x1: 0, y1: 0, x2: 0, y2: h, wt: thick },
+    { x1: w, y1: 0, x2: w, y2: h, wt: thick },
+  )
+  return { lines, texts, h }
+}
+
+const anchorOf = (a: 'l' | 'r' | 'c') => (a === 'r' ? 'end' : a === 'c' ? 'middle' : 'start')
+
+// เนื้อใน SVG (พิกัดสัมบูรณ์บนแผ่น) — ใช้ทั้ง export และ blueprint (ครอบด้วย <g> หมุนภายนอก)
+export function nutritionInnerSVG(e: NutritionEl): string {
+  const p = nutritionLayout(e)
+  const ink = e.ink ?? '#111111'
+  const fam = `${fontCss(undefined)}, sans-serif`
+  let s = ''
+  if (e.paper !== false) s += `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${p.h}" fill="#ffffff"/>`
+  for (const l of p.lines)
+    s += `<line x1="${e.x + l.x1}" y1="${e.y + l.y1}" x2="${e.x + l.x2}" y2="${e.y + l.y2}" stroke="${ink}" stroke-width="${l.wt}"/>`
+  for (const t of p.texts)
+    s += `<text x="${e.x + t.x}" y="${e.y + t.y}" font-size="${t.size}" fill="${ink}" text-anchor="${anchorOf(t.align)}" dominant-baseline="central" font-weight="${t.bold ? 700 : 400}" font-family="${fam}">${xmlEsc(t.str)}</text>`
+  return s
+}
+
+// วาดตารางลง canvas — ctx ถูก translate ไปกึ่งกลาง+หมุนไว้แล้ว (เยื้องไปมุมซ้ายบนก่อนวาด)
+export function drawNutrition2D(ctx: CanvasRenderingContext2D, e: NutritionEl, s: number) {
+  const p = nutritionLayout(e)
+  const ink = e.ink ?? '#111111'
+  ctx.save()
+  ctx.translate((-e.w / 2) * s, (-p.h / 2) * s)
+  if (e.paper !== false) {
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, e.w * s, p.h * s)
+  }
+  ctx.strokeStyle = ink
+  ctx.lineCap = 'butt'
+  for (const l of p.lines) {
+    ctx.lineWidth = Math.max(0.4, l.wt * s)
+    ctx.beginPath()
+    ctx.moveTo(l.x1 * s, l.y1 * s)
+    ctx.lineTo(l.x2 * s, l.y2 * s)
+    ctx.stroke()
+  }
+  ctx.fillStyle = ink
+  ctx.textBaseline = 'middle'
+  const fam = fontCss(undefined)
+  for (const t of p.texts) {
+    ctx.font = `${t.bold ? 700 : 400} ${t.size * s}px ${fam}, sans-serif`
+    ctx.textAlign = t.align === 'r' ? 'right' : t.align === 'c' ? 'center' : 'left'
+    ctx.fillText(t.str, t.x * s, t.y * s)
+  }
+  ctx.restore()
+}
+
 // transform พลิก (สะท้อนรอบจุดกึ่งกลาง) สำหรับ SVG — ต่อท้าย rotate; ว่างถ้าไม่พลิก
 export function flipTransform(e: Deco): string {
   if (!e.flipX && !e.flipY) return ''
@@ -931,6 +1139,8 @@ export function svgArtworkLayer(decos: Deco[]): string {
           `<image href="${e.src}" x="${e.x}" y="${e.y}" width="${w}" height="${h}" preserveAspectRatio="${imgPAR(e.fit)}"${clip}${rot}/>`
       } else if (e.type === 'shape') {
         el = shapeSVG(e, rot)
+      } else if (e.type === 'nutrition') {
+        el = `<g${rot}>${nutritionInnerSVG(e)}</g>`
       } else if (isCurvedText(e)) {
         // โค้ง: <text> ต่ออักษร ในกรอบที่หมุน/พลิกด้วย <g> (เงาไว้บนกลุ่ม, ขอบต่ออักษร)
         const strokeA = textHasStroke(e)
@@ -979,6 +1189,8 @@ export function drawDeco2D(
     if (img) drawImageFit(ctx, img, e, s)
   } else if (e.type === 'shape') {
     drawShape2D(ctx, e, s)
+  } else if (e.type === 'nutrition') {
+    drawNutrition2D(ctx, e, s)
   } else {
     drawText2D(ctx, e, s)
   }
@@ -1160,6 +1372,45 @@ export function parseDeco(v: unknown): Deco | null {
       ...(grad ? { grad } : {}),
       ...((shape === 'polygon' || shape === 'star') && sides ? { sides } : {}),
       ...(o.dash === true ? { dash: true } : {}),
+      ...base,
+    }
+  }
+  if (o.type === 'nutrition') {
+    const w = Number(o.w)
+    if (!(w > 0)) return null
+    const str = (v: unknown, d = '') => (typeof v === 'string' ? v : d)
+    const rows = Array.isArray(o.rows)
+      ? (o.rows as Record<string, unknown>[]).map((r) => ({
+          label: str(r.label),
+          value: str(r.value),
+          ...(str(r.rdi) ? { rdi: str(r.rdi) } : {}),
+          ...(r.indent === true ? { indent: true } : {}),
+          ...(r.bold === true ? { bold: true } : {}),
+        }))
+      : []
+    const vitamins = Array.isArray(o.vitamins)
+      ? (o.vitamins as Record<string, unknown>[]).map((r) => ({
+          label: str(r.label),
+          value: str(r.value),
+          ...(str(r.rdi) ? { rdi: str(r.rdi) } : {}),
+        }))
+      : []
+    const ink = typeof o.ink === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.ink) ? o.ink : undefined
+    const scale = Number(o.scale) > 0 && Number(o.scale) !== 1 ? clampNum(Number(o.scale), 0.5, 3) : undefined
+    return {
+      id,
+      type: 'nutrition',
+      w,
+      serving: str(o.serving),
+      servings: str(o.servings),
+      energy: str(o.energy),
+      ...(str(o.energyFat) ? { energyFat: str(o.energyFat) } : {}),
+      rows,
+      vitamins,
+      footnote: str(o.footnote),
+      ...(ink ? { ink } : {}),
+      ...(o.paper === false ? { paper: false } : {}),
+      ...(scale ? { scale } : {}),
       ...base,
     }
   }

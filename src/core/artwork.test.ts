@@ -34,6 +34,9 @@ import {
   isCurvedText,
   curvedGlyphs,
   svgArtworkLayer,
+  makeNutritionEl,
+  nutritionLayout,
+  nutritionInnerSVG,
   sheetUV,
   withTextW,
   type Deco,
@@ -564,5 +567,50 @@ describe('ข้อความโค้ง (curved text)', () => {
   it('parseDeco: รับ curve + clamp -300..300, ปัดค่าน้อย(<1)ทิ้ง', () => {
     expect((parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', curve: 999, x: 0, y: 0, rot: 0 }) as TextEl).curve).toBe(300)
     expect((parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', curve: 0.3, x: 0, y: 0, rot: 0 }) as TextEl).curve).toBeUndefined()
+  })
+})
+
+describe('ตารางข้อมูลโภชนาการ (nutrition)', () => {
+  it('makeNutritionEl: ค่าเริ่มต้นครบ + ความสูงคำนวณได้ + วางในแผ่น', () => {
+    const d = dieline()
+    const el = makeNutritionEl(d)
+    expect(el.type).toBe('nutrition')
+    expect(el.rows.length).toBeGreaterThan(3)
+    expect(elW(el)).toBe(el.w)
+    expect(elH(el)).toBeGreaterThan(el.w) // ตารางสูงกว่ากว้าง
+    expect(el.x).toBeGreaterThanOrEqual(0)
+    expect(el.y).toBeGreaterThanOrEqual(0)
+  })
+
+  it('nutritionLayout: มีเส้นกรอบนอก 4 + ความสูงเพิ่มตามจำนวนแถว', () => {
+    const d = dieline()
+    const base = makeNutritionEl(d)
+    const more = { ...base, rows: [...base.rows, ...base.rows] }
+    expect(nutritionLayout(more).h).toBeGreaterThan(nutritionLayout(base).h)
+    // เส้นกรอบนอกอย่างน้อย 4 เส้น
+    expect(nutritionLayout(base).lines.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('nutritionInnerSVG + svgArtworkLayer: มีหัวตาราง/สารอาหาร/หน่วยบริโภค', () => {
+    const el = makeNutritionEl(dieline())
+    const svg = nutritionInnerSVG(el)
+    expect(svg).toContain('ข้อมูลโภชนาการ')
+    expect(svg).toContain('โซเดียม')
+    expect(svg).toContain('หนึ่งหน่วยบริโภค')
+    expect(svg).toContain('<rect') // พื้นขาว
+    // ไหลผ่าน layer รวม
+    expect(svgArtworkLayer([el])).toContain('ข้อมูลโภชนาการ')
+  })
+
+  it('parseDeco: nutrition round-trip เก็บแถว/ค่า และปัด paper=false', () => {
+    const el = makeNutritionEl(dieline())
+    const p = parseDeco({ ...el, paper: false, ink: '#0f6e56' }) as typeof el
+    expect(p.type).toBe('nutrition')
+    expect(p.rows.length).toBe(el.rows.length)
+    expect(p.rows[0].label).toBe(el.rows[0].label)
+    expect(p.paper).toBe(false)
+    expect(p.ink).toBe('#0f6e56')
+    // ไม่มี w → null
+    expect(parseDeco({ type: 'nutrition', serving: '', servings: '', energy: '', rows: [], vitamins: [], footnote: '', x: 0, y: 0, rot: 0 })).toBeNull()
   })
 })

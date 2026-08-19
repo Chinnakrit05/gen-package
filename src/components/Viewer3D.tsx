@@ -9,6 +9,7 @@ import {
   drawImageFit,
   drawShape2D,
   drawText2D,
+  drawNutrition2D,
   elW,
   elH,
   sheetUV,
@@ -39,6 +40,8 @@ function drawDeco(
     if (img) drawImageFit(ctx, img, e, s)
   } else if (e.type === 'shape') {
     drawShape2D(ctx, e, s)
+  } else if (e.type === 'nutrition') {
+    drawNutrition2D(ctx, e, s)
   } else {
     drawText2D(ctx, e, s)
   }

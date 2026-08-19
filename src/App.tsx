@@ -28,9 +28,11 @@ import {
   fillSVGLayer,
   fillImageSVGLayer,
   renderArtworkCanvas,
+  makeNutritionEl,
   type Deco,
   type FillImage,
   type ShapeKind,
+  type NutriRow,
 } from './core/artwork'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
@@ -345,6 +347,27 @@ const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
   a.D === b.D &&
   a.H === b.H &&
   a.handle === b.handle
+
+// แปลงแถวสารอาหาร ↔ ข้อความ (คั่นด้วย | ต่อบรรทัด) สำหรับแก้ในกล่องข้อความ
+const rowsToText = (rows: NutriRow[]) =>
+  rows.map((r) => [r.label, r.value, r.rdi ?? '', r.indent ? '1' : '', r.bold ? '1' : ''].join(' | ')).join('\n')
+const textToRows = (t: string): NutriRow[] =>
+  t
+    .split('\n')
+    .filter((l) => l.trim())
+    .map((l) => {
+      const [label = '', value = '', rdi = '', indent = '', bold = ''] = l.split('|').map((s) => s.trim())
+      return { label, value, ...(rdi ? { rdi } : {}), ...(indent === '1' ? { indent: true } : {}), ...(bold === '1' ? { bold: true } : {}) }
+    })
+const vitToText = (rows: NutriRow[]) => rows.map((r) => `${r.label} | ${r.rdi ?? ''}`).join('\n')
+const textToVit = (t: string): NutriRow[] =>
+  t
+    .split('\n')
+    .filter((l) => l.trim())
+    .map((l) => {
+      const [label = '', rdi = ''] = l.split('|').map((s) => s.trim())
+      return { label, value: '', ...(rdi ? { rdi } : {}) }
+    })
 
 // --- บันทึกหลายงาน (project) + ประวัติเวอร์ชันของแต่ละงานลง localStorage ---
 
@@ -1122,6 +1145,13 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setSelectedIds([el.id])
   }
 
+  const addNutrition = () => {
+    if (!dieline) return
+    const el = makeNutritionEl(dieline)
+    setDecos((ds) => [...ds, el])
+    setSelectedIds([el.id])
+  }
+
   // แก้เฉพาะชิ้นที่เลือก (ชิ้นเดียว) ผ่านฟังก์ชันแปลง (คงชนิด image/text ไว้)
   const patchSelected = (fn: (d: Deco) => Deco) => {
     if (!selectedId) return
@@ -1852,6 +1882,11 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     <IconStar /> ดาว
                   </button>
                 </div>
+                <div className="art-actions" style={{ marginTop: 8 }}>
+                  <button className="ico-btn" disabled={aiBusy} title="ตารางข้อมูลโภชนาการ (อย.)" onClick={addNutrition}>
+                    ▤ ตารางโภชนาการ (อย.)
+                  </button>
+                </div>
               </Group>
 
               <Group title="ไลบรารีลาย" open={groups.lib} onToggle={() => toggleGroup('lib')}>
@@ -1906,6 +1941,10 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                               borderColor: d.stroke && d.stroke !== 'none' ? d.stroke : d.fill,
                             }}
                           />
+                        ) : d.type === 'nutrition' ? (
+                          <span className="deco-tico" style={{ color: '#111' }}>
+                            ▤
+                          </span>
                         ) : (
                           <span className="deco-tico" style={{ color: d.color }}>
                             T
@@ -2389,6 +2428,120 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           disabled={aiBusy}
                           onChange={(v) => patchSelected((d) => (d.type === 'text' ? { ...d, curve: Math.abs(v) >= 1 ? v : undefined } : d))}
                         />
+                      </>
+                    )}
+                    {selected.type === 'nutrition' && (
+                      <>
+                        <DimField
+                          label="กว้างตาราง"
+                          value={Math.round(selected.w * 10) / 10}
+                          min={30}
+                          max={Math.round(dieline.width)}
+                          disabled={aiBusy}
+                          onChange={(v) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, w: v } : d))}
+                        />
+                        <DimField
+                          label="ขนาดตัวอักษร"
+                          value={selected.scale ?? 1}
+                          min={0.6}
+                          max={2}
+                          step={0.05}
+                          unit="×"
+                          disabled={aiBusy}
+                          onChange={(v) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, scale: v !== 1 ? v : undefined } : d))}
+                        />
+                        <div className="deco-color">
+                          <span>สีตัวอักษร</span>
+                          <ColorField
+                            value={selected.ink ?? '#111111'}
+                            onChange={(hex) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, ink: hex } : d))}
+                            palette={palette}
+                            onSave={saveSwatch}
+                            disabled={aiBusy}
+                            label="สีตัวอักษรตาราง"
+                          />
+                        </div>
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked={selected.paper !== false}
+                            disabled={aiBusy}
+                            onChange={(e) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, paper: e.target.checked ? undefined : false } : d))}
+                          />
+                          พื้นขาว
+                        </label>
+                        <label className="fld">
+                          <span>หนึ่งหน่วยบริโภค</span>
+                          <input
+                            className="txt-in"
+                            value={selected.serving}
+                            disabled={aiBusy}
+                            onChange={(e) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, serving: e.target.value } : d))}
+                          />
+                        </label>
+                        <label className="fld">
+                          <span>จำนวนหน่วยบริโภคต่อภาชนะ</span>
+                          <input
+                            className="txt-in"
+                            value={selected.servings}
+                            disabled={aiBusy}
+                            onChange={(e) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, servings: e.target.value } : d))}
+                          />
+                        </label>
+                        <div className="art-actions">
+                          <label className="fld" style={{ flex: 1 }}>
+                            <span>พลังงาน (kcal)</span>
+                            <input
+                              className="txt-in"
+                              value={selected.energy}
+                              disabled={aiBusy}
+                              onChange={(e) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, energy: e.target.value } : d))}
+                            />
+                          </label>
+                          <label className="fld" style={{ flex: 1 }}>
+                            <span>จากไขมัน</span>
+                            <input
+                              className="txt-in"
+                              value={selected.energyFat ?? ''}
+                              disabled={aiBusy}
+                              onChange={(e) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, energyFat: e.target.value || undefined } : d))}
+                            />
+                          </label>
+                        </div>
+                        <label className="fld">
+                          <span>สารอาหาร (บรรทัดละแถว: ชื่อ | ปริมาณ | %RDI | ย่อ(1) | หนา(1))</span>
+                          <textarea
+                            className="txt-in"
+                            rows={8}
+                            key={`rows-${selected.id}`}
+                            defaultValue={rowsToText(selected.rows)}
+                            disabled={aiBusy}
+                            onBlur={(e) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, rows: textToRows(e.target.value) } : d))}
+                          />
+                        </label>
+                        <label className="fld">
+                          <span>วิตามิน/แร่ธาตุ (บรรทัดละแถว: ชื่อ | %RDI)</span>
+                          <textarea
+                            className="txt-in"
+                            rows={5}
+                            key={`vit-${selected.id}`}
+                            defaultValue={vitToText(selected.vitamins)}
+                            disabled={aiBusy}
+                            onBlur={(e) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, vitamins: textToVit(e.target.value) } : d))}
+                          />
+                        </label>
+                        <label className="fld">
+                          <span>หมายเหตุท้ายตาราง</span>
+                          <textarea
+                            className="txt-in"
+                            rows={2}
+                            key={`fn-${selected.id}`}
+                            defaultValue={selected.footnote}
+                            disabled={aiBusy}
+                            onBlur={(e) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, footnote: e.target.value } : d))}
+                          />
+                        </label>
+                        <p className="hint">ตารางแก้ตัวเลขได้ในกล่องข้อความ (คั่นด้วย |) · กด Enter ขึ้นแถวใหม่ · คลิกนอกช่องเพื่ออัปเดต</p>
                       </>
                     )}
                     {selected.type === 'image' && selected.preset && (
