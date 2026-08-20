@@ -1804,6 +1804,93 @@ button[aria-disabled='true'] {
   border-color: var(--accent, #0f6e56);
 }
 
+/* ตัวแก้ตารางโภชนาการทีละแถว */
+.nutri-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 10px 0 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.nutri-cols {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-2);
+}
+.nrow {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 3px;
+}
+.nrow .txt-in {
+  padding: 4px 6px;
+  font-size: 12px;
+  min-width: 0;
+}
+.nrow .lbl {
+  flex: 1 1 auto;
+}
+.nrow .val {
+  flex: 0 0 52px;
+  width: 52px;
+}
+.nrow .rdi {
+  flex: 0 0 38px;
+  width: 38px;
+  text-align: center;
+}
+.nmini {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-1, #fff);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.nmini:hover:not(:disabled) {
+  border-color: var(--accent, #0f6e56);
+  color: var(--text-1);
+}
+.nmini.on {
+  background: var(--accent, #0f6e56);
+  border-color: var(--accent, #0f6e56);
+  color: #fff;
+}
+.nmini.del:hover:not(:disabled) {
+  border-color: #c0392b;
+  color: #c0392b;
+}
+.nmini:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.add-row {
+  width: 100%;
+  margin: 2px 0 4px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.add-row:hover:not(:disabled) {
+  border-color: var(--accent, #0f6e56);
+  color: var(--accent, #0f6e56);
+}
+
 /* ปุ่มด่วนต่อชิ้นที่เลือก (ความทึบ + เลื่อนเลเยอร์) — ต่อท้ายรายการเลเยอร์ */
 .layer-quick {
   margin-top: 10px;

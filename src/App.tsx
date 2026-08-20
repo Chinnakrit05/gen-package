@@ -348,27 +348,6 @@ const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
   a.H === b.H &&
   a.handle === b.handle
 
-// แปลงแถวสารอาหาร ↔ ข้อความ (คั่นด้วย | ต่อบรรทัด) สำหรับแก้ในกล่องข้อความ
-const rowsToText = (rows: NutriRow[]) =>
-  rows.map((r) => [r.label, r.value, r.rdi ?? '', r.indent ? '1' : '', r.bold ? '1' : ''].join(' | ')).join('\n')
-const textToRows = (t: string): NutriRow[] =>
-  t
-    .split('\n')
-    .filter((l) => l.trim())
-    .map((l) => {
-      const [label = '', value = '', rdi = '', indent = '', bold = ''] = l.split('|').map((s) => s.trim())
-      return { label, value, ...(rdi ? { rdi } : {}), ...(indent === '1' ? { indent: true } : {}), ...(bold === '1' ? { bold: true } : {}) }
-    })
-const vitToText = (rows: NutriRow[]) => rows.map((r) => `${r.label} | ${r.rdi ?? ''}`).join('\n')
-const textToVit = (t: string): NutriRow[] =>
-  t
-    .split('\n')
-    .filter((l) => l.trim())
-    .map((l) => {
-      const [label = '', rdi = ''] = l.split('|').map((s) => s.trim())
-      return { label, value: '', ...(rdi ? { rdi } : {}) }
-    })
-
 // --- บันทึกหลายงาน (project) + ประวัติเวอร์ชันของแต่ละงานลง localStorage ---
 
 const STORAGE_KEY = 'gen-package-projects-v1'
@@ -1157,6 +1136,27 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     if (!selectedId) return
     setDecos((ds) => ds.map((d) => (d.id === selectedId ? fn(d) : d)))
   }
+
+  // แก้แถวตารางโภชนาการทีละแถว (rows = สารอาหาร, vitamins = วิตามิน/แร่ธาตุ)
+  const patchNutriRow = (key: 'rows' | 'vitamins', i: number, patch: Partial<NutriRow>) =>
+    patchSelected((d) => (d.type === 'nutrition' ? { ...d, [key]: d[key].map((r, j) => (j === i ? { ...r, ...patch } : r)) } : d))
+  const removeNutriRow = (key: 'rows' | 'vitamins', i: number) =>
+    patchSelected((d) => (d.type === 'nutrition' ? { ...d, [key]: d[key].filter((_, j) => j !== i) } : d))
+  const moveNutriRow = (key: 'rows' | 'vitamins', i: number, dir: -1 | 1) =>
+    patchSelected((d) => {
+      if (d.type !== 'nutrition') return d
+      const j = i + dir
+      if (j < 0 || j >= d[key].length) return d
+      const arr = [...d[key]]
+      ;[arr[i], arr[j]] = [arr[j], arr[i]]
+      return { ...d, [key]: arr }
+    })
+  const addNutriRow = (key: 'rows' | 'vitamins') =>
+    patchSelected((d) =>
+      d.type === 'nutrition'
+        ? { ...d, [key]: [...d[key], key === 'rows' ? { label: 'สารอาหาร', value: '0 ก.' } : { label: 'วิตามิน', value: '', rdi: '0' }] }
+        : d,
+    )
 
   // ลากชิ้น: ถ้าอยู่ในชุดเลือกหลายชิ้น ให้ย้ายทั้งชุดตามระยะเดียวกัน (ชิ้นที่ลากตรง snap)
   const moveDeco = (id: string, x: number, y: number) =>
@@ -2508,29 +2508,89 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                             />
                           </label>
                         </div>
-                        <label className="fld">
-                          <span>สารอาหาร (บรรทัดละแถว: ชื่อ | ปริมาณ | %RDI | ย่อ(1) | หนา(1))</span>
-                          <textarea
-                            className="txt-in"
-                            rows={8}
-                            key={`rows-${selected.id}`}
-                            defaultValue={rowsToText(selected.rows)}
-                            disabled={aiBusy}
-                            onBlur={(e) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, rows: textToRows(e.target.value) } : d))}
-                          />
-                        </label>
-                        <label className="fld">
-                          <span>วิตามิน/แร่ธาตุ (บรรทัดละแถว: ชื่อ | %RDI)</span>
-                          <textarea
-                            className="txt-in"
-                            rows={5}
-                            key={`vit-${selected.id}`}
-                            defaultValue={vitToText(selected.vitamins)}
-                            disabled={aiBusy}
-                            onBlur={(e) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, vitamins: textToVit(e.target.value) } : d))}
-                          />
-                        </label>
-                        <label className="fld">
+                        <div className="nutri-head">
+                          <span>สารอาหาร</span>
+                          <span className="nutri-cols">ปริมาณ · %</span>
+                        </div>
+                        {selected.rows.map((r, i) => (
+                          <div className="nrow" key={`r${i}`}>
+                            <button
+                              className={`nmini${r.indent ? ' on' : ''}`}
+                              title="ย่อหน้า (สารอาหารย่อย)"
+                              disabled={aiBusy}
+                              onClick={() => patchNutriRow('rows', i, { indent: !r.indent || undefined })}
+                            >
+                              ↳
+                            </button>
+                            <input
+                              className="txt-in lbl"
+                              value={r.label}
+                              placeholder="ชื่อสารอาหาร"
+                              disabled={aiBusy}
+                              onChange={(e) => patchNutriRow('rows', i, { label: e.target.value })}
+                            />
+                            <input
+                              className="txt-in val"
+                              value={r.value}
+                              placeholder="3 ก."
+                              disabled={aiBusy}
+                              onChange={(e) => patchNutriRow('rows', i, { value: e.target.value })}
+                            />
+                            <input
+                              className="txt-in rdi"
+                              value={r.rdi ?? ''}
+                              placeholder="%"
+                              disabled={aiBusy}
+                              onChange={(e) => patchNutriRow('rows', i, { rdi: e.target.value || undefined })}
+                            />
+                            <button className={`nmini${r.bold ? ' on' : ''}`} title="ตัวหนา" disabled={aiBusy} onClick={() => patchNutriRow('rows', i, { bold: !r.bold || undefined })}>
+                              <b>B</b>
+                            </button>
+                            <button className="nmini" title="เลื่อนขึ้น" disabled={aiBusy || i === 0} onClick={() => moveNutriRow('rows', i, -1)}>
+                              ▲
+                            </button>
+                            <button className="nmini del" title="ลบแถว" disabled={aiBusy} onClick={() => removeNutriRow('rows', i)}>
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                        <button className="add-row" disabled={aiBusy} onClick={() => addNutriRow('rows')}>
+                          ＋ เพิ่มแถวสารอาหาร
+                        </button>
+
+                        <div className="nutri-head">
+                          <span>วิตามิน / แร่ธาตุ</span>
+                          <span className="nutri-cols">%</span>
+                        </div>
+                        {selected.vitamins.map((v, i) => (
+                          <div className="nrow" key={`v${i}`}>
+                            <input
+                              className="txt-in lbl"
+                              value={v.label}
+                              placeholder="ชื่อวิตามิน"
+                              disabled={aiBusy}
+                              onChange={(e) => patchNutriRow('vitamins', i, { label: e.target.value })}
+                            />
+                            <input
+                              className="txt-in rdi"
+                              value={v.rdi ?? ''}
+                              placeholder="%"
+                              disabled={aiBusy}
+                              onChange={(e) => patchNutriRow('vitamins', i, { rdi: e.target.value || undefined })}
+                            />
+                            <button className="nmini" title="เลื่อนขึ้น" disabled={aiBusy || i === 0} onClick={() => moveNutriRow('vitamins', i, -1)}>
+                              ▲
+                            </button>
+                            <button className="nmini del" title="ลบแถว" disabled={aiBusy} onClick={() => removeNutriRow('vitamins', i)}>
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                        <button className="add-row" disabled={aiBusy} onClick={() => addNutriRow('vitamins')}>
+                          ＋ เพิ่มวิตามิน/แร่ธาตุ
+                        </button>
+
+                        <label className="fld" style={{ marginTop: 8 }}>
                           <span>หมายเหตุท้ายตาราง</span>
                           <textarea
                             className="txt-in"
@@ -2541,7 +2601,6 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                             onBlur={(e) => patchSelected((d) => (d.type === 'nutrition' ? { ...d, footnote: e.target.value } : d))}
                           />
                         </label>
-                        <p className="hint">ตารางแก้ตัวเลขได้ในกล่องข้อความ (คั่นด้วย |) · กด Enter ขึ้นแถวใหม่ · คลิกนอกช่องเพื่ออัปเดต</p>
                       </>
                     )}
                     {selected.type === 'image' && selected.preset && (
