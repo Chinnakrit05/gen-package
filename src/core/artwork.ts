@@ -536,7 +536,7 @@ export function makeShapeEl(dieline: Dieline, shape: ShapeKind): ShapeEl {
   // รูปหลายเหลี่ยม/ดาว/สามเหลี่ยม ใช้กรอบจัตุรัสให้ดูสมส่วน (regular)
   const h = isPolyShape(shape) ? w : Math.max(10, fh * 0.3)
   const { x, y } = centerOnFace(dieline, w, h)
-  const base = { id: newId(), type: 'shape' as const, shape, w, h, fill: '#0f6e56', stroke: 'none', strokeW: 0, x, y, rot: 0 }
+  const base = { id: newId(), type: 'shape' as const, shape, w, h, fill: '#7b74e8', stroke: 'none', strokeW: 0, x, y, rot: 0 }
   return shape === 'star' ? { ...base, sides: 5 } : shape === 'polygon' ? { ...base, sides: 6 } : base
 }
 
@@ -1347,7 +1347,7 @@ export function parseDeco(v: unknown): Deco | null {
     const w = Number(o.w)
     const h = Number(o.h)
     if (!(w > 0) || !(h > 0)) return null
-    const fill = typeof o.fill === 'string' ? o.fill : '#0f6e56'
+    const fill = typeof o.fill === 'string' ? o.fill : '#7b74e8'
     const stroke = typeof o.stroke === 'string' ? o.stroke : 'none'
     const strokeW = Number(o.strokeW) >= 0 ? Number(o.strokeW) : 0
     const gr = o.grad as Record<string, unknown> | undefined

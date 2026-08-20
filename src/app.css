@@ -20,7 +20,9 @@
   --on-accent: #ffffff;
   --pink: #f0a7c2;
   --coral: #f4a9b6;
-  --cta: #201c2c; /* ปุ่มหลักดำอมม่วง (แบบ Join Now) */
+  /* ปุ่มหลัก = ไล่สีพาสเทล พีริวิงเคิล → ชมพู */
+  --cta-grad: linear-gradient(135deg, #8b84f0 0%, #ef9fc0 100%);
+  --cta-grad-hover: linear-gradient(135deg, #7b72ee 0%, #ec8fb5 100%);
   --danger: #e26d8a;
   /* มุมโค้ง + เบลอกระจก */
   --radius: 20px;
@@ -586,17 +588,17 @@ button:hover {
   color: var(--accent);
 }
 
-/* ปุ่มหลัก = แคปซูลดำอมม่วง (แบบ Join Now ในต้นแบบ) */
+/* ปุ่มหลัก = แคปซูลไล่สีพาสเทล (พีริวิงเคิล → ชมพู) */
 button.primary {
-  background: var(--cta);
-  border-color: var(--cta);
+  background: var(--cta-grad);
+  border-color: transparent;
   color: var(--on-accent);
-  box-shadow: 0 8px 20px rgba(32, 28, 44, 0.28);
+  box-shadow: 0 10px 22px rgba(139, 132, 240, 0.32);
 }
 
 button.primary:hover {
-  background: #100d1a;
-  border-color: #100d1a;
+  background: var(--cta-grad-hover);
+  border-color: transparent;
   color: var(--on-accent);
 }
 
@@ -880,13 +882,14 @@ button[aria-disabled='true'] {
   padding: 7px 16px;
   font-size: 13px;
   border-radius: 999px;
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--cta-grad);
+  border-color: transparent;
   color: var(--on-accent);
+  box-shadow: 0 8px 18px rgba(139, 132, 240, 0.3);
 }
 .fold-play:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+  background: var(--cta-grad-hover);
+  border-color: transparent;
   color: var(--on-accent);
 }
 .fold-label {
