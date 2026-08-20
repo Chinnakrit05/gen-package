@@ -1,20 +1,34 @@
-/* --- design tokens: โทนนิวทรัลสะอาด (modern minimal) + เขียวแบรนด์ --- */
+/* --- design tokens: pastel glassmorphism (ม่วงลาเวนเดอร์ → ชมพู) --- */
 :root {
-  --bg: #f6f7f8;
-  --surface: #ffffff;
-  --surface-2: #f2f3f5;
-  --border: #e8eaed;
-  --border-strong: #d6dade;
-  --text: #1f2328;
-  --text-2: #5b636b;
-  --text-3: #8b929a;
-  --accent: #0f6e56;
-  --accent-hover: #0b5a45;
-  --accent-weak: #e9f3ef;
-  --accent-border: #c2ddd2;
-  --danger: #d0402f;
-  --shadow-sm: 0 1px 2px rgba(16, 24, 32, 0.05);
-  --shadow: 0 6px 22px rgba(16, 24, 32, 0.09);
+  /* พื้นหลัง gradient นุ่ม + สีทึบสำรองหลังกระจก */
+  --bg: linear-gradient(135deg, #d8d1f1 0%, #e0d2ec 34%, #edd0e0 66%, #f4d8e2 100%);
+  --bg-solid: #e7dcf0;
+  /* การ์ดกระจกฝ้า (โปร่งแสง + เบลอ) */
+  --surface: rgba(255, 255, 255, 0.6);
+  --surface-2: rgba(255, 255, 255, 0.4);
+  --surface-solid: #ffffff;
+  --border: rgba(126, 104, 178, 0.16);
+  --border-strong: rgba(126, 104, 178, 0.28);
+  --text: #262232;
+  --text-2: #6a6480;
+  --text-3: #9b95ad;
+  /* accent พาสเทลพีริวิงเคิล + คู่สีชมพู/คอรัล */
+  --accent: #7b74e8;
+  --accent-hover: #6a62dd;
+  --accent-weak: rgba(123, 116, 232, 0.14);
+  --accent-border: rgba(123, 116, 232, 0.34);
+  --on-accent: #ffffff;
+  --pink: #f0a7c2;
+  --coral: #f4a9b6;
+  --cta: #201c2c; /* ปุ่มหลักดำอมม่วง (แบบ Join Now) */
+  --danger: #e26d8a;
+  /* มุมโค้ง + เบลอกระจก */
+  --radius: 20px;
+  --radius-lg: 26px;
+  --radius-sm: 12px;
+  --glass: blur(20px) saturate(1.35);
+  --shadow-sm: 0 2px 10px rgba(120, 100, 190, 0.1);
+  --shadow: 0 16px 40px rgba(120, 100, 190, 0.18);
 }
 
 * {
@@ -30,11 +44,26 @@ body,
 
 body {
   font-family: 'Noto Sans Thai', -apple-system, sans-serif;
-  background: var(--bg);
+  background: var(--bg-solid);
+  background-image: var(--bg);
+  background-attachment: fixed;
+  background-size: cover;
   color: var(--text);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* หัวข้อใช้ Prompt (เรขาคณิตมน) ให้ได้อารมณ์ตัวหนากลม ๆ แบบต้นแบบ */
+h1,
+h2,
+h3,
+.tgroup-title,
+.login-name,
+.login-title,
+.bp-head > span,
+.group > .tgroup-head .tgroup-title {
+  font-family: 'Prompt', 'Noto Sans Thai', sans-serif;
 }
 
 ::selection {
@@ -68,11 +97,16 @@ body {
 
 header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   padding: 12px 20px;
+  margin: 10px 10px 0;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 header h1 {
@@ -158,8 +192,13 @@ aside {
   flex-shrink: 0;
   overflow-y: auto;
   padding: 16px;
+  margin: 10px 0 10px 10px;
   background: var(--surface);
-  border-right: 1px solid var(--border);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -235,12 +274,12 @@ aside h2 {
   align-items: flex-start;
   gap: 2px;
   text-align: left;
-  padding: 9px 11px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: var(--surface);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
   cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease;
+  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
 }
 .pick-item:hover:not(:disabled),
 .pick-item.active {
@@ -531,14 +570,14 @@ select {
 
 button {
   width: 100%;
-  padding: 9px 12px;
-  border-radius: 8px;
+  padding: 9px 13px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong);
-  background: var(--surface);
+  background: var(--surface-2);
   color: var(--text);
   font: inherit;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
 }
 
 button:hover {
@@ -547,15 +586,18 @@ button:hover {
   color: var(--accent);
 }
 
+/* ปุ่มหลัก = แคปซูลดำอมม่วง (แบบ Join Now ในต้นแบบ) */
 button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--surface);
+  background: var(--cta);
+  border-color: var(--cta);
+  color: var(--on-accent);
+  box-shadow: 0 8px 20px rgba(32, 28, 44, 0.28);
 }
 
 button.primary:hover {
-  background: var(--accent-hover);
-  color: var(--surface);
+  background: #100d1a;
+  border-color: #100d1a;
+  color: var(--on-accent);
 }
 
 main {
@@ -805,10 +847,12 @@ button[aria-disabled='true'] {
 
 .card {
   background: var(--surface);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow);
 }
 
 .viewer {
@@ -835,13 +879,15 @@ button[aria-disabled='true'] {
   flex-shrink: 0;
   padding: 7px 16px;
   font-size: 13px;
+  border-radius: 999px;
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--surface);
+  color: var(--on-accent);
 }
 .fold-play:hover {
   background: var(--accent-hover);
-  color: var(--surface);
+  border-color: var(--accent-hover);
+  color: var(--on-accent);
 }
 .fold-label {
   font-size: 12px;
@@ -2068,8 +2114,10 @@ button[aria-disabled='true'] {
   width: 100%;
   max-width: 380px;
   background: var(--surface);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   padding: 34px 30px 26px;
   text-align: center;
