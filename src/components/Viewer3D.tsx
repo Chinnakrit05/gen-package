@@ -330,7 +330,7 @@ export function Viewer3D(props: ModelProps) {
       role="img"
       aria-label="มุมมอง 3 มิติของกล่องที่กำลังพับ"
     >
-      <color attach="background" args={['#eeebe3']} />
+      <color attach="background" args={['#ffffff']} />
       <ambientLight intensity={0.9} />
       <directionalLight position={[250, 420, 300]} intensity={1.7} />
       <directionalLight position={[-220, 120, -260]} intensity={0.55} />

@@ -181,7 +181,7 @@ export function VesselViewer3D({
       role="img"
       aria-label="มุมมอง 3 มิติของภาชนะพร้อมฉลาก"
     >
-      <color attach="background" args={['#eeebe3']} />
+      <color attach="background" args={['#ffffff']} />
       <ambientLight intensity={0.85} />
       <directionalLight position={[250, 420, 300]} intensity={1.7} />
       <directionalLight position={[-220, 120, -260]} intensity={0.6} />

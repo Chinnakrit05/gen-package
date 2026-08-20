@@ -291,7 +291,7 @@ export function PouchViewer3D({
       role="img"
       aria-label="มุมมอง 3 มิติของถุงพร้อมลาย"
     >
-      <color attach="background" args={['#eeebe3']} />
+      <color attach="background" args={['#ffffff']} />
       <ambientLight intensity={0.85} />
       <directionalLight position={[250, 420, 300]} intensity={1.6} />
       <directionalLight position={[-220, 120, -260]} intensity={0.6} />
