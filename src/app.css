@@ -946,6 +946,8 @@ button[aria-disabled='true'] {
   min-height: 0;
   position: relative;
   display: flex;
+  /* พื้นที่วาด blueprint เป็นสีขาวทึบ — สีลายอ่านตรง ไม่โดน gradient ด้านหลังรบกวน */
+  background: var(--surface-solid);
 }
 .dieline-svg {
   flex: 1;
