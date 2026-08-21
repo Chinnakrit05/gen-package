@@ -2057,15 +2057,16 @@ button[aria-disabled='true'] {
   .body {
     flex-direction: column;
   }
+  /* แถบข้างเป็นการ์ดเต็มกว้าง เลื่อนในตัว (สูงไม่เกินครึ่งจอ) ให้พื้นที่วาดอยู่ใกล้ ๆ ไม่ต้องเลื่อนยาว */
   aside {
-    width: 100%;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    overflow-y: visible;
+    width: auto;
+    margin: 10px 10px 0;
+    max-height: 52vh;
+    overflow-y: auto;
   }
 
   main {
-    padding: 12px;
+    padding: 10px;
   }
   .panels {
     grid-template-columns: 1fr;
