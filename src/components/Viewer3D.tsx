@@ -17,6 +17,7 @@ import {
   type FillImage,
 } from '../core/artwork'
 import { computeMatrices, rollBeads } from '../core/fold'
+import { assignOuterFaceGroups } from '../core/panelFaces'
 
 // วาดองค์ประกอบ (รูป/ข้อความ) ลง ctx ในพิกัดแผ่นคลี่ (สเกล s) พร้อมหมุนรอบจุดกึ่งกลาง
 // ใช้พิกัดชุดเดียวกับ blueprint (y ชี้ลง, มุมหมุนตามเข็ม) เพื่อให้จอสองฝั่งตรงกัน
@@ -220,11 +221,23 @@ function PanelMesh({ geometry, edges, matrix, mat, tex }: PanelMeshProps) {
 
   return (
     <mesh ref={ref} geometry={geometry}>
+      {/* material 0 = ฝาด้านนอก มีลายพิมพ์ (จาก texture แผ่นคลี่) */}
       <meshStandardMaterial
         ref={matRef}
+        attach="material-0"
         map={tex}
         // texture มีสีวัสดุอยู่ในตัวแล้ว ถ้าคูณสีซ้ำภาพจะมืดลง
         color={tex ? '#ffffff' : mat.color}
+        roughness={mat.roughness ?? 0.8}
+        metalness={0}
+        transparent={mat.opacity !== undefined}
+        opacity={mat.opacity ?? 1}
+        side={THREE.DoubleSide}
+      />
+      {/* material 1 = ฝาด้านใน + ผนัง สีวัสดุล้วน ไม่พิมพ์ลาย */}
+      <meshStandardMaterial
+        attach="material-1"
+        color={mat.color}
         roughness={mat.roughness ?? 0.8}
         metalness={0}
         transparent={mat.opacity !== undefined}
@@ -259,8 +272,9 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillIm
         for (const ring of p.holes ?? []) {
           shape.holes.push(new THREE.Path(ring.map((pt) => new THREE.Vector2(pt.x, -pt.y))))
         }
+        const d = Math.max(mat.thickness, 0.25)
         const geo = new THREE.ExtrudeGeometry(shape, {
-          depth: Math.max(mat.thickness, 0.25),
+          depth: d,
           bevelEnabled: false,
         })
 
@@ -274,6 +288,9 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillIm
           uv[i * 2 + 1] = v
         }
         geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+
+        // แยก group เพื่อพิมพ์ลายเฉพาะฝา "ด้านนอก" (สีวัสดุล้วนด้านใน) — ตรรกะเทสต์ใน panelFaces.test.ts
+        assignOuterFaceGroups(geo, d)
 
         return { geo, edges: new THREE.EdgesGeometry(geo, 25) }
       }),
