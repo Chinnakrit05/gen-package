@@ -3,15 +3,15 @@
   /* พื้นหลัง gradient นุ่ม + สีทึบสำรองหลังกระจก */
   --bg: linear-gradient(135deg, #d8d1f1 0%, #e0d2ec 34%, #edd0e0 66%, #f4d8e2 100%);
   --bg-solid: #e7dcf0;
-  /* การ์ดกระจกฝ้า (โปร่งแสง + เบลอ) */
-  --surface: rgba(255, 255, 255, 0.6);
-  --surface-2: rgba(255, 255, 255, 0.4);
+  /* การ์ดกระจกฝ้า (โปร่งแสง + เบลอ) — ทึบขึ้นเล็กน้อยเพื่อ contrast ตัวหนังสือ */
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-2: rgba(255, 255, 255, 0.58);
   --surface-solid: #ffffff;
-  --border: rgba(126, 104, 178, 0.16);
-  --border-strong: rgba(126, 104, 178, 0.28);
-  --text: #262232;
-  --text-2: #6a6480;
-  --text-3: #9b95ad;
+  --border: rgba(120, 100, 175, 0.22);
+  --border-strong: rgba(120, 100, 175, 0.36);
+  --text: #241f30;
+  --text-2: #605a75;
+  --text-3: #837c95;
   /* accent พาสเทลพีริวิงเคิล + คู่สีชมพู/คอรัล */
   --accent: #7b74e8;
   --accent-hover: #6a62dd;
@@ -1386,11 +1386,12 @@ button[aria-disabled='true'] {
   z-index: 50;
 }
 .modal {
-  background: var(--surface);
-  border-radius: 12px;
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 20px;
   width: min(360px, 90vw);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 20px 50px rgba(60, 40, 100, 0.3);
 }
 .modal h3 {
   font-size: 15px;
