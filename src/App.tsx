@@ -562,6 +562,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [palette, setPalette] = useState<string[]>(loadPalette)
   const [sr, setSr] = useState({ cols: 3, rows: 1, dx: 30, dy: 30, brick: false })
   const [expand3d, setExpand3d] = useState(false) // ขยาย 3D viewer เป็น popup ใหญ่
+  const [pip3dMin, setPip3dMin] = useState(false) // ซ่อนจอเล็ก 3D เหลือปุ่มกลม
   const [sheetId, setSheetId] = useState(SHEET_PRESETS[0].id)
   const [customSheet, setCustomSheet] = useState({ w: 640, h: 900 })
   const [gutter, setGutter] = useState(DEFAULT_OPT.gutter)
@@ -3205,18 +3206,32 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               />
             </div>
             {expand3d && <div className="viewer-backdrop" onClick={() => setExpand3d(false)} />}
-            {/* มุมมอง 3D = จอเล็กซ้อนมุม blueprint (PiP) กดขยายเป็น popup ใหญ่ได้ */}
+            {/* ย่อเหลือปุ่มกลม — กดเพื่อโชว์จอเล็กกลับมา */}
+            {pip3dMin && !expand3d && (
+              <button className="pip-restore card" title="แสดงมุมมอง 3D" aria-label="แสดงมุมมอง 3D" onClick={() => setPip3dMin(false)}>
+                3D
+              </button>
+            )}
+            {/* มุมมอง 3D = จอเล็กซ้อนมุม blueprint (PiP) จางไว้ ชี้เมาส์ค่อยชัด กดขยายเป็น popup ใหญ่ */}
+            {!(pip3dMin && !expand3d) && (
             <div className={`viewer-pip card${expand3d ? ' expanded' : ''}`}>
               <div className="pip-bar">
                 <span className="pip-title">มุมมอง 3D</span>
-                <button
-                  className="pip-expand"
-                  title={expand3d ? 'ย่อมุมมอง' : 'ขยายมุมมอง'}
-                  aria-label={expand3d ? 'ย่อมุมมอง 3D' : 'ขยายมุมมอง 3D'}
-                  onClick={() => setExpand3d((v) => !v)}
-                >
-                  {expand3d ? '✕' : '⤢'}
-                </button>
+                <span className="pip-actions">
+                  {!expand3d && (
+                    <button className="pip-expand" title="ซ่อนมุมมอง" aria-label="ซ่อนมุมมอง 3D" onClick={() => setPip3dMin(true)}>
+                      –
+                    </button>
+                  )}
+                  <button
+                    className="pip-expand"
+                    title={expand3d ? 'ย่อมุมมอง' : 'ขยายมุมมอง'}
+                    aria-label={expand3d ? 'ย่อมุมมอง 3D' : 'ขยายมุมมอง 3D'}
+                    onClick={() => setExpand3d((v) => !v)}
+                  >
+                    {expand3d ? '✕' : '⤢'}
+                  </button>
+                </span>
               </div>
               {expand3d && foldBar}
               <div className="viewer-3d">
@@ -3240,6 +3255,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 </Suspense>
               </div>
             </div>
+            )}
           </div>
         </main>
       </div>

@@ -645,17 +645,50 @@ main {
   min-width: 0;
 }
 
-/* จอ 3D เล็กซ้อนมุม blueprint */
+/* จอ 3D เล็กซ้อนมุม blueprint — จางไว้ ไม่ให้บังงาน ชี้เมาส์ค่อยชัด */
 .viewer-pip {
   position: absolute;
   right: 14px;
   bottom: 14px;
-  width: 264px;
-  height: 214px;
+  width: 196px;
+  height: 156px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   z-index: 6;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease;
+}
+/* จางเฉพาะตอนเป็นจอเล็ก (docked) — ชี้เมาส์ค่อยชัด; ตอนขยายเต็มไม่จาง */
+.viewer-pip:not(.expanded) {
+  opacity: 0.5;
+}
+.viewer-pip:not(.expanded):hover,
+.viewer-pip:not(.expanded):focus-within {
+  opacity: 1;
+}
+.pip-actions {
+  display: flex;
+  gap: 4px;
+}
+/* ปุ่มกลมเล็กเมื่อย่อ 3D เก็บ */
+.pip-restore {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  padding: 0;
+  z-index: 6;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  opacity: 0.7;
+}
+.pip-restore:hover {
+  opacity: 1;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .viewer-pip .viewer-3d {
   flex: 1;
@@ -707,6 +740,7 @@ main {
   width: min(92vw, 1120px);
   height: min(88vh, 820px);
   z-index: 60;
+  opacity: 1;
 }
 .viewer-pip.expanded .fold-bar {
   display: flex;
