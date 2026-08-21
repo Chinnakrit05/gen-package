@@ -24,6 +24,14 @@
   --cta-grad: linear-gradient(135deg, #8b84f0 0%, #ef9fc0 100%);
   --cta-grad-hover: linear-gradient(135deg, #7b72ee 0%, #ec8fb5 100%);
   --danger: #e26d8a;
+  --danger-bg: #fcebeb;
+  /* สีบอกสถานะ (info ฟ้า / warn เหลืองอำพัน) — ปรับตามธีมได้ ไม่ hardcode พื้นสว่างค้างในโหมดมืด */
+  --info: #1b6ea8;
+  --info-bg: #e6f1fb;
+  --info-border: #185fa5;
+  --warn: #8a5a1c;
+  --warn-bg: #faeeda;
+  --warn-border: #ba7517;
   /* มุมโค้ง + เบลอกระจก */
   --radius: 20px;
   --radius-lg: 26px;
@@ -44,12 +52,25 @@
   --border-strong: rgba(255, 255, 255, 0.24);
   --text: #ece9f6;
   --text-2: #b6afca;
-  --text-3: #8e88a3;
+  /* text-3 ในโหมดมืดต้องสว่างพอ (secondary text บนการ์ดกระจกมืดผ่าน AA ~4.5:1) */
+  --text-3: #b3acc8;
   --accent: #a49dff;
   --accent-hover: #b7b1ff;
-  --accent-weak: rgba(164, 157, 255, 0.18);
+  /* พื้น active/hover จาง ๆ — ลดความทึบในโหมดมืดให้การ์ด active ไม่สว่างจนตัวหนังสือ accent เลือนหาย */
+  --accent-weak: rgba(164, 157, 255, 0.12);
   --accent-border: rgba(164, 157, 255, 0.42);
+  /* accent ในโหมดมืดเป็นสีอ่อน → ตัวอักษรบนพื้น accent ทึบ (ชิป/แบดจ์) ต้องเป็นสีเข้มถึงจะอ่านออก
+     (ปุ่ม gradient หลักคุมสีขาวเองแยกต่างหาก จึงไม่กระทบ) */
+  --on-accent: #211a33;
   --danger: #f28aa6;
+  --danger-bg: rgba(242, 138, 166, 0.16);
+  /* โหมดมืด: ตัวอักษรสถานะสว่างขึ้น + พื้นเป็นสีโปร่งจาง อ่านง่ายบนการ์ดมืด */
+  --info: #8fc4ee;
+  --info-bg: rgba(80, 150, 215, 0.18);
+  --info-border: rgba(130, 185, 232, 0.5);
+  --warn: #e6b877;
+  --warn-bg: rgba(205, 155, 70, 0.18);
+  --warn-border: rgba(215, 170, 95, 0.5);
   --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.35);
   --shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
 }
@@ -398,7 +419,7 @@ aside h2 {
 .step-next {
   flex: 1;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--accent);
   font-weight: 600;
 }
@@ -462,7 +483,7 @@ aside h2 {
   border-radius: 6px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  color: var(--text-2);
+  color: var(--text);
   font-size: 11px;
   font-weight: 700;
 }
@@ -490,7 +511,7 @@ aside h2 {
 .export-item.primary .export-badge {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 .export-item.primary .export-name {
   color: var(--accent);
@@ -613,14 +634,15 @@ button:hover {
 button.primary {
   background: var(--cta-grad);
   border-color: transparent;
-  color: var(--on-accent);
+  /* ปุ่ม gradient คงตัวอักษรขาวทุกธีม (เอกลักษณ์) — ไม่ผูกกับ --on-accent ที่พลิกเป็นสีเข้มในโหมดมืด */
+  color: #fff;
   box-shadow: 0 10px 22px rgba(139, 132, 240, 0.32);
 }
 
 button.primary:hover {
   background: var(--cta-grad-hover);
   border-color: transparent;
-  color: var(--on-accent);
+  color: #fff;
 }
 
 main {
@@ -864,9 +886,9 @@ main {
 }
 
 .pb-chip.fromimg {
-  border-color: #185fa5;
-  color: #0c447c;
-  background: #e6f1fb;
+  border-color: var(--info-border);
+  color: var(--info);
+  background: var(--info-bg);
 }
 
 .pb-result .hint {
@@ -876,7 +898,7 @@ main {
 .pb-error {
   font-size: 13px;
   color: var(--danger);
-  background: #fcebeb;
+  background: var(--danger-bg);
   padding: 8px 12px;
   border-radius: 8px;
 }
@@ -888,8 +910,8 @@ main {
 }
 
 .pb-mock {
-  background: #faeeda;
-  color: #854f0b;
+  background: var(--warn-bg);
+  color: var(--warn);
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 12.5px;
@@ -912,9 +934,9 @@ main {
 }
 
 .pb-chip.limit {
-  border-color: #ba7517;
-  color: #854f0b;
-  background: #faeeda;
+  border-color: var(--warn-border);
+  color: var(--warn);
+  background: var(--warn-bg);
   font-weight: 600;
 }
 
@@ -1024,13 +1046,13 @@ button[aria-disabled='true'] {
   border-radius: 999px;
   background: var(--cta-grad);
   border-color: transparent;
-  color: var(--on-accent);
+  color: #fff;
   box-shadow: 0 8px 18px rgba(139, 132, 240, 0.3);
 }
 .fold-play:hover {
   background: var(--cta-grad-hover);
   border-color: transparent;
-  color: var(--on-accent);
+  color: #fff;
 }
 .fold-label {
   font-size: 12px;
@@ -1111,6 +1133,8 @@ button[aria-disabled='true'] {
   gap: 3px;
   padding: 3px;
   background: rgba(255, 255, 255, 0.92);
+  /* ลอยบนกระดาษขาว (คงขาวทุกธีม) → ตัวไอคอนต้องเข้มเสมอ ไม่อิงสีตัวอักษรของธีมมืด */
+  color: #2a2440;
   border: 1px solid var(--border);
   border-radius: 9px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
@@ -1124,6 +1148,8 @@ button[aria-disabled='true'] {
   border: none;
   background: none;
   border-radius: 6px;
+  /* สืบสีเข้มจาก .bp-tools (ชนะกฎ button{color:var(--text)} ที่ทำให้ไอคอนจางบนกระดาษขาวในโหมดมืด) */
+  color: inherit;
 }
 .bp-tool:hover {
   background: var(--accent-weak);
@@ -1139,6 +1165,8 @@ button[aria-disabled='true'] {
   gap: 3px;
   padding: 3px;
   background: rgba(255, 255, 255, 0.92);
+  /* ลอยบนกระดาษขาว → ตัวปุ่มต้องเข้มเสมอ (เช่นเดียวกับ .bp-tools) */
+  color: #2a2440;
   border: 1px solid var(--border);
   border-radius: 9px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
@@ -1152,6 +1180,8 @@ button[aria-disabled='true'] {
   border: none;
   background: none;
   border-radius: 6px;
+  /* สืบสีเข้มจาก .zoom-toolbar (บนกระดาษขาว) แทนสีตัวอักษรธีมมืด */
+  color: inherit;
 }
 .zoom-toolbar button:hover:not([disabled]) {
   background: var(--accent-weak);
@@ -1216,7 +1246,7 @@ button[aria-disabled='true'] {
 
 .notfoldable h2 {
   font-size: 17px;
-  color: #993c1d;
+  color: var(--warn);
   margin-bottom: 12px;
 }
 
@@ -1268,7 +1298,7 @@ button[aria-disabled='true'] {
   color: inherit;
 }
 .hint.warn {
-  color: #8a5a1c;
+  color: var(--warn);
 }
 /* รูปบน blueprint: ลากย้ายได้ */
 .dieline-svg .art {
@@ -1396,7 +1426,7 @@ button[aria-disabled='true'] {
   outline: none;
 }
 .deco-item.active {
-  border-color: #1b6ea8;
+  border-color: var(--accent-border);
   background: var(--accent-weak);
   font-weight: 600;
 }
@@ -1489,11 +1519,11 @@ button[aria-disabled='true'] {
   line-height: 1.45;
 }
 .assume li.limit {
-  color: #a13a1c;
+  color: var(--warn);
   font-weight: 600;
 }
 .assume li.fromimg {
-  color: #1b6ea8;
+  color: var(--info);
 }
 .assume li.layout {
   color: var(--text-2);
@@ -1583,7 +1613,7 @@ button[aria-disabled='true'] {
   color: var(--accent);
 }
 .tabbar .tab.active {
-  background: var(--surface);
+  background: var(--surface-solid);
   color: var(--accent);
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -1985,15 +2015,15 @@ button[aria-disabled='true'] {
   font-size: 13px;
   line-height: 1.4;
   padding: 6px 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: var(--surface-1, #fff);
-  color: var(--text-1);
+  background: var(--surface-solid);
+  color: var(--text);
   resize: vertical;
 }
 .txt-in:focus {
   outline: none;
-  border-color: var(--accent, #0f6e56);
+  border-color: var(--accent);
 }
 
 /* ตัวแก้ตารางโภชนาการทีละแถว */
@@ -2004,7 +2034,7 @@ button[aria-disabled='true'] {
   margin: 10px 0 4px;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--text-1);
+  color: var(--text);
 }
 .nutri-cols {
   font-size: 11px;
@@ -2044,24 +2074,24 @@ button[aria-disabled='true'] {
   padding: 0;
   font-size: 12px;
   line-height: 1;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: var(--surface-1, #fff);
+  background: var(--surface-solid);
   color: var(--text-2);
   cursor: pointer;
 }
 .nmini:hover:not(:disabled) {
-  border-color: var(--accent, #0f6e56);
-  color: var(--text-1);
+  border-color: var(--accent);
+  color: var(--text);
 }
 .nmini.on {
-  background: var(--accent, #0f6e56);
-  border-color: var(--accent, #0f6e56);
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
 }
 .nmini.del:hover:not(:disabled) {
-  border-color: #c0392b;
-  color: #c0392b;
+  border-color: var(--danger);
+  color: var(--danger);
 }
 .nmini:disabled {
   opacity: 0.4;
@@ -2072,22 +2102,22 @@ button[aria-disabled='true'] {
   margin: 2px 0 4px;
   padding: 6px 8px;
   font-size: 12.5px;
-  border: 1px dashed var(--line);
+  border: 1px dashed var(--border-strong);
   border-radius: 6px;
   background: transparent;
   color: var(--text-2);
   cursor: pointer;
 }
 .add-row:hover:not(:disabled) {
-  border-color: var(--accent, #0f6e56);
-  color: var(--accent, #0f6e56);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* ปุ่มด่วนต่อชิ้นที่เลือก (ความทึบ + เลื่อนเลเยอร์) — ต่อท้ายรายการเลเยอร์ */
 .layer-quick {
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 8px;
