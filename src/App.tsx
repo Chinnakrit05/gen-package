@@ -514,6 +514,13 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [pouchStyle, setPouchStyle] = useState<PouchStyle>(active0.pouchStyle ?? 'stand')
   const [zipper, setZipper] = useState<boolean>(active0.zipper ?? false)
   const [pouchAddons, setPouchAddons] = useState<PouchAddons>(active0.pouchAddons ?? {})
+  // ธีมสว่าง/มืด — เก็บใน localStorage, ตั้ง data-theme บน <html> (canvas/3D คงขาวเสมอ)
+  const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark')
+  useEffect(() => {
+    if (dark) document.documentElement.dataset.theme = 'dark'
+    else delete document.documentElement.dataset.theme
+    localStorage.setItem('packit-theme', dark ? 'dark' : 'light')
+  }, [dark])
   const [decos, setDecos] = useState<Deco[]>(active0.decos)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [renamingId, setRenamingId] = useState<string | null>(null) // เลเยอร์ที่กำลังแก้ชื่อ (ดับเบิลคลิก)
@@ -1396,6 +1403,15 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
             </div>
           ))}
         </nav>
+        <button
+          className="theme-btn"
+          title={dark ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
+          aria-label="สลับธีมสว่าง/มืด"
+          aria-pressed={dark}
+          onClick={() => setDark((d) => !d)}
+        >
+          {dark ? '☀' : '☾'}
+        </button>
         {onLogout && (
           <button className="logout-btn" title="ออกจากระบบ" onClick={onLogout}>
             ออกจากระบบ
@@ -2549,6 +2565,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                             <button className="nmini" title="เลื่อนขึ้น" disabled={aiBusy || i === 0} onClick={() => moveNutriRow('rows', i, -1)}>
                               ▲
                             </button>
+                            <button className="nmini" title="เลื่อนลง" disabled={aiBusy || i === selected.rows.length - 1} onClick={() => moveNutriRow('rows', i, 1)}>
+                              ▼
+                            </button>
                             <button className="nmini del" title="ลบแถว" disabled={aiBusy} onClick={() => removeNutriRow('rows', i)}>
                               ✕
                             </button>
@@ -2580,6 +2599,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                             />
                             <button className="nmini" title="เลื่อนขึ้น" disabled={aiBusy || i === 0} onClick={() => moveNutriRow('vitamins', i, -1)}>
                               ▲
+                            </button>
+                            <button className="nmini" title="เลื่อนลง" disabled={aiBusy || i === selected.vitamins.length - 1} onClick={() => moveNutriRow('vitamins', i, 1)}>
+                              ▼
                             </button>
                             <button className="nmini del" title="ลบแถว" disabled={aiBusy} onClick={() => removeNutriRow('vitamins', i)}>
                               ✕

@@ -19,6 +19,11 @@ import './app.css'
 
 const AUTH_KEY = 'packit-auth'
 
+// ใช้ธีมที่บันทึกไว้ตั้งแต่ก่อนเรนเดอร์ (ครอบทั้งหน้า login และแอป ไม่ให้กะพริบสลับธีม)
+if (localStorage.getItem('packit-theme') === 'dark') {
+  document.documentElement.dataset.theme = 'dark'
+}
+
 // gate เข้าสู่ระบบก่อนเข้าแอป — เก็บสถานะไว้ใน localStorage จึงไม่ต้องล็อกอินซ้ำตอนรีเฟรช
 // (เป็นการจำลอง ยังไม่ต่อ OAuth จริง — กดปุ่ม Google แล้วเข้าเลย)
 function Root() {

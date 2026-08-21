@@ -33,6 +33,27 @@
   --shadow: 0 16px 40px rgba(120, 100, 190, 0.18);
 }
 
+/* --- Dark mode: กระจกฝ้าบนพื้นม่วง-พลัมเข้ม (accent สว่างขึ้น) --- */
+:root[data-theme='dark'] {
+  --bg: linear-gradient(135deg, #1e1930 0%, #271f3c 40%, #331f39 72%, #3a2340 100%);
+  --bg-solid: #221c34;
+  --surface: rgba(255, 255, 255, 0.07);
+  --surface-2: rgba(255, 255, 255, 0.05);
+  --surface-solid: #2a2440;
+  --border: rgba(255, 255, 255, 0.14);
+  --border-strong: rgba(255, 255, 255, 0.24);
+  --text: #ece9f6;
+  --text-2: #b6afca;
+  --text-3: #8e88a3;
+  --accent: #a49dff;
+  --accent-hover: #b7b1ff;
+  --accent-weak: rgba(164, 157, 255, 0.18);
+  --accent-border: rgba(164, 157, 255, 0.42);
+  --danger: #f28aa6;
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.35);
+  --shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -946,8 +967,8 @@ button[aria-disabled='true'] {
   min-height: 0;
   position: relative;
   display: flex;
-  /* พื้นที่วาด blueprint เป็นสีขาวทึบ — สีลายอ่านตรง ไม่โดน gradient ด้านหลังรบกวน */
-  background: var(--surface-solid);
+  /* พื้นที่วาด blueprint เป็นสีขาวเสมอ (กระดาษพิมพ์) — คงขาวแม้ dark mode เพื่อให้สีลายอ่านตรง */
+  background: #ffffff;
 }
 .dieline-svg {
   flex: 1;
@@ -2192,6 +2213,21 @@ button[aria-disabled='true'] {
 .login-footer {
   font-size: 12px;
   color: var(--text-3);
+}
+
+/* ปุ่มสลับธีมสว่าง/มืด */
+.theme-btn {
+  flex-shrink: 0;
+  width: auto;
+  align-self: center;
+  padding: 5px 11px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-2);
+}
+.theme-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* ปุ่มออกจากระบบในหัวแอป */
