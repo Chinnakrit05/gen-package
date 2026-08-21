@@ -97,11 +97,14 @@ import {
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
 const PALETTE_KEY = 'gen-package-palette-v1'
 // สัดส่วนความกว้าง blueprint (ซ้าย) เทียบพื้นที่ทำงาน — ลากเส้นแบ่งปรับได้
-const SPLIT_KEY = 'gen-package-split-v1'
-const DEFAULT_SPLIT = 0.57
+// v2: รีเซ็ตค่าที่เคยบันทึกไว้ เพื่อให้ทุกคนได้สัดส่วนใหม่ (blueprint ใหญ่ขึ้น)
+const SPLIT_KEY = 'gen-package-split-v2'
+const DEFAULT_SPLIT = 0.68 // blueprint เป็นพื้นที่ทำงานหลัก จึงกว้างกว่า viewer
+const SPLIT_MIN = 0.25
+const SPLIT_MAX = 0.85
 function loadSplit(): number {
   const v = Number(localStorage.getItem(SPLIT_KEY))
-  return v >= 0.2 && v <= 0.8 ? v : DEFAULT_SPLIT
+  return v >= SPLIT_MIN && v <= SPLIT_MAX ? v : DEFAULT_SPLIT
 }
 const isHex = (s: unknown): s is string => typeof s === 'string' && /^#[0-9a-fA-F]{6}$/.test(s)
 function loadPalette(): string[] {
@@ -696,7 +699,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const onDividerMove = (e: React.PointerEvent) => {
     if (!resizing.current || !panelsRef.current) return
     const r = panelsRef.current.getBoundingClientRect()
-    setSplit(clamp((e.clientX - r.left) / r.width, 0.2, 0.8))
+    setSplit(clamp((e.clientX - r.left) / r.width, SPLIT_MIN, SPLIT_MAX))
   }
   const onDividerUp = (e: React.PointerEvent) => {
     resizing.current = false
