@@ -6,6 +6,7 @@ import { generateSleeve } from './sleeve'
 import { generateBottleCarrier } from './bottleCarrier'
 import { generateTrayBox } from './tray'
 import { generateGableBox } from './gable'
+import { generateRSCBox } from './rsc'
 
 export interface BoxTemplate {
   id: string
@@ -48,6 +49,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: false,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateFefco0427,
+  },
+  {
+    id: 'rsc',
+    nameTh: 'กล่องลูกฟูก RSC (FEFCO 0201)',
+    detail: 'กล่องชิปปิ้งมาตรฐาน ผนัง 4 ด้านเป็นท่อ ลิ้นบน-ล่างพับมาชนกลาง ปิดสองชั้น แข็งแรง ใช้กับสินค้าทั่วไป',
+    defaults: { W: 250, D: 200, H: 150 },
+    tilt: 0,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
+    generate: generateRSCBox,
   },
   {
     id: 'bottle-carrier',
