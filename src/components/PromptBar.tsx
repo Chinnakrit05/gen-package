@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { requestBoxSpec, type AiBoxSpec, type CurrentSpec } from '../core/ai'
 
 const QUICK_ADJUSTS = [
@@ -44,7 +44,26 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<AiBoxSpec | null>(null)
+  const [quickOpen, setQuickOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const quickRef = useRef<HTMLDivElement>(null)
+
+  // ปิด popover ปรับเร็วเมื่อคลิกนอกกรอบ หรือกด Esc
+  useEffect(() => {
+    if (!quickOpen) return
+    const onDoc = (e: MouseEvent) => {
+      if (quickRef.current && !quickRef.current.contains(e.target as Node)) setQuickOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setQuickOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [quickOpen])
 
   const setBusy = (v: boolean) => {
     setLoading(v)
@@ -112,11 +131,12 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
           className="pb-attach"
           aria-disabled={loading}
           title="แนบรูปสินค้า/กล่องตัวอย่างให้ AI ดูประกอบ"
+          aria-label="แนบรูปสินค้า/กล่องตัวอย่างให้ AI ดูประกอบ"
           onClick={() => {
             if (!loading) fileRef.current?.click()
           }}
         >
-          แนบรูป
+          📎
         </button>
         <input
           ref={fileRef}
@@ -126,6 +146,36 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
           aria-label="แนบรูปอ้างอิง"
           onChange={(e) => void pickImage(e.target.files?.[0])}
         />
+        <div className="pb-quickwrap" ref={quickRef}>
+          <button
+            type="button"
+            className="pb-quickbtn"
+            aria-haspopup="true"
+            aria-expanded={quickOpen}
+            title="คำสั่งปรับเร็ว"
+            onClick={() => setQuickOpen((v) => !v)}
+          >
+            ⚡ ปรับเร็ว
+          </button>
+          {quickOpen && (
+            <div className="pb-quickpop card" role="menu">
+              {QUICK_ADJUSTS.map((q) => (
+                <button
+                  key={q.label}
+                  role="menuitem"
+                  aria-disabled={loading}
+                  onClick={() => {
+                    setQuickOpen(false)
+                    void run(q.prompt, true, q.label)
+                  }}
+                >
+                  {q.label}
+                </button>
+              ))}
+              <span className="hint">หรือลากปรับขนาด/วัสดุเองได้ตลอด</span>
+            </div>
+          )}
+        </div>
         <button
           type="submit"
           className="primary pb-go"
@@ -145,20 +195,6 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
           </button>
         </div>
       )}
-
-      <div className="pb-quick">
-        <span className="hint">ปรับเร็ว:</span>
-        {QUICK_ADJUSTS.map((q) => (
-          <button
-            key={q.label}
-            aria-disabled={loading}
-            onClick={() => void run(q.prompt, true, q.label)}
-          >
-            {q.label}
-          </button>
-        ))}
-        <span className="hint pb-tail">หรือลากปรับขนาด/วัสดุเองได้ตลอด</span>
-      </div>
 
       {error && (
         <div className="pb-error" role="alert">

@@ -57,10 +57,15 @@ const SYSTEM = `คุณคือวิศวกรบรรจุภัณฑ�
 
 ## รูปแบบกล่อง (template)
 ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} — ${t.detail}`).join('\n')}
-แนวการเลือก: ของชิ้นเดียว/แนวตั้ง/รีเทล → tuck-end; ส่งไปรษณีย์/ของหลายชิ้น/ของแบน/เปิดง่าย → mailer; ชุดขวด/กระป๋องหลายใบแบบยกหิ้ว (4-pack, 6-pack, ของฝากโชว์ขวด) → bottle-carrier; แค่ปลอกรัดรอบสินค้าที่มีกล่องอยู่แล้ว → sleeve. สำหรับ mailer: H คือความสูงกล่อง (มักเตี้ย เช่น 40-80) ส่วน W×D คือ footprint
+แนวการเลือก: ของชิ้นเดียว/แนวตั้ง/รีเทล → tuck-end; ส่งไปรษณีย์/ของหลายชิ้น/ของแบน/เปิดง่าย → mailer; งานส่งที่เน้นแข็งแรง/พรีเมียม/ผลิตจำนวนมากแบบไม่ใช้กาว (subscription box, ของแตกง่าย) → fefco-0427; ชุดขวด/กระป๋องหลายใบแบบยกหิ้ว (4-pack, 6-pack, ของฝากโชว์ขวด) → bottle-carrier; ของขวัญ/เบเกอรี่/คุกกี้/อาหารที่อยากได้กล่องหูหิ้วทรงจั่ว (ถือสวย) → gable; ถาดอาหาร/ดิสเพลย์/ลิ้นชัก → tray; แค่ปลอกรัดรอบสินค้าที่มีกล่องอยู่แล้ว → sleeve. สำหรับ mailer/fefco-0427: H คือความสูงกล่อง (มักเตี้ย เช่น 40-80) ส่วน W×D คือ footprint
 
 ## ความหมายของ W/D/H ต่อ template (สำคัญ)
-- tuck-end / mailer: W×D = footprint ด้านใน, H = ความสูงด้านใน
+- tuck-end / mailer / fefco-0427 / tray / gable: W×D = footprint ด้านใน, H = ความสูงด้านใน
+- gable: กล่องหลังคาทรงจั่ว ฐานตัน ผนัง 4 ด้านพับขึ้น แผงหน้า-หลังเอียงมาชนเป็นสัน มีรูหิ้วที่ยอด = หูหิ้วในตัว (handle ต้องเป็น false — ไม่ต้องเจาะเพิ่ม); H = ความสูงผนัง ระบบเพิ่มความสูงหลังคาให้เอง เหมาะของขวัญ/เบเกอรี่/อาหารพรีเมียม
+- tray: ถาดเปิดบน (ไม่มีฝา) ผนัง 4 ด้านพับขึ้น มุมมีลิ้นล็อกด้านใน — H คือความสูงผนัง (ถาดมักตื้น); ไม่รองรับรูหิ้ว (handle=false); ใช้เป็นถาด/ดิสเพลย์ หรือลิ้นชักคู่กับ sleeve
+- fefco-0427: ผนังข้างเป็นสองชั้น (roll end) + ลิ้นล็อกเสียบฐาน ประกอบไม่ใช้กาว — แผ่นคลี่กว้างกว่า mailer ธรรมดา (เพิ่มข้างละ ~H) และไม่รองรับรูหิ้ว (handle ต้องเป็น false)
+- วัสดุภาชนะ (pet-bottle / glass / aluminum): ระบบสร้างทรง revolve + dieline "ฉลาก" พันรอบตัวให้ — W = ⌀ตัวภาชนะ, D = ⌀ปาก/คอ (ต้องเล็กกว่า W), H = ความสูงภาชนะ; template จะถูกละเลย (ใส่ tuck-end ไปได้), handle ต้องเป็น false — ใช้เมื่อลูกค้าต้องการ "ผลิตตัวขวด/โหล/กระป๋องเอง" ไม่ใช่กล่องใส่มัน
+- วัสดุถุงฟิล์ม (pouch-foil / pouch-kraft / pouch-clear): ระบบสร้าง "ถุงตั้งได้ (doypack)" ก้นตั้ง — ทรง 3D + dieline แผ่นฟิล์มแบน (หน้า+หลัง+ก้น) ให้ — W = ความกว้างถุง, H = ความสูงลำตัว, D = ความลึกก้น (ยิ่งมากยิ่งจุ/ตั้งมั่น ต้องไม่เกิน W); template จะถูกละเลย, handle ต้องเป็น false — ใช้เมื่อลูกค้าต้องการ "ถุง/ซองบรรจุ" เช่น กาแฟ ชา ขนม ผงชง ของแห้ง (ไม่ใช่กล่อง)
 - sleeve: W×D = หน้าตัดด้านในของท่อ (ต้องพอดีกับของที่สวม เช่น แก้ว ⌀90 → W≈92, D≈92), H = ความสูงของปลอก — ระบบคำนวณความยาวแผ่นพันรอบ (ปีกกาว + 2(W+D)) ให้เองอยู่แล้ว ห้ามเอาเส้นรอบวงของมาใส่ใน W เด็ดขาด
 - sleeve เป็นท่อทรงตรง — ของทรงเรียว (แก้วกาแฟ) จะหลวมด้านแคบ ให้ประกาศเป็นข้อจำกัดใน assumptions
 - bottle-carrier: W×D = footprint ด้านใน (เช่น ขวด ⌀66 วาง 2×2 → W,D ≈ 150), H = ความสูงขวด — ระบบสร้างให้เองอัตโนมัติ: แผ่นหูหิ้วกลางสูงกว่าขวด ~55 มม. พร้อมรูมือกลม, ผนังข้างสูง ~42% ของ H, หน้าต่างโชว์สินค้าสองช่องต่อผนัง (handle flag ไม่เกี่ยวกับ template นี้ — หูหิ้วมีในตัว)
@@ -79,6 +84,7 @@ ${MATERIALS.map(
 - งานพิมพ์สวยแต่แข็งแรงเบา → corrugated-e
 - ประหยัด / ทั่วไป / ไม่ระบุ → carton-300
 - ถ้าลูกค้าต้องการ "กล่องใส่ขวด/แก้ว" ให้เลือกวัสดุกล่อง แต่ถ้าต้องการผลิตตัวขวด/กระป๋อง/โหลเอง → pet-bottle / aluminum / glass
+- ถุง/ซอง/doypack/ถุงซิป/ถุงตั้งได้ (กาแฟ ชา ขนม ผงชง ของแห้ง) → pouch-foil (กันชื้นดี, ค่าเริ่มต้นของถุง); สายอีโค่/คราฟท์ → pouch-kraft; อยากโชว์สินค้าข้างใน → pouch-clear
 
 ## ตารางขนาดของที่พบบ่อย (มม.)
 ${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? ' (เปราะ)' : ''}`).join('\n')}
@@ -97,8 +103,8 @@ ${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? ' (เปราะ)' : ''}`
 4. handle=true กับของหนัก (เซรามิก/แก้ว/ขวดหลายชิ้น รวม >2 กก.) → เตือนใน assumptions ว่ารูหิ้วกระดาษรับน้ำหนักจำกัด ควรยกประคองก้นกล่อง
 
 ## ความสามารถของระบบ (สำคัญมาก — ห้ามอ้างเกินนี้)
-สิ่งที่ระบบ gen ได้จริงมีเท่านี้: รูปแบบกล่อง 4 แบบข้างต้น, วัสดุจากรายการ, ขนาด W/D/H, รูหิ้วเจาะ (handle=true — tuck-end เจาะบนฝาเสียบบน, mailer เจาะผนังข้างสองด้าน; bottle-carrier มีหูหิ้ว+รูมือ+หน้าต่างในตัวอยู่แล้ว; sleeve ไม่รองรับ)
-สิ่งที่ยังทำไม่ได้: หูหิ้วเชือก/พลาสติก, หน้าต่างใส, พิมพ์ลาย/โลโก้, ตัวล็อกพิเศษ, แผ่นกั้นด้านใน ฯลฯ — ถ้าลูกค้าขอสิ่งเหล่านี้ ให้เลือกสิ่งใกล้เคียงที่มี (เช่น ขอหูหิ้ว/ที่จับ → handle=true) และเขียนใน reasoning ตรงๆ ว่าระบบยังไม่รองรับสิ่งที่ขอแบบเป๊ะๆ ห้ามอ้างใน assumptions ว่าทำสิ่งที่ทำไม่ได้ให้แล้ว
+สิ่งที่ระบบ gen ได้จริงมีเท่านี้: รูปแบบกล่องตามรายการข้างต้น, วัสดุจากรายการ, ขนาด W/D/H, รูหิ้วเจาะ (handle=true — tuck-end เจาะบนฝาเสียบบน, mailer เจาะผนังข้างสองด้าน; bottle-carrier มีหูหิ้ว+รูมือ+หน้าต่างในตัวอยู่แล้ว; sleeve/fefco-0427 ไม่รองรับ), ภาชนะขึ้นรูป (วัสดุ pet-bottle/glass/aluminum → ทรง revolve + dieline ฉลากพันรอบตัว), และถุงฟิล์ม (วัสดุ pouch-* → dieline ฟิล์มแบน; มี 6 รูปแบบให้ผู้ใช้เลือกในหน้าออกแบบ: ถุงตั้งได้ doypack (ก้นตั้ง ใช้ D=ลึกก้น), ซองแบน 3 ด้าน (ไม่มีก้น ไม่ใช้ D — ของเล็ก/ตัวอย่าง/มาส์ก/ซองซอส), ซองข้างจีบ brick (ถุงกาแฟคลาสสิก ทรงแท่ง ใช้ D=จีบข้าง), ถุงก้นแบนตั้งเหลี่ยม box/quad-seal (กาแฟพรีเมียม ตั้งทรงกล่อง ใช้ D), ซองหลังกลาง pillow (ถุงขนม/ชิป ไม่ใช้ D), และ ถุงมีจุก spout (ของเหลว/เครื่องดื่ม มีจุก+ฝา ใช้ D=ก้น) + ออปชันเสริม (ซิปล็อก/รอยฉีก, รูแขวน euro-hole, วาล์วกาแฟ, ที่รัดปาก tin-tie) — ทั้งรูปแบบถุงและออปชันเสริมเป็น toggle ในหน้าออกแบบ ไม่ได้ตั้งผ่าน AI; ถ้าลูกค้าขอซองแบบเจาะจง/มีซิป/มีวาล์ว ให้เลือกวัสดุถุงแล้วบอกใน assumptions ว่าเลือกรูปแบบ/เปิดออปชันได้ในหน้าออกแบบ)
+สิ่งที่ยังทำไม่ได้: หูหิ้วเชือก/พลาสติก, หน้าต่างใส, ตัวล็อกพิเศษ, แผ่นกั้นด้านใน, ทรงภาชนะแบบกำหนดเอง (โปรไฟล์ fix ตามชนิดวัสดุ) ฯลฯ — ถ้าลูกค้าขอสิ่งเหล่านี้ ให้เลือกสิ่งใกล้เคียงที่มี (เช่น ขอหูหิ้ว/ที่จับ → handle=true) และเขียนใน reasoning ตรงๆ ว่าระบบยังไม่รองรับสิ่งที่ขอแบบเป๊ะๆ ห้ามอ้างใน assumptions ว่าทำสิ่งที่ทำไม่ได้ให้แล้ว
 
 ## รูปอ้างอิงจากลูกค้า (ถ้ามี)
 ใช้รูปเพื่อ: ระบุชนิด/จำนวนของที่จะใส่, ประเมินขนาดจริงจากวัตถุบริบทในรูป (ฝ่ามือ ~180 มม., บัตรเครดิต 86 มม., ขวดน้ำมาตรฐาน ⌀65 ฯลฯ), และอนุมานสไตล์ (สี วัสดุ ความหรู) — ทุกอย่างที่อ่านจากรูปแล้วมีผลต่อ spec ให้ประกาศใน assumptions ขึ้นต้นด้วย "จากรูป:" ถ้ารูปขัดแย้งกับข้อความลูกค้า ให้ยึดข้อความ
@@ -163,7 +169,7 @@ function sanitize(raw: Record<string, unknown>, mock: boolean): BoxSpecResult {
 
 // สร้าง CurrentSpec ใหม่จากค่า client แบบไม่เชื่ออะไรเลย — กัน bypass validation
 // (client ส่ง string อิสระมาใน current ไม่ได้ ทุก field ถูก rebuild)
-function parseCurrent(v: unknown): CurrentSpec | undefined {
+export function parseCurrent(v: unknown): CurrentSpec | undefined {
   if (typeof v !== 'object' || v === null) return undefined
   const o = v as Record<string, unknown>
   const W = Number(o.W)
@@ -191,7 +197,7 @@ export interface RefImage {
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 
 // รูปอ้างอิงจาก client: base64 (ไม่มี data: prefix) ขนาดไม่เกิน ~3.7MB หลัง decode
-function parseImage(v: unknown): RefImage | undefined {
+export function parseImage(v: unknown): RefImage | undefined {
   if (typeof v !== 'object' || v === null) return undefined
   const o = v as Record<string, unknown>
   if (typeof o.data !== 'string' || o.data.length < 100 || o.data.length > 5_000_000) return undefined
@@ -202,7 +208,7 @@ function parseImage(v: unknown): RefImage | undefined {
 }
 
 // โหมดจำลอง: ใช้ตอนยังไม่ได้ตั้ง ANTHROPIC_API_KEY เพื่อให้ทดสอบ UX ได้ครบวงจร
-function mockSpec(prompt: string, current?: CurrentSpec, image?: RefImage): BoxSpecResult {
+export function mockSpec(prompt: string, current?: CurrentSpec, image?: RefImage): BoxSpecResult {
   const assumptions: string[] = []
   if (image) assumptions.push('แนบรูปมา แต่โหมดจำลองยังวิเคราะห์รูปไม่ได้ — ใช้ข้อความอย่างเดียว')
   let materialId = current?.materialId ?? 'carton-300'
@@ -211,10 +217,20 @@ function mockSpec(prompt: string, current?: CurrentSpec, image?: RefImage): BoxS
   if (/หิ้ว|ที่จับ|หูหิ้ว|มือจับ|ถือสะดวก/.test(prompt)) handle = true
 
   if (/หิ้ว.{0,10}ขวด|ขวด.{0,10}หิ้ว|แพ็[คก]|carrier/i.test(prompt)) template = 'bottle-carrier'
+  else if (/จั่ว|ทรงจั่ว|หลังคา|gable/i.test(prompt)) template = 'gable'
   else if (/ไปรษณีย์|ส่งของ|ขนส่ง|พัสดุ/.test(prompt)) template = 'mailer'
+  else if (/ถาด|ดิสเพลย์|ลิ้นชัก|tray/i.test(prompt)) template = 'tray'
   else if (/ปลอก|สวม|แบนด์|รัด/.test(prompt)) template = 'sleeve'
 
-  if (/อีโค่|รักษ์โลก|ธรรมชาติ|คราฟท์/.test(prompt)) materialId = 'kraft-350'
+  // ถุงฟิล์ม (doypack) — ตรวจก่อนวัสดุกล่องทั่วไป; ถ้าเข้าเงื่อนไขจะข้ามการเลือกวัสดุกล่อง
+  if (/ถุง|ซอง|doypack|ซิปล็อก|ซิป|pouch|stand.?up/i.test(prompt)) {
+    materialId = /คราฟท์|อีโค่|รักษ์โลก/.test(prompt)
+      ? 'pouch-kraft'
+      : /ใส(?![่-๋])|โชว์|มองเห็น/.test(prompt)
+        ? 'pouch-clear'
+        : 'pouch-foil'
+    handle = false
+  } else if (/อีโค่|รักษ์โลก|ธรรมชาติ|คราฟท์/.test(prompt)) materialId = 'kraft-350'
   else if (/หรู|พรีเมียม/.test(prompt)) materialId = 'carton-400'
   else if (/ใส(?![่-๋])|โชว์|มองเห็น/.test(prompt)) materialId = 'pet-sheet'
   else if (/ไปรษณีย์|ขนส่ง|กันกระแทก|แข็งแรง|พัสดุ/.test(prompt)) materialId = 'corrugated-b'
@@ -290,7 +306,7 @@ function buildUserContent(prompt: string, current?: CurrentSpec): string {
 
 let client: Anthropic | null = null
 
-async function askClaude(
+export async function askClaude(
   apiKey: string,
   model: string,
   prompt: string,

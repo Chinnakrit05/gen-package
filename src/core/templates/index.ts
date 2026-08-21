@@ -1,8 +1,12 @@
 import type { BoxParams, Dieline, Material } from '../types'
 import { generateTuckEndBox } from './tuckEnd'
 import { generateMailerBox } from './mailer'
+import { generateFefco0427 } from './fefco0427'
 import { generateSleeve } from './sleeve'
 import { generateBottleCarrier } from './bottleCarrier'
+import { generateTrayBox } from './tray'
+import { generateGableBox } from './gable'
+import { generateRSCBox } from './rsc'
 
 export interface BoxTemplate {
   id: string
@@ -37,6 +41,26 @@ export const TEMPLATES: BoxTemplate[] = [
     generate: generateMailerBox,
   },
   {
+    id: 'fefco-0427',
+    nameTh: 'กล่องไปรษณีย์ฝาล็อก (FEFCO 0427)',
+    detail: 'mailer มาตรฐานอุตสาหกรรม ผนังข้างม้วนสองชั้น ลิ้นล็อกเสียบฐาน แข็งแรง ไม่ใช้กาว',
+    defaults: { W: 200, D: 140, H: 60 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.H + m.thickness,
+    generate: generateFefco0427,
+  },
+  {
+    id: 'rsc',
+    nameTh: 'กล่องลูกฟูก RSC (FEFCO 0201)',
+    detail: 'กล่องชิปปิ้งมาตรฐาน ผนัง 4 ด้านเป็นท่อ ลิ้นบน-ล่างพับมาชนกลาง ปิดสองชั้น แข็งแรง ใช้กับสินค้าทั่วไป',
+    defaults: { W: 250, D: 200, H: 150 },
+    tilt: 0,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
+    generate: generateRSCBox,
+  },
+  {
     id: 'bottle-carrier',
     nameTh: 'กล่องหูหิ้วขวด (bottle carrier)',
     detail: 'ตะกร้าเปิดบน หูหิ้วกลางเจาะรูมือ + หน้าต่างโชว์สินค้า สำหรับขวด 2-6 ขวด',
@@ -55,6 +79,26 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: false,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateSleeve,
+  },
+  {
+    id: 'tray',
+    nameTh: 'กล่องถาด (open tray)',
+    detail: 'ถาดเปิดบน ผนัง 4 ด้านพับขึ้น มุมมีลิ้นล็อกด้านใน — ถาดอาหาร/ดิสเพลย์ หรือลิ้นชักคู่กับ sleeve',
+    defaults: { W: 160, D: 110, H: 40 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.H + m.thickness,
+    generate: generateTrayBox,
+  },
+  {
+    id: 'gable',
+    nameTh: 'กล่องหูหิ้วทรงจั่ว (gable)',
+    detail: 'กล่องหลังคาทรงจั่ว หูหิ้วในตัวที่สัน — ของขวัญ/เบเกอรี่/อาหาร ดูพรีเมียม',
+    defaults: { W: 120, D: 100, H: 150 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b) => b.H + b.D * 0.6,
+    generate: generateGableBox,
   },
 ]
 
