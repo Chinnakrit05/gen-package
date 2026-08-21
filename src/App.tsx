@@ -343,8 +343,9 @@ const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
 
 // --- บันทึกหลายงาน (project) + ประวัติเวอร์ชันของแต่ละงานลง localStorage ---
 
-const STORAGE_KEY = 'gen-package-projects-v1'
-const LEGACY_KEY = 'gen-package-design-v1'
+// export ให้ตอน "ออกจากระบบ" ล้างงานทิ้งได้ (ยังไม่มีระบบ user — งานผูกกับเบราว์เซอร์)
+export const STORAGE_KEY = 'gen-package-projects-v1'
+export const LEGACY_KEY = 'gen-package-design-v1'
 
 interface Store {
   projects: Project[]

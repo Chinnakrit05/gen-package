@@ -13,7 +13,7 @@ import '@fontsource/prompt/400.css'
 import '@fontsource/prompt/700.css'
 import '@fontsource/kanit/400.css'
 import '@fontsource/kanit/700.css'
-import App from './App'
+import App, { STORAGE_KEY, LEGACY_KEY } from './App'
 import { Login } from './components/Login'
 import './app.css'
 
@@ -33,6 +33,10 @@ function Root() {
     setAuthed(true)
   }
   const logout = () => {
+    // ยังไม่มีระบบ user — งานถูก autosave ผูกกับเบราว์เซอร์ ออกจากระบบจึงล้างงานให้
+    // เริ่มใหม่สะอาด (แต่ refresh ระหว่างใช้งานยังเก็บงานไว้ ไม่หลุด); คงธีม/จานสีระดับแอปไว้
+    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(LEGACY_KEY)
     localStorage.removeItem(AUTH_KEY)
     setAuthed(false)
   }
