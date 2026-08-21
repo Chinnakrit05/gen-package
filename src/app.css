@@ -630,7 +630,8 @@ main {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 14px;
+  /* บน 10px ให้หัวการ์ด prompt เสมอกับหัวการ์ด sidebar (aside margin-top 10) */
+  padding: 10px 14px 14px;
 }
 
 /* blueprint เต็มพื้นที่ทำงาน + มุมมอง 3D ลอยเป็นจอเล็ก (PiP) มุมขวาล่าง */
@@ -746,9 +747,8 @@ main {
   display: flex;
 }
 
-/* แถบสั่ง AI = แถบเต็มความกว้างใต้ header (บนสุด) เพื่อเปิดพื้นที่ให้ blueprint ด้านล่าง */
+/* แถบสั่ง AI อยู่เหนือ blueprint (คอลัมน์ขวา) — sidebar จึงดันขึ้นเต็มความสูงทางซ้าย */
 .promptbar {
-  margin: 10px 10px 0;
   padding: 10px 14px;
   display: flex;
   flex-direction: column;
