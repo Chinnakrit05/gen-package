@@ -1396,6 +1396,12 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
           </button>
         )}
       </header>
+      <PromptBar
+        current={{ template: templateId, materialId, W, D, H, handle }}
+        hasDesign={history.length > 0}
+        onApply={applySpec}
+        onLoadingChange={setAiBusy}
+      />
       <div className="body">
         <aside ref={asideRef}>
           <div className="tabbar" role="tablist">
@@ -3088,12 +3094,6 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
         </aside>
 
         <main>
-          <PromptBar
-            current={{ template: templateId, materialId, W, D, H, handle }}
-            hasDesign={history.length > 0}
-            onApply={applySpec}
-            onLoadingChange={setAiBusy}
-          />
           {history.length > 0 && (
             <div className="versions card" aria-label="ประวัติเวอร์ชัน">
               <button

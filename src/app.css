@@ -746,7 +746,9 @@ main {
   display: flex;
 }
 
+/* แถบสั่ง AI = แถบเต็มความกว้างใต้ header (บนสุด) เพื่อเปิดพื้นที่ให้ blueprint ด้านล่าง */
 .promptbar {
+  margin: 10px 10px 0;
   padding: 8px 12px;
   display: flex;
   flex-direction: column;
