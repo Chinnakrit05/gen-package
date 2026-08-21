@@ -27,6 +27,9 @@
   /* ปุ่มหลัก = ไล่สีพาสเทล พีริวิงเคิล → ชมพู */
   --cta-grad: linear-gradient(135deg, #8b84f0 0%, #ef9fc0 100%);
   --cta-grad-hover: linear-gradient(135deg, #7b72ee 0%, #ec8fb5 100%);
+  /* ตัวอักษรบนปุ่ม gradient = สีเข้ม (ขาวบนพาสเทลอ่อนไม่ผ่าน AA ~2.9; เข้มได้ 5.8–8.5)
+     — gradient เหมือนกันทั้งสองธีม จึงใช้สีเข้มค่าเดียวไม่ override ในโหมดมืด */
+  --on-cta: #241a33;
   --danger: #e26d8a;
   --danger-bg: #fcebeb;
   /* สีบอกสถานะ (info ฟ้า / warn เหลืองอำพัน) — ปรับตามธีมได้ ไม่ hardcode พื้นสว่างค้างในโหมดมืด */
@@ -640,15 +643,15 @@ button:hover {
 button.primary {
   background: var(--cta-grad);
   border-color: transparent;
-  /* ปุ่ม gradient คงตัวอักษรขาวทุกธีม (เอกลักษณ์) — ไม่ผูกกับ --on-accent ที่พลิกเป็นสีเข้มในโหมดมืด */
-  color: #fff;
+  /* ตัวอักษรเข้มบน gradient พาสเทลให้ผ่าน AA (เหมือนกันทั้งสองธีม) */
+  color: var(--on-cta);
   box-shadow: 0 10px 22px rgba(139, 132, 240, 0.32);
 }
 
 button.primary:hover {
   background: var(--cta-grad-hover);
   border-color: transparent;
-  color: #fff;
+  color: var(--on-cta);
 }
 
 main {
@@ -1052,13 +1055,13 @@ button[aria-disabled='true'] {
   border-radius: 999px;
   background: var(--cta-grad);
   border-color: transparent;
-  color: #fff;
+  color: var(--on-cta);
   box-shadow: 0 8px 18px rgba(139, 132, 240, 0.3);
 }
 .fold-play:hover {
   background: var(--cta-grad-hover);
   border-color: transparent;
-  color: #fff;
+  color: var(--on-cta);
 }
 .fold-label {
   font-size: 12px;
