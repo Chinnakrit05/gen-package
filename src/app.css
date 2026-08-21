@@ -633,39 +633,90 @@ main {
   padding: 14px;
 }
 
+/* blueprint เต็มพื้นที่ทำงาน + มุมมอง 3D ลอยเป็นจอเล็ก (PiP) มุมขวาล่าง */
 .panels {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: var(--split-l, 1.35fr) 10px var(--split-r, 1fr);
-  gap: 8px;
+  position: relative;
+  display: flex;
 }
-/* เส้นแบ่งลากปรับขนาด (ระหว่าง blueprint กับ 3D) */
-.panels-divider {
-  align-self: stretch;
+.panels > .blueprint {
+  flex: 1;
+  min-width: 0;
+}
+
+/* จอ 3D เล็กซ้อนมุม blueprint */
+.viewer-pip {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 264px;
+  height: 214px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 6;
+}
+.viewer-pip .viewer-3d {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+/* ในจอเล็กซ่อนแถบพับ (โชว์เฉพาะตอนขยาย) */
+.viewer-pip .fold-bar {
+  display: none;
+}
+.pip-bar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  padding: 5px 6px 5px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.pip-title {
+  font-weight: 600;
+}
+.pip-expand {
+  width: 28px;
+  height: 26px;
+  flex: none;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  cursor: col-resize;
-  touch-action: none;
+  font-size: 14px;
+  border-radius: 8px;
 }
-.panels-divider span {
-  width: 4px;
-  height: 44px;
-  max-height: 40%;
-  border-radius: 3px;
-  background: var(--border-strong);
+
+/* ขยายเป็น popup ใหญ่กลางจอ */
+.viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: rgba(28, 20, 48, 0.5);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
-.panels-divider:hover span,
-.panels-divider:active span {
-  background: var(--accent);
+.viewer-pip.expanded {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(92vw, 1120px);
+  height: min(88vh, 820px);
+  z-index: 60;
+}
+.viewer-pip.expanded .fold-bar {
+  display: flex;
 }
 
 .promptbar {
-  padding: 12px 14px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 7px;
   flex-shrink: 0;
 }
 
@@ -676,10 +727,11 @@ main {
 
 .pb-row input {
   flex: 1;
-  padding: 9px 12px;
+  padding: 7px 12px;
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font: inherit;
+  font-size: 13px;
   color: inherit;
   min-width: 0;
 }
@@ -734,14 +786,14 @@ main {
 .pb-quick {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
 .pb-quick button {
   width: auto;
-  padding: 5px 14px;
-  font-size: 13px;
+  padding: 3px 12px;
+  font-size: 12px;
   border-radius: 999px;
 }
 

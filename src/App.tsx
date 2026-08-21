@@ -96,16 +96,6 @@ import {
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
 const PALETTE_KEY = 'gen-package-palette-v1'
-// สัดส่วนความกว้าง blueprint (ซ้าย) เทียบพื้นที่ทำงาน — ลากเส้นแบ่งปรับได้
-// v2: รีเซ็ตค่าที่เคยบันทึกไว้ เพื่อให้ทุกคนได้สัดส่วนใหม่ (blueprint ใหญ่ขึ้น)
-const SPLIT_KEY = 'gen-package-split-v2'
-const DEFAULT_SPLIT = 0.68 // blueprint เป็นพื้นที่ทำงานหลัก จึงกว้างกว่า viewer
-const SPLIT_MIN = 0.25
-const SPLIT_MAX = 0.85
-function loadSplit(): number {
-  const v = Number(localStorage.getItem(SPLIT_KEY))
-  return v >= SPLIT_MIN && v <= SPLIT_MAX ? v : DEFAULT_SPLIT
-}
 const isHex = (s: unknown): s is string => typeof s === 'string' && /^#[0-9a-fA-F]{6}$/.test(s)
 function loadPalette(): string[] {
   try {
@@ -571,9 +561,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   }
   const [palette, setPalette] = useState<string[]>(loadPalette)
   const [sr, setSr] = useState({ cols: 3, rows: 1, dx: 30, dy: 30, brick: false })
-  const [split, setSplit] = useState<number>(loadSplit)
-  const panelsRef = useRef<HTMLDivElement>(null)
-  const resizing = useRef(false)
+  const [expand3d, setExpand3d] = useState(false) // ขยาย 3D viewer เป็น popup ใหญ่
   const [sheetId, setSheetId] = useState(SHEET_PRESETS[0].id)
   const [customSheet, setCustomSheet] = useState({ w: 640, h: 900 })
   const [gutter, setGutter] = useState(DEFAULT_OPT.gutter)
@@ -682,29 +670,15 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setPalette((p) => [c, ...p.filter((x) => x !== c)].slice(0, 16))
   }
 
-  // ลากเส้นแบ่ง blueprint | 3D ปรับสัดส่วน (คุมด้วย pointer capture)
+  // ปิด popup 3D ด้วย Esc
   useEffect(() => {
-    try {
-      localStorage.setItem(SPLIT_KEY, String(split))
-    } catch {
-      /* ข้าม */
+    if (!expand3d) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpand3d(false)
     }
-  }, [split])
-
-  const onDividerDown = (e: React.PointerEvent) => {
-    resizing.current = true
-    e.currentTarget.setPointerCapture(e.pointerId)
-    e.preventDefault()
-  }
-  const onDividerMove = (e: React.PointerEvent) => {
-    if (!resizing.current || !panelsRef.current) return
-    const r = panelsRef.current.getBoundingClientRect()
-    setSplit(clamp((e.clientX - r.left) / r.width, SPLIT_MIN, SPLIT_MAX))
-  }
-  const onDividerUp = (e: React.PointerEvent) => {
-    resizing.current = false
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
-  }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [expand3d])
 
   const play = () => {
     cancelAnimationFrame(raf.current)
@@ -3178,11 +3152,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               {currentAi.reasoning && <p className="assume-reason">{currentAi.reasoning}</p>}
             </div>
           )}
-          <div
-            className="panels"
-            ref={panelsRef}
-            style={{ '--split-l': `${split}fr`, '--split-r': `${1 - split}fr` } as React.CSSProperties}
-          >
+          <div className="panels">
             <div className="blueprint card">
               <div className="bp-head">
                 <span>
@@ -3234,20 +3204,21 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 onRemove={removeDeco}
               />
             </div>
-            <div
-              className="panels-divider"
-              role="separator"
-              aria-label="ลากปรับขนาดหน้าต่าง"
-              aria-orientation="vertical"
-              onPointerDown={onDividerDown}
-              onPointerMove={onDividerMove}
-              onPointerUp={onDividerUp}
-              onPointerCancel={onDividerUp}
-            >
-              <span />
-            </div>
-            <div className="viewer card">
-              {foldBar}
+            {expand3d && <div className="viewer-backdrop" onClick={() => setExpand3d(false)} />}
+            {/* มุมมอง 3D = จอเล็กซ้อนมุม blueprint (PiP) กดขยายเป็น popup ใหญ่ได้ */}
+            <div className={`viewer-pip card${expand3d ? ' expanded' : ''}`}>
+              <div className="pip-bar">
+                <span className="pip-title">มุมมอง 3D</span>
+                <button
+                  className="pip-expand"
+                  title={expand3d ? 'ย่อมุมมอง' : 'ขยายมุมมอง'}
+                  aria-label={expand3d ? 'ย่อมุมมอง 3D' : 'ขยายมุมมอง 3D'}
+                  onClick={() => setExpand3d((v) => !v)}
+                >
+                  {expand3d ? '✕' : '⤢'}
+                </button>
+              </div>
+              {expand3d && foldBar}
               <div className="viewer-3d">
                 <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
                   {kind === 'box' ? (
