@@ -543,6 +543,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const toggleGroup = (k: keyof typeof groups) => setGroups((g) => ({ ...g, [k]: !g[k] }))
   // แถบปรับแต่งชิ้นที่เลือก ย้ายไปอยู่ "ด้านบน blueprint" แบบ Canva ผ่าน portal (host อยู่ใน main)
   const [decoBar, setDecoBar] = useState<HTMLDivElement | null>(null)
+  const [decoMore, setDecoMore] = useState(false) // กาง/ยุบเครื่องมือขั้นสูงในแถบบน (สร้างสำเนาตาราง ฯลฯ)
   // เลือกชิ้น → เปิดกลุ่ม "ปรับแต่งที่เลือก" ให้อัตโนมัติ (ไม่ปิดกลุ่มอื่น)
   useEffect(() => {
     if (selectedIds.length) setGroups((g) => (g.props ? g : { ...g, props: true }))
@@ -2082,7 +2083,17 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               {(selected || multi) &&
                 decoBar &&
                 createPortal(
-                  <div className="deco-topbar card">
+                  <div className={`deco-topbar card${decoMore ? ' more' : ''}`}>
+                    <button
+                      type="button"
+                      className="deco-more-btn"
+                      aria-pressed={decoMore}
+                      title="เครื่องมือเพิ่มเติม (สร้างสำเนาเป็นตาราง ฯลฯ)"
+                      aria-label="เครื่องมือเพิ่มเติม"
+                      onClick={() => setDecoMore((v) => !v)}
+                    >
+                      ⋯
+                    </button>
                 {multi && (
                   <div className="deco-edit">
                     <div className="multi-head">เลือก {selectedIds.length} ชิ้น</div>

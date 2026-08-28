@@ -835,27 +835,37 @@ main {
   border-radius: 8px;
 }
 
-/* แถบปรับแต่งชิ้นที่เลือก แบบ Canva — โผล่ด้านบน blueprint เมื่อเลือกชิ้น (portal มาจากแถบข้าง) */
+/* แถบปรับแต่งชิ้นที่เลือก แบบ Canva — โผล่ด้านบน blueprint, คอนโทรลหลัก "แถวเดียว" เลื่อนซ้าย-ขวาได้ */
 .deco-topbar-host {
   flex-shrink: 0;
 }
 .deco-topbar {
-  padding: 8px 12px;
+  position: relative;
+  padding: 6px 46px 6px 12px; /* เว้นขวาให้ปุ่ม ⋯ */
   margin-bottom: 10px;
-  /* คุมความสูงเป็น "แถบ" ไม่ใช่แผง — คอนโทรลหลักอยู่ในแถวเดียว, เครื่องมือขั้นสูง (step&repeat) เลื่อนดูได้ */
-  max-height: 120px;
-  overflow-y: auto;
 }
-.deco-topbar > * + * {
-  margin-top: 6px;
+/* ปุ่มเครื่องมือเพิ่มเติม (มุมขวา) — กดกางเครื่องมือขั้นสูง */
+.deco-more-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-/* จัดคอนโทรลเป็น "แถวเดียวแนวนอน" เลื่อนซ้าย-ขวาได้ (เหมือน toolbar Canva) ไม่ตกลงหลายบรรทัด */
+/* แถวคอนโทรลหลัก = แถวเดียว เลื่อนแนวนอน คุมความสูง (~48px) */
 .deco-topbar .deco-edit {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 6px 12px;
+  gap: 4px 8px;
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 2px;
@@ -864,30 +874,70 @@ main {
   margin: 0;
   flex: 0 0 auto;
 }
-/* กลุ่มย่อยที่ปกติเรียงแนวตั้งในแถบข้าง → ให้เรียงแนวนอนในแถบบน */
-.deco-topbar .deco-edit .fx-group,
-.deco-topbar .deco-edit .deco-sub {
-  display: inline-flex;
+/* สกรอลบาร์แนวนอนบาง ๆ ให้แถบเตี้ยลง (Canva-like) */
+.deco-topbar .deco-edit::-webkit-scrollbar {
+  height: 6px;
+}
+.deco-topbar .deco-edit::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+/* ย่อคอนโทรลที่ปกติสูง 2 แถวให้เหลือแถวเดียว (เฉพาะในแถบบน) */
+.deco-topbar .field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.deco-topbar .align-box {
+  display: flex;
   flex-direction: row;
   align-items: center;
   gap: 6px;
 }
-/* ช่องพิมพ์ข้อความในแถบบนไม่ต้องเต็มกว้าง */
-.deco-topbar .deco-text-input {
-  width: 240px;
-  max-width: 45vw;
+.deco-topbar .align-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 3px;
 }
-.deco-topbar select {
+.deco-topbar .art-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.deco-topbar .art-actions button {
   width: auto;
-  min-width: 120px;
+  white-space: nowrap;
 }
-/* คั่นกลุ่มด้วยเส้นบาง ๆ ให้อ่านง่ายขึ้นในแถวเดียว */
 .deco-topbar .deco-color,
 .deco-topbar .font-row,
 .deco-topbar .align-seg {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+.deco-topbar .deco-text-input {
+  width: 190px;
+  max-width: 40vw;
+  height: 34px;
+  min-height: 34px;
+}
+.deco-topbar select {
+  width: auto;
+  min-width: 110px;
+}
+.deco-topbar .hint {
+  display: none; /* คำอธิบายยาว ๆ ไม่ต้องแสดงในแถบ */
+}
+/* เครื่องมือขั้นสูง (สร้างสำเนาเป็นตาราง) ซ่อนไว้ก่อน — กด ⋯ ค่อยกาง */
+.deco-topbar .sr-box {
+  display: none;
+}
+.deco-topbar.more .sr-box {
+  display: block;
+  margin-top: 8px;
 }
 
 .pb-row {
