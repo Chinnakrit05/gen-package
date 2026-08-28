@@ -835,6 +835,61 @@ main {
   border-radius: 8px;
 }
 
+/* แถบปรับแต่งชิ้นที่เลือก แบบ Canva — โผล่ด้านบน blueprint เมื่อเลือกชิ้น (portal มาจากแถบข้าง) */
+.deco-topbar-host {
+  flex-shrink: 0;
+}
+.deco-topbar {
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  /* คุมความสูงเป็น "แถบ" ไม่ใช่แผง — คอนโทรลหลักอยู่ในแถวเดียว, เครื่องมือขั้นสูง (step&repeat) เลื่อนดูได้ */
+  max-height: 120px;
+  overflow-y: auto;
+}
+.deco-topbar > * + * {
+  margin-top: 6px;
+}
+/* จัดคอนโทรลเป็น "แถวเดียวแนวนอน" เลื่อนซ้าย-ขวาได้ (เหมือน toolbar Canva) ไม่ตกลงหลายบรรทัด */
+.deco-topbar .deco-edit {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+.deco-topbar .deco-edit > * {
+  margin: 0;
+  flex: 0 0 auto;
+}
+/* กลุ่มย่อยที่ปกติเรียงแนวตั้งในแถบข้าง → ให้เรียงแนวนอนในแถบบน */
+.deco-topbar .deco-edit .fx-group,
+.deco-topbar .deco-edit .deco-sub {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+/* ช่องพิมพ์ข้อความในแถบบนไม่ต้องเต็มกว้าง */
+.deco-topbar .deco-text-input {
+  width: 240px;
+  max-width: 45vw;
+}
+.deco-topbar select {
+  width: auto;
+  min-width: 120px;
+}
+/* คั่นกลุ่มด้วยเส้นบาง ๆ ให้อ่านง่ายขึ้นในแถวเดียว */
+.deco-topbar .deco-color,
+.deco-topbar .font-row,
+.deco-topbar .align-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .pb-row {
   display: flex;
   align-items: center;

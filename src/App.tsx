@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { MATERIALS, getMaterial, packKind } from './core/materials'
 import { TEMPLATES, getTemplate } from './core/templates'
 import type { Dieline } from './core/types'
@@ -540,6 +541,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     backup: false,
   })
   const toggleGroup = (k: keyof typeof groups) => setGroups((g) => ({ ...g, [k]: !g[k] }))
+  // แถบปรับแต่งชิ้นที่เลือก ย้ายไปอยู่ "ด้านบน blueprint" แบบ Canva ผ่าน portal (host อยู่ใน main)
+  const [decoBar, setDecoBar] = useState<HTMLDivElement | null>(null)
   // เลือกชิ้น → เปิดกลุ่ม "ปรับแต่งที่เลือก" ให้อัตโนมัติ (ไม่ปิดกลุ่มอื่น)
   useEffect(() => {
     if (selectedIds.length) setGroups((g) => (g.props ? g : { ...g, props: true }))
@@ -2071,10 +2074,15 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 )}
               </Group>
 
-              <Group title="ปรับแต่งที่เลือก" open={groups.props} onToggle={() => toggleGroup('props')}>
-                {!selected && !multi && (
-                  <p className="hint">เลือกชิ้นบนเลเยอร์หรือ blueprint เพื่อปรับแต่ง</p>
-                )}
+              {!selected && !multi && (
+                <Group title="ปรับแต่งที่เลือก" open={groups.props} onToggle={() => toggleGroup('props')}>
+                  <p className="hint">เลือกชิ้นบนเลเยอร์หรือ blueprint เพื่อปรับแต่ง (แถบปรับแต่งจะโผล่ด้านบน)</p>
+                </Group>
+              )}
+              {(selected || multi) &&
+                decoBar &&
+                createPortal(
+                  <div className="deco-topbar card">
                 {multi && (
                   <div className="deco-edit">
                     <div className="multi-head">เลือก {selectedIds.length} ชิ้น</div>
@@ -2865,7 +2873,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     </button>
                   </div>
                 )}
-              </Group>
+                  </div>,
+                  decoBar,
+                )}
 
               <p className="hint">
                 ลายจะถูกใส่ลงไฟล์ .svg (vector) และ .pdf (300 dpi) แล้ว — ไม่ใส่ใน .dxf เพราะเป็นไฟล์มีดตัด
@@ -3089,6 +3099,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
         </aside>
 
         <main>
+          {/* host ของแถบปรับแต่งชิ้นที่เลือก (Canva-style) — portal มาลงที่นี่เมื่อมีการเลือกชิ้น */}
+          <div className="deco-topbar-host" ref={setDecoBar} />
           <PromptBar
             current={{ template: templateId, materialId, W, D, H, handle }}
             hasDesign={history.length > 0}
