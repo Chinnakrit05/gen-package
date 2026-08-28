@@ -45,6 +45,7 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<AiBoxSpec | null>(null)
   const [quickOpen, setQuickOpen] = useState(false)
+  const [open, setOpen] = useState(false) // แถบลอยล่าง: ย่อเป็นปุ่มก่อน คลิกแล้วป็อปอัปช่องพิมพ์
   const fileRef = useRef<HTMLInputElement>(null)
   const quickRef = useRef<HTMLDivElement>(null)
 
@@ -103,8 +104,26 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
 
   const showChips = result && (result.assumptions.length > 0 || result.layoutNote !== '-')
 
+  // ย่ออยู่: โชว์แค่ปุ่มลอยล่าง คลิกแล้วค่อยกางช่องพิมพ์ (เปิดพื้นที่ให้ blueprint เต็มที่)
+  if (!open) {
+    return (
+      <div className="promptbar-dock">
+        <button type="button" className="pb-fab primary" onClick={() => setOpen(true)}>
+          <span aria-hidden="true">✨</span> สั่ง AI สร้าง/แก้กล่อง
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <div className="promptbar card">
+    <div className="promptbar-dock open">
+      <div className="promptbar card">
+      <div className="pb-dockhead">
+        <span className="pb-docktitle">✨ สั่ง AI</span>
+        <button type="button" className="pb-min" aria-label="ย่อเก็บแถบ AI" onClick={() => setOpen(false)}>
+          –
+        </button>
+      </div>
       <form
         className="pb-row"
         onSubmit={(e) => {
@@ -228,6 +247,7 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
             {result.reasoning && <div className="pb-reason">{result.reasoning}</div>}
           </div>
         )}
+      </div>
       </div>
     </div>
   )
