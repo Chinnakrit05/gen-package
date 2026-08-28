@@ -1,10 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import Anthropic from '@anthropic-ai/sdk'
-import { askClaude, mockSpec, parseCurrent, parseImage } from '../server/boxSpec'
+import { askClaude, mockSpec, parseCurrent, parseImage } from './boxSpec'
 
-// endpoint /api/box-spec เวอร์ชัน Vercel (serverless) — ใช้แทน Vite middleware ตอน deploy
+// ต้นทาง (source) ของ serverless function /api/box-spec บน Vercel
+// ถูก esbuild bundle เป็นไฟล์เดียว → api/box-spec.js (ดู scripts/build-api.mjs) เพราะ Vercel รัน
+// ฟังก์ชันแบบ native ESM และ "ไม่ bundle" import ข้ามโฟลเดอร์ให้ (../src, ../server) — ถ้าปล่อยให้
+// Node resolve เองจะ ERR_MODULE_NOT_FOUND ตอนรัน จึง bundle รวมทุก import ไว้ล่วงหน้า
 // บน serverless ไม่มี `claude` CLI จึงรองรับแค่ backend: api (ANTHROPIC_API_KEY) หรือ mock
-// ตั้ง ANTHROPIC_API_KEY ใน Vercel Project → Settings → Environment Variables; ถ้าไม่ตั้ง = โหมดจำลอง
 //
 // ใช้ชนิด node:http (ไม่พึ่ง @vercel/node) — Vercel Node runtime แปลง body ให้ที่ระดับแพลตฟอร์มอยู่แล้ว
 

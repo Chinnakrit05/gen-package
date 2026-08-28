@@ -29,7 +29,8 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `src/core/snap.ts` — logic ดูด artwork เข้าแนวขณะลาก (pure): `snapTargets` สร้างเส้นเป้าหมายจากกึ่งกลางแผ่น/ขอบ-กึ่งกลางแผง/ขอบ-กึ่งกลางชิ้นอื่น, `applySnap` ดูดขอบ-กึ่งกลางชิ้นเข้าเส้นใกล้สุดในระยะ threshold (แปลงจาก 6px ตามซูม); กด Alt ค้างระหว่างลาก = ปิด snap
 - `src/components/PromptBar.tsx` + `src/core/ai.ts` — AI layer ฝั่ง client; แนบรูปอ้างอิงได้ (ย่อเป็น JPEG ≤1024px ฝั่ง client → base64; backend api ส่งเป็น image block, backend cli เขียนไฟล์ tmp ให้ Claude เปิดอ่านเองแล้วลบทิ้ง)
 - `server/boxSpec.ts` — endpoint /api/box-spec (Vite middleware): Claude strict tool use → JSON spec; ไม่มี ANTHROPIC_API_KEY → โหมดจำลอง (mockSpec); export ตัวหลัก (askClaude/mockSpec/parseCurrent/parseImage) ใช้ร่วมกับ serverless
-- `api/box-spec.ts` — endpoint เดียวกันเวอร์ชัน Vercel serverless (import ตัวหลักจาก server/boxSpec) — บน Vercel ไม่มี claude CLI จึงใช้แค่ backend api/mock; ตั้ง ANTHROPIC_API_KEY ใน Vercel env. Dev ใช้ Vite middleware, prod (Vercel) ใช้ไฟล์นี้ — client เรียก path `/api/box-spec` เดียวกัน
+- `server/handler.ts` — ต้นทาง (source) ของ Vercel serverless `/api/box-spec` (import ตัวหลักจาก `./boxSpec`) — บน Vercel ไม่มี claude CLI จึงใช้แค่ backend api/mock; ตั้ง ANTHROPIC_API_KEY ใน Vercel env. Dev ใช้ Vite middleware, prod (Vercel) ใช้เส้นนี้ — client เรียก path `/api/box-spec` เดียวกัน
+- `api/box-spec.js` — **ไฟล์ที่ถูก generate** (esbuild bundle จาก `server/handler.ts` ผ่าน `scripts/build-api.mjs`, สคริปต์ `build:api` ซึ่งอยู่ในคำสั่ง `build`) — อย่าแก้ตรง ๆ ให้แก้ที่ `server/handler.ts` แล้วรัน `npm run build:api`. ต้อง bundle เพราะ Vercel รันฟังก์ชันแบบ native ESM และไม่ bundle import ข้ามโฟลเดอร์ (`../src`, `../server`) ให้ → ถ้าปล่อยไว้จะ `ERR_MODULE_NOT_FOUND` ตอนรัน; commit ไฟล์นี้ไว้เพื่อให้ Vercel ตรวจเจอฟังก์ชัน (เนื้อหาถูก regenerate สดทุก build อยู่แล้ว)
 
 ## Env / AI backend
 
