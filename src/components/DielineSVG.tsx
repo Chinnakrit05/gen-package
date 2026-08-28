@@ -260,6 +260,9 @@ export const DielineSVG = memo(function DielineSVG({
     setHoverGuide(null)
   }
   const pan = useRef<{ sx: number; sy: number; cx: number; cy: number; moved: boolean } | null>(null)
+  // พินช์สองนิ้ว (ทัช/iPad) → ซูมเข้า-ออกที่จุดกึ่งกลางสองนิ้ว (เดสก์ท็อปใช้ Ctrl+ล้อ)
+  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const pinch = useRef<{ dist: number } | null>(null)
   const editable = !!(onMove && onRotate && onSelect)
 
   // แปลงพิกัดหน้าจอเป็นพิกัดแผ่นคลี่ (มม.) — viewBox เป็นหน่วย มม. อยู่แล้ว
@@ -319,6 +322,7 @@ export const DielineSVG = memo(function DielineSVG({
   }
 
   const onMoveEvt = (e: React.PointerEvent) => {
+    if (pinch.current) return // กำลังพินช์สองนิ้ว — ไม่ลาก/แพนนิ้วเดียว
     if (guideDrag.current) {
       const p = toSheet(e.clientX, e.clientY)
       if (!p) return
@@ -399,7 +403,7 @@ export const DielineSVG = memo(function DielineSVG({
 
   // กดพื้นที่ว่าง = เริ่มลาก pan (ตอนซูม) หรือถ้าไม่ขยับก็ยกเลิกการเลือกตอนปล่อย
   const onBgDown = (e: React.PointerEvent) => {
-    if (!editable || grab.current) return
+    if (!editable || grab.current || pinch.current) return
     pan.current = { sx: e.clientX, sy: e.clientY, cx: viewCx, cy: viewCy, moved: false }
     capture(e)
   }
@@ -442,6 +446,37 @@ export const DielineSVG = memo(function DielineSVG({
   const fit = () => {
     setZoom(1)
     setCenter(null)
+  }
+
+  // --- พินช์สองนิ้ว (ทัช/iPad) --- ติดตาม pointer ที่ capture phase เพื่อให้จับได้แม้นิ้วแรกลงบน artwork
+  const pinchDown = (e: React.PointerEvent) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 2) {
+      // เข้าโหมดพินช์ → ยกเลิกการลาก/แพน/ลากไกด์นิ้วเดียวที่อาจเริ่มไปแล้ว
+      grab.current = null
+      pan.current = null
+      guideDrag.current = null
+      snapT.current = null
+      setActive(false)
+      setSnap({ vx: null, vy: null })
+      const [a, b] = [...pointers.current.values()]
+      pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1 }
+    }
+  }
+  const pinchMove = (e: React.PointerEvent) => {
+    if (!pointers.current.has(e.pointerId)) return
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (!pinch.current || pointers.current.size < 2) return
+    e.preventDefault()
+    const [a, b] = [...pointers.current.values()]
+    const dist = Math.hypot(a.x - b.x, a.y - b.y)
+    const mid = toSheet((a.x + b.x) / 2, (a.y + b.y) / 2)
+    if (mid && dist > 0) zoomAt(dist / pinch.current.dist, mid.x, mid.y)
+    if (dist > 0) pinch.current.dist = dist
+  }
+  const pinchUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size < 2) pinch.current = null
   }
 
   // เปลี่ยนขนาดแผ่น (เปลี่ยน template/ขนาด) → กลับไปพอดีจอ
@@ -501,6 +536,11 @@ export const DielineSVG = memo(function DielineSVG({
       onPointerCancel={endDrag}
       // กดพื้นที่ว่าง = เริ่ม pan / คลิกเปล่า = ยกเลิกการเลือก
       onPointerDown={onBgDown}
+      // พินช์สองนิ้ว: ติดตามที่ capture phase (ทำงานก่อน handler ของ artwork ที่ stopPropagation)
+      onPointerDownCapture={pinchDown}
+      onPointerMoveCapture={pinchMove}
+      onPointerUpCapture={pinchUp}
+      onPointerCancelCapture={pinchUp}
     >
       {fillImage ? (
         <g className="fill" pointerEvents="none" opacity={fillImage.opacity ?? 1}>
