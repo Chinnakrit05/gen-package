@@ -778,37 +778,37 @@ main {
   display: flex;
 }
 
-/* แถบสั่ง AI = ลอยอยู่ล่าง-กลางจอ ย่อเป็นปุ่มก่อน คลิกแล้วป็อปอัปช่องพิมพ์ (ไม่กินพื้นที่ blueprint) */
+/* แถบสั่ง AI = ปุ่มบน header (หน้าปุ่มโหมดมืด) คลิกแล้วแผงช่องพิมพ์หย่อนลงมาเป็น dropdown */
 .promptbar-dock {
-  position: fixed;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  z-index: 40;
-  width: min(680px, 94vw);
-  display: flex;
-  justify-content: center;
-  pointer-events: none; /* พื้นที่ว่างข้างปุ่มคลิกทะลุไป blueprint ได้ */
+  position: relative;
+  display: inline-flex;
+  z-index: 45;
 }
-.promptbar-dock > * {
-  pointer-events: auto;
-}
-/* ปุ่มลอย (ตอนย่อ) */
+/* ปุ่มทริกเกอร์บน header */
 .pb-fab {
   width: auto;
-  padding: 11px 22px;
+  padding: 8px 16px;
   border-radius: 999px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  box-shadow: var(--shadow);
+  white-space: nowrap;
 }
 .promptbar {
-  width: 100%;
   padding: 10px 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   flex-shrink: 0;
+}
+/* แผงช่องพิมพ์ = dropdown หย่อนจากปุ่มบน มุมขวาใต้ header */
+.promptbar-dock.open .promptbar {
+  position: fixed;
+  top: 62px;
+  right: 12px;
+  left: auto;
+  width: 560px;
+  max-width: calc(100vw - 24px);
+  z-index: 60;
   box-shadow: var(--shadow);
 }
 /* หัวแถบ (ตอนกาง) — ชื่อ + ปุ่มย่อเก็บ */
@@ -1054,6 +1054,49 @@ main {
   background: var(--border-strong);
 }
 
+/* --- ขนาดปุ่มในแถบเครื่องมือให้ใกล้เคียงกันทั้งหมด (สูง 32px) --- */
+.deco-topbar .deco-edit button {
+  height: 32px;
+  min-height: 32px;
+}
+/* ปุ่มไอคอนล้วน = สี่เหลี่ยมจัตุรัส 32×32 ไอคอนใหญ่ขึ้น */
+.deco-topbar .tb-ic,
+.deco-topbar .align-seg button,
+.deco-topbar .align-grid button,
+.deco-topbar .bold-btn {
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* ปุ่ม pop (โค้ง/หมุน/ขนาด ฯลฯ) สูงเท่ากัน + ไอคอน SVG พอดี */
+.deco-topbar .field-pop-btn {
+  height: 32px;
+}
+.deco-topbar .field-pop-ic {
+  display: inline-flex;
+  align-items: center;
+}
+.deco-topbar .field-pop-ic svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+/* ช่อง X/Y แคบพอดีตัวเลข ไม่กว้างเกิน */
+.deco-topbar .xy-row {
+  gap: 6px;
+}
+.deco-topbar .xy-row label {
+  gap: 3px;
+}
+.deco-topbar .xy-row input {
+  width: 56px;
+  flex: 0 0 56px;
+}
+
 .pb-row {
   display: flex;
   align-items: center;
@@ -1107,8 +1150,7 @@ main {
 
 .pb-quickpop {
   position: absolute;
-  /* เปิดขึ้นบน เพราะแถบอยู่ล่างจอ (เปิดลงล่างจะตกขอบ) */
-  bottom: calc(100% + 6px);
+  top: calc(100% + 6px);
   right: 0;
   z-index: 20;
   min-width: 190px;

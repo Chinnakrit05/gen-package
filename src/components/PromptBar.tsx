@@ -104,24 +104,24 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
 
   const showChips = result && (result.assumptions.length > 0 || result.layoutNote !== '-')
 
-  // ย่ออยู่: โชว์แค่ปุ่มลอยล่าง คลิกแล้วค่อยกางช่องพิมพ์ (เปิดพื้นที่ให้ blueprint เต็มที่)
-  if (!open) {
-    return (
-      <div className="promptbar-dock">
-        <button type="button" className="pb-fab primary" onClick={() => setOpen(true)}>
-          <span aria-hidden="true">✨</span> สั่ง AI สร้าง/แก้กล่อง
-        </button>
-      </div>
-    )
-  }
-
+  // ปุ่มทริกเกอร์อยู่บน header (หน้าปุ่มโหมดมืด) คลิกแล้วแผงช่องพิมพ์หย่อนลงมา
   return (
-    <div className="promptbar-dock open">
+    <div className={`promptbar-dock${open ? ' open' : ''}`}>
+      <button
+        type="button"
+        className="pb-fab primary"
+        aria-expanded={open}
+        title="สั่ง AI สร้าง/แก้กล่องด้วยข้อความ"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span aria-hidden="true">✨</span> สั่ง AI
+      </button>
+      {open && (
       <div className="promptbar card">
       <div className="pb-dockhead">
-        <span className="pb-docktitle">✨ สั่ง AI</span>
-        <button type="button" className="pb-min" aria-label="ย่อเก็บแถบ AI" onClick={() => setOpen(false)}>
-          –
+        <span className="pb-docktitle">✨ สั่ง AI สร้าง/แก้กล่อง</span>
+        <button type="button" className="pb-min" aria-label="ปิดแถบ AI" onClick={() => setOpen(false)}>
+          ✕
         </button>
       </div>
       <form
@@ -249,6 +249,7 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
         )}
       </div>
       </div>
+      )}
     </div>
   )
 }

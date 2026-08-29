@@ -122,9 +122,10 @@ interface DimFieldProps {
   onChange: (v: number) => void
   // pop = แสดงเป็นปุ่มเล็ก คลิกแล้ว dropdown สไลเดอร์ลงมา (แบบ Canva) — ใช้ในแถบบน
   pop?: boolean
+  icon?: React.ReactNode // ถ้ามี → ปุ่ม pop โชว์ไอคอนแทนป้ายข้อความ (label ยังอยู่ใน dropdown + tooltip)
 }
 
-function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange, pop: popProp }: DimFieldProps) {
+function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange, pop: popProp, icon }: DimFieldProps) {
   const commit = (v: number) => onChange(clamp(Number.isFinite(v) ? v : min, min, max))
   const inTopBar = useContext(TopBarCtx) // เรียก hook แบบไม่มีเงื่อนไข
   const pop = popProp || inTopBar // ในแถบบน = โหมด dropdown อัตโนมัติ
@@ -193,7 +194,13 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
           title={label}
           onClick={openMenu}
         >
-          <span className="field-pop-label">{label}</span>
+          {icon ? (
+            <span className="field-pop-ic" aria-hidden="true">
+              {icon}
+            </span>
+          ) : (
+            <span className="field-pop-label">{label}</span>
+          )}
           <b>
             {value}
             {unit === '×' ? '×' : ''}
@@ -1519,6 +1526,12 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
             </div>
           ))}
         </nav>
+        <PromptBar
+          current={{ template: templateId, materialId, W, D, H, handle }}
+          hasDesign={history.length > 0}
+          onApply={applySpec}
+          onLoadingChange={setAiBusy}
+        />
         <button
           className="theme-btn"
           title={dark ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
@@ -2562,6 +2575,12 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         </label>
                         <DimField
                           label="โค้ง (0=ตรง, +ขึ้น −ลง)"
+                          icon={
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M3 17c4-9 14-9 18 0" />
+                              <path d="M7 12.5l-1.6 3M17 12.5l1.6 3M12 10v4" />
+                            </svg>
+                          }
                           value={selected.curve ?? 0}
                           min={-300}
                           max={300}
@@ -2903,6 +2922,12 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     )}
                     <DimField
                       label="หมุน (องศา)"
+                      icon={
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M20 11a8 8 0 1 0-2.3 5.7" />
+                          <path d="M20 4v5h-5" />
+                        </svg>
+                      }
                       value={selected.rot}
                       min={-180}
                       max={180}
@@ -3251,12 +3276,6 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
         <main>
           {/* host ของแถบปรับแต่งชิ้นที่เลือก (Canva-style) — portal มาลงที่นี่เมื่อมีการเลือกชิ้น */}
           <div className="deco-topbar-host" ref={setDecoBar} />
-          <PromptBar
-            current={{ template: templateId, materialId, W, D, H, handle }}
-            hasDesign={history.length > 0}
-            onApply={applySpec}
-            onLoadingChange={setAiBusy}
-          />
           {history.length > 0 && (
             <div className="versions card" aria-label="ประวัติเวอร์ชัน">
               <button
