@@ -217,6 +217,10 @@ export const DielineSVG = memo(function DielineSVG({
   onRotate,
   onRemove,
   onText,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
 }: {
   dieline: Dieline
   showDims: boolean
@@ -230,6 +234,10 @@ export const DielineSVG = memo(function DielineSVG({
   onRotate?: (id: string, deg: number) => void
   onRemove?: (id: string) => void
   onText?: (id: string, text: string) => void
+  onUndo?: () => void
+  onRedo?: () => void
+  canUndo?: boolean
+  canRedo?: boolean
 }) {
   const [showRuler, setShowRuler] = useState(false)
   const pad = showDims || showRuler ? 26 : 12
@@ -550,7 +558,7 @@ export const DielineSVG = memo(function DielineSVG({
   return (
     <div className="bp-canvas">
     {editable && (
-      <div className="bp-tools">
+      <div className={`bp-tools${selectedIds.length > 0 ? ' below-topbar' : ''}`}>
         <button
           type="button"
           className="bp-tool"
@@ -567,6 +575,17 @@ export const DielineSVG = memo(function DielineSVG({
         <button type="button" className="bp-tool" title="เพิ่มเส้นไกด์นอน" aria-label="เพิ่มเส้นไกด์นอน" onClick={() => addGuide('y')}>
           －＋
         </button>
+        {(onUndo || onRedo) && <span className="bp-tools-sep" />}
+        {onUndo && (
+          <button type="button" className="bp-tool" title="เลิกทำ (Ctrl+Z)" aria-label="เลิกทำ" aria-disabled={!canUndo} onClick={onUndo}>
+            ↶
+          </button>
+        )}
+        {onRedo && (
+          <button type="button" className="bp-tool" title="ทำซ้ำ (Ctrl+Shift+Z)" aria-label="ทำซ้ำ" aria-disabled={!canRedo} onClick={onRedo}>
+            ↷
+          </button>
+        )}
       </div>
     )}
     <svg

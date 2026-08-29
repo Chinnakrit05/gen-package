@@ -87,8 +87,6 @@ import {
   IconTriangle,
   IconPolygon,
   IconStar,
-  IconUndo,
-  IconRedo,
   IconAlignLeft,
   IconAlignCenter,
   IconAlignRight,
@@ -3282,8 +3280,6 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
         </aside>
 
         <main>
-          {/* host ของแถบปรับแต่งชิ้นที่เลือก (Canva-style) — portal มาลงที่นี่เมื่อมีการเลือกชิ้น */}
-          <div className="deco-topbar-host" ref={setDecoBar} />
           {history.length > 0 && (
             <div className="versions card" aria-label="ประวัติเวอร์ชัน">
               <button
@@ -3344,43 +3340,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
             </div>
           )}
           <div className="panels">
+            {/* host แถบเครื่องมือ (Canva) — ลอยทับบน dieline (portal มาลงที่นี่เมื่อเลือกชิ้น) */}
+            <div className="deco-topbar-host" ref={setDecoBar} />
             <div className="blueprint card">
-              <div className="bp-head">
-                <span>
-                  {kind === 'box'
-                    ? 'blueprint การพับ'
-                    : kind === 'pouch'
-                      ? 'dieline ถุง (ฟิล์มแบน)'
-                      : 'dieline ฉลาก'}
-                </span>
-                <div className="bp-head-right">
-                  <div className="undo-bar">
-                    <button
-                      className="undo-btn"
-                      title="เลิกทำ (Ctrl+Z)"
-                      aria-label="เลิกทำ"
-                      aria-disabled={aiBusy || undoStack.length === 0}
-                      onClick={undo}
-                    >
-                      <IconUndo />
-                    </button>
-                    <button
-                      className="undo-btn"
-                      title="ทำซ้ำ (Ctrl+Shift+Z)"
-                      aria-label="ทำซ้ำ"
-                      aria-disabled={aiBusy || redoStack.length === 0}
-                      onClick={redo}
-                    >
-                      <IconRedo />
-                    </button>
-                  </div>
-                  <span className="legend">
-                    <i className="sw-cut" /> เส้นตัด
-                    <i className="sw-crease" />{' '}
-                    {kind === 'box' ? 'เส้นพับ' : kind === 'pouch' ? 'รอยพับ/ซีล' : 'แนวทับกาว'}
-                  </span>
-                </div>
-              </div>
               <DielineSVG
                 dieline={dieline}
                 showDims={showDims}
@@ -3398,7 +3360,16 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     ds.map((d) => (d.id === id && d.type === 'text' ? withTextW({ ...d, text }) : d)),
                   )
                 }
+                onUndo={undo}
+                onRedo={redo}
+                canUndo={!aiBusy && undoStack.length > 0}
+                canRedo={!aiBusy && redoStack.length > 0}
               />
+              <span className="bp-legend">
+                <i className="sw-cut" /> เส้นตัด
+                <i className="sw-crease" />{' '}
+                {kind === 'box' ? 'เส้นพับ' : kind === 'pouch' ? 'รอยพับ/ซีล' : 'แนวทับกาว'}
+              </span>
             </div>
             {expand3d && <div className="viewer-backdrop" onClick={() => setExpand3d(false)} />}
             {/* ย่อเหลือปุ่มกลม — กดเพื่อโชว์จอเล็กกลับมา */}

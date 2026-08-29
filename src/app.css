@@ -835,14 +835,18 @@ main {
   border-radius: 8px;
 }
 
-/* แถบปรับแต่งชิ้นที่เลือก แบบ Canva — โผล่ด้านบน blueprint, คอนโทรลหลัก "แถวเดียว" เลื่อนซ้าย-ขวาได้ */
+/* แถบปรับแต่งชิ้นที่เลือก แบบ Canva — ลอย "ทับ" บน dieline (ไม่กินพื้นที่ blueprint) */
 .deco-topbar-host {
-  flex-shrink: 0;
+  position: static; /* ไม่กินพื้นที่ layout — แถบ (portal) ลอย absolute เอง */
 }
 .deco-topbar {
-  position: relative;
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  right: 10px;
+  z-index: 25;
   padding: 6px 46px 6px 12px; /* เว้นขวาให้ปุ่ม ⋯ */
-  margin-bottom: 10px;
+  box-shadow: var(--shadow);
 }
 /* ปุ่มเครื่องมือเพิ่มเติม (มุมขวา) — กดกางเครื่องมือขั้นสูง */
 .deco-more-btn {
@@ -1388,6 +1392,43 @@ button[aria-disabled='true'] {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  position: relative; /* กรอบอ้างอิงของ legend ลอย */
+}
+
+/* legend ลอยมุมซ้ายล่างของ blueprint (ย้ายออกจากแถบหัวที่เอาออกแล้ว) */
+.bp-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #2a2440;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+.bp-legend i {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  margin-left: 8px;
+}
+/* เลือกชิ้น → แถบเครื่องมือลอยด้านบน จึงเลื่อนกลุ่มไม้บรรทัดลงมาให้พ้น */
+.bp-tools.below-topbar {
+  top: 84px;
+}
+/* เส้นคั่นในกลุ่มไม้บรรทัด (คั่นไม้บรรทัด/ไกด์ กับ undo/redo) */
+.bp-tools-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 3px 2px;
+  background: var(--border);
 }
 
 .bp-head {
@@ -1414,11 +1455,13 @@ button[aria-disabled='true'] {
   margin-left: 10px;
 }
 
-.legend .sw-cut {
+.legend .sw-cut,
+.bp-legend .sw-cut {
   border-top: 2px solid #43403a;
 }
 
-.legend .sw-crease {
+.legend .sw-crease,
+.bp-legend .sw-crease {
   border-top: 2px dashed #12876a;
 }
 
