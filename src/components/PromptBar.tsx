@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { requestBoxSpec, type AiBoxSpec, type CurrentSpec } from '../core/ai'
 
 const QUICK_ADJUSTS = [
@@ -116,7 +117,7 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
       >
         <span aria-hidden="true">✨</span> สั่ง AI
       </button>
-      {open && (
+      {open && createPortal(
       <div className="promptbar card">
       <div className="pb-dockhead">
         <span className="pb-docktitle">✨ สั่ง AI สร้าง/แก้กล่อง</span>
@@ -248,7 +249,8 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
           </div>
         )}
       </div>
-      </div>
+      </div>,
+        document.body,
       )}
     </div>
   )
