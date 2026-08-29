@@ -34,6 +34,32 @@ export function IconText({ size = 16 }: IconProps) {
   )
 }
 
+export function IconLineHeight({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M9 6h11M9 12h11M9 18h11" />
+      <path d="M4 5v14M2 7l2-2 2 2M2 17l2 2 2-2" />
+    </svg>
+  )
+}
+
+export function IconFontSize({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M2 20l4.5-13 4.5 13M3.4 15.5h6.2" />
+      <path d="M14 20l3-8.5 3 8.5M14.9 16.8h4.2" />
+    </svg>
+  )
+}
+
+export function IconStroke({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <rect x="4" y="4" width="16" height="16" rx="4" strokeWidth={2.6} />
+    </svg>
+  )
+}
+
 export function IconRect({ size = 16 }: IconProps) {
   return (
     <svg {...base(size)}>

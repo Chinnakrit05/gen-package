@@ -96,6 +96,9 @@ import {
   IconBottle,
   IconPouch,
   IconTrash,
+  IconLineHeight,
+  IconFontSize,
+  IconStroke,
 } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
@@ -2310,6 +2313,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         </div>
                         <DimField
                           label="ระยะบรรทัด"
+                          icon={<IconLineHeight />}
                           value={Math.round((selected.lh ?? 1.25) * 100) / 100}
                           min={0.8}
                           max={3}
@@ -2489,6 +2493,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         </div>
                         <DimField
                           label="เส้นขอบหนา (0=ไม่มี)"
+                          icon={<IconStroke />}
                           value={selected.strokeW}
                           min={0}
                           max={20}
@@ -2539,6 +2544,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                       <>
                         <DimField
                           label="ขนาดตัวอักษร"
+                          icon={<IconFontSize />}
                           value={selected.size}
                           min={3}
                           max={120}
@@ -2558,6 +2564,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         </div>
                         <DimField
                           label="เส้นขอบหนา (0=ไม่มี)"
+                          icon={<IconStroke />}
                           value={selected.strokeW ?? 0}
                           min={0}
                           max={5}
@@ -2602,6 +2609,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         />
                         <DimField
                           label="ขนาดตัวอักษร"
+                          icon={<IconFontSize />}
                           value={selected.scale ?? 1}
                           min={0.6}
                           max={2}
