@@ -1,5 +1,8 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, createContext, lazy, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+
+// true เมื่อ DimField อยู่ในแถบปรับแต่งด้านบน (Canva-style) → เปลี่ยนสไลเดอร์เป็นปุ่ม+dropdown อัตโนมัติ
+const TopBarCtx = createContext(false)
 import { MATERIALS, getMaterial, packKind } from './core/materials'
 import { TEMPLATES, getTemplate } from './core/templates'
 import type { Dieline } from './core/types'
@@ -117,38 +120,118 @@ interface DimFieldProps {
   unit?: string
   step?: number
   onChange: (v: number) => void
+  // pop = แสดงเป็นปุ่มเล็ก คลิกแล้ว dropdown สไลเดอร์ลงมา (แบบ Canva) — ใช้ในแถบบน
+  pop?: boolean
 }
 
-function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange }: DimFieldProps) {
+function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange, pop: popProp }: DimFieldProps) {
   const commit = (v: number) => onChange(clamp(Number.isFinite(v) ? v : min, min, max))
+  const inTopBar = useContext(TopBarCtx) // เรียก hook แบบไม่มีเงื่อนไข
+  const pop = popProp || inTopBar // ในแถบบน = โหมด dropdown อัตโนมัติ
+  const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null)
+  const openMenu = () => {
+    const r = btnRef.current?.getBoundingClientRect()
+    if (r) setMenuPos({ left: r.left, top: r.bottom + 6 }) // dropdown ใต้ปุ่ม (portal ไป body กันโดน overflow ตัด)
+    setOpen((v) => !v)
+  }
+  useEffect(() => {
+    if (!pop || !open) return
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [pop, open])
+
+  const num = (
+    <input
+      type="number"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      disabled={disabled}
+      aria-label={label}
+      onChange={(e) => commit(Number(e.target.value))}
+    />
+  )
+  const slider = (
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      disabled={disabled}
+      aria-label={label}
+      onChange={(e) => commit(Number(e.target.value))}
+    />
+  )
+
+  if (pop) {
+    return (
+      <div className="field-pop">
+        <button
+          ref={btnRef}
+          type="button"
+          className="field-pop-btn"
+          aria-expanded={open}
+          aria-haspopup="true"
+          disabled={disabled}
+          title={label}
+          onClick={openMenu}
+        >
+          <span className="field-pop-label">{label}</span>
+          <b>
+            {value}
+            {unit === '×' ? '×' : ''}
+          </b>
+        </button>
+        {open &&
+          menuPos &&
+          createPortal(
+            <div
+              ref={menuRef}
+              className="field-pop-menu card"
+              style={{ position: 'fixed', left: menuPos.left, top: menuPos.top }}
+            >
+              <span className="field-head">
+                {label}
+                <span className="field-num">
+                  {num}
+                  {unit}
+                </span>
+              </span>
+              {slider}
+            </div>,
+            document.body,
+          )}
+      </div>
+    )
+  }
+
   return (
     <div className="field">
       <span className="field-head">
         {label}
         <span className="field-num">
-          <input
-            type="number"
-            min={min}
-            max={max}
-            step={step}
-            value={value}
-            disabled={disabled}
-            aria-label={label}
-            onChange={(e) => commit(Number(e.target.value))}
-          />
+          {num}
           {unit}
         </span>
       </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        aria-label={label}
-        onChange={(e) => commit(Number(e.target.value))}
-      />
+      {slider}
     </div>
   )
 }
@@ -2083,6 +2166,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               {(selected || multi) &&
                 decoBar &&
                 createPortal(
+                  <TopBarCtx.Provider value={true}>
                   <div className={`deco-topbar card${decoMore ? ' more' : ''}`}>
                     <button
                       type="button"
@@ -2877,7 +2961,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     </button>
                   </div>
                 )}
-                  </div>,
+                  </div>
+                  </TopBarCtx.Provider>,
                   decoBar,
                 )}
 
