@@ -216,6 +216,7 @@ export const DielineSVG = memo(function DielineSVG({
   onMove,
   onRotate,
   onRemove,
+  onText,
 }: {
   dieline: Dieline
   showDims: boolean
@@ -228,6 +229,7 @@ export const DielineSVG = memo(function DielineSVG({
   onMove?: (id: string, x: number, y: number) => void
   onRotate?: (id: string, deg: number) => void
   onRemove?: (id: string) => void
+  onText?: (id: string, text: string) => void
 }) {
   const [showRuler, setShowRuler] = useState(false)
   const pad = showDims || showRuler ? 26 : 12
@@ -235,6 +237,10 @@ export const DielineSVG = memo(function DielineSVG({
   const grab = useRef<Grab | null>(null)
   const snapT = useRef<SnapTargets | null>(null)
   const [active, setActive] = useState(false)
+  // แก้ข้อความในที่ (คลิกข้อความที่เลือกอยู่อีกที / ดับเบิลคลิก → พิมพ์แก้บน blueprint ได้เลย)
+  const [editing, setEditing] = useState<string | null>(null)
+  const editCandidate = useRef<string | null>(null) // ข้อความที่ "เลือกอยู่แล้ว" ตอนกด — ถ้าไม่ลากคือจะแก้
+  const dragMoved = useRef(false)
   // เส้นไกด์ที่กำลังดูดติด (ค่า x ของเส้นตั้ง / y ของเส้นนอน) — null = ไม่มี
   const [snap, setSnap] = useState<{ vx: number | null; vy: number | null }>({ vx: null, vy: null })
   // ซูม/แพน blueprint ผ่าน viewBox — zoom=1 คือพอดีจอ, center=null คือกึ่งกลาง
@@ -288,6 +294,11 @@ export const DielineSVG = memo(function DielineSVG({
     if (!editable) return
     // กัน pointerdown ลอยไปโดน handler พื้นหลังของ svg (ยกเลิกการเลือก) — ต้องทำก่อน return กรณีล็อก
     e.stopPropagation()
+    // ถ้ากดข้อความที่ "เลือกอยู่ชิ้นเดียว" อยู่แล้ว และไม่ลาก → เข้าโหมดพิมพ์แก้ (จำไว้ ตัดสินตอนปล่อย)
+    dragMoved.current = false
+    editCandidate.current =
+      d.type === 'text' && selectedIds.length === 1 && selectedIds[0] === d.id ? d.id : null
+    if (editing && editing !== d.id) setEditing(null)
     const additive = e.shiftKey || e.ctrlKey || e.metaKey
     if (additive) {
       onSelect?.(d.id, true) // Shift/Ctrl คลิก = สลับเข้า/ออกชุดเลือก (ไม่เริ่มลาก)
@@ -347,6 +358,7 @@ export const DielineSVG = memo(function DielineSVG({
     const d = decos.find((x) => x.id === g.id)
     if (!d) return
     if (g.mode === 'move') {
+      dragMoved.current = true // มีการลากจริง → ไม่เข้าโหมดแก้ข้อความตอนปล่อย
       const w = elW(d)
       const h = elH(d)
       let rx = p.x - g.dx
@@ -399,11 +411,15 @@ export const DielineSVG = memo(function DielineSVG({
     setActive(false)
     setSnap({ vx: null, vy: null })
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+    // คลิกข้อความที่เลือกอยู่แล้วโดยไม่ลาก → เข้าโหมดพิมพ์แก้บน blueprint
+    if (editCandidate.current && !dragMoved.current) setEditing(editCandidate.current)
+    editCandidate.current = null
   }
 
   // กดพื้นที่ว่าง = เริ่มลาก pan (ตอนซูม) หรือถ้าไม่ขยับก็ยกเลิกการเลือกตอนปล่อย
   const onBgDown = (e: React.PointerEvent) => {
     if (!editable || grab.current || pinch.current) return
+    if (editing) setEditing(null) // คลิกพื้นที่ว่าง = ออกจากโหมดแก้ข้อความ
     pan.current = { sx: e.clientX, sy: e.clientY, cx: viewCx, cy: viewCy, moved: false }
     capture(e)
   }
@@ -503,6 +519,33 @@ export const DielineSVG = memo(function DielineSVG({
 
   // เส้นไกด์ที่กำลังโฟกัส (ลากอยู่ก่อน ไม่งั้นตัวที่ชี้) → ใช้เลือกว่าจะโชว์ถังขยะขอบไหน
   const activeGuide = guideLines.find((g) => g.id === (guideDrag.current?.id ?? hoverGuide)) ?? null
+
+  // กล่องพิมพ์แก้ข้อความในที่ — วางทับตำแหน่งข้อความบน blueprint (พิกัดจอเทียบ .bp-canvas)
+  const editSrc = editing != null ? decos.find((d) => d.id === editing) : undefined
+  const editText = editSrc && editSrc.type === 'text' ? editSrc : undefined
+  const editBox = (() => {
+    const svg = svgRef.current
+    if (!editText || !svg) return null
+    const host = svg.parentElement
+    const ctm = svg.getScreenCTM()
+    if (!host || !ctm) return null
+    const toScr = (x: number, y: number) => {
+      const p = svg.createSVGPoint()
+      p.x = x
+      p.y = y
+      return p.matrixTransform(ctm)
+    }
+    const a = toScr(editText.x, editText.y)
+    const b = toScr(editText.x + elW(editText), editText.y + elH(editText))
+    const hr = host.getBoundingClientRect()
+    return {
+      left: Math.min(a.x, b.x) - hr.left,
+      top: Math.min(a.y, b.y) - hr.top,
+      width: Math.abs(b.x - a.x),
+      height: Math.abs(b.y - a.y),
+      scale: ctm.a,
+    }
+  })()
 
   return (
     <div className="bp-canvas">
@@ -636,6 +679,13 @@ export const DielineSVG = memo(function DielineSVG({
             className={`deco${sel ? ' selected' : ''}${active && sel ? ' dragging' : ''}${d.locked ? ' locked' : ''}`}
             transform={`rotate(${d.rot} ${c.x} ${c.y})`}
             onPointerDown={(e) => startMove(e, d)}
+            onDoubleClick={(e) => {
+              if (d.type === 'text' && editable && !d.locked) {
+                e.stopPropagation()
+                onSelect?.(d.id, false)
+                setEditing(d.id)
+              }
+            }}
           >
             <DecoBody e={d} />
             {sel && (
@@ -844,6 +894,34 @@ export const DielineSVG = memo(function DielineSVG({
           ＋
         </button>
       </div>
+    )}
+    {editText && editBox && (
+      <textarea
+        className="deco-inline-edit"
+        autoFocus
+        value={editText.text}
+        aria-label="แก้ข้อความ (Esc = เสร็จ)"
+        onChange={(e) => onText?.(editText.id, e.target.value)}
+        onFocus={(e) => e.currentTarget.select()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          e.stopPropagation()
+          if (e.key === 'Escape') e.currentTarget.blur()
+        }}
+        onBlur={() => setEditing(null)}
+        style={{
+          left: editBox.left,
+          top: editBox.top,
+          width: Math.max(80, editBox.width),
+          height: Math.max(30, editBox.height),
+          fontFamily: `${fontCss(editText.font)}, sans-serif`,
+          fontSize: Math.max(11, editText.size * editBox.scale),
+          lineHeight: String(editText.lh ?? 1.25),
+          color: editText.color,
+          textAlign: editText.align ?? 'left',
+          fontWeight: editText.weight ?? 400,
+        }}
+      />
     )}
     </div>
   )

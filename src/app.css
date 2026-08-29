@@ -940,6 +940,23 @@ main {
   margin-top: 8px;
 }
 
+/* กล่องพิมพ์แก้ข้อความในที่ (คลิกข้อความบน blueprint แล้วพิมพ์ได้เลย) */
+.deco-inline-edit {
+  position: absolute;
+  z-index: 5;
+  margin: 0;
+  border: 1.5px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 4px;
+  background: rgba(255, 255, 255, 0.94);
+  resize: none;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
+}
+.deco-inline-edit:focus {
+  outline: none;
+}
+
 .pb-row {
   display: flex;
   align-items: center;

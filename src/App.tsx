@@ -2136,14 +2136,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   <div className="deco-edit">
                     {selected.type === 'text' && (
                       <>
-                        <textarea
-                          className="deco-text-input"
-                          rows={2}
-                          value={selected.text}
-                          disabled={aiBusy}
-                          aria-label="ข้อความ (Enter = ขึ้นบรรทัดใหม่)"
-                          onChange={(e) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, text: e.target.value }) : d))}
-                        />
+                        {/* แก้ข้อความด้วยการคลิกที่ข้อความบน blueprint แล้วพิมพ์ได้เลย (เลิกใช้กล่องในแถบ) */}
                         <div className="align-seg" role="group" aria-label="จัดชิดข้อความ">
                           {(
                             [
@@ -3227,6 +3220,11 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 onMove={moveDeco}
                 onRotate={rotateDeco}
                 onRemove={removeDeco}
+                onText={(id, text) =>
+                  setDecos((ds) =>
+                    ds.map((d) => (d.id === id && d.type === 'text' ? withTextW({ ...d, text }) : d)),
+                  )
+                }
               />
             </div>
             {expand3d && <div className="viewer-backdrop" onClick={() => setExpand3d(false)} />}
