@@ -60,6 +60,17 @@ export function IconStroke({ size = 16 }: IconProps) {
   )
 }
 
+export function IconNutrition({ size = 16 }: IconProps) {
+  // ป้ายข้อมูลโภชนาการ: กรอบเอกสาร + เส้นหัวหนา + แถวรายการ
+  return (
+    <svg {...base(size)}>
+      <rect x="5" y="3" width="14" height="18" rx="1.5" />
+      <path d="M8 7.5h8" strokeWidth={2.4} />
+      <path d="M8 11.5h8M8 15h8M8 18.2h5" />
+    </svg>
+  )
+}
+
 export function IconRect({ size = 16 }: IconProps) {
   return (
     <svg {...base(size)}>

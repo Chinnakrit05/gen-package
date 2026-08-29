@@ -97,6 +97,7 @@ import {
   IconLineHeight,
   IconFontSize,
   IconStroke,
+  IconNutrition,
 } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
@@ -2030,7 +2031,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 </div>
                 <div className="art-actions" style={{ marginTop: 8 }}>
                   <button className="ico-btn" disabled={aiBusy} title="ตารางข้อมูลโภชนาการ (อย.)" onClick={addNutrition}>
-                    ▤ ตารางโภชนาการ (อย.)
+                    <IconNutrition /> ตารางโภชนาการ (อย.)
                   </button>
                 </div>
               </Group>
