@@ -627,6 +627,56 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   // แถบปรับแต่งชิ้นที่เลือก ย้ายไปอยู่ "ด้านบน blueprint" แบบ Canva ผ่าน portal (host อยู่ใน main)
   const [decoBar, setDecoBar] = useState<HTMLDivElement | null>(null)
   const [decoMore, setDecoMore] = useState(false) // กาง/ยุบเครื่องมือขั้นสูงในแถบบน (สร้างสำเนาตาราง ฯลฯ)
+
+  // tooltip กล่องข้อความตอนชี้ปุ่มในแถบเครื่องมือบน — อ่านจาก title ของปุ่ม (ครอบทุกปุ่มอัตโนมัติ)
+  // แล้วแสดงเป็นกล่องสไตล์ Canva (พร้อมถอด title ออกชั่วคราวกัน tooltip เนทีฟซ้อน)
+  useEffect(() => {
+    let tip: HTMLDivElement | null = null
+    let cur: HTMLElement | null = null
+    const hide = () => {
+      if (cur && cur.dataset.tipHold != null) {
+        cur.setAttribute('title', cur.dataset.tipHold)
+        delete cur.dataset.tipHold
+      }
+      cur = null
+      tip?.classList.remove('on')
+    }
+    const show = (el: HTMLElement) => {
+      const txt = el.getAttribute('title')
+      if (!txt) return
+      el.dataset.tipHold = txt
+      el.removeAttribute('title')
+      if (!tip) {
+        tip = document.createElement('div')
+        tip.className = 'hover-tip'
+        document.body.appendChild(tip)
+      }
+      tip.textContent = txt
+      const r = el.getBoundingClientRect()
+      tip.style.left = `${r.left + r.width / 2}px`
+      tip.style.top = `${r.bottom + 8}px`
+      cur = el
+      void tip.offsetHeight // บังคับ reflow ให้ transition ทำงาน (ไม่พึ่ง requestAnimationFrame)
+      tip.classList.add('on')
+    }
+    const over = (e: Event) => {
+      const el = (e.target as Element).closest?.('.deco-topbar [title]') as HTMLElement | null
+      if (el && el !== cur) {
+        hide()
+        show(el)
+      }
+    }
+    const out = (e: MouseEvent) => {
+      if (cur && !cur.contains(e.relatedTarget as Node)) hide()
+    }
+    document.addEventListener('mouseover', over)
+    document.addEventListener('mouseout', out)
+    return () => {
+      document.removeEventListener('mouseover', over)
+      document.removeEventListener('mouseout', out)
+      tip?.remove()
+    }
+  }, [])
   // เลือกชิ้น → เปิดกลุ่ม "ปรับแต่งที่เลือก" ให้อัตโนมัติ (ไม่ปิดกลุ่มอื่น)
   useEffect(() => {
     if (selectedIds.length) setGroups((g) => (g.props ? g : { ...g, props: true }))
@@ -2196,21 +2246,21 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     </div>
                     {selectedIds.length >= 3 && (
                       <div className="art-actions" style={{ marginTop: 8 }}>
-                        <button onClick={() => distributeSelected('h')}>กระจาย ↔</button>
-                        <button onClick={() => distributeSelected('v')}>กระจาย ↕</button>
+                        <button className="tb-ic" title="กระจายแนวนอนเท่า ๆ กัน" aria-label="กระจายแนวนอน" onClick={() => distributeSelected('h')}>↔</button>
+                        <button className="tb-ic" title="กระจายแนวตั้งเท่า ๆ กัน" aria-label="กระจายแนวตั้ง" onClick={() => distributeSelected('v')}>↕</button>
                       </div>
                     )}
+                    <span className="tb-sep" />
                     <div className="art-actions" style={{ marginTop: 8 }}>
-                      <button onClick={groupSelected}>จัดกลุ่ม</button>
-                      <button onClick={ungroupSelected}>แยกกลุ่ม</button>
+                      <button className="tb-ic" title="จัดกลุ่ม (Ctrl+G)" aria-label="จัดกลุ่ม" onClick={groupSelected}>⊞</button>
+                      <button className="tb-ic" title="แยกกลุ่ม" aria-label="แยกกลุ่ม" onClick={ungroupSelected}>⊟</button>
                     </div>
+                    <span className="tb-sep" />
                     <div className="art-actions">
-                      <button onClick={duplicateSelected}>ทำสำเนา</button>
-                      <button onClick={toggleHiddenSelected}>ซ่อน/แสดง</button>
-                      <button onClick={toggleLockedSelected}>ล็อก/ปลด</button>
-                    </div>
-                    <div className="art-actions">
-                      <button onClick={removeSelected}>ลบที่เลือก</button>
+                      <button className="tb-ic" title="ทำสำเนา" aria-label="ทำสำเนา" onClick={duplicateSelected}>⧉</button>
+                      <button className="tb-ic" title="ซ่อน/แสดง" aria-label="ซ่อน/แสดง" onClick={toggleHiddenSelected}>👁</button>
+                      <button className="tb-ic" title="ล็อก/ปลดล็อก" aria-label="ล็อก/ปลดล็อก" onClick={toggleLockedSelected}>🔒</button>
+                      <button className="tb-ic" title="ลบที่เลือก" aria-label="ลบที่เลือก" onClick={removeSelected}>🗑</button>
                     </div>
                     <p className="hint">Shift/Ctrl คลิกเพื่อเพิ่ม-ลดชิ้น · ลากชิ้นใดชิ้นหนึ่งเพื่อย้ายทั้งชุด · Ctrl+G จัดกลุ่ม</p>
                   </div>
@@ -2885,22 +2935,28 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         มม.
                       </label>
                     </div>
+                    <span className="tb-sep" />
                     <div className="art-actions">
                       <button
+                        className="tb-ic"
                         aria-pressed={!!selected.flipX}
                         title="พลิกแนวนอน"
+                        aria-label="พลิกแนวนอน"
                         onClick={() => patchSelected((d) => ({ ...d, flipX: !d.flipX }))}
                       >
-                        ⇋ พลิกแนวนอน
+                        ⇋
                       </button>
                       <button
+                        className="tb-ic"
                         aria-pressed={!!selected.flipY}
                         title="พลิกแนวตั้ง"
+                        aria-label="พลิกแนวตั้ง"
                         onClick={() => patchSelected((d) => ({ ...d, flipY: !d.flipY }))}
                       >
-                        ⥯ พลิกแนวตั้ง
+                        ⥯
                       </button>
                     </div>
+                    <span className="tb-sep" />
                     <div className="align-box">
                       <span className="align-title">จัดแนวในแผงหน้า</span>
                       <div className="align-grid">
@@ -2914,9 +2970,14 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         <button title="ชิดล่าง" aria-label="ชิดล่าง" onClick={() => alignSelected('bottom')}>⭳</button>
                       </div>
                     </div>
+                    <span className="tb-sep" />
                     <div className="art-actions">
-                      <button onClick={recenterSelected}>วางกลางแผงหน้า</button>
-                      <button onClick={removeSelected}>ลบชิ้นนี้</button>
+                      <button className="tb-ic" title="วางกลางแผงหน้า" aria-label="วางกลางแผงหน้า" onClick={recenterSelected}>
+                        ⊕
+                      </button>
+                      <button className="tb-ic" title="ลบชิ้นนี้" aria-label="ลบชิ้นนี้" onClick={removeSelected}>
+                        🗑
+                      </button>
                     </div>
                     <p className="hint">ลาก/หมุนบน blueprint ได้ (จุดวงกลม = หมุน) · เลเยอร์สูง = อยู่หน้า</p>
                   </div>

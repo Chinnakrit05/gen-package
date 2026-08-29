@@ -896,6 +896,10 @@ main {
   align-items: center;
   gap: 6px;
 }
+/* ป้ายกลุ่มจัดแนวยาว ๆ ไม่ต้องโชว์ในแถบ (ไอคอน + tooltip พอ) */
+.deco-topbar .align-title {
+  display: none;
+}
 .deco-topbar .align-grid {
   display: flex;
   flex-wrap: nowrap;
@@ -1004,6 +1008,50 @@ main {
 }
 .field-pop-menu input[type='range'] {
   width: 100%;
+}
+
+/* tooltip กล่องข้อความตอนชี้ปุ่มในแถบบน (สไตล์ Canva) */
+.hover-tip {
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 200;
+  max-width: 240px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: #2a2440;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+.hover-tip.on {
+  opacity: 1;
+}
+
+/* ปุ่มไอคอนในแถบเครื่องมือบน — สี่เหลี่ยมจัตุรัส กลาง ๆ */
+.deco-topbar .tb-ic {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+}
+/* เส้นคั่นกลุ่มเครื่องมือ */
+.deco-topbar .tb-sep {
+  flex: 0 0 auto;
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: var(--border-strong);
 }
 
 .pb-row {
