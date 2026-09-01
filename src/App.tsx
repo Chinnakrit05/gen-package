@@ -1,4 +1,4 @@
-import { Suspense, createContext, lazy, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, createContext, lazy, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 // true เมื่อ DimField อยู่ในแถบปรับแต่งด้านบน (Canva-style) → เปลี่ยนสไลเดอร์เป็นปุ่ม+dropdown อัตโนมัติ
@@ -141,6 +141,26 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
     if (r) setMenuPos({ left: r.left, top: r.bottom + 6 }) // dropdown ใต้ปุ่ม (portal ไป body กันโดน overflow ตัด)
     setOpen((v) => !v)
   }
+  // clamp dropdown เข้าจอหลังเรนเดอร์ (ปุ่มชิดขวาแถบ → เมนูล้นขอบ)
+  useLayoutEffect(() => {
+    if (!pop || !open) return
+    const menu = menuRef.current
+    const btn = btnRef.current
+    if (!menu || !btn) return
+    const m = 8
+    const w = menu.offsetWidth
+    const h = menu.offsetHeight
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const br = btn.getBoundingClientRect()
+    let left = br.left
+    if (left + w > vw - m) left = br.right - w
+    left = Math.max(m, Math.min(left, vw - m - w))
+    let top = br.bottom + 6
+    if (top + h > vh - m) top = br.top - 6 - h
+    top = Math.max(m, Math.min(top, vh - m - h))
+    setMenuPos({ left, top })
+  }, [pop, open])
   useEffect(() => {
     if (!pop || !open) return
     const onDoc = (e: MouseEvent) => {
@@ -265,6 +285,26 @@ function ToolPopover({
     if (r) setPos({ left: r.left, top: r.bottom + 6 })
     setOpen((v) => !v)
   }
+  // clamp เข้าจอหลังเมนูเรนเดอร์ (ปุ่มอยู่ชิดขวา เมนูกว้างจะล้นขอบ → ดันซ้าย/ชิดขวาปุ่ม)
+  useLayoutEffect(() => {
+    if (!open) return
+    const menu = menuRef.current
+    const btn = btnRef.current
+    if (!menu || !btn) return
+    const m = 8
+    const w = menu.offsetWidth
+    const h = menu.offsetHeight
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const br = btn.getBoundingClientRect()
+    let left = br.left
+    if (left + w > vw - m) left = br.right - w // ชิดขวาปุ่มก่อน
+    left = Math.max(m, Math.min(left, vw - m - w)) // แล้ว hard-clamp เข้าจอเสมอ (กันปุ่มที่เลื่อนพ้นขอบ)
+    let top = br.bottom + 6
+    if (top + h > vh - m) top = br.top - 6 - h // เด้งขึ้นบนถ้าล้นล่าง
+    top = Math.max(m, Math.min(top, vh - m - h))
+    setPos({ left, top })
+  }, [open])
   useEffect(() => {
     if (!open) return
     const onDoc = (e: MouseEvent) => {
