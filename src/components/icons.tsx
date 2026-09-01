@@ -60,6 +60,16 @@ export function IconStroke({ size = 16 }: IconProps) {
   )
 }
 
+export function IconPosition({ size = 16 }: IconProps) {
+  // จัดตำแหน่ง: กรอบประ + ชิ้นเล็กชิดมุม (สื่อ "จัดวางชิ้นในกรอบ")
+  return (
+    <svg {...base(size)}>
+      <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="3 2.6" />
+      <rect x="6.5" y="6.5" width="7" height="7" rx="1" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 export function IconNutrition({ size = 16 }: IconProps) {
   // ป้ายข้อมูลโภชนาการ: กรอบเอกสาร + เส้นหัวหนา + แถวรายการ
   return (

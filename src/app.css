@@ -1055,6 +1055,58 @@ main {
   background: var(--border-strong);
 }
 
+/* ToolPopover — ปุ่มไอคอนคลิกแล้วกางกลุ่มเครื่องมือ (จัดตำแหน่ง/พลิก) */
+.tool-pop {
+  position: relative;
+  display: inline-flex;
+}
+.tool-pop-menu {
+  z-index: 60;
+  min-width: 176px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow);
+}
+.tool-pop-menu .pop-title {
+  font-size: 11.5px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+.tool-pop-menu .pop-row {
+  display: flex;
+  gap: 6px;
+}
+.tool-pop-menu .tb-ic {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.tool-pop-menu .align-grid {
+  display: grid;
+  grid-template-columns: auto repeat(3, 34px);
+  gap: 5px;
+  align-items: center;
+}
+.tool-pop-menu .align-grid button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tool-pop-menu .align-axis {
+  color: var(--text-2);
+  text-align: center;
+}
+
 /* --- ขนาดปุ่มในแถบเครื่องมือให้ใกล้เคียงกันทั้งหมด (สูง 32px) --- */
 .deco-topbar .deco-edit button {
   height: 32px;

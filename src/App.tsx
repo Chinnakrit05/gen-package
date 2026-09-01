@@ -98,6 +98,7 @@ import {
   IconFontSize,
   IconStroke,
   IconNutrition,
+  IconPosition,
 } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
@@ -241,6 +242,68 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
         </span>
       </span>
       {slider}
+    </div>
+  )
+}
+
+// ปุ่มไอคอนในแถบเครื่องมือ ที่คลิกแล้วกาง popover (portal ไป body กัน overflow ตัด) — จัดกลุ่มเครื่องมือ
+function ToolPopover({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode
+  title: string
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const toggle = () => {
+    const r = btnRef.current?.getBoundingClientRect()
+    if (r) setPos({ left: r.left, top: r.bottom + 6 })
+    setOpen((v) => !v)
+  }
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  return (
+    <div className="tool-pop">
+      <button
+        ref={btnRef}
+        type="button"
+        className="tb-ic"
+        aria-haspopup="true"
+        aria-expanded={open}
+        title={title}
+        aria-label={title}
+        onClick={toggle}
+      >
+        {icon}
+      </button>
+      {open &&
+        pos &&
+        createPortal(
+          <div ref={menuRef} className="tool-pop-menu card" style={{ position: 'fixed', left: pos.left, top: pos.top }}>
+            {children}
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
@@ -2968,29 +3031,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                       </label>
                     </div>
                     <span className="tb-sep" />
-                    <div className="art-actions">
-                      <button
-                        className="tb-ic"
-                        aria-pressed={!!selected.flipX}
-                        title="พลิกแนวนอน"
-                        aria-label="พลิกแนวนอน"
-                        onClick={() => patchSelected((d) => ({ ...d, flipX: !d.flipX }))}
-                      >
-                        ⇋
-                      </button>
-                      <button
-                        className="tb-ic"
-                        aria-pressed={!!selected.flipY}
-                        title="พลิกแนวตั้ง"
-                        aria-label="พลิกแนวตั้ง"
-                        onClick={() => patchSelected((d) => ({ ...d, flipY: !d.flipY }))}
-                      >
-                        ⥯
-                      </button>
-                    </div>
-                    <span className="tb-sep" />
-                    <div className="align-box">
-                      <span className="align-title">จัดแนวในแผงหน้า</span>
+                    <ToolPopover icon={<IconPosition />} title="จัดตำแหน่ง / พลิก">
+                      <div className="pop-title">จัดแนวในแผงหน้า</div>
                       <div className="align-grid">
                         <span className="align-axis">↔</span>
                         <button title="ชิดซ้าย" aria-label="ชิดซ้าย" onClick={() => alignSelected('left')}>⭰</button>
@@ -3001,16 +3043,34 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         <button title="กึ่งกลางแนวตั้ง" aria-label="กึ่งกลางแนวตั้ง" onClick={() => alignSelected('vcenter')}>⭥</button>
                         <button title="ชิดล่าง" aria-label="ชิดล่าง" onClick={() => alignSelected('bottom')}>⭳</button>
                       </div>
-                    </div>
-                    <span className="tb-sep" />
-                    <div className="art-actions">
-                      <button className="tb-ic" title="วางกลางแผงหน้า" aria-label="วางกลางแผงหน้า" onClick={recenterSelected}>
-                        ⊕
-                      </button>
-                      <button className="tb-ic" title="ลบชิ้นนี้" aria-label="ลบชิ้นนี้" onClick={removeSelected}>
-                        🗑
-                      </button>
-                    </div>
+                      <div className="pop-title">พลิก / จัดกลาง</div>
+                      <div className="pop-row">
+                        <button
+                          className="tb-ic"
+                          aria-pressed={!!selected.flipX}
+                          title="พลิกแนวนอน"
+                          aria-label="พลิกแนวนอน"
+                          onClick={() => patchSelected((d) => ({ ...d, flipX: !d.flipX }))}
+                        >
+                          ⇋
+                        </button>
+                        <button
+                          className="tb-ic"
+                          aria-pressed={!!selected.flipY}
+                          title="พลิกแนวตั้ง"
+                          aria-label="พลิกแนวตั้ง"
+                          onClick={() => patchSelected((d) => ({ ...d, flipY: !d.flipY }))}
+                        >
+                          ⥯
+                        </button>
+                        <button className="tb-ic" title="วางกลางแผงหน้า" aria-label="วางกลางแผงหน้า" onClick={recenterSelected}>
+                          ⊕
+                        </button>
+                      </div>
+                    </ToolPopover>
+                    <button className="tb-ic" title="ลบชิ้นนี้" aria-label="ลบชิ้นนี้" onClick={removeSelected}>
+                      🗑
+                    </button>
                     <p className="hint">ลาก/หมุนบน blueprint ได้ (จุดวงกลม = หมุน) · เลเยอร์สูง = อยู่หน้า</p>
                   </div>
                 )}
