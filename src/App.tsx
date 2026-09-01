@@ -94,11 +94,11 @@ import {
   IconBottle,
   IconPouch,
   IconTrash,
-  IconLineHeight,
   IconFontSize,
   IconStroke,
   IconNutrition,
   IconPosition,
+  IconEffects,
 } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
@@ -2373,19 +2373,6 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                             </button>
                           ))}
                         </div>
-                        <DimField
-                          label="ระยะบรรทัด"
-                          icon={<IconLineHeight />}
-                          value={Math.round((selected.lh ?? 1.25) * 100) / 100}
-                          min={0.8}
-                          max={3}
-                          step={0.05}
-                          unit="×"
-                          disabled={aiBusy}
-                          onChange={(v) =>
-                            patchSelected((d) => (d.type === 'text' ? { ...d, lh: v === 1.25 ? undefined : v } : d))
-                          }
-                        />
                         <div className="deco-color">
                           <span>สี</span>
                           <ColorField
@@ -2613,50 +2600,62 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           disabled={aiBusy}
                           onChange={(v) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, size: v }) : d))}
                         />
-                        <div className="deco-color">
-                          <span>เส้นขอบ</span>
-                          <ColorField
-                            value={selected.strokeColor ?? '#ffffff'}
-                            onChange={(hex) => patchSelected((d) => (d.type === 'text' ? { ...d, strokeColor: hex, strokeW: d.strokeW && d.strokeW > 0 ? d.strokeW : 0.8 } : d))}
-                            palette={palette}
-                            onSave={saveSwatch}
-                            disabled={aiBusy}
-                            label="สีเส้นขอบตัวอักษร"
-                          />
-                        </div>
-                        <DimField
-                          label="เส้นขอบหนา (0=ไม่มี)"
-                          icon={<IconStroke />}
-                          value={selected.strokeW ?? 0}
-                          min={0}
-                          max={5}
-                          disabled={aiBusy}
-                          onChange={(v) => patchSelected((d) => (d.type === 'text' ? { ...d, strokeW: v || undefined, strokeColor: v > 0 ? d.strokeColor ?? '#ffffff' : d.strokeColor } : d))}
-                        />
-                        <label className="check">
-                          <input
-                            type="checkbox"
-                            checked={!!selected.shadow}
-                            disabled={aiBusy}
-                            onChange={(e) => patchSelected((d) => (d.type === 'text' ? { ...d, shadow: e.target.checked || undefined } : d))}
-                          />
-                          เงาใต้ตัวอักษร
-                        </label>
-                        <DimField
-                          label="โค้ง (0=ตรง, +ขึ้น −ลง)"
-                          icon={
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <path d="M3 17c4-9 14-9 18 0" />
-                              <path d="M7 12.5l-1.6 3M17 12.5l1.6 3M12 10v4" />
-                            </svg>
-                          }
-                          value={selected.curve ?? 0}
-                          min={-300}
-                          max={300}
-                          unit="°"
-                          disabled={aiBusy}
-                          onChange={(v) => patchSelected((d) => (d.type === 'text' ? { ...d, curve: Math.abs(v) >= 1 ? v : undefined } : d))}
-                        />
+                        <ToolPopover icon={<IconEffects />} title="เอฟเฟกต์/ระยะข้อความ (ระยะบรรทัด/เส้นขอบ/เงา/โค้ง)">
+                          {/* ในป็อปโอเวอร์มีที่ → ปิดโหมด pop ให้ DimField เป็นสไลเดอร์เต็ม */}
+                          <TopBarCtx.Provider value={false}>
+                            <div className="pop-title">ระยะบรรทัด</div>
+                            <DimField
+                              label="ระยะบรรทัด"
+                              value={Math.round((selected.lh ?? 1.25) * 100) / 100}
+                              min={0.8}
+                              max={3}
+                              step={0.05}
+                              unit="×"
+                              disabled={aiBusy}
+                              onChange={(v) => patchSelected((d) => (d.type === 'text' ? { ...d, lh: v === 1.25 ? undefined : v } : d))}
+                            />
+                            <div className="pop-title">เส้นขอบตัวอักษร</div>
+                            <div className="deco-color">
+                              <span>สี</span>
+                              <ColorField
+                                value={selected.strokeColor ?? '#ffffff'}
+                                onChange={(hex) => patchSelected((d) => (d.type === 'text' ? { ...d, strokeColor: hex, strokeW: d.strokeW && d.strokeW > 0 ? d.strokeW : 0.8 } : d))}
+                                palette={palette}
+                                onSave={saveSwatch}
+                                disabled={aiBusy}
+                                label="สีเส้นขอบตัวอักษร"
+                              />
+                            </div>
+                            <DimField
+                              label="ความหนา (0=ไม่มี)"
+                              value={selected.strokeW ?? 0}
+                              min={0}
+                              max={5}
+                              disabled={aiBusy}
+                              onChange={(v) => patchSelected((d) => (d.type === 'text' ? { ...d, strokeW: v || undefined, strokeColor: v > 0 ? d.strokeColor ?? '#ffffff' : d.strokeColor } : d))}
+                            />
+                            <div className="pop-title">เงา</div>
+                            <label className="check">
+                              <input
+                                type="checkbox"
+                                checked={!!selected.shadow}
+                                disabled={aiBusy}
+                                onChange={(e) => patchSelected((d) => (d.type === 'text' ? { ...d, shadow: e.target.checked || undefined } : d))}
+                              />
+                              เงาใต้ตัวอักษร
+                            </label>
+                            <div className="pop-title">ดัดโค้ง</div>
+                            <DimField
+                              label="โค้ง (0=ตรง, +ขึ้น −ลง)"
+                              value={selected.curve ?? 0}
+                              min={-300}
+                              max={300}
+                              unit="°"
+                              disabled={aiBusy}
+                              onChange={(v) => patchSelected((d) => (d.type === 'text' ? { ...d, curve: Math.abs(v) >= 1 ? v : undefined } : d))}
+                            />
+                          </TopBarCtx.Provider>
+                        </ToolPopover>
                       </>
                     )}
                     {selected.type === 'nutrition' && (

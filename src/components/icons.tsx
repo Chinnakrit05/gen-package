@@ -60,6 +60,16 @@ export function IconStroke({ size = 16 }: IconProps) {
   )
 }
 
+export function IconEffects({ size = 16 }: IconProps) {
+  // เอฟเฟกต์: ไม้กายสิทธิ์ + ประกาย (สื่อ "แต่งเอฟเฟกต์")
+  return (
+    <svg {...base(size)}>
+      <path d="M4.5 19.5 14 10" />
+      <path d="M16.6 4.2l.85 2.05 2.05.85-2.05.85-.85 2.05-.85-2.05-2.05-.85 2.05-.85z" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 export function IconPosition({ size = 16 }: IconProps) {
   // จัดตำแหน่ง: กรอบประ + ชิ้นเล็กชิดมุม (สื่อ "จัดวางชิ้นในกรอบ")
   return (
