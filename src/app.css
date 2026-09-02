@@ -2682,6 +2682,45 @@ button[aria-disabled='true'] {
   }
 }
 
+/* iPad/แท็บเล็ต/จอแคบ (รวม iPad แนวนอน ~1024) — พื้นที่วาดแคบเกินกว่าแถบเครื่องมือ
+   แถวเดียวจะพอ จึงวางแถบไว้เหนือ blueprint (ไม่ลอยทับ) แล้วห่อหลายแถวแทนเลื่อนแนวนอน */
+@media (max-width: 1200px) {
+  /* แถบเครื่องมือมาอยู่เหนือ blueprint (คอลัมน์) แทนการลอยทับ */
+  .panels {
+    flex-direction: column;
+  }
+  .deco-topbar {
+    position: relative; /* ไม่ใช่ static เพื่อให้ปุ่ม ⋯ (absolute) ยังยึดกับแถบ */
+    inset: auto;
+    margin: 0 0 10px;
+    padding: 8px 46px 8px 10px;
+  }
+  .deco-topbar .deco-edit {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    overflow-y: visible;
+    row-gap: 6px;
+  }
+  /* เป้าแตะใหญ่ขึ้นบนจอสัมผัส (สูง 32 → 40px ทั้งแถว, ปุ่มไอคอนเป็นจัตุรัส) */
+  .deco-topbar .deco-edit button,
+  .deco-topbar .deco-edit input,
+  .deco-topbar .deco-edit select {
+    height: 40px;
+    min-height: 40px;
+  }
+  .deco-topbar .tb-ic,
+  .deco-topbar .align-seg button,
+  .deco-topbar .align-grid button,
+  .deco-topbar .bold-btn {
+    width: 40px;
+    min-width: 40px;
+  }
+  /* แถบไม่ลอยทับแล้ว → เครื่องมือไม้บรรทัดกลับตำแหน่งเดิม */
+  .bp-tools.below-topbar {
+    top: 12px;
+  }
+}
+
 @media (max-width: 480px) {
   header h1 {
     font-size: 15px;
