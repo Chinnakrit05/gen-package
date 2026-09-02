@@ -1709,6 +1709,26 @@ button[aria-disabled='true'] {
 .art-actions button {
   flex: 1;
 }
+/* แผงเพิ่มองค์ประกอบใน sidebar: กริด 2 คอลัมน์ ปุ่มกว้าง-สูงเท่ากันทุกอัน
+   (flex เดิมทำให้กว้างไม่เท่ากันเพราะยาวตามข้อความ) */
+aside .art-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+aside .art-actions > * {
+  min-width: 0; /* ให้ยืดตาม track 1fr ไม่ดันกว้างตามข้อความ */
+}
+aside .art-actions .ico-btn,
+aside .art-actions .file-pick.inline,
+aside .art-actions button {
+  width: 100%;
+}
+/* ปุ่มเดี่ยว (ตารางโภชนาการ) เต็มความกว้าง */
+aside .art-actions button:only-child,
+aside .art-actions .file-pick:only-child {
+  grid-column: 1 / -1;
+}
 /* ปุ่มไอคอน + ข้อความ: จัดกึ่งกลาง ไอคอนสีเทาจางลงเล็กน้อย */
 .ico-btn {
   display: inline-flex;
