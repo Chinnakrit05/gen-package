@@ -7,6 +7,7 @@ import { generateBottleCarrier } from './bottleCarrier'
 import { generateTrayBox } from './tray'
 import { generateGableBox } from './gable'
 import { generateRSCBox } from './rsc'
+import { generateCard } from './card'
 
 export interface BoxTemplate {
   id: string
@@ -99,6 +100,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: false,
     foldDepth: (b) => b.H + b.D * 0.6,
     generate: generateGableBox,
+  },
+  {
+    id: 'card',
+    nameTh: 'นามบัตร (business card)',
+    detail: 'การ์ดแบนพิมพ์ ขนาดมาตรฐาน 90×54 มม. — ออกแบบด้านหน้าแล้วส่งพิมพ์ ไม่มีรอยพับ',
+    defaults: { W: 90, D: 54, H: 54 },
+    tilt: 0,
+    supportsHandle: false,
+    foldDepth: () => 0,
+    generate: generateCard,
   },
 ]
 

@@ -106,7 +106,9 @@ describe.each(TEMPLATES.map((t) => [t.id, t] as const))('dxf: template %s', (_id
     expect(declared.has('CREASE')).toBe(true)
     expect([...used].every((u) => declared.has(u))).toBe(true)
     expect(used.has('CUT')).toBe(true)
-    expect(used.has('CREASE')).toBe(true)
+    // เทมเพลตแบบพับได้มีรอยพับเสมอ แต่การ์ดแบน (นามบัตร) ไม่มี crease
+    const hasCrease = d.segments.some((s) => s.kind === 'crease')
+    expect(used.has('CREASE')).toBe(hasCrease)
   })
 
   it('เรขาคณิตอยู่ในขอบเขตแผ่น ไม่มี NaN ไม่มีเส้นยาวศูนย์', () => {

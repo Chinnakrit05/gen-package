@@ -1837,7 +1837,15 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
           )}
 
           <Group
-            title={kind === 'box' ? 'ขนาดกล่อง (ด้านใน)' : kind === 'pouch' ? 'ขนาดถุง' : 'ขนาดภาชนะ'}
+            title={
+              kind === 'box'
+                ? templateId === 'card'
+                  ? 'ขนาดนามบัตร'
+                  : 'ขนาดกล่อง (ด้านใน)'
+                : kind === 'pouch'
+                  ? 'ขนาดถุง'
+                  : 'ขนาดภาชนะ'
+            }
             open={groups.size}
             onToggle={() => toggleGroup('size')}
           >
@@ -1861,8 +1869,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               disabled={aiBusy}
               onChange={setW}
             />
-            {/* ซองแบน/หลังกลางไม่มีก้น-จีบ → ซ่อนช่อง D */}
-            {!(kind === 'pouch' && (pouchStyle === 'flat' || pouchStyle === 'pillow')) && (
+            {/* ซองแบน/หลังกลางไม่มีก้น-จีบ, นามบัตรเป็นการ์ดแบน → ซ่อนช่อง D */}
+            {!(kind === 'pouch' && (pouchStyle === 'flat' || pouchStyle === 'pillow')) &&
+              !(kind === 'box' && templateId === 'card') && (
               <DimField
                 label={
                   kind === 'box'
