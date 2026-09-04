@@ -190,6 +190,17 @@ export function IconBottle({ size = 16 }: IconProps) {
   )
 }
 
+export function IconCard({ size = 16 }: IconProps) {
+  // นามบัตร: การ์ดแนวนอน + รูปเล็ก + บรรทัดข้อความ
+  return (
+    <svg {...base(size)}>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <circle cx="8" cy="11" r="1.9" />
+      <path d="M12.5 10h5.5M12.5 13.2h3.5M6 15.2h7" />
+    </svg>
+  )
+}
+
 export function IconPouch({ size = 16 }: IconProps) {
   return (
     <svg {...base(size)}>

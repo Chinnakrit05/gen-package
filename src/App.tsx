@@ -93,6 +93,7 @@ import {
   IconBox,
   IconBottle,
   IconPouch,
+  IconCard,
   IconTrash,
   IconFontSize,
   IconStroke,
@@ -829,6 +830,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const template = getTemplate(templateId)
   const mat = getMaterial(materialId)
   const kind = packKind(mat) // 'box' | 'vessel' | 'pouch' — เลือก path dieline/3D
+  // นามบัตรใช้กลไก box (การ์ดแบน) แต่นำเสนอเป็น "ประเภทงาน" แยกใน UI
+  const isCard = kind === 'box' && templateId === 'card'
   // วัสดุพับไม่ได้แยกเป็น 2 เส้นทาง: ภาชนะ (revolve + ฉลากพันรอบ) กับ ถุงฟิล์ม (doypack)
   // ทั้งคู่ผลิต Dieline ธรรมดา ระบบเดิม (artwork/export/guides/ใบสเปก/CMYK) จึงใช้ต่อได้เลย
   const vessel = useMemo(
@@ -1679,11 +1682,12 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
           <Group title="ประเภทงาน" open={groups.mode} onToggle={() => toggleGroup('mode')}>
             <div className="pick-list">
               <button
-                className={`pick-item mode${kind === 'box' ? ' active' : ''}`}
+                className={`pick-item mode${kind === 'box' && !isCard ? ' active' : ''}`}
                 disabled={aiBusy}
-                aria-pressed={kind === 'box'}
+                aria-pressed={kind === 'box' && !isCard}
                 onClick={() => {
                   if (kind !== 'box') changeMaterial('carton-300')
+                  else if (isCard) changeTemplate('tuck-end')
                 }}
               >
                 <span className="mode-ic">
@@ -1726,13 +1730,30 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   <span className="pick-detail">ถุง doypack ก้นตั้ง — พิมพ์ฟิล์มซีลขอบ</span>
                 </span>
               </button>
+              <button
+                className={`pick-item mode${isCard ? ' active' : ''}`}
+                disabled={aiBusy}
+                aria-pressed={isCard}
+                onClick={() => {
+                  if (kind !== 'box') changeMaterial('carton-300')
+                  changeTemplate('card')
+                }}
+              >
+                <span className="mode-ic">
+                  <IconCard size={20} />
+                </span>
+                <span className="pick-body">
+                  <span className="pick-name">นามบัตร</span>
+                  <span className="pick-detail">การ์ดแบนพิมพ์ ขนาดมาตรฐาน 90×54 มม.</span>
+                </span>
+              </button>
             </div>
           </Group>
 
-          {mat.foldable && (
+          {mat.foldable && !isCard && (
             <Group title="รูปแบบบรรจุภัณฑ์" open={groups.tpl} onToggle={() => toggleGroup('tpl')}>
               <div className="pick-list">
-                {TEMPLATES.map((tp) => (
+                {TEMPLATES.filter((tp) => tp.id !== 'card').map((tp) => (
                   <button
                     key={tp.id}
                     className={`pick-item${templateId === tp.id ? ' active' : ''}`}
@@ -1781,12 +1802,17 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
           )}
 
           <Group
-            title={kind === 'box' ? 'วัสดุกล่อง' : kind === 'pouch' ? 'ชนิดถุง' : 'ชนิดภาชนะ'}
+            title={isCard ? 'กระดาษนามบัตร' : kind === 'box' ? 'วัสดุกล่อง' : kind === 'pouch' ? 'ชนิดถุง' : 'ชนิดภาชนะ'}
             open={groups.mat}
             onToggle={() => toggleGroup('mat')}
           >
             <div className="pick-list">
-              {MATERIALS.filter((m) => packKind(m) === kind).map((m) => (
+              {MATERIALS.filter(
+                (m) =>
+                  packKind(m) === kind &&
+                  // นามบัตรใช้กระดาษการ์ดเท่านั้น (ไม่ใช่ลูกฟูก/พลาสติกใส)
+                  (!isCard || m.id === 'carton-300' || m.id === 'carton-400' || m.id === 'kraft-350'),
+              ).map((m) => (
                 <button
                   key={m.id}
                   className={`pick-item mat${materialId === m.id ? ' active' : ''}`}
