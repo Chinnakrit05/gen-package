@@ -1,0 +1,2 @@
+# ไฟล์ generate จาก esbuild ใช้ LF เสมอ กัน diff เพี้ยนจาก autocrlf
+api/box-spec.js text eol=lf
