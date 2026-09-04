@@ -923,6 +923,16 @@ main {
   align-items: center;
   gap: 6px;
 }
+/* ไอคอนนำหน้าช่องสี (แทนข้อความ พื้น/เส้นขอบ) — โทนจาง สื่อความหมายผ่าน tooltip */
+.deco-topbar .deco-ic {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-3);
+}
+.deco-topbar .deco-ic svg {
+  width: 17px;
+  height: 17px;
+}
 .deco-topbar .deco-text-input {
   width: 190px;
   max-width: 40vw;

@@ -102,6 +102,11 @@ import {
   IconNutrition,
   IconPosition,
   IconEffects,
+  IconFill,
+  IconNoFill,
+  IconGradient,
+  IconWidth,
+  IconHeight,
 } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
@@ -2555,8 +2560,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     {selected.type === 'shape' && selected.shape !== 'line' && (
                       <>
                         <div className="art-actions">
-                          <div className="deco-color">
-                            <span>พื้น</span>
+                          <div className="deco-color" title="สีพื้น">
+                            <span className="deco-ic" aria-hidden="true"><IconFill /></span>
                             <ColorField
                               value={selected.fill === 'none' ? '#7b74e8' : selected.fill}
                               onChange={(hex) => patchSelected((d) => (d.type === 'shape' ? { ...d, fill: hex } : d))}
@@ -2567,32 +2572,36 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                             />
                           </div>
                           <button
+                            className="tb-ic"
+                            title="ไม่มีพื้น (โปร่งใส)"
+                            aria-label="ไม่มีพื้น"
                             disabled={aiBusy || selected.fill === 'none'}
                             onClick={() => patchSelected((d) => (d.type === 'shape' ? { ...d, fill: 'none', strokeW: d.strokeW > 0 ? d.strokeW : 2, stroke: d.stroke === 'none' ? '#222222' : d.stroke } : d))}
                           >
-                            ไม่มีพื้น
+                            <IconNoFill />
                           </button>
                         </div>
-                        <label className="check">
-                          <input
-                            type="checkbox"
-                            checked={!!selected.grad}
-                            disabled={aiBusy}
-                            onChange={(e) =>
-                              patchSelected((d) =>
-                                d.type === 'shape'
-                                  ? {
-                                      ...d,
-                                      grad: e.target.checked
-                                        ? { from: d.fill !== 'none' ? d.fill : '#7b74e8', to: '#ffffff', angle: 90 }
-                                        : undefined,
-                                    }
-                                  : d,
-                              )
-                            }
-                          />
-                          ไล่สี (gradient)
-                        </label>
+                        <button
+                          className="tb-ic"
+                          title="ไล่สี (gradient)"
+                          aria-label="ไล่สี (gradient)"
+                          aria-pressed={!!selected.grad}
+                          disabled={aiBusy}
+                          onClick={() =>
+                            patchSelected((d) =>
+                              d.type === 'shape'
+                                ? {
+                                    ...d,
+                                    grad: !d.grad
+                                      ? { from: d.fill !== 'none' ? d.fill : '#7b74e8', to: '#ffffff', angle: 90 }
+                                      : undefined,
+                                  }
+                                : d,
+                            )
+                          }
+                        >
+                          <IconGradient />
+                        </button>
                         {selected.grad && (
                           <>
                             <div className="deco-color">
@@ -2638,8 +2647,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                             )}
                           </>
                         )}
-                        <div className="deco-color">
-                          <span>เส้นขอบ</span>
+                        <div className="deco-color" title="สีเส้นขอบ">
+                          <span className="deco-ic" aria-hidden="true"><IconStroke /></span>
                           <ColorField
                             value={selected.stroke === 'none' ? '#222222' : selected.stroke}
                             onChange={(hex) => patchSelected((d) => (d.type === 'shape' ? { ...d, stroke: hex, strokeW: d.strokeW > 0 ? d.strokeW : 2 } : d))}
@@ -2681,6 +2690,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         )}
                         <DimField
                           label="กว้าง"
+                          icon={<IconWidth />}
                           value={Math.round(selected.w * 10) / 10}
                           min={2}
                           max={Math.round(dieline.width)}
@@ -2689,6 +2699,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         />
                         <DimField
                           label="สูง"
+                          icon={<IconHeight />}
                           value={Math.round(selected.h * 10) / 10}
                           min={2}
                           max={Math.round(dieline.height)}

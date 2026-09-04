@@ -190,6 +190,55 @@ export function IconBottle({ size = 16 }: IconProps) {
   )
 }
 
+export function IconFill({ size = 16 }: IconProps) {
+  // สีพื้น: สี่เหลี่ยมทึบ
+  return (
+    <svg {...base(size)}>
+      <rect x="4" y="4" width="16" height="16" rx="3" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+export function IconNoFill({ size = 16 }: IconProps) {
+  // ไม่มีพื้น: กรอบว่าง + ขีดทแยง
+  return (
+    <svg {...base(size)}>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="M6 18 18 6" />
+    </svg>
+  )
+}
+
+export function IconGradient({ size = 16 }: IconProps) {
+  // ไล่สี: สี่เหลี่ยมครึ่งทึบทแยง
+  return (
+    <svg {...base(size)}>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="M4 20 20 4 20 20Z" fill="currentColor" stroke="none" opacity="0.45" />
+    </svg>
+  )
+}
+
+export function IconWidth({ size = 16 }: IconProps) {
+  // กว้าง: ลูกศรแนวนอนสองหัว + เสาปลาย
+  return (
+    <svg {...base(size)}>
+      <path d="M4 5v14M20 5v14" />
+      <path d="M7 12h10M9 9l-3 3 3 3M15 9l3 3-3 3" />
+    </svg>
+  )
+}
+
+export function IconHeight({ size = 16 }: IconProps) {
+  // สูง: ลูกศรแนวตั้งสองหัว + คานปลาย
+  return (
+    <svg {...base(size)}>
+      <path d="M5 4h14M5 20h14" />
+      <path d="M12 7v10M9 9l3-3 3 3M9 15l3 3 3-3" />
+    </svg>
+  )
+}
+
 export function IconCard({ size = 16 }: IconProps) {
   // นามบัตร: การ์ดแนวนอน + รูปเล็ก + บรรทัดข้อความ
   return (
