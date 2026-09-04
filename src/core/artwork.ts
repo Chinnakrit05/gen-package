@@ -533,8 +533,9 @@ export function makeShapeEl(dieline: Dieline, shape: ShapeKind): ShapeEl {
     return { id: newId(), type: 'shape', shape, w, h: strokeW, fill: 'none', stroke: '#222222', strokeW, x, y, rot: 0 }
   }
   const w = Math.max(10, fw * 0.4)
-  // รูปหลายเหลี่ยม/ดาว/สามเหลี่ยม ใช้กรอบจัตุรัสให้ดูสมส่วน (regular)
-  const h = isPolyShape(shape) ? w : Math.max(10, fh * 0.3)
+  // วงกลม + รูปหลายเหลี่ยม/ดาว/สามเหลี่ยม ใช้กรอบจัตุรัส (วงกลมกลมจริง ไม่ใช่วงรี)
+  // — ผู้ใช้ยืดเป็นวงรีเองได้ภายหลัง; สี่เหลี่ยมยังเป็นทรงผืนผ้าตามหน้าโชว์
+  const h = isPolyShape(shape) || shape === 'ellipse' ? w : Math.max(10, fh * 0.3)
   const { x, y } = centerOnFace(dieline, w, h)
   const base = { id: newId(), type: 'shape' as const, shape, w, h, fill: '#7b74e8', stroke: 'none', strokeW: 0, x, y, rot: 0 }
   return shape === 'star' ? { ...base, sides: 5 } : shape === 'polygon' ? { ...base, sides: 6 } : base
