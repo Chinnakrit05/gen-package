@@ -21,6 +21,8 @@ const SNAP_COLOR = '#ff7a00'
 const GUIDE_COLOR = '#0aa5c9'
 let guideSeq = 0
 const SNAP_PX = 6 // ระยะดูดบนจอ (พิกเซล) — แปลงเป็น มม. ตามซูมปัจจุบัน จะได้รู้สึกคงที่ทุกขนาดแผ่น
+const MIN_SIZE = 3 // ขนาดต่ำสุดตอนย่อ (มม.) — App คุมต่ำสุดตามชนิดอีกชั้น
+const HANDLE_HS = 2.6 // ครึ่งขนาดมือจับมุม (มม.)
 
 function Dim({ d }: { d: DimMark }) {
   const vert = Math.abs(d.a.x - d.b.x) < 0.001
@@ -200,9 +202,29 @@ function DecoBody({ e }: { e: Deco }) {
   return e.opacity !== undefined && e.opacity < 1 ? <g opacity={e.opacity}>{flipped}</g> : flipped
 }
 
+type Corner = 'nw' | 'ne' | 'sw' | 'se'
+// เครื่องหมายทิศของแต่ละมุมเทียบจุดกึ่งกลาง (sx, sy)
+const CORNER_SIGN: Record<Corner, [number, number]> = {
+  nw: [-1, -1],
+  ne: [1, -1],
+  sw: [-1, 1],
+  se: [1, 1],
+}
+const OPPOSITE: Record<Corner, Corner> = { nw: 'se', ne: 'sw', sw: 'ne', se: 'nw' }
+
 type Grab =
   | { mode: 'move'; id: string; dx: number; dy: number }
   | { mode: 'rotate'; id: string }
+  | {
+      mode: 'resize'
+      id: string
+      cos: number
+      sin: number
+      asx: number // เครื่องหมายของ "มุมตรึง" (anchor) เทียบกึ่งกลาง
+      asy: number
+      anchor: { x: number; y: number } // ตำแหน่งจอของมุมตรึง (คงที่ตลอดการลาก)
+      aspect: number // สัดส่วนตอนเริ่ม (w/h) สำหรับล็อกด้วย Shift
+    }
 
 export const DielineSVG = memo(function DielineSVG({
   dieline,
@@ -215,6 +237,8 @@ export const DielineSVG = memo(function DielineSVG({
   onSelect,
   onMove,
   onRotate,
+  onResize,
+  resizeAspect,
   onRemove,
   onText,
   onUndo,
@@ -232,6 +256,8 @@ export const DielineSVG = memo(function DielineSVG({
   onSelect?: (id: string | null, additive?: boolean) => void
   onMove?: (id: string, x: number, y: number) => void
   onRotate?: (id: string, deg: number) => void
+  onResize?: (id: string, x: number, y: number, w: number, h: number) => void
+  resizeAspect?: number | null // ล็อกสัดส่วนตอนย่อ-ขยาย (รูป/ข้อความ); null = อิสระ
   onRemove?: (id: string) => void
   onText?: (id: string, text: string) => void
   onUndo?: () => void
@@ -340,6 +366,28 @@ export const DielineSVG = memo(function DielineSVG({
     e.preventDefault()
   }
 
+  // เริ่มย่อ-ขยายจากมุมกรอบ — มุมตรงข้ามเป็นจุดตรึง (คงตำแหน่งจอไว้ รองรับการหมุน)
+  const startResize = (e: React.PointerEvent, d: Deco, corner: Corner) => {
+    if (!editable || d.locked) return
+    const w0 = elW(d)
+    const h0 = elH(d)
+    const cx = d.x + w0 / 2
+    const cy = d.y + h0 / 2
+    const rad = (d.rot * Math.PI) / 180
+    const cos = Math.cos(rad)
+    const sin = Math.sin(rad)
+    const [asx, asy] = CORNER_SIGN[OPPOSITE[corner]] // มุมตรึง = มุมตรงข้าม
+    const lx = (asx * w0) / 2
+    const ly = (asy * h0) / 2
+    // ตำแหน่งจอของมุมตรึง = กึ่งกลาง + หมุน(offset)
+    const anchor = { x: cx + (cos * lx - sin * ly), y: cy + (sin * lx + cos * ly) }
+    grab.current = { mode: 'resize', id: d.id, cos, sin, asx, asy, anchor, aspect: h0 > 0 ? w0 / h0 : 1 }
+    setActive(true)
+    capture(e)
+    e.stopPropagation()
+    e.preventDefault()
+  }
+
   const onMoveEvt = (e: React.PointerEvent) => {
     if (pinch.current) return // กำลังพินช์สองนิ้ว — ไม่ลาก/แพนนิ้วเดียว
     if (guideDrag.current) {
@@ -365,6 +413,28 @@ export const DielineSVG = memo(function DielineSVG({
     if (!p) return
     const d = decos.find((x) => x.id === g.id)
     if (!d) return
+    if (g.mode === 'resize') {
+      // เวกเตอร์จากมุมตรึงไปเมาส์ แล้วฉายลงแกนของชิ้น (u=กว้าง, v=สูง)
+      const vx = p.x - g.anchor.x
+      const vy = p.y - g.anchor.y
+      let w = Math.abs(vx * g.cos + vy * g.sin)
+      let h = Math.abs(-vx * g.sin + vy * g.cos)
+      // ล็อกสัดส่วน: รูป/ข้อความ (resizeAspect) เสมอ, ชิ้นอื่นเมื่อกด Shift
+      const lock = resizeAspect ?? (e.shiftKey ? g.aspect : null)
+      if (lock && lock > 0) {
+        if (w / lock >= h) h = w / lock
+        else w = h * lock
+      }
+      w = Math.max(MIN_SIZE, w)
+      h = Math.max(MIN_SIZE, h)
+      // หา x,y ใหม่โดยให้มุมตรึงอยู่ตำแหน่งจอเดิม
+      const lx = (g.asx * w) / 2
+      const ly = (g.asy * h) / 2
+      const ncx = g.anchor.x - (g.cos * lx - g.sin * ly)
+      const ncy = g.anchor.y - (g.sin * lx + g.cos * ly)
+      onResize?.(g.id, ncx - w / 2, ncy - h / 2, w, h)
+      return
+    }
     if (g.mode === 'move') {
       dragMoved.current = true // มีการลากจริง → ไม่เข้าโหมดแก้ข้อความตอนปล่อย
       const w = elW(d)
@@ -734,8 +804,33 @@ export const DielineSVG = memo(function DielineSVG({
                     <circle cx={c.x} cy={handleY} r={3} fill="#fff" stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
                   </g>
                 )}
+                {/* มือจับ 4 มุม — ลากย่อ-ขยาย (มุมตรงข้ามตรึง) */}
+                {editable && single && onResize && !d.locked &&
+                  (
+                    [
+                      ['nw', d.x, d.y],
+                      ['ne', d.x + w, d.y],
+                      ['sw', d.x, d.y + h],
+                      ['se', d.x + w, d.y + h],
+                    ] as const
+                  ).map(([corner, hx, hy]) => (
+                    <rect
+                      key={corner}
+                      className="resize-handle"
+                      x={hx - HANDLE_HS}
+                      y={hy - HANDLE_HS}
+                      width={HANDLE_HS * 2}
+                      height={HANDLE_HS * 2}
+                      fill="#fff"
+                      stroke={SEL_COLOR}
+                      strokeWidth={1}
+                      vectorEffect="non-scaling-stroke"
+                      style={{ cursor: corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize' }}
+                      onPointerDown={(e) => startResize(e, d, corner)}
+                    />
+                  ))}
                 {editable && single && onRemove && !d.locked && (
-                  // กากบาทลบที่มุมขวาบนของชิ้น — กด pointerdown แล้วลบทันที (stopPropagation กันไปเริ่มลาก)
+                  // กากบาทลบ — เยื้องออกนอกมุมขวาบนเล็กน้อยให้พ้นมือจับปรับขนาด
                   <g
                     className="del-handle"
                     onPointerDown={(e) => {
@@ -744,9 +839,17 @@ export const DielineSVG = memo(function DielineSVG({
                       onRemove(d.id)
                     }}
                   >
-                    <circle cx={d.x + w} cy={d.y} r={3.4} fill="#fff" stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-                    <line x1={d.x + w - 1.7} y1={d.y - 1.7} x2={d.x + w + 1.7} y2={d.y + 1.7} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-                    <line x1={d.x + w - 1.7} y1={d.y + 1.7} x2={d.x + w + 1.7} y2={d.y - 1.7} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                    {(() => {
+                      const dx = d.x + w + HANDLE_HS * 2.2
+                      const dy = d.y - HANDLE_HS * 2.2
+                      return (
+                        <>
+                          <circle cx={dx} cy={dy} r={3.4} fill="#fff" stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                          <line x1={dx - 1.7} y1={dy - 1.7} x2={dx + 1.7} y2={dy + 1.7} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                          <line x1={dx - 1.7} y1={dy + 1.7} x2={dx + 1.7} y2={dy - 1.7} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                        </>
+                      )
+                    })()}
                   </g>
                 )}
               </>

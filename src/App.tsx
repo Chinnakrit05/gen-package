@@ -28,6 +28,8 @@ import {
   recenter,
   cloneDeco,
   withTextW,
+  elW,
+  elH,
   svgArtworkLayer,
   fillSVGLayer,
   fillImageSVGLayer,
@@ -1415,6 +1417,38 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
       setSelectedIds((cur) => cur.filter((x) => x !== id))
       return ds.filter((d) => d.id !== id)
     })
+
+  // ย่อ-ขยายจากมือจับมุม — DielineSVG ส่งกรอบใหม่ (x,y,w,h) มาให้ แล้วปรับตามชนิดชิ้น
+  const r1 = (v: number) => Math.round(v * 10) / 10
+  const resizeDeco = (id: string, x: number, y: number, w: number, h: number) =>
+    setDecos((ds) =>
+      ds.map((d) => {
+        if (d.id !== id) return d
+        if (d.type === 'shape') return { ...d, x, y, w: Math.max(2, r1(w)), h: Math.max(2, r1(h)) }
+        if (d.type === 'nutrition') return { ...d, x, y, w: Math.max(20, r1(w)) }
+        if (d.type === 'image') {
+          if (lockAspect) {
+            const nw = Math.max(5, r1(w))
+            return { ...d, x, y, w: nw, h: r1(nw / d.aspect) }
+          }
+          return { ...d, x, y, w: Math.max(5, r1(w)), h: Math.max(5, r1(h)) }
+        }
+        if (d.type === 'text') {
+          const cur = elH(d) || 1
+          const size = clamp(Math.round((d.size * h) / cur), 3, 120)
+          return withTextW({ ...d, size, x, y })
+        }
+        return d
+      }),
+    )
+
+  // สัดส่วนที่ต้องล็อกตอนย่อ-ขยาย (รูปที่ล็อกสัดส่วน + ข้อความ) — null = ปรับอิสระ (รูปทรง/ตาราง)
+  const resizeAspect =
+    selected && selectedIds.length === 1
+      ? selected.type === 'text' || (selected.type === 'image' && lockAspect)
+        ? elW(selected) / (elH(selected) || 1)
+        : null
+      : null
 
   // ลบทุกชิ้นที่เลือก (ข้ามชิ้นที่ล็อก)
   const removeSelected = () => {
@@ -3489,6 +3523,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 onSelect={selectDeco}
                 onMove={moveDeco}
                 onRotate={rotateDeco}
+                onResize={resizeDeco}
+                resizeAspect={resizeAspect}
                 onRemove={removeDeco}
                 onText={(id, text) =>
                   setDecos((ds) =>
