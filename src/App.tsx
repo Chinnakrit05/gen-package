@@ -113,6 +113,8 @@ import {
   IconAngle,
   IconCorner,
   IconDash,
+  IconLock,
+  IconUnlock,
 } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
@@ -2991,6 +2993,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                       <>
                         <DimField
                           label="กรอบ กว้าง"
+                          icon={<IconWidth />}
                           value={Math.round(selected.w * 10) / 10}
                           min={5}
                           max={Math.round(dieline.width)}
@@ -3011,6 +3014,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         />
                         <DimField
                           label="กรอบ สูง"
+                          icon={<IconHeight />}
                           value={Math.round(selected.h * 10) / 10}
                           min={5}
                           max={Math.round(dieline.height)}
@@ -3030,8 +3034,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           }
                         />
                         <button
-                          className="lock-ratio"
+                          className="tb-ic"
                           aria-pressed={lockAspect}
+                          aria-label="ล็อกสัดส่วนรูป"
                           title={lockAspect ? 'กำลังล็อกสัดส่วน — ปรับกว้าง/สูงพร้อมกัน' : 'ล็อกสัดส่วนรูป'}
                           disabled={aiBusy}
                           onClick={() => {
@@ -3046,7 +3051,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                               )
                           }}
                         >
-                          {lockAspect ? '🔒' : '🔓'} ล็อกสัดส่วน
+                          {lockAspect ? <IconLock /> : <IconUnlock />}
                         </button>
                         <div className="font-row">
                           <select

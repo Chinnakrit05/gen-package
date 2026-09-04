@@ -297,6 +297,26 @@ export function IconDash({ size = 16 }: IconProps) {
   )
 }
 
+export function IconLock({ size = 16 }: IconProps) {
+  // ล็อกสัดส่วน (ปิด)
+  return (
+    <svg {...base(size)}>
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  )
+}
+
+export function IconUnlock({ size = 16 }: IconProps) {
+  // ปลดล็อกสัดส่วน (เปิด)
+  return (
+    <svg {...base(size)}>
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 7.5-1.3" />
+    </svg>
+  )
+}
+
 export function IconCard({ size = 16 }: IconProps) {
   // นามบัตร: การ์ดแนวนอน + รูปเล็ก + บรรทัดข้อความ
   return (
