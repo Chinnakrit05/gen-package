@@ -107,6 +107,12 @@ import {
   IconGradient,
   IconWidth,
   IconHeight,
+  IconGradStart,
+  IconGradEnd,
+  IconRadial,
+  IconAngle,
+  IconCorner,
+  IconDash,
 } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
@@ -2604,8 +2610,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         </button>
                         {selected.grad && (
                           <>
-                            <div className="deco-color">
-                              <span>จาก</span>
+                            <div className="deco-color" title="สีเริ่มไล่">
+                              <span className="deco-ic" aria-hidden="true"><IconGradStart /></span>
                               <ColorField
                                 value={selected.grad.from}
                                 onChange={(hex) => patchSelected((d) => (d.type === 'shape' && d.grad ? { ...d, grad: { ...d.grad, from: hex } } : d))}
@@ -2615,8 +2621,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                                 label="สีเริ่มไล่"
                               />
                             </div>
-                            <div className="deco-color">
-                              <span>ถึง</span>
+                            <div className="deco-color" title="สีปลายไล่">
+                              <span className="deco-ic" aria-hidden="true"><IconGradEnd /></span>
                               <ColorField
                                 value={selected.grad.to}
                                 onChange={(hex) => patchSelected((d) => (d.type === 'shape' && d.grad ? { ...d, grad: { ...d.grad, to: hex } } : d))}
@@ -2626,18 +2632,20 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                                 label="สีปลายไล่"
                               />
                             </div>
-                            <label className="check">
-                              <input
-                                type="checkbox"
-                                checked={!!selected.grad.radial}
-                                disabled={aiBusy}
-                                onChange={(e) => patchSelected((d) => (d.type === 'shape' && d.grad ? { ...d, grad: { ...d.grad, radial: e.target.checked || undefined } } : d))}
-                              />
-                              แบบวงกลม (radial)
-                            </label>
+                            <button
+                              className="tb-ic"
+                              title="ไล่สีแบบวงกลม (radial)"
+                              aria-label="ไล่สีแบบวงกลม (radial)"
+                              aria-pressed={!!selected.grad.radial}
+                              disabled={aiBusy}
+                              onClick={() => patchSelected((d) => (d.type === 'shape' && d.grad ? { ...d, grad: { ...d.grad, radial: !d.grad.radial || undefined } } : d))}
+                            >
+                              <IconRadial />
+                            </button>
                             {!selected.grad.radial && (
                               <DimField
                                 label="มุมไล่สี (องศา)"
+                                icon={<IconAngle />}
                                 value={selected.grad.angle}
                                 min={0}
                                 max={360}
@@ -2668,19 +2676,21 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           onChange={(v) => patchSelected((d) => (d.type === 'shape' ? { ...d, strokeW: v, stroke: v > 0 && d.stroke === 'none' ? '#222222' : d.stroke } : d))}
                         />
                         {selected.strokeW > 0 && (
-                          <label className="check">
-                            <input
-                              type="checkbox"
-                              checked={!!selected.dash}
-                              disabled={aiBusy}
-                              onChange={(e) => patchSelected((d) => (d.type === 'shape' ? { ...d, dash: e.target.checked || undefined } : d))}
-                            />
-                            เส้นขอบประ (dashed)
-                          </label>
+                          <button
+                            className="tb-ic"
+                            title="เส้นขอบประ (dashed)"
+                            aria-label="เส้นขอบประ (dashed)"
+                            aria-pressed={!!selected.dash}
+                            disabled={aiBusy}
+                            onClick={() => patchSelected((d) => (d.type === 'shape' ? { ...d, dash: !d.dash || undefined } : d))}
+                          >
+                            <IconDash />
+                          </button>
                         )}
                         {(selected.shape === 'polygon' || selected.shape === 'star') && (
                           <DimField
                             label={selected.shape === 'star' ? 'จำนวนแฉก' : 'จำนวนด้าน'}
+                            icon={selected.shape === 'star' ? <IconStar /> : <IconPolygon />}
                             value={selected.sides ?? (selected.shape === 'star' ? 5 : 6)}
                             min={3}
                             max={12}
@@ -3060,46 +3070,47 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         </div>
                         <DimField
                           label="มุมโค้ง (มม.)"
+                          icon={<IconCorner />}
                           value={selected.radius ?? 0}
                           min={0}
                           max={Math.round(Math.min(selected.w, selected.h) / 2)}
                           disabled={aiBusy || !!selected.circle || !!selected.maskShape}
                           onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, radius: v || undefined, maskShape: undefined } : d))}
                         />
-                        <label className="check">
-                          <input
-                            type="checkbox"
-                            checked={!!selected.circle}
+                        <button
+                          className="tb-ic"
+                          title="มาสก์วงรี"
+                          aria-label="มาสก์วงรี"
+                          aria-pressed={!!selected.circle}
+                          disabled={aiBusy}
+                          onClick={() => patchSelected((d) => (d.type === 'image' ? { ...d, circle: !d.circle || undefined, maskShape: undefined, maskSides: undefined } : d))}
+                        >
+                          <IconEllipse />
+                        </button>
+                        <span className="hint">มาสก์ทรง:</span>
+                        {(['triangle', 'polygon', 'star'] as const).map((sh) => (
+                          <button
+                            key={sh}
+                            className="tb-ic"
+                            title={sh === 'triangle' ? 'มาสก์สามเหลี่ยม' : sh === 'polygon' ? 'มาสก์หลายเหลี่ยม' : 'มาสก์ดาว'}
+                            aria-label={sh === 'triangle' ? 'มาสก์สามเหลี่ยม' : sh === 'polygon' ? 'มาสก์หลายเหลี่ยม' : 'มาสก์ดาว'}
                             disabled={aiBusy}
-                            onChange={(e) => patchSelected((d) => (d.type === 'image' ? { ...d, circle: e.target.checked || undefined, maskShape: undefined, maskSides: undefined } : d))}
-                          />
-                          มาสก์วงรี
-                        </label>
-                        <div className="art-actions" style={{ marginTop: 6 }}>
-                          <span className="hint" style={{ alignSelf: 'center' }}>มาสก์ทรง:</span>
-                          {(['triangle', 'polygon', 'star'] as const).map((sh) => (
-                            <button
-                              key={sh}
-                              className="ico-btn"
-                              disabled={aiBusy}
-                              aria-pressed={selected.maskShape === sh}
-                              style={selected.maskShape === sh ? { borderColor: '#7b74e8', color: '#7b74e8' } : undefined}
-                              onClick={() =>
-                                patchSelected((d) =>
-                                  d.type === 'image'
-                                    ? { ...d, maskShape: d.maskShape === sh ? undefined : sh, circle: undefined, radius: undefined }
-                                    : d,
-                                )
-                              }
-                            >
-                              {sh === 'triangle' ? <IconTriangle /> : sh === 'polygon' ? <IconPolygon /> : <IconStar />}
-                              {sh === 'triangle' ? 'สามเหลี่ยม' : sh === 'polygon' ? 'หลายเหลี่ยม' : 'ดาว'}
-                            </button>
-                          ))}
-                        </div>
+                            aria-pressed={selected.maskShape === sh}
+                            onClick={() =>
+                              patchSelected((d) =>
+                                d.type === 'image'
+                                  ? { ...d, maskShape: d.maskShape === sh ? undefined : sh, circle: undefined, radius: undefined }
+                                  : d,
+                              )
+                            }
+                          >
+                            {sh === 'triangle' ? <IconTriangle /> : sh === 'polygon' ? <IconPolygon /> : <IconStar />}
+                          </button>
+                        ))}
                         {(selected.maskShape === 'polygon' || selected.maskShape === 'star') && (
                           <DimField
                             label={selected.maskShape === 'star' ? 'จำนวนแฉก' : 'จำนวนด้าน'}
+                            icon={selected.maskShape === 'star' ? <IconStar /> : <IconPolygon />}
                             value={selected.maskSides ?? (selected.maskShape === 'star' ? 5 : 6)}
                             min={3}
                             max={12}

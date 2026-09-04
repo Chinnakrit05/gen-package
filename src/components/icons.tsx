@@ -239,6 +239,64 @@ export function IconHeight({ size = 16 }: IconProps) {
   )
 }
 
+export function IconGradStart({ size = 16 }: IconProps) {
+  // สีเริ่มไล่: วงกลมทึบ
+  return (
+    <svg {...base(size)}>
+      <circle cx="12" cy="12" r="7" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+export function IconGradEnd({ size = 16 }: IconProps) {
+  // สีปลายไล่: วงกลมโปร่ง
+  return (
+    <svg {...base(size)}>
+      <circle cx="12" cy="12" r="7" />
+    </svg>
+  )
+}
+
+export function IconRadial({ size = 16 }: IconProps) {
+  // ไล่สีแบบวงกลม: วงซ้อน
+  return (
+    <svg {...base(size)}>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+export function IconAngle({ size = 16 }: IconProps) {
+  // มุมไล่สี: มุม/องศา
+  return (
+    <svg {...base(size)}>
+      <path d="M4 19h14" />
+      <path d="M4 19 17 7" />
+      <path d="M11.5 19a7.5 7.5 0 0 0-1.7-4.8" />
+    </svg>
+  )
+}
+
+export function IconCorner({ size = 16 }: IconProps) {
+  // มุมโค้ง: มุมมนสองด้าน
+  return (
+    <svg {...base(size)}>
+      <path d="M20 10V7a3 3 0 0 0-3-3h-3" />
+      <path d="M4 14v3a3 3 0 0 0 3 3h3" />
+    </svg>
+  )
+}
+
+export function IconDash({ size = 16 }: IconProps) {
+  // เส้นประ
+  return (
+    <svg {...base(size)}>
+      <path d="M3 12h3.5M10.2 12h3.6M17.5 12H21" />
+    </svg>
+  )
+}
+
 export function IconCard({ size = 16 }: IconProps) {
   // นามบัตร: การ์ดแนวนอน + รูปเล็ก + บรรทัดข้อความ
   return (
