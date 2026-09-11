@@ -406,6 +406,7 @@ export const DielineSVG = memo(function DielineSVG({
   const [pen, setPen] = useState<RawAnchor[] | null>(null)
   const [penHover, setPenHover] = useState<{ x: number; y: number } | null>(null)
   const penDrag = useRef<{ idx: number; ax: number; ay: number; moved: boolean } | null>(null)
+  const penClosing = useRef(false) // กำลังปิดวง (ลากได้เพื่อทำโค้งที่จุดปิด)
   const pxToMm = (px: number) => px / (svgRef.current?.getScreenCTM()?.a || 1)
 
   const penCommit = (closed: boolean) => {
@@ -413,6 +414,7 @@ export const DielineSVG = memo(function DielineSVG({
     setPen(null)
     setPenHover(null)
     penDrag.current = null
+    penClosing.current = false
     if (pts && pts.length >= 2) onAddPath?.(pts, closed)
     onPenExit?.()
   }
@@ -424,17 +426,19 @@ export const DielineSVG = memo(function DielineSVG({
     e.preventDefault()
     capture(e)
     const pts = pen ?? []
-    // คลิกใกล้จุดแรก (≥3 จุด) = ปิดรูป
+    // คลิกใกล้จุดแรก (≥3 จุด) = ปิดรูป — ลากต่อได้เพื่อทำโค้งที่จุดปิด (จบตอนปล่อย)
     if (pts.length >= 3) {
       const f = pts[0]
       if (Math.hypot(p.x - f.x, p.y - f.y) <= pxToMm(10)) {
-        penCommit(true)
+        penClosing.current = true
+        penDrag.current = { idx: 0, ax: f.x, ay: f.y, moved: false }
         return
       }
     }
     const idx = pts.length
     setPen([...pts, { x: p.x, y: p.y }])
     penDrag.current = { idx, ax: p.x, ay: p.y, moved: false }
+    penClosing.current = false
   }
 
   const penMove = (e: React.PointerEvent) => {
@@ -460,6 +464,11 @@ export const DielineSVG = memo(function DielineSVG({
   const penUp = (e: React.PointerEvent) => {
     penDrag.current = null
     if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+    // ปล่อยหลังปิดวง → จบเป็นรูปปิด (เก็บโค้งจุดปิดที่เพิ่งลาก)
+    if (penClosing.current) {
+      penClosing.current = false
+      penCommit(true)
+    }
   }
 
   // คีย์ลัดระหว่างวาด: Enter/ดับเบิลคลิก = จบเส้นเปิด, Esc = ยกเลิก
@@ -474,6 +483,7 @@ export const DielineSVG = memo(function DielineSVG({
         setPen(null)
         setPenHover(null)
         penDrag.current = null
+        penClosing.current = false
         onPenExit?.()
       }
     }
@@ -1091,9 +1101,9 @@ export const DielineSVG = memo(function DielineSVG({
       {penMode && penHover && (
         // เครื่องหมายเล็ง (กากบาท) ตามเมาส์ — เห็นชัดว่ากำลังอยู่โหมดปากกา
         <g className="pen-cursor" pointerEvents="none">
-          <line x1={penHover.x - 4} y1={penHover.y} x2={penHover.x + 4} y2={penHover.y} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          <line x1={penHover.x} y1={penHover.y - 4} x2={penHover.x} y2={penHover.y + 4} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          <circle cx={penHover.x} cy={penHover.y} r={1.6} fill="none" stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          <line x1={penHover.x - 4} y1={penHover.y} x2={penHover.x + 4} y2={penHover.y} stroke="#555" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          <line x1={penHover.x} y1={penHover.y - 4} x2={penHover.x} y2={penHover.y + 4} stroke="#555" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          <circle cx={penHover.x} cy={penHover.y} r={1.6} fill="none" stroke="#555" strokeWidth={1} vectorEffect="non-scaling-stroke" />
         </g>
       )}
 
