@@ -1415,15 +1415,11 @@ export async function renderArtworkCanvas(
 function parseBase(
   o: Record<string, unknown>,
 ): { x: number; y: number; rot: number; hidden?: boolean; locked?: boolean } | null {
-  const x = Number(o.x)
-  const y = Number(o.y)
-  const rot = Number(o.rot)
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
-  // เก็บ flag เฉพาะเมื่อ true — กันบวม JSON และให้ round-trip เหมือนเดิมสำหรับชิ้นปกติ
+  // กันเหนียว: พิกัด/มุมที่เพี้ยน (NaN/Infinity/หาย) → 0 แทนที่จะทิ้งทั้งชิ้นหรือปล่อยให้เรนเดอร์พัง
   return {
-    x,
-    y,
-    rot: Number.isFinite(rot) ? rot : 0,
+    x: finiteOr(o.x, 0),
+    y: finiteOr(o.y, 0),
+    rot: finiteOr(o.rot, 0),
     ...(o.hidden === true ? { hidden: true } : {}),
     ...(o.locked === true ? { locked: true } : {}),
     ...(typeof o.name === 'string' && o.name.trim() ? { name: o.name.slice(0, 40) } : {}),
@@ -1474,17 +1470,17 @@ export function parseDeco(v: unknown): Deco | null {
   }
   if (o.type === 'text') {
     const text = typeof o.text === 'string' ? o.text : ''
-    const size = Number(o.size)
+    // กันเหนียว: ขนาดฟอนต์ที่เพี้ยน → clamp เข้าช่วงปลอดภัย (แทนที่จะปล่อยให้ NaN ทำ SVG พัง)
+    const size = clampFinite(o.size, 1, 400, 20)
     const color = typeof o.color === 'string' ? o.color : '#222222'
-    if (!(size > 0)) return null
     const font = FONTS.some((f) => f.id === o.font) ? (o.font as string) : undefined
     const weight = Number(o.weight) === 700 ? 700 : undefined
     const align = o.align === 'center' || o.align === 'right' ? o.align : undefined
     const lh = Number(o.lh) > 0 && Number(o.lh) !== LINE ? clampNum(Number(o.lh), 0.8, 3) : undefined
-    const w =
-      Number(o.w) > 0
-        ? Number(o.w)
-        : Math.max(...text.split('\n').map((ln) => measureText(ln, size, font, weight)))
+    const wRaw = Number(o.w)
+    const w = Number.isFinite(wRaw) && wRaw > 0
+      ? wRaw
+      : finiteOr(Math.max(...text.split('\n').map((ln) => measureText(ln, size, font, weight))), size * 4)
     const strokeColor = typeof o.strokeColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.strokeColor) ? o.strokeColor : undefined
     const strokeW = strokeColor && Number(o.strokeW) > 0 ? clampNum(Number(o.strokeW), 0, 10) : undefined
     return {
@@ -1668,3 +1664,12 @@ export function parseFillImage(v: unknown): FillImage | null {
 }
 
 const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+// แปลงเป็นเลขจำกัด (กัน NaN/Infinity ที่ทำให้ SVG เพี้ยน) — ตกไป fallback ถ้าไม่ถูกต้อง
+const finiteOr = (v: unknown, fb: number) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : fb
+}
+const clampFinite = (v: unknown, lo: number, hi: number, fb: number) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fb
+}

@@ -424,11 +424,28 @@ describe('persistence + migration', () => {
 
   it.each([
     ['src ไม่ใช่ data URI', { type: 'image', src: 'http://evil/x.png', aspect: 1, w: 10, x: 0, y: 0, rot: 0 }],
-    ['text size ≤ 0', { type: 'text', text: 'a', size: 0, color: '#000', x: 0, y: 0, rot: 0 }],
     ['aspect = 0', { type: 'image', src: 'data:image/png;base64,A', aspect: 0, w: 10, x: 0, y: 0, rot: 0 }],
     ['null', null],
   ])('ปฏิเสธข้อมูลเสีย: %s', (_n, bad) => {
     expect(parseDeco(bad)).toBeNull()
+  })
+
+  it('กันเหนียวตอนโหลด: ค่าตัวเลข text ที่เพี้ยน (NaN/หาย) ถูก clamp ไม่ทำให้เรนเดอร์พัง', () => {
+    // x/y/rot ที่เพี้ยน → 0; size ที่เพี้ยน → ค่าเริ่มต้น 20; ทุกค่าที่ใช้เรนเดอร์ต้อง finite
+    const t = parseDeco({ type: 'text', text: 'a', size: NaN, color: '#000', x: 'x', y: undefined, rot: NaN }) as TextEl
+    expect(t).not.toBeNull()
+    expect(Number.isFinite(t.x)).toBe(true)
+    expect(Number.isFinite(t.y)).toBe(true)
+    expect(Number.isFinite(t.rot)).toBe(true)
+    expect(Number.isFinite(t.size) && t.size > 0).toBe(true)
+    expect(Number.isFinite(t.w)).toBe(true)
+    // size ≤ 0 → clamp ขึ้นขั้นต่ำ (ไม่ทิ้งชิ้น)
+    const z = parseDeco({ type: 'text', text: 'a', size: 0, color: '#000', x: 0, y: 0, rot: 0 }) as TextEl
+    expect(z).not.toBeNull()
+    expect(z.size).toBeGreaterThan(0)
+    // ตำแหน่ง Infinity ของ shape → 0 (parseBase กันให้ทุกชนิด)
+    const s = parseDeco({ type: 'shape', shape: 'rect', w: 10, h: 10, x: Infinity, y: 0, rot: 0 }) as { x: number }
+    expect(Number.isFinite(s.x)).toBe(true)
   })
 
   it('parseDecos รับค่าเสียแล้วคืน []', () => {
