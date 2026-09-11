@@ -30,6 +30,7 @@ import {
   withTextW,
   makePathEl,
   type RawAnchor,
+  type PathAnchor,
   elW,
   elH,
   svgArtworkLayer,
@@ -1392,6 +1393,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setDecos((ds) => [...ds, el])
     setSelectedIds([el.id])
   }
+  // แก้จุด path ทีละจุด (ลาก anchor/แขนโค้ง, เพิ่ม-ลบจุด)
+  const editPath = (id: string, anchors: PathAnchor[]) =>
+    setDecos((ds) => ds.map((d) => (d.id === id && d.type === 'path' ? { ...d, anchors } : d)))
 
   const addNutrition = () => {
     if (!dieline) return
@@ -3593,6 +3597,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 penMode={penMode}
                 onAddPath={addPath}
                 onPenExit={() => setPenMode(false)}
+                onEditPath={editPath}
                 onRemove={removeDeco}
                 onText={(id, text) =>
                   setDecos((ds) =>

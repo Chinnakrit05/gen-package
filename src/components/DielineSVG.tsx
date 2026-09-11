@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, TEXT_STROKE_MUL, textShadowSVG, textShadowId, isCurvedText, curvedGlyphs, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type RawAnchor } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, TEXT_STROKE_MUL, textShadowSVG, textShadowId, isCurvedText, curvedGlyphs, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
@@ -228,6 +228,8 @@ type Grab =
       anchor: { x: number; y: number } // ตำแหน่งจอของมุมตรึง (คงที่ตลอดการลาก)
       aspect: number // สัดส่วนตอนเริ่ม (w/h) สำหรับล็อกด้วย Shift
     }
+  | { mode: 'anchor'; id: string; idx: number } // ลากจุด anchor ของ path
+  | { mode: 'handle'; id: string; idx: number; which: 'o' | 'i'; alt: boolean } // ลากแขน bezier
 
 export const DielineSVG = memo(function DielineSVG({
   dieline,
@@ -247,6 +249,7 @@ export const DielineSVG = memo(function DielineSVG({
   penMode,
   onAddPath,
   onPenExit,
+  onEditPath,
   onUndo,
   onRedo,
   canUndo,
@@ -269,6 +272,7 @@ export const DielineSVG = memo(function DielineSVG({
   penMode?: boolean // โหมดปากกา (Pen) — คลิกวางจุด/ลากสร้างโค้ง
   onAddPath?: (raw: RawAnchor[], closed: boolean) => void
   onPenExit?: () => void // วาดเสร็จ/ยกเลิก → ออกจากโหมดปากกา
+  onEditPath?: (id: string, anchors: PathAnchor[]) => void // แก้จุดทีละจุด
   onUndo?: () => void
   onRedo?: () => void
   canUndo?: boolean
@@ -478,6 +482,77 @@ export const DielineSVG = memo(function DielineSVG({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [penMode, pen])
 
+  // --- แก้จุด path ทีละจุด (เฟส 2) ---
+  const rotPt = (px: number, py: number, cx: number, cy: number, deg: number) => {
+    const r = (deg * Math.PI) / 180
+    const c = Math.cos(r)
+    const s = Math.sin(r)
+    const dx = px - cx
+    const dy = py - cy
+    return { x: cx + c * dx - s * dy, y: cy + s * dx + c * dy }
+  }
+  // พิกัดท้องถิ่น (ก่อนหมุน) ของ nx,ny — เรนเดอร์ในกลุ่มที่หมุนแล้ว จึงไม่ต้องหมุนเอง
+  const nAbsLocal = (e: PathEl, nx: number, ny: number) => ({ x: e.x + nx * e.w, y: e.y + ny * e.h })
+  // แปลงพิกัดจอ → normalized (ถอดการหมุนรอบกึ่งกลาง, กรอบ x/y/w/h คงที่)
+  const sheetToNorm = (e: PathEl, sx: number, sy: number) => {
+    const cx = e.x + e.w / 2
+    const cy = e.y + e.h / 2
+    const l = rotPt(sx, sy, cx, cy, -e.rot)
+    return { nx: (l.x - e.x) / e.w, ny: (l.y - e.y) / e.h }
+  }
+
+  const startAnchorDrag = (ev: React.PointerEvent, d: PathEl, idx: number) => {
+    if (!editable || d.locked) return
+    ev.stopPropagation()
+    ev.preventDefault()
+    // Alt-คลิก = ลบจุด
+    if (ev.altKey) {
+      const min = d.closed ? 3 : 2
+      if (d.anchors.length > min) onEditPath?.(d.id, d.anchors.filter((_, i) => i !== idx))
+      return
+    }
+    grab.current = { mode: 'anchor', id: d.id, idx }
+    setActive(true)
+    capture(ev)
+  }
+
+  const startHandleDrag = (ev: React.PointerEvent, d: PathEl, idx: number, which: 'o' | 'i') => {
+    if (!editable || d.locked) return
+    ev.stopPropagation()
+    ev.preventDefault()
+    grab.current = { mode: 'handle', id: d.id, idx, which, alt: ev.altKey }
+    setActive(true)
+    capture(ev)
+  }
+
+  // เพิ่มจุดบนเส้น (ดับเบิลคลิก) — หาช่วงที่ใกล้สุดแล้วแทรกจุดมุม
+  const addPointOnPath = (d: PathEl, sx: number, sy: number) => {
+    const { nx, ny } = sheetToNorm(d, sx, sy)
+    const a = d.anchors
+    const segs: [number, number][] = []
+    for (let i = 1; i < a.length; i++) segs.push([i - 1, i])
+    if (d.closed) segs.push([a.length - 1, 0])
+    let best = { at: 1, dist: Infinity, nx, ny }
+    for (const [i, j] of segs) {
+      const ax = a[i].nx
+      const ay = a[i].ny
+      const bx = a[j].nx
+      const by = a[j].ny
+      const dx = bx - ax
+      const dy = by - ay
+      const len2 = dx * dx + dy * dy || 1
+      let t = ((nx - ax) * dx + (ny - ay) * dy) / len2
+      t = Math.max(0, Math.min(1, t))
+      const px = ax + t * dx
+      const py = ay + t * dy
+      const dd = Math.hypot(nx - px, ny - py)
+      if (dd < best.dist) best = { at: j === 0 ? a.length : j, dist: dd, nx: px, ny: py }
+    }
+    const next = [...a]
+    next.splice(best.at, 0, { nx: best.nx, ny: best.ny })
+    onEditPath?.(d.id, next)
+  }
+
   const onMoveEvt = (e: React.PointerEvent) => {
     if (penMode) return penMove(e)
     if (pinch.current) return // กำลังพินช์สองนิ้ว — ไม่ลาก/แพนนิ้วเดียว
@@ -504,6 +579,41 @@ export const DielineSVG = memo(function DielineSVG({
     if (!p) return
     const d = decos.find((x) => x.id === g.id)
     if (!d) return
+    if (g.mode === 'anchor' || g.mode === 'handle') {
+      if (d.type !== 'path') return
+      const { nx, ny } = sheetToNorm(d, p.x, p.y)
+      const a = { ...d.anchors[g.idx] }
+      if (g.mode === 'anchor') {
+        const dnx = nx - a.nx
+        const dny = ny - a.ny
+        a.nx = nx
+        a.ny = ny
+        if (a.ox != null) {
+          a.ox += dnx
+          a.oy = (a.oy as number) + dny
+        }
+        if (a.ix != null) {
+          a.ix += dnx
+          a.iy = (a.iy as number) + dny
+        }
+      } else if (g.which === 'o') {
+        a.ox = nx
+        a.oy = ny
+        if (!g.alt) {
+          a.ix = 2 * a.nx - nx
+          a.iy = 2 * a.ny - ny
+        }
+      } else {
+        a.ix = nx
+        a.iy = ny
+        if (!g.alt) {
+          a.ox = 2 * a.nx - nx
+          a.oy = 2 * a.ny - ny
+        }
+      }
+      onEditPath?.(d.id, d.anchors.map((x, i) => (i === g.idx ? a : x)))
+      return
+    }
     if (g.mode === 'resize') {
       // เวกเตอร์จากมุมตรึงไปเมาส์ แล้วฉายลงแกนของชิ้น (u=กว้าง, v=สูง)
       const vx = p.x - g.anchor.x
@@ -866,6 +976,11 @@ export const DielineSVG = memo(function DielineSVG({
                 e.stopPropagation()
                 onSelect?.(d.id, false)
                 setEditing(d.id)
+              } else if (d.type === 'path' && editable && !d.locked && !penMode) {
+                // ดับเบิลคลิกบนเส้น = เพิ่มจุด
+                e.stopPropagation()
+                const sp = toSheet(e.clientX, e.clientY)
+                if (sp) addPointOnPath(d, sp.x, sp.y)
               }
             }}
           >
@@ -945,11 +1060,42 @@ export const DielineSVG = memo(function DielineSVG({
                     })()}
                   </g>
                 )}
+                {/* แก้จุด path ทีละจุด — จุด anchor (เหลี่ยม) + แขน bezier (กลม) */}
+                {d.type === 'path' && editable && single && !d.locked && !penMode &&
+                  d.anchors.map((a, i) => {
+                    const ap = nAbsLocal(d, a.nx, a.ny)
+                    return (
+                      <g key={`ae${i}`} className="anchor-edit">
+                        {a.ox != null && a.oy != null && (
+                          <>
+                            <line x1={ap.x} y1={ap.y} x2={nAbsLocal(d, a.ox, a.oy).x} y2={nAbsLocal(d, a.ox, a.oy).y} stroke={SEL_COLOR} strokeWidth={0.8} vectorEffect="non-scaling-stroke" opacity={0.6} />
+                            <circle cx={nAbsLocal(d, a.ox, a.oy).x} cy={nAbsLocal(d, a.ox, a.oy).y} r={2.2} fill="#fff" stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startHandleDrag(e, d, i, 'o')} />
+                          </>
+                        )}
+                        {a.ix != null && a.iy != null && (
+                          <>
+                            <line x1={ap.x} y1={ap.y} x2={nAbsLocal(d, a.ix, a.iy).x} y2={nAbsLocal(d, a.ix, a.iy).y} stroke={SEL_COLOR} strokeWidth={0.8} vectorEffect="non-scaling-stroke" opacity={0.6} />
+                            <circle cx={nAbsLocal(d, a.ix, a.iy).x} cy={nAbsLocal(d, a.ix, a.iy).y} r={2.2} fill="#fff" stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startHandleDrag(e, d, i, 'i')} />
+                          </>
+                        )}
+                        <rect x={ap.x - 2.4} y={ap.y - 2.4} width={4.8} height={4.8} fill={i === 0 ? '#fff' : SEL_COLOR} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startAnchorDrag(e, d, i)} />
+                      </g>
+                    )
+                  })}
               </>
             )}
           </g>
         )
       })}
+
+      {penMode && penHover && (
+        // เครื่องหมายเล็ง (กากบาท) ตามเมาส์ — เห็นชัดว่ากำลังอยู่โหมดปากกา
+        <g className="pen-cursor" pointerEvents="none">
+          <line x1={penHover.x - 4} y1={penHover.y} x2={penHover.x + 4} y2={penHover.y} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          <line x1={penHover.x} y1={penHover.y - 4} x2={penHover.x} y2={penHover.y + 4} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          <circle cx={penHover.x} cy={penHover.y} r={1.6} fill="none" stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        </g>
+      )}
 
       {penMode && pen && pen.length > 0 && (() => {
         let d = `M ${pen[0].x} ${pen[0].y}`

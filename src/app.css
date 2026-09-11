@@ -1760,9 +1760,10 @@ aside .art-actions .file-pick:only-child {
 .ico-btn.active svg {
   color: var(--accent-ink);
 }
-/* โหมดปากกา: เคอร์เซอร์กากบาท */
-.dieline-svg.pen {
-  cursor: crosshair;
+/* โหมดปากกา: เคอร์เซอร์กากบาททั่วทั้งพื้นที่ (คลุมลูก ๆ ที่มี cursor เดิม) */
+.dieline-svg.pen,
+.dieline-svg.pen * {
+  cursor: crosshair !important;
 }
 .ico-btn:hover svg,
 .deco-item.active .ico-btn svg {
