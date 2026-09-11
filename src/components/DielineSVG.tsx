@@ -6,6 +6,7 @@ import type { Guides } from '../core/guides'
 
 const DIM_COLOR = '#1b6ea8'
 const SEL_COLOR = '#1b6ea8'
+const HANDLE_FILL = '#c2c8d0' // พื้นมือจับ — สีเทา ไม่กลืนกับ blueprint พื้นขาว
 const SAFE_COLOR = '#1b6ea8'
 const BLEED_COLOR = '#c0158a'
 const DEL_COLOR = '#c0392b'
@@ -1019,7 +1020,7 @@ export const DielineSVG = memo(function DielineSVG({
                       strokeWidth={1}
                       vectorEffect="non-scaling-stroke"
                     />
-                    <circle cx={c.x} cy={handleY} r={3} fill="#fff" stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                    <circle cx={c.x} cy={handleY} r={3} fill={HANDLE_FILL} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
                   </g>
                 )}
                 {/* มือจับ 4 มุม — ลากย่อ-ขยาย (มุมตรงข้ามตรึง) */}
@@ -1039,7 +1040,7 @@ export const DielineSVG = memo(function DielineSVG({
                       y={hy - HANDLE_HS}
                       width={HANDLE_HS * 2}
                       height={HANDLE_HS * 2}
-                      fill="#fff"
+                      fill={HANDLE_FILL}
                       stroke={SEL_COLOR}
                       strokeWidth={1}
                       vectorEffect="non-scaling-stroke"
@@ -1062,7 +1063,7 @@ export const DielineSVG = memo(function DielineSVG({
                       const dy = d.y - HANDLE_HS * 2.2
                       return (
                         <>
-                          <circle cx={dx} cy={dy} r={3.4} fill="#fff" stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                          <circle cx={dx} cy={dy} r={3.4} fill={HANDLE_FILL} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
                           <line x1={dx - 1.7} y1={dy - 1.7} x2={dx + 1.7} y2={dy + 1.7} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
                           <line x1={dx - 1.7} y1={dy + 1.7} x2={dx + 1.7} y2={dy - 1.7} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
                         </>
@@ -1079,16 +1080,16 @@ export const DielineSVG = memo(function DielineSVG({
                         {a.ox != null && a.oy != null && (
                           <>
                             <line x1={ap.x} y1={ap.y} x2={nAbsLocal(d, a.ox, a.oy).x} y2={nAbsLocal(d, a.ox, a.oy).y} stroke={SEL_COLOR} strokeWidth={0.8} vectorEffect="non-scaling-stroke" opacity={0.6} />
-                            <circle cx={nAbsLocal(d, a.ox, a.oy).x} cy={nAbsLocal(d, a.ox, a.oy).y} r={2.2} fill="#fff" stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startHandleDrag(e, d, i, 'o')} />
+                            <circle cx={nAbsLocal(d, a.ox, a.oy).x} cy={nAbsLocal(d, a.ox, a.oy).y} r={2.2} fill={HANDLE_FILL} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startHandleDrag(e, d, i, 'o')} />
                           </>
                         )}
                         {a.ix != null && a.iy != null && (
                           <>
                             <line x1={ap.x} y1={ap.y} x2={nAbsLocal(d, a.ix, a.iy).x} y2={nAbsLocal(d, a.ix, a.iy).y} stroke={SEL_COLOR} strokeWidth={0.8} vectorEffect="non-scaling-stroke" opacity={0.6} />
-                            <circle cx={nAbsLocal(d, a.ix, a.iy).x} cy={nAbsLocal(d, a.ix, a.iy).y} r={2.2} fill="#fff" stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startHandleDrag(e, d, i, 'i')} />
+                            <circle cx={nAbsLocal(d, a.ix, a.iy).x} cy={nAbsLocal(d, a.ix, a.iy).y} r={2.2} fill={HANDLE_FILL} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startHandleDrag(e, d, i, 'i')} />
                           </>
                         )}
-                        <rect x={ap.x - 2.4} y={ap.y - 2.4} width={4.8} height={4.8} fill={i === 0 ? '#fff' : SEL_COLOR} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startAnchorDrag(e, d, i)} />
+                        <rect x={ap.x - 2.4} y={ap.y - 2.4} width={4.8} height={4.8} fill={i === 0 ? HANDLE_FILL : SEL_COLOR} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startAnchorDrag(e, d, i)} />
                       </g>
                     )
                   })}
@@ -1155,7 +1156,7 @@ export const DielineSVG = memo(function DielineSVG({
                 cx={a.x}
                 cy={a.y}
                 r={2.4}
-                fill={i === 0 ? '#fff' : SEL_COLOR}
+                fill={i === 0 ? HANDLE_FILL : SEL_COLOR}
                 stroke={SEL_COLOR}
                 strokeWidth={1}
                 vectorEffect="non-scaling-stroke"
