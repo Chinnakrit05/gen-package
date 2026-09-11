@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, TEXT_STROKE_MUL, textShadowSVG, textShadowId, isCurvedText, curvedGlyphs, nutritionInnerSVG, type Deco, type FillImage } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, TEXT_STROKE_MUL, textShadowSVG, textShadowId, isCurvedText, curvedGlyphs, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type RawAnchor } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
@@ -141,6 +141,9 @@ function decoInner(e: Deco) {
   if (e.type === 'nutrition') {
     return <g dangerouslySetInnerHTML={{ __html: nutritionInnerSVG(e) }} />
   }
+  if (e.type === 'path') {
+    return <g dangerouslySetInnerHTML={{ __html: pathSVG(e, '') }} />
+  }
   const tStroke =
     e.strokeColor && (e.strokeW ?? 0) > 0
       ? { stroke: e.strokeColor, strokeWidth: (e.strokeW as number) * TEXT_STROKE_MUL, paintOrder: 'stroke' as const, strokeLinejoin: 'round' as const }
@@ -241,6 +244,9 @@ export const DielineSVG = memo(function DielineSVG({
   resizeAspect,
   onRemove,
   onText,
+  penMode,
+  onAddPath,
+  onPenExit,
   onUndo,
   onRedo,
   canUndo,
@@ -260,6 +266,9 @@ export const DielineSVG = memo(function DielineSVG({
   resizeAspect?: number | null // ล็อกสัดส่วนตอนย่อ-ขยาย (รูป/ข้อความ); null = อิสระ
   onRemove?: (id: string) => void
   onText?: (id: string, text: string) => void
+  penMode?: boolean // โหมดปากกา (Pen) — คลิกวางจุด/ลากสร้างโค้ง
+  onAddPath?: (raw: RawAnchor[], closed: boolean) => void
+  onPenExit?: () => void // วาดเสร็จ/ยกเลิก → ออกจากโหมดปากกา
   onUndo?: () => void
   onRedo?: () => void
   canUndo?: boolean
@@ -325,6 +334,7 @@ export const DielineSVG = memo(function DielineSVG({
   }
 
   const startMove = (e: React.PointerEvent, d: Deco) => {
+    if (penMode) return penDown(e) // โหมดปากกา: คลิกทับชิ้นอื่น = วางจุดแทนการเลือก
     if (!editable) return
     // กัน pointerdown ลอยไปโดน handler พื้นหลังของ svg (ยกเลิกการเลือก) — ต้องทำก่อน return กรณีล็อก
     e.stopPropagation()
@@ -388,7 +398,88 @@ export const DielineSVG = memo(function DielineSVG({
     e.preventDefault()
   }
 
+  // --- Pen tool: วาดเส้น/รูปเวกเตอร์ ---
+  const [pen, setPen] = useState<RawAnchor[] | null>(null)
+  const [penHover, setPenHover] = useState<{ x: number; y: number } | null>(null)
+  const penDrag = useRef<{ idx: number; ax: number; ay: number; moved: boolean } | null>(null)
+  const pxToMm = (px: number) => px / (svgRef.current?.getScreenCTM()?.a || 1)
+
+  const penCommit = (closed: boolean) => {
+    const pts = pen
+    setPen(null)
+    setPenHover(null)
+    penDrag.current = null
+    if (pts && pts.length >= 2) onAddPath?.(pts, closed)
+    onPenExit?.()
+  }
+
+  const penDown = (e: React.PointerEvent) => {
+    const p = toSheet(e.clientX, e.clientY)
+    if (!p) return
+    e.stopPropagation()
+    e.preventDefault()
+    capture(e)
+    const pts = pen ?? []
+    // คลิกใกล้จุดแรก (≥3 จุด) = ปิดรูป
+    if (pts.length >= 3) {
+      const f = pts[0]
+      if (Math.hypot(p.x - f.x, p.y - f.y) <= pxToMm(10)) {
+        penCommit(true)
+        return
+      }
+    }
+    const idx = pts.length
+    setPen([...pts, { x: p.x, y: p.y }])
+    penDrag.current = { idx, ax: p.x, ay: p.y, moved: false }
+  }
+
+  const penMove = (e: React.PointerEvent) => {
+    const p = toSheet(e.clientX, e.clientY)
+    if (!p) return
+    const pd = penDrag.current
+    if (pd) {
+      const moved = Math.hypot(p.x - pd.ax, p.y - pd.ay) >= pxToMm(3)
+      if (!moved && !pd.moved) return
+      pd.moved = true
+      setPen((cur) => {
+        if (!cur) return cur
+        const n = [...cur]
+        // แขนออก = ตำแหน่งเมาส์, แขนเข้า = สะท้อน (โค้งเรียบ symmetric)
+        n[pd.idx] = { ...n[pd.idx], ox: p.x, oy: p.y, ix: 2 * pd.ax - p.x, iy: 2 * pd.ay - p.y }
+        return n
+      })
+    } else {
+      setPenHover({ x: p.x, y: p.y })
+    }
+  }
+
+  const penUp = (e: React.PointerEvent) => {
+    penDrag.current = null
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+
+  // คีย์ลัดระหว่างวาด: Enter/ดับเบิลคลิก = จบเส้นเปิด, Esc = ยกเลิก
+  useEffect(() => {
+    if (!penMode) return
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault()
+        penCommit(false)
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault()
+        setPen(null)
+        setPenHover(null)
+        penDrag.current = null
+        onPenExit?.()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [penMode, pen])
+
   const onMoveEvt = (e: React.PointerEvent) => {
+    if (penMode) return penMove(e)
     if (pinch.current) return // กำลังพินช์สองนิ้ว — ไม่ลาก/แพนนิ้วเดียว
     if (guideDrag.current) {
       const p = toSheet(e.clientX, e.clientY)
@@ -464,6 +555,7 @@ export const DielineSVG = memo(function DielineSVG({
   }
 
   const endDrag = (e: React.PointerEvent) => {
+    if (penMode) return penUp(e)
     if (guideDrag.current) {
       // ลากเส้นไกด์ออกนอกแผ่น = ลบทิ้ง
       const gd = guideDrag.current
@@ -496,6 +588,7 @@ export const DielineSVG = memo(function DielineSVG({
 
   // กดพื้นที่ว่าง = เริ่มลาก pan (ตอนซูม) หรือถ้าไม่ขยับก็ยกเลิกการเลือกตอนปล่อย
   const onBgDown = (e: React.PointerEvent) => {
+    if (penMode) return penDown(e)
     if (!editable || grab.current || pinch.current) return
     if (editing) setEditing(null) // คลิกพื้นที่ว่าง = ออกจากโหมดแก้ข้อความ
     pan.current = { sx: e.clientX, sy: e.clientY, cx: viewCx, cy: viewCy, moved: false }
@@ -660,7 +753,7 @@ export const DielineSVG = memo(function DielineSVG({
     )}
     <svg
       ref={svgRef}
-      className={`dieline-svg${zoom > 1 ? ' zoomed' : ''}`}
+      className={`dieline-svg${zoom > 1 ? ' zoomed' : ''}${penMode ? ' pen' : ''}`}
       viewBox={`${viewCx - vw / 2} ${viewCy - vh / 2} ${vw} ${vh}`}
       preserveAspectRatio="xMidYMid meet"
       onPointerMove={onMoveEvt}
@@ -857,6 +950,64 @@ export const DielineSVG = memo(function DielineSVG({
           </g>
         )
       })}
+
+      {penMode && pen && pen.length > 0 && (() => {
+        let d = `M ${pen[0].x} ${pen[0].y}`
+        for (let i = 1; i < pen.length; i++) {
+          const pv = pen[i - 1]
+          const cu = pen[i]
+          const o = pv.ox != null ? [pv.ox, pv.oy!] : null
+          const n = cu.ix != null ? [cu.ix, cu.iy!] : null
+          if (o || n) {
+            const [ox, oy] = o ?? [pv.x, pv.y]
+            const [ix, iy] = n ?? [cu.x, cu.y]
+            d += ` C ${ox} ${oy} ${ix} ${iy} ${cu.x} ${cu.y}`
+          } else d += ` L ${cu.x} ${cu.y}`
+        }
+        const last = pen[pen.length - 1]
+        return (
+          <g className="pen-preview" pointerEvents="none">
+            <path d={d} fill="none" stroke={SEL_COLOR} strokeWidth={1.4} vectorEffect="non-scaling-stroke" />
+            {penHover && (
+              <path
+                d={
+                  last.ox != null
+                    ? `M ${last.x} ${last.y} C ${last.ox} ${last.oy} ${penHover.x} ${penHover.y} ${penHover.x} ${penHover.y}`
+                    : `M ${last.x} ${last.y} L ${penHover.x} ${penHover.y}`
+                }
+                fill="none"
+                stroke={SEL_COLOR}
+                strokeWidth={1}
+                strokeDasharray="3 3"
+                opacity={0.6}
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+            {pen.map((a, i) =>
+              a.ox != null ? (
+                <g key={`h${i}`} opacity={0.55}>
+                  <line x1={a.x} y1={a.y} x2={a.ox} y2={a.oy} stroke={SEL_COLOR} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+                  <line x1={a.x} y1={a.y} x2={a.ix} y2={a.iy} stroke={SEL_COLOR} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+                  <circle cx={a.ox} cy={a.oy} r={1.6} fill={SEL_COLOR} vectorEffect="non-scaling-stroke" />
+                  <circle cx={a.ix} cy={a.iy} r={1.6} fill={SEL_COLOR} vectorEffect="non-scaling-stroke" />
+                </g>
+              ) : null,
+            )}
+            {pen.map((a, i) => (
+              <circle
+                key={`p${i}`}
+                cx={a.x}
+                cy={a.y}
+                r={2.4}
+                fill={i === 0 ? '#fff' : SEL_COLOR}
+                stroke={SEL_COLOR}
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+          </g>
+        )
+      })()}
 
       {active && (snap.vx !== null || snap.vy !== null) && (
         <g className="snap-lines" pointerEvents="none">

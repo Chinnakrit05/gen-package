@@ -297,6 +297,17 @@ export function IconDash({ size = 16 }: IconProps) {
   )
 }
 
+export function IconPen({ size = 16 }: IconProps) {
+  // ปากกา (Pen tool): ด้ามปากกา + หัวปากกาแหลม
+  return (
+    <svg {...base(size)}>
+      <path d="M15 5 19 9 9 19l-5 1 1-5z" />
+      <path d="M13 7l4 4" />
+      <path d="M4 20l2.6-.6-2-2z" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 export function IconLock({ size = 16 }: IconProps) {
   // ล็อกสัดส่วน (ปิด)
   return (

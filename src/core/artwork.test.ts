@@ -39,9 +39,12 @@ import {
   nutritionInnerSVG,
   sheetUV,
   withTextW,
+  makePathEl,
+  pathDataString,
   type Deco,
   type ShapeEl,
   type TextEl,
+  type PathEl,
 } from './artwork'
 import { TEMPLATES } from './templates'
 import { getMaterial } from './materials'
@@ -612,5 +615,88 @@ describe('ตารางข้อมูลโภชนาการ (nutrition)'
     expect(p.ink).toBe('#0f6e56')
     // ไม่มี w → null
     expect(parseDeco({ type: 'nutrition', serving: '', servings: '', energy: '', rows: [], vitamins: [], footnote: '', x: 0, y: 0, rot: 0 })).toBeNull()
+  })
+})
+
+describe('Pen tool (path)', () => {
+  const raw = [
+    { x: 100, y: 100 },
+    { x: 200, y: 100, ox: 220, oy: 140, ix: 180, iy: 60 }, // จุดโค้ง (มีแขน)
+    { x: 150, y: 200 },
+  ]
+
+  it('makePathEl: normalize เข้ากรอบ bbox แล้วเก็บ x,y,w,h ถูกต้อง', () => {
+    const p = makePathEl(raw, true)!
+    expect(p).not.toBeNull()
+    expect(p.type).toBe('path')
+    expect(p.closed).toBe(true)
+    // bbox ของจุด anchor = (100..200)×(100..200)
+    expect(p.x).toBe(100)
+    expect(p.y).toBe(100)
+    expect(p.w).toBe(100)
+    expect(p.h).toBe(100)
+    // จุดแรก (100,100) → (0,0); จุดสอง (200,100) → (1,0)
+    expect(p.anchors[0]).toMatchObject({ nx: 0, ny: 0 })
+    expect(p.anchors[1].nx).toBeCloseTo(1)
+    expect(p.anchors[1].ny).toBeCloseTo(0)
+    // แขนของจุดสอง normalize ด้วย bbox เดียวกัน
+    expect(p.anchors[1].ox).toBeCloseTo(1.2)
+    expect(p.anchors[1].oy).toBeCloseTo(0.4)
+  })
+
+  it('makePathEl: ค่าเริ่มต้น closed=มีพื้น/ไม่มีเส้น, open=มีเส้น/ไม่มีพื้น; <2 จุด = null', () => {
+    const closed = makePathEl(raw, true)!
+    expect(closed.fill).not.toBe('none')
+    expect(closed.strokeW).toBe(0)
+    const open = makePathEl(raw, false)!
+    expect(open.fill).toBe('none')
+    expect(open.stroke).not.toBe('none')
+    expect(open.strokeW).toBeGreaterThan(0)
+    expect(makePathEl([{ x: 0, y: 0 }], true)).toBeNull()
+  })
+
+  it('pathDataString: มุมใช้ L, จุดมีแขนใช้ C, ปิดรูปลงท้าย Z', () => {
+    const p = makePathEl(raw, true)!
+    const abs = pathDataString(p, (nx, ny) => [p.x + nx * p.w, p.y + ny * p.h])
+    expect(abs.startsWith('M 100 100')).toBe(true)
+    expect(abs).toContain(' C ') // ช่วงที่มีแขนโค้ง
+    expect(abs.trim().endsWith('Z')).toBe(true)
+    // เส้นเปิดไม่มี Z
+    const open = makePathEl(raw, false)!
+    const d2 = pathDataString(open, (nx, ny) => [open.x + nx * open.w, open.y + ny * open.h])
+    expect(d2.trim().endsWith('Z')).toBe(false)
+  })
+
+  it('elW/elH ของ path = w/h; ย่อ-ขยายด้วย w,h จุด normalize คงเดิม', () => {
+    const p = makePathEl(raw, true)!
+    expect(elW(p)).toBe(p.w)
+    expect(elH(p)).toBe(p.h)
+    const bigger: PathEl = { ...p, w: p.w * 2, h: p.h * 2 }
+    // จุดยัง normalize เดิม → เรนเดอร์ใหญ่ขึ้นเป็นสัดส่วน
+    const d = pathDataString(bigger, (nx, ny) => [bigger.x + nx * bigger.w, bigger.y + ny * bigger.h])
+    expect(d).toContain('300 100') // จุดสอง (nx1) ยืดเป็น x=100+1*200=300
+  })
+
+  it('parseDeco: round-trip path คงจุด/สถานะปิด/สี', () => {
+    const p = makePathEl(raw, true)!
+    const back = parseDeco(JSON.parse(JSON.stringify(p))) as PathEl
+    expect(back).not.toBeNull()
+    expect(back.type).toBe('path')
+    expect(back.closed).toBe(true)
+    expect(back.anchors).toHaveLength(3)
+    expect(back.anchors[1].ox).toBeCloseTo(1.2)
+    // จุดน้อยกว่า 2 → null
+    expect(parseDeco({ type: 'path', closed: true, w: 10, h: 10, anchors: [{ nx: 0, ny: 0 }], x: 0, y: 0, rot: 0 })).toBeNull()
+  })
+
+  it('decoLabel: path ปิด=รูปวาด, เปิด=เส้นวาด', () => {
+    expect(decoLabel(makePathEl(raw, true)!)).toBe('รูปวาด')
+    expect(decoLabel(makePathEl(raw, false)!)).toBe('เส้นวาด')
+  })
+
+  it('svgArtworkLayer: path เรนเดอร์เป็น <path d=…>', () => {
+    const p = makePathEl(raw, true)!
+    const svg = svgArtworkLayer([p])
+    expect(svg).toContain('<path d="M 100 100')
   })
 })

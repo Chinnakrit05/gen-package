@@ -10,6 +10,7 @@ import {
   drawShape2D,
   drawText2D,
   drawNutrition2D,
+  drawPath2D,
   elW,
   elH,
   sheetUV,
@@ -41,6 +42,8 @@ function drawDeco(
     if (img) drawImageFit(ctx, img, e, s)
   } else if (e.type === 'shape') {
     drawShape2D(ctx, e, s)
+  } else if (e.type === 'path') {
+    drawPath2D(ctx, e, s)
   } else if (e.type === 'nutrition') {
     drawNutrition2D(ctx, e, s)
   } else {

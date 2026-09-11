@@ -1751,6 +1751,19 @@ aside .art-actions .file-pick:only-child {
   flex: none;
   color: var(--text-3);
 }
+/* ปุ่มเครื่องมือที่กำลังทำงาน (เช่น ปากกา) */
+.ico-btn.active {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  background: var(--accent-weak);
+}
+.ico-btn.active svg {
+  color: var(--accent-ink);
+}
+/* โหมดปากกา: เคอร์เซอร์กากบาท */
+.dieline-svg.pen {
+  cursor: crosshair;
+}
 .ico-btn:hover svg,
 .deco-item.active .ico-btn svg {
   color: inherit;

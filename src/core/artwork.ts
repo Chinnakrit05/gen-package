@@ -146,7 +146,30 @@ export interface NutritionEl extends BaseEl {
   scale?: number // ตัวคูณขนาดตัวอักษร (ไม่ใส่ = 1)
 }
 
-export type Deco = ImageEl | TextEl | ShapeEl | NutritionEl
+// เส้น/รูปเวกเตอร์วาดเอง (Pen tool) — anchor + แขน bezier เก็บแบบ normalized (0..1) ในกรอบ w×h
+// จึงย่อ-ขยาย/ย้าย/หมุน ผ่าน x,y,w,h,rot ได้เหมือน shape โดยไม่ต้องแตะพิกัดจุด
+export interface PathAnchor {
+  nx: number // จุด anchor (สัดส่วนในกรอบ)
+  ny: number
+  ox?: number // แขนออก (คุมโค้งไปจุดถัดไป) — ไม่มี = มุมตรง
+  oy?: number
+  ix?: number // แขนเข้า (คุมโค้งจากจุดก่อนหน้า)
+  iy?: number
+}
+export interface PathEl extends BaseEl {
+  type: 'path'
+  anchors: PathAnchor[]
+  closed: boolean // ปิดรูป (มีพื้นได้) หรือเส้นเปิด
+  w: number
+  h: number
+  fill: string // สีพื้น หรือ 'none' (เส้นเปิดมักเป็น none)
+  stroke: string
+  strokeW: number
+  grad?: GradientDef
+  dash?: boolean
+}
+
+export type Deco = ImageEl | TextEl | ShapeEl | NutritionEl | PathEl
 
 // รูปที่ใช้เป็น "พื้นแพ็กเกจ" (แทน/ทับสีพื้น) — คลุมทั้งแผ่นแล้วครอปตามรูปทรงแผงจริง
 // ต่างจาก ImageEl (โลโก้แปะจุดเดียว) ตรงที่รูปนี้ยืดคลุม bounding box ของทุกแผงเป็นผืนเดียว
@@ -511,6 +534,7 @@ export function decoLabel(e: Deco): string {
   if (e.type === 'image') return 'รูป'
   if (e.type === 'text') return e.text || 'ข้อความ'
   if (e.type === 'nutrition') return 'ตารางโภชนาการ'
+  if (e.type === 'path') return e.closed ? 'รูปวาด' : 'เส้นวาด'
   const names: Record<ShapeKind, string> = {
     rect: 'สี่เหลี่ยม',
     ellipse: 'วงกลม',
@@ -678,7 +702,16 @@ export function distribute(decos: Deco[], ids: Iterable<string>, axis: 'h' | 'v'
 
 // สำเนาองค์ประกอบ (id ใหม่ เยื้องเล็กน้อยให้เห็นว่าเป็นชิ้นใหม่) — สำเนาแสดง+แก้ได้เสมอ
 export function cloneDeco(e: Deco, dx = 5, dy = 5): Deco {
-  return { ...e, id: newId(), x: e.x + dx, y: e.y + dy, hidden: false, locked: false }
+  return {
+    ...e,
+    id: newId(),
+    x: e.x + dx,
+    y: e.y + dy,
+    hidden: false,
+    locked: false,
+    // path: คัดลอก anchors เป็นชุดใหม่ กันแก้ไขไปกระทบต้นฉบับ
+    ...(e.type === 'path' ? { anchors: e.anchors.map((a) => ({ ...a })) } : {}),
+  }
 }
 
 // แปลงจุดยอด shape เป็น UV บนผ้าใบขนาดเท่าแผ่นคลี่
@@ -834,7 +867,7 @@ export function gradVec(angle: number): { x1: number; y1: number; x2: number; y2
 }
 
 // สตริง <linearGradient>/<radialGradient> สำหรับใส่ใน <defs> ของ SVG
-export function gradientSVGString(e: ShapeEl): string {
+export function gradientSVGString(e: { id: string; grad?: GradientDef }): string {
   if (!e.grad) return ''
   const id = gradientId(e.id)
   const stops = `<stop offset="0" stop-color="${e.grad.from}"/><stop offset="1" stop-color="${e.grad.to}"/>`
@@ -846,7 +879,7 @@ export function gradientSVGString(e: ShapeEl): string {
 // สร้าง CanvasGradient ในพิกัดท้องถิ่นของชิ้น (กึ่งกลาง = origin, ครึ่งกว้าง=hw ครึ่งสูง=hh)
 export function shapeGradient(
   ctx: CanvasRenderingContext2D,
-  e: ShapeEl,
+  e: { grad?: GradientDef },
   hw: number,
   hh: number,
 ): CanvasGradient | null {
@@ -931,6 +964,133 @@ export function drawShape2D(ctx: CanvasRenderingContext2D, e: ShapeEl, s: number
   if (e.stroke !== 'none' && e.strokeW > 0) {
     ctx.strokeStyle = e.stroke
     ctx.lineWidth = e.strokeW * s
+    if (e.dash) ctx.setLineDash(dashArray(e.strokeW).split(' ').map((n) => Number(n) * s))
+    ctx.stroke()
+    ctx.setLineDash([])
+  }
+}
+
+// --- Pen tool: เส้น/รูปเวกเตอร์วาดเอง ---
+// สร้าง PathEl จากจุดที่วาด (พิกัดแผ่นสัมบูรณ์) — normalize เข้ากรอบ w×h
+export interface RawAnchor {
+  x: number
+  y: number
+  ox?: number
+  oy?: number
+  ix?: number
+  iy?: number
+}
+export function makePathEl(raw: RawAnchor[], closed: boolean): PathEl | null {
+  if (raw.length < 2) return null
+  const xs = raw.map((a) => a.x)
+  const ys = raw.map((a) => a.y)
+  const x0 = Math.min(...xs)
+  const y0 = Math.min(...ys)
+  const w = Math.max(1, Math.max(...xs) - x0)
+  const h = Math.max(1, Math.max(...ys) - y0)
+  const nx = (v: number) => (v - x0) / w
+  const ny = (v: number) => (v - y0) / h
+  const anchors: PathAnchor[] = raw.map((a) => ({
+    nx: nx(a.x),
+    ny: ny(a.y),
+    ...(a.ox != null && a.oy != null ? { ox: nx(a.ox), oy: ny(a.oy) } : {}),
+    ...(a.ix != null && a.iy != null ? { ix: nx(a.ix), iy: ny(a.iy) } : {}),
+  }))
+  return {
+    id: newId(),
+    type: 'path',
+    anchors,
+    closed,
+    w,
+    h,
+    x: x0,
+    y: y0,
+    rot: 0,
+    fill: closed ? '#7b74e8' : 'none',
+    stroke: closed ? 'none' : '#222222',
+    strokeW: closed ? 0 : 2,
+  }
+}
+
+// สร้างสตริง path `d` ผ่าน mapper (nx,ny)→[X,Y] — ใช้ร่วม SVG (สัมบูรณ์) และ canvas (ท้องถิ่น)
+export function pathDataString(e: PathEl, map: (nx: number, ny: number) => [number, number]): string {
+  const a = e.anchors
+  if (a.length === 0) return ''
+  const P = (i: number) => map(a[i].nx, a[i].ny)
+  const outH = (i: number) => (a[i].ox != null && a[i].oy != null ? map(a[i].ox, a[i].oy) : null)
+  const inH = (i: number) => (a[i].ix != null && a[i].iy != null ? map(a[i].ix, a[i].iy) : null)
+  const [sx, sy] = P(0)
+  let d = `M ${sx} ${sy}`
+  if (a.length === 1) return d
+  const seg = (i: number, j: number) => {
+    const o = outH(i)
+    const n = inH(j)
+    const [px, py] = P(j)
+    if (o || n) {
+      const [ox, oy] = o ?? P(i)
+      const [ix, iy] = n ?? P(j)
+      d += ` C ${ox} ${oy} ${ix} ${iy} ${px} ${py}`
+    } else d += ` L ${px} ${py}`
+  }
+  for (let i = 1; i < a.length; i++) seg(i - 1, i)
+  if (e.closed) {
+    seg(a.length - 1, 0)
+    d += ' Z'
+  }
+  return d
+}
+
+// พิกัดสัมบูรณ์บนแผ่นสำหรับ SVG
+const pathAbsMap = (e: PathEl) => (nx: number, ny: number): [number, number] => [e.x + nx * e.w, e.y + ny * e.h]
+
+export function pathSVG(e: PathEl, rot: string): string {
+  const d = pathDataString(e, pathAbsMap(e))
+  if (!d) return ''
+  const defs = e.grad && e.closed ? `<defs>${gradientSVGString(e)}</defs>` : ''
+  const fill = e.closed ? (e.grad ? `url(#${gradientId(e.id)})` : e.fill !== 'none' ? e.fill : 'none') : 'none'
+  const dash = e.dash && e.strokeW > 0 ? ` stroke-dasharray="${dashArray(e.strokeW)}"` : ''
+  const stroke =
+    e.stroke !== 'none' && e.strokeW > 0 ? ` stroke="${e.stroke}" stroke-width="${e.strokeW}"${dash}` : ''
+  return defs + `<path d="${d}" fill="${fill}"${stroke} stroke-linejoin="round" stroke-linecap="round"${rot}/>`
+}
+
+// วาด path ลง canvas 2D — ctx ถูก translate ไปกึ่งกลาง+หมุนไว้แล้ว (พิกัดท้องถิ่นกึ่งกลาง=origin)
+export function drawPath2D(ctx: CanvasRenderingContext2D, e: PathEl, s: number) {
+  const a = e.anchors
+  if (a.length < 2) return
+  const mx = (nx: number) => (nx * e.w - e.w / 2) * s
+  const my = (ny: number) => (ny * e.h - e.h / 2) * s
+  const P = (i: number) => [mx(a[i].nx), my(a[i].ny)] as const
+  const outH = (i: number) => (a[i].ox != null && a[i].oy != null ? ([mx(a[i].ox!), my(a[i].oy!)] as const) : null)
+  const inH = (i: number) => (a[i].ix != null && a[i].iy != null ? ([mx(a[i].ix!), my(a[i].iy!)] as const) : null)
+  ctx.beginPath()
+  const [sx, sy] = P(0)
+  ctx.moveTo(sx, sy)
+  const seg = (i: number, j: number) => {
+    const o = outH(i)
+    const n = inH(j)
+    const [px, py] = P(j)
+    if (o || n) {
+      const [ox, oy] = o ?? P(i)
+      const [ix, iy] = n ?? P(j)
+      ctx.bezierCurveTo(ox, oy, ix, iy, px, py)
+    } else ctx.lineTo(px, py)
+  }
+  for (let i = 1; i < a.length; i++) seg(i - 1, i)
+  if (e.closed) {
+    seg(a.length - 1, 0)
+    ctx.closePath()
+  }
+  const grad = shapeGradient(ctx, e, (e.w / 2) * s, (e.h / 2) * s)
+  if (e.closed && (grad || e.fill !== 'none')) {
+    ctx.fillStyle = grad ?? e.fill
+    ctx.fill()
+  }
+  if (e.stroke !== 'none' && e.strokeW > 0) {
+    ctx.strokeStyle = e.stroke
+    ctx.lineWidth = e.strokeW * s
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
     if (e.dash) ctx.setLineDash(dashArray(e.strokeW).split(' ').map((n) => Number(n) * s))
     ctx.stroke()
     ctx.setLineDash([])
@@ -1141,6 +1301,8 @@ export function svgArtworkLayer(decos: Deco[]): string {
           `<image href="${e.src}" x="${e.x}" y="${e.y}" width="${w}" height="${h}" preserveAspectRatio="${imgPAR(e.fit)}"${clip}${rot}/>`
       } else if (e.type === 'shape') {
         el = shapeSVG(e, rot)
+      } else if (e.type === 'path') {
+        el = pathSVG(e, rot)
       } else if (e.type === 'nutrition') {
         el = `<g${rot}>${nutritionInnerSVG(e)}</g>`
       } else if (isCurvedText(e)) {
@@ -1191,6 +1353,8 @@ export function drawDeco2D(
     if (img) drawImageFit(ctx, img, e, s)
   } else if (e.type === 'shape') {
     drawShape2D(ctx, e, s)
+  } else if (e.type === 'path') {
+    drawPath2D(ctx, e, s)
   } else if (e.type === 'nutrition') {
     drawNutrition2D(ctx, e, s)
   } else {
@@ -1373,6 +1537,56 @@ export function parseDeco(v: unknown): Deco | null {
       strokeW,
       ...(grad ? { grad } : {}),
       ...((shape === 'polygon' || shape === 'star') && sides ? { sides } : {}),
+      ...(o.dash === true ? { dash: true } : {}),
+      ...base,
+    }
+  }
+  if (o.type === 'path') {
+    const w = Number(o.w)
+    const h = Number(o.h)
+    if (!(w > 0) || !(h > 0) || !Array.isArray(o.anchors)) return null
+    const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : null)
+    const anchors: PathAnchor[] = []
+    for (const raw of o.anchors as Record<string, unknown>[]) {
+      const nx = num(raw?.nx)
+      const ny = num(raw?.ny)
+      if (nx === null || ny === null) continue
+      const ox = num(raw.ox)
+      const oy = num(raw.oy)
+      const ix = num(raw.ix)
+      const iy = num(raw.iy)
+      anchors.push({
+        nx,
+        ny,
+        ...(ox !== null && oy !== null ? { ox, oy } : {}),
+        ...(ix !== null && iy !== null ? { ix, iy } : {}),
+      })
+    }
+    if (anchors.length < 2) return null
+    const fill = typeof o.fill === 'string' ? o.fill : 'none'
+    const stroke = typeof o.stroke === 'string' ? o.stroke : '#222222'
+    const strokeW = Number(o.strokeW) >= 0 ? Number(o.strokeW) : 2
+    const gr = o.grad as Record<string, unknown> | undefined
+    const grad =
+      gr && typeof gr.from === 'string' && typeof gr.to === 'string'
+        ? {
+            from: gr.from,
+            to: gr.to,
+            angle: Number.isFinite(Number(gr.angle)) ? Number(gr.angle) : 90,
+            ...(gr.radial === true ? { radial: true } : {}),
+          }
+        : undefined
+    return {
+      id,
+      type: 'path',
+      anchors,
+      closed: o.closed === true,
+      w,
+      h,
+      fill,
+      stroke,
+      strokeW,
+      ...(grad ? { grad } : {}),
       ...(o.dash === true ? { dash: true } : {}),
       ...base,
     }

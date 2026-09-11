@@ -28,6 +28,8 @@ import {
   recenter,
   cloneDeco,
   withTextW,
+  makePathEl,
+  type RawAnchor,
   elW,
   elH,
   svgArtworkLayer,
@@ -115,6 +117,7 @@ import {
   IconDash,
   IconLock,
   IconUnlock,
+  IconPen,
 } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
@@ -1377,6 +1380,19 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setSelectedIds([el.id])
   }
 
+  // Pen tool: โหมดวาดเวกเตอร์ — กดปุ่มเข้าโหมด, วาดบน blueprint, เสร็จแล้วได้ path deco
+  const [penMode, setPenMode] = useState(false)
+  const startPen = () => {
+    setSelectedIds([])
+    setPenMode(true)
+  }
+  const addPath = (raw: RawAnchor[], closed: boolean) => {
+    const el = makePathEl(raw, closed)
+    if (!el) return
+    setDecos((ds) => [...ds, el])
+    setSelectedIds([el.id])
+  }
+
   const addNutrition = () => {
     if (!dieline) return
     const el = makeNutritionEl(dieline)
@@ -1437,7 +1453,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setDecos((ds) =>
       ds.map((d) => {
         if (d.id !== id) return d
-        if (d.type === 'shape') return { ...d, x, y, w: Math.max(2, r1(w)), h: Math.max(2, r1(h)) }
+        if (d.type === 'shape' || d.type === 'path') return { ...d, x, y, w: Math.max(2, r1(w)), h: Math.max(2, r1(h)) }
         if (d.type === 'nutrition') return { ...d, x, y, w: Math.max(20, r1(w)) }
         if (d.type === 'image') {
           if (lockAspect) {
@@ -2213,6 +2229,15 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   <button className="ico-btn" disabled={aiBusy} title="ดาว" onClick={() => addShape('star')}>
                     <IconStar /> ดาว
                   </button>
+                  <button
+                    className={`ico-btn${penMode ? ' active' : ''}`}
+                    disabled={aiBusy}
+                    title="ปากกา (Pen) — คลิกวางจุด/ลากสร้างโค้ง, คลิกจุดแรกเพื่อปิดรูป, Enter จบเส้น, Esc ยกเลิก"
+                    aria-pressed={penMode}
+                    onClick={() => (penMode ? setPenMode(false) : startPen())}
+                  >
+                    <IconPen /> ปากกา
+                  </button>
                 </div>
                 <div className="art-actions" style={{ marginTop: 8 }}>
                   <button className="ico-btn" disabled={aiBusy} title="ตารางข้อมูลโภชนาการ (อย.)" onClick={addNutrition}>
@@ -2277,6 +2302,14 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           <span className="deco-tico" style={{ color: '#111' }}>
                             ▤
                           </span>
+                        ) : d.type === 'path' ? (
+                          <span
+                            className="deco-sw"
+                            style={{
+                              background: d.closed && d.fill !== 'none' ? d.fill : 'transparent',
+                              borderColor: d.stroke && d.stroke !== 'none' ? d.stroke : d.fill,
+                            }}
+                          />
                         ) : (
                           <span className="deco-tico" style={{ color: d.color }}>
                             T
@@ -2565,14 +2598,17 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                       </>
                     )}
 
-                    {selected.type === 'shape' && selected.shape !== 'line' && (
+                    {((selected.type === 'shape' && selected.shape !== 'line') || selected.type === 'path') && (
                       <>
+                        {/* สีพื้น/ไล่สี: เฉพาะรูปทรง หรือ path ที่ปิดรูป (เส้นเปิดไม่มีพื้น) */}
+                        {(selected.type === 'shape' || (selected.type === 'path' && selected.closed)) && (
+                          <>
                         <div className="art-actions">
                           <div className="deco-color" title="สีพื้น">
                             <span className="deco-ic" aria-hidden="true"><IconFill /></span>
                             <ColorField
                               value={selected.fill === 'none' ? '#7b74e8' : selected.fill}
-                              onChange={(hex) => patchSelected((d) => (d.type === 'shape' ? { ...d, fill: hex } : d))}
+                              onChange={(hex) => patchSelected((d) => (d.type === 'shape' || d.type === 'path' ? { ...d, fill: hex } : d))}
                               palette={palette}
                               onSave={saveSwatch}
                               disabled={aiBusy}
@@ -2584,7 +2620,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                             title="ไม่มีพื้น (โปร่งใส)"
                             aria-label="ไม่มีพื้น"
                             disabled={aiBusy || selected.fill === 'none'}
-                            onClick={() => patchSelected((d) => (d.type === 'shape' ? { ...d, fill: 'none', strokeW: d.strokeW > 0 ? d.strokeW : 2, stroke: d.stroke === 'none' ? '#222222' : d.stroke } : d))}
+                            onClick={() => patchSelected((d) => (d.type === 'shape' || d.type === 'path' ? { ...d, fill: 'none', strokeW: d.strokeW > 0 ? d.strokeW : 2, stroke: d.stroke === 'none' ? '#222222' : d.stroke } : d))}
                           >
                             <IconNoFill />
                           </button>
@@ -2597,7 +2633,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           disabled={aiBusy}
                           onClick={() =>
                             patchSelected((d) =>
-                              d.type === 'shape'
+                              d.type === 'shape' || d.type === 'path'
                                 ? {
                                     ...d,
                                     grad: !d.grad
@@ -2616,7 +2652,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                               <span className="deco-ic" aria-hidden="true"><IconGradStart /></span>
                               <ColorField
                                 value={selected.grad.from}
-                                onChange={(hex) => patchSelected((d) => (d.type === 'shape' && d.grad ? { ...d, grad: { ...d.grad, from: hex } } : d))}
+                                onChange={(hex) => patchSelected((d) => ((d.type === 'shape' || d.type === 'path') && d.grad ? { ...d, grad: { ...d.grad, from: hex } } : d))}
                                 palette={palette}
                                 onSave={saveSwatch}
                                 disabled={aiBusy}
@@ -2627,7 +2663,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                               <span className="deco-ic" aria-hidden="true"><IconGradEnd /></span>
                               <ColorField
                                 value={selected.grad.to}
-                                onChange={(hex) => patchSelected((d) => (d.type === 'shape' && d.grad ? { ...d, grad: { ...d.grad, to: hex } } : d))}
+                                onChange={(hex) => patchSelected((d) => ((d.type === 'shape' || d.type === 'path') && d.grad ? { ...d, grad: { ...d.grad, to: hex } } : d))}
                                 palette={palette}
                                 onSave={saveSwatch}
                                 disabled={aiBusy}
@@ -2640,7 +2676,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                               aria-label="ไล่สีแบบวงกลม (radial)"
                               aria-pressed={!!selected.grad.radial}
                               disabled={aiBusy}
-                              onClick={() => patchSelected((d) => (d.type === 'shape' && d.grad ? { ...d, grad: { ...d.grad, radial: !d.grad.radial || undefined } } : d))}
+                              onClick={() => patchSelected((d) => ((d.type === 'shape' || d.type === 'path') && d.grad ? { ...d, grad: { ...d.grad, radial: !d.grad.radial || undefined } } : d))}
                             >
                               <IconRadial />
                             </button>
@@ -2652,16 +2688,18 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                                 min={0}
                                 max={360}
                                 disabled={aiBusy}
-                                onChange={(v) => patchSelected((d) => (d.type === 'shape' && d.grad ? { ...d, grad: { ...d.grad, angle: v } } : d))}
+                                onChange={(v) => patchSelected((d) => ((d.type === 'shape' || d.type === 'path') && d.grad ? { ...d, grad: { ...d.grad, angle: v } } : d))}
                               />
                             )}
+                          </>
+                        )}
                           </>
                         )}
                         <div className="deco-color" title="สีเส้นขอบ">
                           <span className="deco-ic" aria-hidden="true"><IconStroke /></span>
                           <ColorField
                             value={selected.stroke === 'none' ? '#222222' : selected.stroke}
-                            onChange={(hex) => patchSelected((d) => (d.type === 'shape' ? { ...d, stroke: hex, strokeW: d.strokeW > 0 ? d.strokeW : 2 } : d))}
+                            onChange={(hex) => patchSelected((d) => (d.type === 'shape' || d.type === 'path' ? { ...d, stroke: hex, strokeW: d.strokeW > 0 ? d.strokeW : 2 } : d))}
                             palette={palette}
                             onSave={saveSwatch}
                             disabled={aiBusy}
@@ -2675,7 +2713,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           min={0}
                           max={20}
                           disabled={aiBusy}
-                          onChange={(v) => patchSelected((d) => (d.type === 'shape' ? { ...d, strokeW: v, stroke: v > 0 && d.stroke === 'none' ? '#222222' : d.stroke } : d))}
+                          onChange={(v) => patchSelected((d) => (d.type === 'shape' || d.type === 'path' ? { ...d, strokeW: v, stroke: v > 0 && d.stroke === 'none' ? '#222222' : d.stroke } : d))}
                         />
                         {selected.strokeW > 0 && (
                           <button
@@ -2684,12 +2722,12 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                             aria-label="เส้นขอบประ (dashed)"
                             aria-pressed={!!selected.dash}
                             disabled={aiBusy}
-                            onClick={() => patchSelected((d) => (d.type === 'shape' ? { ...d, dash: !d.dash || undefined } : d))}
+                            onClick={() => patchSelected((d) => (d.type === 'shape' || d.type === 'path' ? { ...d, dash: !d.dash || undefined } : d))}
                           >
                             <IconDash />
                           </button>
                         )}
-                        {(selected.shape === 'polygon' || selected.shape === 'star') && (
+                        {selected.type === 'shape' && (selected.shape === 'polygon' || selected.shape === 'star') && (
                           <DimField
                             label={selected.shape === 'star' ? 'จำนวนแฉก' : 'จำนวนด้าน'}
                             icon={selected.shape === 'star' ? <IconStar /> : <IconPolygon />}
@@ -2707,7 +2745,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           min={2}
                           max={Math.round(dieline.width)}
                           disabled={aiBusy}
-                          onChange={(v) => patchSelected((d) => (d.type === 'shape' ? { ...d, w: v } : d))}
+                          onChange={(v) => patchSelected((d) => (d.type === 'shape' || d.type === 'path' ? { ...d, w: v } : d))}
                         />
                         <DimField
                           label="สูง"
@@ -2716,7 +2754,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           min={2}
                           max={Math.round(dieline.height)}
                           disabled={aiBusy}
-                          onChange={(v) => patchSelected((d) => (d.type === 'shape' ? { ...d, h: v } : d))}
+                          onChange={(v) => patchSelected((d) => (d.type === 'shape' || d.type === 'path' ? { ...d, h: v } : d))}
                         />
                       </>
                     )}
@@ -3552,6 +3590,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 onRotate={rotateDeco}
                 onResize={resizeDeco}
                 resizeAspect={resizeAspect}
+                penMode={penMode}
+                onAddPath={addPath}
+                onPenExit={() => setPenMode(false)}
                 onRemove={removeDeco}
                 onText={(id, text) =>
                   setDecos((ds) =>
