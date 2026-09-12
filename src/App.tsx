@@ -122,6 +122,8 @@ import {
 } from './components/icons'
 
 // จานสี (palette) ใช้ร่วมทุกช่องสี — เก็บระดับแอปใน localStorage แยกจากงาน
+// ซ่อนเครื่องมือปากกา (Pen) ไว้ก่อน — โค้ด path/pen ยังอยู่ครบ เปิดกลับได้ที่นี่
+const SHOW_PEN_TOOL = false
 const PALETTE_KEY = 'gen-package-palette-v1'
 const isHex = (s: unknown): s is string => typeof s === 'string' && /^#[0-9a-fA-F]{6}$/.test(s)
 function loadPalette(): string[] {
@@ -2233,15 +2235,17 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   <button className="ico-btn" disabled={aiBusy} title="ดาว" onClick={() => addShape('star')}>
                     <IconStar /> ดาว
                   </button>
-                  <button
-                    className={`ico-btn${penMode ? ' active' : ''}`}
-                    disabled={aiBusy}
-                    title="ปากกา (Pen) — คลิกวางจุด/ลากสร้างโค้ง, คลิกจุดแรกเพื่อปิดรูป, Enter จบเส้น, Esc ยกเลิก"
-                    aria-pressed={penMode}
-                    onClick={() => (penMode ? setPenMode(false) : startPen())}
-                  >
-                    <IconPen /> ปากกา
-                  </button>
+                  {SHOW_PEN_TOOL && (
+                    <button
+                      className={`ico-btn${penMode ? ' active' : ''}`}
+                      disabled={aiBusy}
+                      title="ปากกา (Pen) — คลิกวางจุด/ลากสร้างโค้ง, คลิกจุดแรกเพื่อปิดรูป, Enter จบเส้น, Esc ยกเลิก"
+                      aria-pressed={penMode}
+                      onClick={() => (penMode ? setPenMode(false) : startPen())}
+                    >
+                      <IconPen /> ปากกา
+                    </button>
+                  )}
                 </div>
                 <div className="art-actions" style={{ marginTop: 8 }}>
                   <button className="ico-btn" disabled={aiBusy} title="ตารางข้อมูลโภชนาการ (อย.)" onClick={addNutrition}>
