@@ -1,38 +1,38 @@
 /* --- design tokens: pastel glassmorphism (ม่วงลาเวนเดอร์ → ชมพู) --- */
 :root {
-  /* พื้นหลัง gradient นุ่ม + สีทึบสำรองหลังกระจก */
-  --bg: linear-gradient(135deg, #d8d1f1 0%, #e0d2ec 34%, #edd0e0 66%, #f4d8e2 100%);
-  --bg-solid: #e7dcf0;
+  /* พื้นหลัง gradient นุ่ม teal → ครีมอุ่น (เข้าโทนโลโก้ #154049) + สีทึบสำรองหลังกระจก */
+  --bg: linear-gradient(135deg, #d5e7e9 0%, #e0e8e6 38%, #efe3db 72%, #f6e5db 100%);
+  --bg-solid: #e6ebe7;
   /* การ์ดกระจกฝ้า (โปร่งแสง + เบลอ) — ทึบขึ้นเล็กน้อยเพื่อ contrast ตัวหนังสือ */
   --surface: rgba(255, 255, 255, 0.72);
   --surface-2: rgba(255, 255, 255, 0.58);
   --surface-solid: #ffffff;
-  --border: rgba(120, 100, 175, 0.22);
-  --border-strong: rgba(120, 100, 175, 0.36);
-  --text: #241f30;
-  --text-2: #605a75;
+  --border: rgba(25, 85, 95, 0.2);
+  --border-strong: rgba(25, 85, 95, 0.34);
+  --text: #1c2a2d;
+  --text-2: #4c5c5f;
   /* text-3 = ตัวอักษรลำดับสาม ต้องเข้มพอผ่าน AA ~4.5:1 บนการ์ดสว่าง แต่ยังจางกว่า text-2 */
-  --text-3: #6c6684;
-  /* accent พาสเทลพีริวิงเคิล + คู่สีชมพู/คอรัล */
-  --accent: #7b74e8;
-  --accent-hover: #6a62dd;
-  --accent-weak: rgba(123, 116, 232, 0.1);
-  --accent-border: rgba(123, 116, 232, 0.34);
-  /* accent เวอร์ชันเข้มสำหรับ "ตัวอักษร" บนพื้นสว่าง (accent พาสเทลอ่อนเกินจะผ่าน AA เป็น text)
-     — พื้น/ขอบ/โลโก้ยังใช้ --accent สดใสเหมือนเดิม; โหมดมืด accent สว่างพออยู่แล้วจึงตั้ง = --accent */
-  --accent-ink: #5b53c6;
+  --text-3: #5a696c;
+  /* accent = teal (แกนโลโก้) + คู่สีคอรัลอุ่น */
+  --accent: #1f7c8b;
+  --accent-hover: #1a6c7a;
+  --accent-weak: rgba(31, 124, 139, 0.1);
+  --accent-border: rgba(31, 124, 139, 0.34);
+  /* accent เวอร์ชันเข้มสำหรับ "ตัวอักษร" บนพื้นสว่าง = สีโลโก้ตรง ๆ (contrast สูงผ่าน AA)
+     — พื้น/ขอบ/โลโก้ใช้ --accent สด; โหมดมืด accent สว่างพออยู่แล้วจึงตั้ง = --accent */
+  --accent-ink: #154049;
   --on-accent: #ffffff;
-  --pink: #f0a7c2;
-  --coral: #f4a9b6;
-  /* ปุ่มหลัก = ไล่สีพาสเทล พีริวิงเคิล → ชมพู */
-  --cta-grad: linear-gradient(135deg, #8b84f0 0%, #ef9fc0 100%);
-  --cta-grad-hover: linear-gradient(135deg, #7b72ee 0%, #ec8fb5 100%);
-  /* ตัวอักษรบนปุ่ม gradient = สีเข้ม (ขาวบนพาสเทลอ่อนไม่ผ่าน AA ~2.9; เข้มได้ 5.8–8.5)
-     — gradient เหมือนกันทั้งสองธีม จึงใช้สีเข้มค่าเดียวไม่ override ในโหมดมืด */
-  --on-cta: #241a33;
-  --danger: #e26d8a;
-  --danger-bg: #fcebeb;
-  /* สีบอกสถานะ (info ฟ้า / warn เหลืองอำพัน) — ปรับตามธีมได้ ไม่ hardcode พื้นสว่างค้างในโหมดมืด */
+  /* คู่สีคอรัล (ชื่อ token คงเดิมเพื่อไม่แตะที่เรียกใช้) */
+  --pink: #e88a63;
+  --coral: #f0a98a;
+  /* ปุ่มหลัก = ไล่สี teal → terracotta (คอรัลเข้ม) — ขาวอ่านออกทั้งปุ่ม ≥4.6:1 ผ่าน AA */
+  --cta-grad: linear-gradient(135deg, #1f7c8b 0%, #bd5530 100%);
+  --cta-grad-hover: linear-gradient(135deg, #1a7080 0%, #ab4c2a 100%);
+  /* ตัวอักษรบนปุ่ม gradient = ขาว (ไล่สีเข้มพอ) — gradient เหมือนกันทั้งสองธีม ไม่ override ในโหมดมืด */
+  --on-cta: #ffffff;
+  --danger: #d6494f;
+  --danger-bg: #fbeaea;
+  /* สีบอกสถานะ (info ฟ้า แยกจาก teal / warn เหลืองอำพัน) */
   --info: #1b6ea8;
   --info-bg: #e6f1fb;
   --info-border: #185fa5;
@@ -44,35 +44,35 @@
   --radius-lg: 26px;
   --radius-sm: 12px;
   --glass: blur(20px) saturate(1.35);
-  --shadow-sm: 0 2px 10px rgba(120, 100, 190, 0.1);
-  --shadow: 0 16px 40px rgba(120, 100, 190, 0.18);
+  --shadow-sm: 0 2px 10px rgba(20, 75, 85, 0.12);
+  --shadow: 0 16px 40px rgba(20, 75, 85, 0.2);
 }
 
-/* --- Dark mode: กระจกฝ้าบนพื้นม่วง-พลัมเข้ม (accent สว่างขึ้น) --- */
+/* --- Dark mode: กระจกฝ้าบนพื้น teal เข้ม (accent teal สว่างขึ้น) --- */
 :root[data-theme='dark'] {
-  --bg: linear-gradient(135deg, #1e1930 0%, #271f3c 40%, #331f39 72%, #3a2340 100%);
-  --bg-solid: #221c34;
+  --bg: linear-gradient(135deg, #0f2529 0%, #143033 42%, #1e302c 74%, #2a2c26 100%);
+  --bg-solid: #142b2e;
   --surface: rgba(255, 255, 255, 0.07);
   --surface-2: rgba(255, 255, 255, 0.05);
-  --surface-solid: #2a2440;
+  --surface-solid: #173230;
   --border: rgba(255, 255, 255, 0.14);
   --border-strong: rgba(255, 255, 255, 0.24);
-  --text: #ece9f6;
-  --text-2: #b6afca;
+  --text: #e7efee;
+  --text-2: #a7bcbb;
   /* text-3 ในโหมดมืดต้องสว่างพอ (secondary text บนการ์ดกระจกมืดผ่าน AA ~4.5:1) */
-  --text-3: #b3acc8;
-  --accent: #a49dff;
-  --accent-hover: #b7b1ff;
+  --text-3: #a3b7b6;
+  --accent: #5cc0cf;
+  --accent-hover: #74ccd9;
   /* โหมดมืด: accent สว่างพอเป็นตัวอักษรบนการ์ดมืดได้ จึงใช้ค่าเดียวกับ --accent */
-  --accent-ink: #a49dff;
+  --accent-ink: #5cc0cf;
   /* พื้น active/hover จาง ๆ — ลดความทึบในโหมดมืดให้การ์ด active ไม่สว่างจนตัวหนังสือ accent เลือนหาย */
-  --accent-weak: rgba(164, 157, 255, 0.12);
-  --accent-border: rgba(164, 157, 255, 0.42);
+  --accent-weak: rgba(92, 192, 207, 0.14);
+  --accent-border: rgba(92, 192, 207, 0.42);
   /* accent ในโหมดมืดเป็นสีอ่อน → ตัวอักษรบนพื้น accent ทึบ (ชิป/แบดจ์) ต้องเป็นสีเข้มถึงจะอ่านออก
      (ปุ่ม gradient หลักคุมสีขาวเองแยกต่างหาก จึงไม่กระทบ) */
-  --on-accent: #211a33;
-  --danger: #f28aa6;
-  --danger-bg: rgba(242, 138, 166, 0.16);
+  --on-accent: #08211f;
+  --danger: #f28a8f;
+  --danger-bg: rgba(242, 138, 143, 0.16);
   /* โหมดมืด: ตัวอักษรสถานะสว่างขึ้น + พื้นเป็นสีโปร่งจาง อ่านง่ายบนการ์ดมืด */
   --info: #8fc4ee;
   --info-bg: rgba(80, 150, 215, 0.18);

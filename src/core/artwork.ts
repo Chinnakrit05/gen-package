@@ -561,7 +561,7 @@ export function makeShapeEl(dieline: Dieline, shape: ShapeKind): ShapeEl {
   // — ผู้ใช้ยืดเป็นวงรีเองได้ภายหลัง; สี่เหลี่ยมยังเป็นทรงผืนผ้าตามหน้าโชว์
   const h = isPolyShape(shape) || shape === 'ellipse' ? w : Math.max(10, fh * 0.3)
   const { x, y } = centerOnFace(dieline, w, h)
-  const base = { id: newId(), type: 'shape' as const, shape, w, h, fill: '#7b74e8', stroke: 'none', strokeW: 0, x, y, rot: 0 }
+  const base = { id: newId(), type: 'shape' as const, shape, w, h, fill: '#2f8a99', stroke: 'none', strokeW: 0, x, y, rot: 0 }
   return shape === 'star' ? { ...base, sides: 5 } : shape === 'polygon' ? { ...base, sides: 6 } : base
 }
 
@@ -1006,7 +1006,7 @@ export function makePathEl(raw: RawAnchor[], closed: boolean): PathEl | null {
     x: x0,
     y: y0,
     rot: 0,
-    fill: closed ? '#7b74e8' : 'none',
+    fill: closed ? '#2f8a99' : 'none',
     stroke: closed ? 'none' : '#222222',
     strokeW: closed ? 0 : 2,
   }
@@ -1508,7 +1508,7 @@ export function parseDeco(v: unknown): Deco | null {
     const w = Number(o.w)
     const h = Number(o.h)
     if (!(w > 0) || !(h > 0)) return null
-    const fill = typeof o.fill === 'string' ? o.fill : '#7b74e8'
+    const fill = typeof o.fill === 'string' ? o.fill : '#2f8a99'
     const stroke = typeof o.stroke === 'string' ? o.stroke : 'none'
     const strokeW = Number(o.strokeW) >= 0 ? Number(o.strokeW) : 0
     const gr = o.grad as Record<string, unknown> | undefined

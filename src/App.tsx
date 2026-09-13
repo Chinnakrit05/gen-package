@@ -701,7 +701,7 @@ function ImpositionDiagram({
     <svg className="imp-diagram" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="แผนภาพการวางบนแผ่น">
       <rect x={0} y={0} width={W} height={H} fill="#f4f2ec" stroke="#c9bda2" strokeWidth={1} />
       {cells.map((c, i) => (
-        <rect key={i} x={c.x} y={c.y} width={pw} height={ph} fill="#e3e0fb" stroke="#7b74e8" strokeWidth={0.7} />
+        <rect key={i} x={c.x} y={c.y} width={pw} height={ph} fill="#dbeef1" stroke="#2f8a99" strokeWidth={0.7} />
       ))}
     </svg>
   )
@@ -737,7 +737,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [renamingId, setRenamingId] = useState<string | null>(null) // เลเยอร์ที่กำลังแก้ชื่อ (ดับเบิลคลิก)
   const [lockAspect, setLockAspect] = useState(true) // ล็อกสัดส่วนกรอบรูป: ปรับกว้าง/สูงพร้อมกันตามสัดส่วนรูปจริง
-  const [presetColor, setPresetColor] = useState('#7b74e8') // สีเริ่มต้นของลายจากไลบรารี
+  const [presetColor, setPresetColor] = useState('#2f8a99') // สีเริ่มต้นของลายจากไลบรารี
   // กลุ่มเครื่องมือหน้าตกแต่งที่เปิดอยู่ (accordion) — เก็บค่าเริ่มต้นตามการใช้งานบ่อย
   const [groups, setGroups] = useState({
     // หน้าออกแบบ
@@ -2130,7 +2130,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               <Group title="พื้นหลังแพ็กเกจ" open={groups.bg} onToggle={() => toggleGroup('bg')}>
                 <div className="fill-color-row">
                   <ColorField
-                    value={fillColor ?? '#7b74e8'}
+                    value={fillColor ?? '#2f8a99'}
                     onChange={setFillColor}
                     palette={palette}
                     onSave={saveSwatch}
@@ -2680,7 +2680,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                           <div className="deco-color" title="สีพื้น">
                             <span className="deco-ic" aria-hidden="true"><IconFill /></span>
                             <ColorField
-                              value={selected.fill === 'none' ? '#7b74e8' : selected.fill}
+                              value={selected.fill === 'none' ? '#2f8a99' : selected.fill}
                               onChange={(hex) => patchSelected((d) => (d.type === 'shape' || d.type === 'path' ? { ...d, fill: hex } : d))}
                               palette={palette}
                               onSave={saveSwatch}
@@ -2710,7 +2710,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                                 ? {
                                     ...d,
                                     grad: !d.grad
-                                      ? { from: d.fill !== 'none' ? d.fill : '#7b74e8', to: '#ffffff', angle: 90 }
+                                      ? { from: d.fill !== 'none' ? d.fill : '#2f8a99', to: '#ffffff', angle: 90 }
                                       : undefined,
                                   }
                                 : d,
@@ -3085,7 +3085,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                       <div className="deco-color">
                         <span>สีลาย</span>
                         <ColorField
-                          value={selected.presetColor ?? '#7b74e8'}
+                          value={selected.presetColor ?? '#2f8a99'}
                           onChange={(hex) =>
                             patchSelected((d) => {
                               if (d.type !== 'image' || !d.preset) return d
