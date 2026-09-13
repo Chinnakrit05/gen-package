@@ -13,11 +13,11 @@
   --text-2: #4c5c5f;
   /* text-3 = ตัวอักษรลำดับสาม ต้องเข้มพอผ่าน AA ~4.5:1 บนการ์ดสว่าง แต่ยังจางกว่า text-2 */
   --text-3: #5a696c;
-  /* accent = teal (แกนโลโก้) + คู่สีคอรัลอุ่น */
-  --accent: #1f7c8b;
-  --accent-hover: #1a6c7a;
-  --accent-weak: rgba(31, 124, 139, 0.1);
-  --accent-border: rgba(31, 124, 139, 0.34);
+  /* accent = teal เข้ม (แกนโลโก้ #154049) */
+  --accent: #17677a;
+  --accent-hover: #12586a;
+  --accent-weak: rgba(23, 103, 122, 0.1);
+  --accent-border: rgba(23, 103, 122, 0.36);
   /* accent เวอร์ชันเข้มสำหรับ "ตัวอักษร" บนพื้นสว่าง = สีโลโก้ตรง ๆ (contrast สูงผ่าน AA)
      — พื้น/ขอบ/โลโก้ใช้ --accent สด; โหมดมืด accent สว่างพออยู่แล้วจึงตั้ง = --accent */
   --accent-ink: #154049;
@@ -25,9 +25,9 @@
   /* โทนอ่อน teal/aqua (ชื่อ token คงเดิมเพื่อไม่แตะที่เรียกใช้) */
   --pink: #4aa7b3;
   --coral: #7fc3cc;
-  /* ปุ่มหลัก = ไล่สี teal → teal เข้มสีโลโก้ (mono-teal) — ขาวอ่านออกทั้งปุ่ม ≥4.9:1 ผ่าน AA */
-  --cta-grad: linear-gradient(135deg, #1f7c8b 0%, #154049 100%);
-  --cta-grad-hover: linear-gradient(135deg, #1a7080 0%, #103640 100%);
+  /* ปุ่มหลัก = ไล่สี teal เข้ม → teal เข้มสีโลโก้ (mono-teal) — ขาวอ่านออกทั้งปุ่มผ่าน AA */
+  --cta-grad: linear-gradient(135deg, #1a7284 0%, #154049 100%);
+  --cta-grad-hover: linear-gradient(135deg, #155f6f 0%, #103640 100%);
   /* ตัวอักษรบนปุ่ม gradient = ขาว (ไล่สีเข้มพอ) — gradient เหมือนกันทั้งสองธีม ไม่ override ในโหมดมืด */
   --on-cta: #ffffff;
   --danger: #d6494f;
