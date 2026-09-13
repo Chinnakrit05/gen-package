@@ -805,9 +805,74 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     }
     document.addEventListener('mouseover', over)
     document.addEventListener('mouseout', out)
+
+    // จอสัมผัส (ไม่มี hover): แตะค้าง ~0.45 วิ = โชว์ tooltip เดียวกัน แล้วกันไม่ให้ปุ่มถูกกดจริง
+    let pressTimer = 0
+    let pressEl: HTMLElement | null = null
+    let pressXY = { x: 0, y: 0 }
+    let lpShown = false
+    let autoHide = 0
+    const clearPress = () => {
+      if (pressTimer) window.clearTimeout(pressTimer)
+      pressTimer = 0
+    }
+    const eatClick = (ev: Event) => {
+      ev.preventDefault()
+      ev.stopPropagation()
+    }
+    const pDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return
+      const el = (e.target as Element).closest?.('.deco-topbar [title]') as HTMLElement | null
+      if (!el) return
+      pressEl = el
+      pressXY = { x: e.clientX, y: e.clientY }
+      lpShown = false
+      clearPress()
+      pressTimer = window.setTimeout(() => {
+        if (!pressEl) return
+        hide()
+        show(pressEl)
+        lpShown = true
+      }, 450)
+    }
+    const pMove = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch' || !pressEl) return
+      // ขยับเกินระยะ = ตั้งใจลาก/เลื่อน ไม่ใช่แตะค้าง
+      if (Math.hypot(e.clientX - pressXY.x, e.clientY - pressXY.y) > 10) {
+        clearPress()
+        if (lpShown) hide()
+        pressEl = null
+        lpShown = false
+      }
+    }
+    const pUp = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return
+      clearPress()
+      if (lpShown) {
+        // กันคลิกที่จะตามมาหลังปล่อยนิ้ว (แตะค้าง = ดูข้อมูล ไม่สั่งทำงาน)
+        document.addEventListener('click', eatClick, { capture: true, once: true })
+        window.setTimeout(() => document.removeEventListener('click', eatClick, { capture: true }), 500)
+        if (autoHide) window.clearTimeout(autoHide)
+        autoHide = window.setTimeout(hide, 1600) // ปล่อยแล้วค้างไว้ให้อ่านครู่หนึ่ง
+      }
+      pressEl = null
+      lpShown = false
+    }
+    document.addEventListener('pointerdown', pDown, true)
+    document.addEventListener('pointermove', pMove, true)
+    document.addEventListener('pointerup', pUp, true)
+    document.addEventListener('pointercancel', pUp, true)
+
     return () => {
       document.removeEventListener('mouseover', over)
       document.removeEventListener('mouseout', out)
+      document.removeEventListener('pointerdown', pDown, true)
+      document.removeEventListener('pointermove', pMove, true)
+      document.removeEventListener('pointerup', pUp, true)
+      document.removeEventListener('pointercancel', pUp, true)
+      document.removeEventListener('click', eatClick, { capture: true })
+      clearPress()
+      if (autoHide) window.clearTimeout(autoHide)
       tip?.remove()
     }
   }, [])
