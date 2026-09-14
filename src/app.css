@@ -690,8 +690,9 @@ main {
   flex: 1;
   min-height: 320px;
 }
-/* โมดูล "ขนาด" ลอยด้านขวาของ work area (แท็บออกแบบ) — ปรับแล้วเห็น 3D อัปเดตทันที */
-.size-float {
+/* โมดูลลอยด้านขวาของ work area (ขนาด @ ออกแบบ, พื้นหลัง @ ตกแต่ง) — ปรับแล้วเห็นผลทันที */
+.size-float,
+.bg-float {
   position: absolute;
   top: 14px;
   right: 14px;
@@ -702,7 +703,8 @@ main {
   z-index: 20;
   padding: 6px 14px 12px;
 }
-.size-float:empty {
+.size-float:empty,
+.bg-float:empty {
   display: none;
 }
 /* เว้นที่ให้โมดูลลอย ไม่ให้แถบพับด้านขวาโดนบัง */
@@ -710,8 +712,9 @@ main {
   padding-right: 286px;
 }
 @media (max-width: 1200px) {
-  /* จอแคบ: ไม่ลอยทับ — วางเป็นบล็อกใต้ 3D */
-  .size-float {
+  /* จอแคบ: ไม่ลอยทับ — วางเป็นบล็อกใต้พื้นที่ทำงาน */
+  .size-float,
+  .bg-float {
     position: static;
     width: auto;
     max-height: none;
@@ -885,7 +888,7 @@ main {
   position: absolute;
   top: 8px;
   left: 10px;
-  right: 10px;
+  right: 290px; /* เว้นที่ด้านขวาให้โมดูลพื้นหลังลอย (bg-float) ไม่ทับกัน */
   z-index: 25;
   padding: 6px 46px 6px 12px; /* เว้นขวาให้ปุ่ม ⋯ */
   box-shadow: var(--shadow);

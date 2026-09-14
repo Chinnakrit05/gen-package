@@ -746,8 +746,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     mat: true,
     label: true,
     size: true,
-    // หน้าตกแต่ง
-    bg: false,
+    // หน้าตกแต่ง (bg เปิดไว้ — เป็นโมดูลลอยแล้ว)
+    bg: true,
     add: true,
     lib: false,
     layers: true,
@@ -763,6 +763,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [decoMore, setDecoMore] = useState(false) // กาง/ยุบเครื่องมือขั้นสูงในแถบบน (สร้างสำเนาตาราง ฯลฯ)
   // โมดูล "ขนาด" ลอยด้านขวา work area (portal จากแถบข้างไปที่ host ใน main)
   const [sizeFloatEl, setSizeFloatEl] = useState<HTMLDivElement | null>(null)
+  // โมดูล "พื้นหลังแพ็กเกจ" ลอยด้านขวา work area (แท็บตกแต่ง)
+  const [bgFloatEl, setBgFloatEl] = useState<HTMLDivElement | null>(null)
 
   // tooltip กล่องข้อความตอนชี้ปุ่มในแถบเครื่องมือบน — อ่านจาก title ของปุ่ม (ครอบทุกปุ่มอัตโนมัติ)
   // แล้วแสดงเป็นกล่องสไตล์ Canva (พร้อมถอด title ออกชั่วคราวกัน tooltip เนทีฟซ้อน)
@@ -2156,6 +2158,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
 
           {sideTab === 'artwork' && (
           <>
+              {bgFloatEl && createPortal(
               <Group title="พื้นหลังแพ็กเกจ" open={groups.bg} onToggle={() => toggleGroup('bg')}>
                 <div className="fill-color-row">
                   <ColorField
@@ -2290,7 +2293,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         ? 'ถมสีพื้นถุงทั้งแผ่น เข้าไฟล์ .svg/.pdf จริง; “ไม่มีสี” = ฟิล์มพื้นขาว · หรือใส่รูปเป็นพื้นก็ได้'
                         : 'ถมสีพื้นฉลากทั้งแผ่น เข้าไฟล์ .svg/.pdf จริง; “ไม่มีสี” = ฉลากพื้นขาว · หรือใส่รูปเป็นพื้นก็ได้'}
                 </p>
-              </Group>
+              </Group>,
+                bgFloatEl,
+              )}
 
               <Group title="เพิ่มองค์ประกอบ" open={groups.add} onToggle={() => toggleGroup('add')}>
                 <div className="art-actions">
@@ -3756,6 +3761,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               <div className="viewer-3d">{viewer3D}</div>
             </div>
             )}
+            {/* โมดูลพื้นหลังแพ็กเกจ ลอยขวา (เฉพาะแท็บตกแต่ง) */}
+            {sideTab === 'artwork' && <div className="bg-float card" ref={setBgFloatEl} />}
             </>
             )}
           </div>
