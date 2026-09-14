@@ -398,6 +398,54 @@ function Group({
   )
 }
 
+// โมดูลลอยที่ลากย้ายได้ (จับที่แถบหัวข้อ) + จางลงเมื่อไม่ได้ชี้/โฟกัส
+// host คือ div เปล่า — เนื้อหา (Group) ถูก portal เข้ามาจาก App ผ่าน hostRef
+function FloatModule({ kind, hostRef }: { kind: 'size' | 'bg'; hostRef: (el: HTMLDivElement | null) => void }) {
+  const elRef = useRef<HTMLDivElement | null>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const setRef = (el: HTMLDivElement | null) => {
+    elRef.current = el
+    hostRef(el)
+  }
+  // ใช้ native listener บน host — เนื้อหา (Group) ถูก portal เข้ามา event จึง bubble ทาง DOM ไม่ใช่ React tree
+  useEffect(() => {
+    const el = elRef.current
+    if (!el) return
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target as HTMLElement).closest('.tgroup-head')) return // ลากเฉพาะแถบหัวข้อ
+      const start = { sx: e.clientX, sy: e.clientY, l: el.offsetLeft, t: el.offsetTop, moved: false }
+      const parent = el.offsetParent as HTMLElement | null
+      const onMove = (ev: PointerEvent) => {
+        if (!start.moved && Math.hypot(ev.clientX - start.sx, ev.clientY - start.sy) > 3) start.moved = true
+        if (!start.moved) return
+        let left = start.l + (ev.clientX - start.sx)
+        let top = start.t + (ev.clientY - start.sy)
+        if (parent) {
+          left = Math.max(4, Math.min(left, parent.clientWidth - el.offsetWidth - 4))
+          top = Math.max(4, Math.min(top, parent.clientHeight - 44))
+        }
+        setPos({ left, top })
+      }
+      const onUp = () => {
+        document.removeEventListener('pointermove', onMove)
+        document.removeEventListener('pointerup', onUp)
+        if (start.moved) {
+          // กันคลิกที่ตามมา (ไม่ให้ยุบ/กางกลุ่มหลังลาก)
+          const eat = (ce: Event) => ce.stopPropagation()
+          document.addEventListener('click', eat, { capture: true, once: true })
+          setTimeout(() => document.removeEventListener('click', eat, { capture: true }), 120)
+        }
+      }
+      document.addEventListener('pointermove', onMove)
+      document.addEventListener('pointerup', onUp)
+    }
+    el.addEventListener('pointerdown', onDown)
+    return () => el.removeEventListener('pointerdown', onDown)
+  }, [])
+  const style = pos ? { left: pos.left, top: pos.top, right: 'auto' as const } : undefined
+  return <div ref={setRef} className={`${kind}-float card float-module`} style={style} />
+}
+
 // จัดเป็นเลเยอร์ตั้งชื่อ cut/crease/dims เพื่อให้เปิดใน Illustrator/CorelDRAW แล้วแยกชั้นได้
 // (โปรแกรมพวกนี้เอา id ของ <g> ไปเป็นชื่อเลเยอร์) ส่วน attribute inkscape:* ทำให้
 // Inkscape มองเป็นเลเยอร์จริงด้วย — สำคัญตรงที่เลเยอร์ dims ต้องปิด/ลบทิ้งได้ในคลิกเดียว
@@ -3688,7 +3736,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   {foldBar}
                   <div className="viewer-3d">{viewer3D}</div>
                 </div>
-                <div className="size-float card" ref={setSizeFloatEl} />
+                <FloatModule kind="size" hostRef={setSizeFloatEl} />
               </>
             ) : (
             <>
@@ -3762,7 +3810,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
             </div>
             )}
             {/* โมดูลพื้นหลังแพ็กเกจ ลอยขวา (เฉพาะแท็บตกแต่ง) */}
-            {sideTab === 'artwork' && <div className="bg-float card" ref={setBgFloatEl} />}
+            {sideTab === 'artwork' && <FloatModule kind="bg" hostRef={setBgFloatEl} />}
             </>
             )}
           </div>

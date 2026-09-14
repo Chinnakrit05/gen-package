@@ -707,6 +707,18 @@ main {
 .bg-float:empty {
   display: none;
 }
+/* โมดูลลอย: จางเมื่อไม่ได้ใช้ (เห็นพื้นที่ทำงานทะลุ) เต็มเมื่อชี้/โฟกัส/ลาก; ลากที่แถบหัวข้อ */
+.float-module {
+  opacity: 0.62;
+  transition: opacity 0.14s ease;
+}
+.float-module:hover,
+.float-module:focus-within {
+  opacity: 1;
+}
+.float-module .tgroup-head {
+  cursor: move;
+}
 /* เว้นที่ให้โมดูลลอย ไม่ให้แถบพับด้านขวาโดนบัง */
 .panels.show3d .viewer-main .fold-bar {
   padding-right: 286px;
