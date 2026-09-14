@@ -1728,6 +1728,30 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     </div>
   ) : null
 
+  // มุมมอง 3D (ใช้ซ้ำได้ทั้งจอเล็ก PiP และจอหลักในแท็บออกแบบ)
+  const viewer3D = (
+    <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
+      {kind === 'box' ? (
+        <Viewer3D
+          dieline={dieline}
+          mat={mat}
+          fold={fold}
+          depth={template.foldDepth({ W, D, H }, mat)}
+          tilt={template.tilt}
+          decos={decos}
+          fillColor={fillColor}
+          fillImage={fillImage}
+        />
+      ) : kind === 'vessel' ? (
+        <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} />
+      ) : (
+        <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} />
+      )}
+    </Suspense>
+  )
+  // แท็บ "ออกแบบ" = โชว์ 3D ของแพ็กเกจเป็นจอหลัก (แทน blueprint)
+  const design3D = sideTab === 'design'
+
   return (
     <div className="app">
       <header>
@@ -3646,7 +3670,15 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
               {currentAi.reasoning && <p className="assume-reason">{currentAi.reasoning}</p>}
             </div>
           )}
-          <div className="panels">
+          <div className={`panels${design3D ? ' show3d' : ''}`}>
+            {design3D ? (
+              /* แท็บออกแบบ: จอหลักเป็น 3D ของแพ็กเกจที่เลือก (พร้อมแถบพับ) */
+              <div className="viewer-main card">
+                {foldBar}
+                <div className="viewer-3d">{viewer3D}</div>
+              </div>
+            ) : (
+            <>
             {/* host แถบเครื่องมือ (Canva) — ลอยทับบน dieline (portal มาลงที่นี่เมื่อเลือกชิ้น) */}
             <div className="deco-topbar-host" ref={setDecoBar} />
             <div className="blueprint card">
@@ -3713,27 +3745,10 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 </span>
               </div>
               {expand3d && foldBar}
-              <div className="viewer-3d">
-                <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
-                  {kind === 'box' ? (
-                    <Viewer3D
-                      dieline={dieline}
-                      mat={mat}
-                      fold={fold}
-                      depth={template.foldDepth({ W, D, H }, mat)}
-                      tilt={template.tilt}
-                      decos={decos}
-                      fillColor={fillColor}
-                      fillImage={fillImage}
-                    />
-                  ) : kind === 'vessel' ? (
-                    <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} />
-                  ) : (
-                    <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} />
-                  )}
-                </Suspense>
-              </div>
+              <div className="viewer-3d">{viewer3D}</div>
             </div>
+            )}
+            </>
             )}
           </div>
         </main>

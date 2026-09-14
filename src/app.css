@@ -676,6 +676,20 @@ main {
   flex: 1;
   min-width: 0;
 }
+/* แท็บออกแบบ: จอ 3D เป็นจอหลักเต็มพื้นที่ (แถบพับด้านบน + 3D ด้านล่าง) */
+.panels > .viewer-main {
+  flex: 1;
+  min-width: 0;
+}
+.viewer-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.viewer-main .viewer-3d {
+  flex: 1;
+  min-height: 320px;
+}
 
 /* จอ 3D เล็กซ้อนมุม blueprint — จางไว้ ไม่ให้บังงาน ชี้เมาส์ค่อยชัด */
 .viewer-pip {
