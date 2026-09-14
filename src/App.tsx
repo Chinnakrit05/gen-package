@@ -761,6 +761,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   // แถบปรับแต่งชิ้นที่เลือก ย้ายไปอยู่ "ด้านบน blueprint" แบบ Canva ผ่าน portal (host อยู่ใน main)
   const [decoBar, setDecoBar] = useState<HTMLDivElement | null>(null)
   const [decoMore, setDecoMore] = useState(false) // กาง/ยุบเครื่องมือขั้นสูงในแถบบน (สร้างสำเนาตาราง ฯลฯ)
+  // โมดูล "ขนาด" ลอยด้านขวา work area (portal จากแถบข้างไปที่ host ใน main)
+  const [sizeFloatEl, setSizeFloatEl] = useState<HTMLDivElement | null>(null)
 
   // tooltip กล่องข้อความตอนชี้ปุ่มในแถบเครื่องมือบน — อ่านจาก title ของปุ่ม (ครอบทุกปุ่มอัตโนมัติ)
   // แล้วแสดงเป็นกล่องสไตล์ Canva (พร้อมถอด title ออกชั่วคราวกัน tooltip เนทีฟซ้อน)
@@ -2020,6 +2022,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
             </Group>
           )}
 
+          {sizeFloatEl && createPortal(
           <Group
             title={
               kind === 'box'
@@ -2136,7 +2139,9 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 </p>
               </>
             )}
-          </Group>
+          </Group>,
+            sizeFloatEl,
+          )}
 
           <div className="step-nav">
             <span className="step-saved">✓ บันทึกงานอัตโนมัติ</span>
@@ -3672,11 +3677,14 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
           )}
           <div className={`panels${design3D ? ' show3d' : ''}`}>
             {design3D ? (
-              /* แท็บออกแบบ: จอหลักเป็น 3D ของแพ็กเกจที่เลือก (พร้อมแถบพับ) */
-              <div className="viewer-main card">
-                {foldBar}
-                <div className="viewer-3d">{viewer3D}</div>
-              </div>
+              /* แท็บออกแบบ: จอหลักเป็น 3D ของแพ็กเกจที่เลือก (พร้อมแถบพับ) + โมดูลขนาดลอยขวา */
+              <>
+                <div className="viewer-main card">
+                  {foldBar}
+                  <div className="viewer-3d">{viewer3D}</div>
+                </div>
+                <div className="size-float card" ref={setSizeFloatEl} />
+              </>
             ) : (
             <>
             {/* host แถบเครื่องมือ (Canva) — ลอยทับบน dieline (portal มาลงที่นี่เมื่อเลือกชิ้น) */}

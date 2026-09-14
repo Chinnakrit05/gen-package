@@ -690,6 +690,37 @@ main {
   flex: 1;
   min-height: 320px;
 }
+/* โมดูล "ขนาด" ลอยด้านขวาของ work area (แท็บออกแบบ) — ปรับแล้วเห็น 3D อัปเดตทันที */
+.size-float {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 258px;
+  max-width: calc(100% - 28px);
+  max-height: calc(100% - 28px);
+  overflow-y: auto;
+  z-index: 20;
+  padding: 6px 14px 12px;
+}
+.size-float:empty {
+  display: none;
+}
+/* เว้นที่ให้โมดูลลอย ไม่ให้แถบพับด้านขวาโดนบัง */
+.panels.show3d .viewer-main .fold-bar {
+  padding-right: 286px;
+}
+@media (max-width: 1200px) {
+  /* จอแคบ: ไม่ลอยทับ — วางเป็นบล็อกใต้ 3D */
+  .size-float {
+    position: static;
+    width: auto;
+    max-height: none;
+    margin: 10px 0 0;
+  }
+  .panels.show3d .viewer-main .fold-bar {
+    padding-right: 12px;
+  }
+}
 
 /* จอ 3D เล็กซ้อนมุม blueprint — จางไว้ ไม่ให้บังงาน ชี้เมาส์ค่อยชัด */
 .viewer-pip {
