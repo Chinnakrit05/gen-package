@@ -42,6 +42,9 @@ export interface Material {
   detail: string
   thickness: number
   foldable: boolean
+  // ชนิดการขึ้นรูปสำหรับวัสดุที่ foldable=false: 'revolve' = ภาชนะหมุนขึ้นรูป (ค่าเริ่มต้นเมื่อไม่ระบุ),
+  // 'pouch' = ถุงฟิล์มซีลขอบ (doypack) — ใช้แยก path 3D/dieline; วัสดุพับได้ (foldable) ไม่ใช้ฟิลด์นี้
+  form?: 'revolve' | 'pouch'
   process: string
   color: string
   opacity?: number

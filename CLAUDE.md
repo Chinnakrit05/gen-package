@@ -7,19 +7,30 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `npm run dev` — dev server ที่ port 5173 (strict)
 - `npm run build` — typecheck (`tsc --noEmit`) + vite build
 - `npx tsc --noEmit` — typecheck อย่างเดียว
+- `npm test` — vitest (unit test ใน `src/**/*.test.ts`) — เทสต์เรขาคณิตเป็นเชิงตัวเลขล้วน:
+  ไฟล์ export ตรวจ byte/โครงสร้างจริง (xref offset, เลเยอร์), การพับตรวจตำแหน่ง 3D ของแผง
+  ผ่าน `computeMatrices` แทนการดูภาพ — เพิ่ม template/รูปแบบไฟล์ใหม่ให้เพิ่มเทสต์แนวเดียวกัน
+  (ดู `fefco0427.test.ts` เป็นแบบ) config อยู่ `vitest.config.ts` แยกจาก vite.config.ts
+  โดยเจตนา เพื่อไม่โหลด middleware /api/box-spec ตอนรันเทสต์
 
 ## โครงสร้าง
 
 - `src/core/types.ts` — Dieline, Panel (outline + hinge + stage + zOffset), Material, DimMark
+- `src/core/project.ts` — โมเดล Project (งานหนึ่งชิ้น) + ตัว parse/validate ที่ localStorage และการนำเข้าไฟล์ใช้ร่วมกัน (ย้ายออกจาก App.tsx เพื่อไม่ให้ App เป็น dependency ของ projectFile)
+- `src/core/projectFile.ts` — ส่งออก/นำเข้างานเป็น `.genpkg.json` (envelope: app/schemaVersion/exportedAt); นำเข้าแล้ว id ใหม่เสมอ (กันชน) + เตือนเมื่อ parse ซ่อมค่า (clamp ขนาด/ตัด history); schema ใหม่กว่า → ปฏิเสธ; เพิ่มฟิลด์ที่เก็บต้องขึ้น PROJECT_FILE_VERSION
 - `src/core/materials.ts` — material registry: ความหนา t, foldable, สี — วัสดุกำหนดระยะเผื่อใน dieline ไม่ใช่แค่หน้าตา
 - `src/core/templates/index.ts` — template registry (BoxTemplate: defaults, tilt, supportsHandle, foldDepth, generate) — เพิ่มแบบกล่องใหม่ที่นี่
 - feature รูหิ้ว: `Panel.holes` (polygon rings → THREE.Shape.holes) + `obroundPts/obroundPath` ใน shared.ts; เพิ่ม feature ใหม่ต้องอัปเดต "ความสามารถของระบบ" ใน system prompt ของ server/boxSpec.ts ด้วย ไม่งั้น AI จะอ้างว่าทำได้ทั้งที่ engine ไม่มี
-- `src/core/templates/tuckEnd.ts` / `mailer.ts` / `sleeve.ts` / `bottleCarrier.ts` — generators: รับ W/D/H "ด้านใน" แปลงเป็นระยะ score +2t ต่อแกน, ระยะหลบ flap สเกลตาม t, ผลิตทั้ง segments (SVG มี Q curve) และ panels (3D, polygonized) จาก geometry เดียวกัน; mailer ใช้ tilt หมุนโมเดลให้ฐานลงพื้นตามจังหวะพับ
+- `src/core/templates/tuckEnd.ts` / `mailer.ts` / `sleeve.ts` / `bottleCarrier.ts` / `tray.ts` / `gable.ts` — generators: รับ W/D/H "ด้านใน" แปลงเป็นระยะ score +2t ต่อแกน, ระยะหลบ flap สเกลตาม t, ผลิตทั้ง segments (SVG มี Q curve) และ panels (3D, polygonized) จาก geometry เดียวกัน; mailer/tray/gable ใช้ tilt หมุนโมเดลให้ฐานลงพื้นตามจังหวะพับ (tray = ถาดเปิดบน ผนัง 4 ด้าน + ลิ้นมุมพับเข้าล็อก เหมือน mailer แต่ไม่มีฝา; gable = ต่อยอดจาก tray โดยเพิ่มแผงจั่วบนผนังหน้า-หลังที่ foldAngle=±lean เอียงมาชนกันที่สัน เกิดหลังคา+หูหิ้วในตัว, lean=asin(Dp/2G) — foldAngle 0 ของแผงลูก = ต่อดิ่งจากผนัง ไม่ใช่ 90)
 - `src/core/fold.ts` — fold engine: panel หมุนรอบ crease ในพิกัดแผ่นคลี่ คูณ matrix แม่เป็นลูกโซ่; ด้านในกล่อง = +z; stage 0-3 (ลำตัว→ลิ้นกันฝุ่น→ฝาเสียบ→ลิ้น); zOffset ดันชั้นวัสดุที่ซ้อนกันกัน z-fighting
 - `src/components/Viewer3D.tsx` — R3F viewer + FitCamera (วัดจากส่วนแผ่นที่ยื่นไกลสุดจากแผงหน้า ไม่ใช่ครึ่งแผ่น)
-- `src/components/DielineSVG.tsx` — blueprint preview + เส้นบอกขนาด (toggle ได้)
+- `src/components/DielineSVG.tsx` — blueprint preview + เส้นบอกขนาด (toggle ได้) + ลาก/หมุน/ลบ artwork; การลากมี snap; ซูม/แพน (Ctrl+ล้อ), กริด, ไม้บรรทัด, เส้นไกด์ลากเอง (state ใน component; guideLines ≠ prop `guides` ที่เป็น bleed/safe); เส้นไกด์เข้า snapTargets ตอนลาก
+- `src/core/imposition.ts` — คำนวณ yield ต่อแผ่น (pure): `computeImposition` วางกริด step&repeat เทียบชิ้นตั้ง/หมุน 90° เลือกจำนวนมากสุด + `sheetsNeeded` (ปัดขึ้น) + `SHEET_PRESETS` แผ่นมาตรฐานไทย; UI อยู่แท็บ "ส่งออก" ผูกกับช่องจำนวน (state ephemeral ไม่เก็บลง project)
+- `src/core/snap.ts` — logic ดูด artwork เข้าแนวขณะลาก (pure): `snapTargets` สร้างเส้นเป้าหมายจากกึ่งกลางแผ่น/ขอบ-กึ่งกลางแผง/ขอบ-กึ่งกลางชิ้นอื่น, `applySnap` ดูดขอบ-กึ่งกลางชิ้นเข้าเส้นใกล้สุดในระยะ threshold (แปลงจาก 6px ตามซูม); กด Alt ค้างระหว่างลาก = ปิด snap
 - `src/components/PromptBar.tsx` + `src/core/ai.ts` — AI layer ฝั่ง client; แนบรูปอ้างอิงได้ (ย่อเป็น JPEG ≤1024px ฝั่ง client → base64; backend api ส่งเป็น image block, backend cli เขียนไฟล์ tmp ให้ Claude เปิดอ่านเองแล้วลบทิ้ง)
-- `server/boxSpec.ts` — endpoint /api/box-spec (Vite middleware): Claude strict tool use → JSON spec; ไม่มี ANTHROPIC_API_KEY → โหมดจำลอง (mockSpec)
+- `server/boxSpec.ts` — endpoint /api/box-spec (Vite middleware): Claude strict tool use → JSON spec; ไม่มี ANTHROPIC_API_KEY → โหมดจำลอง (mockSpec); export ตัวหลัก (askClaude/mockSpec/parseCurrent/parseImage) ใช้ร่วมกับ serverless
+- `server/handler.ts` — ต้นทาง (source) ของ Vercel serverless `/api/box-spec` (import ตัวหลักจาก `./boxSpec`) — บน Vercel ไม่มี claude CLI จึงใช้แค่ backend api/mock; ตั้ง ANTHROPIC_API_KEY ใน Vercel env. Dev ใช้ Vite middleware, prod (Vercel) ใช้เส้นนี้ — client เรียก path `/api/box-spec` เดียวกัน
+- `api/box-spec.js` — **ไฟล์ที่ถูก generate** (esbuild bundle จาก `server/handler.ts` ผ่าน `scripts/build-api.mjs`, สคริปต์ `build:api` ซึ่งอยู่ในคำสั่ง `build`) — อย่าแก้ตรง ๆ ให้แก้ที่ `server/handler.ts` แล้วรัน `npm run build:api`. ต้อง bundle เพราะ Vercel รันฟังก์ชันแบบ native ESM และไม่ bundle import ข้ามโฟลเดอร์ (`../src`, `../server`) ให้ → ถ้าปล่อยไว้จะ `ERR_MODULE_NOT_FOUND` ตอนรัน; commit ไฟล์นี้ไว้เพื่อให้ Vercel ตรวจเจอฟังก์ชัน (เนื้อหาถูก regenerate สดทุก build อยู่แล้ว)
 
 ## Env / AI backend
 
@@ -32,5 +43,36 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - three ต้อง >= 0.185 — r175 มีบั๊ก ExtrudeGeometry ไม่สร้างฝาหน้า-หลังเมื่อ bevelEnabled:false (กล่องกลายเป็น wireframe)
 - เปลี่ยนเวอร์ชัน dependency แล้วต้องลบ `node_modules/.vite` แล้วรีสตาร์ท dev server ไม่งั้น pre-bundle เก่าค้าง
 - พิกัดแผ่นคลี่: x ขวา y ลง หน่วย mm; แปลงเป็น 3D ที่ (x, -y, 0)
+- ฟอนต์ไทย self-host ผ่าน `@fontsource/*` (import ใน main.tsx, ไม่พึ่ง Google CDN); ข้อความเลือกได้หลายฟอนต์ (registry `FONTS` ใน artwork.ts: noto/sarabun/prompt/kanit) + น้ำหนัก 400/700 — เพิ่มฟอนต์ใหม่ต้องทำ 3 จุด: import css ใน main.tsx, เพิ่มใน `FONTS`, และ `ensureThaiFont` โหลดให้; ก่อน rasterize ลง canvas (renderArtworkCanvas/ใบสเปก) ต้อง `await ensureThaiFont()` เพราะ fontsource โหลด subset ต่อน้ำหนักแบบ lazy — ถ้าไม่รอ canvas จะ fallback ทำให้ไทยในไฟล์ export เพี้ยน
 - ตัวเลขบน blueprint คือระยะ score จริง (บวกเผื่อความหนาแล้ว) จึงใหญ่กว่าค่าที่ผู้ใช้ตั้งเล็กน้อย — ตั้งใจ ไม่ใช่บั๊ก
-- แผนเฟสถัดไป: template เพิ่ม (FEFCO 0427, sleeve), export PDF/DXF, โลโก้/ข้อความ (dieline คือ UV map), ขวด revolve + ฉลาก
+- แผนเฟสเดิม (FEFCO 0427, sleeve, export PDF/DXF, โลโก้/ข้อความ, ขวด revolve + ฉลาก) เสร็จครบแล้ว
+- ชนิดงาน (packKind ใน materials.ts) แยก 3 path จากวัสดุ: `box` (foldable) / `vessel` (revolve) /
+  `pouch` (form==='pouch') — App เลือก generator + viewer + label UI ตาม kind ไม่ใช่ `mat.foldable` ตรง ๆ
+  แล้ว (ถุงกับภาชนะต่างเป็น !foldable ทั้งคู่); เพิ่มชนิดงานใหม่ต้องเพิ่ม kind + แตะจุดที่เช็ค kind ใน App
+- วัสดุพับไม่ได้ (pet-bottle/glass/aluminum) → เส้นทางภาชนะใน `src/core/vessel.ts`:
+  โปรไฟล์ revolve ต่อชนิดวัสดุ (LatheGeometry ใน VesselViewer3D) + dieline "ฉลาก" พันรอบตัว
+  — ฉลากเป็น Dieline ธรรมดา ระบบ artwork/export/guides/ใบสเปกเดิมจึงใช้ได้หมด
+  ความหมายขนาด: W = ⌀ตัว, D = ⌀ปาก/คอ, H = สูง (template ถูกละเลย); `isVessel` = !foldable && form≠pouch
+- วัสดุถุงฟิล์ม (pouch-foil/pouch-kraft/pouch-clear, form==='pouch') → `src/core/pouch.ts`:
+  ถุงตั้งได้ (doypack) — (1) dieline แผ่นฟิล์มแบน [หน้า W][หลัง W][ลิ้นกาว] × [ริมบน+ลำตัว+ก้น] เป็น
+  Dieline ปกติ ไหลผ่าน artwork/export/CMYK/ใบสเปกได้เลย (2) ทรง 3D ใน PouchViewer3D = พื้นผิว loft
+  หน้าตัดวงรีเปลี่ยนตามความสูง (`pouchWidthFactor`/`pouchDepthFactor` เป็น pure ทดสอบได้: ก้นแบนตั้งได้
+  พุงกลางป่อง ปากซีลแบน) + UV แม็พ frontRect/backRect ให้ลายอ่านไม่กลับด้านเมื่อมองจาก +Z (texture flipY=false)
+  ความหมายขนาด: W = กว้างถุง, D = ลึกก้น (clamp ≤ W, ≥10; ซองแบนไม่ใช้ D), H = สูงลำตัว (template ถูกละเลย)
+  รูปแบบถุง `pouchStyle` (`POUCH_STYLES`) 6 แบบ: 'stand' doypack ก้นตั้ง / 'flat' ซองแบน 3 ด้าน (ไม่ใช้ D) /
+  'gusset' ซองข้างจีบ brick (front+จีบ+back+จีบ, ทรงแท่ง) / 'box' ก้นแบนตั้งเหลี่ยม (จีบข้าง+ก้น gusset, ตั้งได้) /
+  'pillow' ซองหลังกลาง (ไม่ใช้ D, fin seal กลางหลัง, พองนุ่ม) / 'spout' ถุงมีจุก (ก้นตั้งเหมือน stand + จุก 3D + marker บน dieline)
+  — dieline คุมด้วย sideGusset (gusset/box) + bottomGusset (stand/box/spout) + sb (flat/gusset/pillow);
+  โปรไฟล์ 3D ผ่าน `pouchDepthFactor(v, style)` + `pouchWidthFactor(v, style)` + `pouchSection(θ, style)`
+  (gusset/box ใช้ superellipse = ทรงเหลี่ยม) + `Pouch.depth3D`/`stands`/`spout`; `generatePouch(box, mat, { style, zipper })`
+  ออปชันเสริม `PouchAddons` = { hangHole (รูแขวน euro-hole, ตัดจริง), valve (วาล์วกาแฟ marker+จาน 3D),
+  tinTie (ที่รัดปาก แถบ 3D) } — ตำแหน่งใช้ค่าคงที่ร่วม dieline/3D (`VALVE_V`/`TINTIE_INSET`/`valveR`)
+  ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
+  (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 5); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+- รอยพับ 180° (แผ่นม้วน FEFCO 0427) ได้สันโค้งจาก `rollBeads` ใน fold.ts — ทรงกระบอกบาง
+  รัศมี = ครึ่งของระยะสองชั้น เรนเดอร์เป็น `Bead` ใน Viewer3D โตตามการพับเอง; fold อื่นที่ใช้
+  foldAngle ±180 จะได้สันนี้อัตโนมัติ (ปัจจุบันมีแค่ roll)
+- หน้าต่างเวลาการพับใน `fold.ts` เลือกชุดตามจำนวน stage ที่ template ใช้ (`WINDOWS_4`/`WINDOWS_5`)
+  — เพิ่ม template ที่ต้องการจังหวะมากกว่า 5 ให้เพิ่มชุดใหม่ อย่าแก้ชุดเดิม เพราะจะไปเปลี่ยน
+  จังหวะพับของ template ที่จูนไว้แล้ว
