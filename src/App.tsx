@@ -155,6 +155,12 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
   const inTopBar = useContext(TopBarCtx) // เรียก hook แบบไม่มีเงื่อนไข
   const pop = popProp || inTopBar // ในแถบบน = โหมด dropdown อัตโนมัติ
   const [open, setOpen] = useState(false)
+  // ข้อความในช่องพิมพ์ระหว่างแก้ (ไม่ clamp ทันที กันพิมพ์เลขมั่ว เช่น 100→250) — clamp ตอน blur
+  const [text, setText] = useState(String(value))
+  const [editing, setEditing] = useState(false)
+  useEffect(() => {
+    if (!editing) setText(String(value))
+  }, [value, editing])
   const btnRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null)
@@ -207,10 +213,20 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
       min={min}
       max={max}
       step={step}
-      value={value}
+      value={text}
       disabled={disabled}
       aria-label={label}
-      onChange={(e) => commit(Number(e.target.value))}
+      onFocus={() => setEditing(true)}
+      onChange={(e) => {
+        setText(e.target.value)
+        const n = Number(e.target.value)
+        // อัปเดตสด (สไลเดอร์/3D ตาม) เฉพาะเมื่อเป็นตัวเลขในช่วง — ไม่ clamp ระหว่างพิมพ์
+        if (e.target.value !== '' && Number.isFinite(n) && n >= min && n <= max) onChange(n)
+      }}
+      onBlur={() => {
+        setEditing(false)
+        commit(Number(text)) // clamp ตอนออกจากช่อง
+      }}
     />
   )
   const slider = (
