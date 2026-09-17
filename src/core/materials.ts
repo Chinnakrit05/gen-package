@@ -70,7 +70,9 @@ export const MATERIALS: Material[] = [
     foldable: false,
     process: 'เป่าขึ้นรูป (blow molding)',
     color: '#9fc9dd',
-    note: 'วัสดุนี้พับไม่ได้ — ต้องขึ้นรูปด้วยการเป่า จะใช้เส้นทาง revolve profile + dieline ของฉลากแทน (เฟสถัดไป)',
+    opacity: 0.5,
+    roughness: 0.12,
+    note: 'ขึ้นรูปด้วยการเป่า — blueprint ที่เห็นคือ dieline ของฉลากพันรอบขวด พร้อมส่งพิมพ์',
   },
   {
     id: 'glass',
@@ -80,7 +82,9 @@ export const MATERIALS: Material[] = [
     foldable: false,
     process: 'เป่า/หล่อขึ้นรูป',
     color: '#cfe6dd',
-    note: 'วัสดุนี้พับไม่ได้ — ขึ้นรูปจากแม่พิมพ์ blueprint ที่มีความหมายคือ dieline ของฉลาก (เฟสถัดไป)',
+    opacity: 0.55,
+    roughness: 0.08,
+    note: 'ขึ้นรูปจากแม่พิมพ์ — blueprint ที่เห็นคือ dieline ของฉลากพันรอบโหล/ขวด พร้อมส่งพิมพ์',
   },
   {
     id: 'aluminum',
@@ -90,7 +94,45 @@ export const MATERIALS: Material[] = [
     foldable: false,
     process: 'ดึงขึ้นรูป (draw & iron)',
     color: '#c8ccd0',
-    note: 'วัสดุนี้พับไม่ได้ — ขึ้นรูปจากแผ่นด้วยแม่พิมพ์ จะใช้เส้นทาง revolve + ฉลากแทน (เฟสถัดไป)',
+    roughness: 0.3,
+    note: 'ดึงขึ้นรูปจากแผ่น — blueprint ที่เห็นคือ dieline ของฉลาก/สติกเกอร์พันรอบกระป๋อง พร้อมส่งพิมพ์',
+  },
+  {
+    id: 'pouch-foil',
+    nameTh: 'ถุงฟอยล์ตั้งได้ (doypack)',
+    detail: 'ฟิล์มลามิเนตฟอยล์ ก้นตั้งได้ กันความชื้น — กาแฟ/ขนม/ผงชง',
+    thickness: 0.12,
+    foldable: false,
+    form: 'pouch',
+    process: 'พิมพ์ + ลามิเนต + ซีลขอบขึ้นรูปถุง',
+    color: '#e7e3d8',
+    roughness: 0.55,
+    note: 'ถุงฟิล์มซีลขอบ — blueprint ที่เห็นคือแผ่นฟิล์มแบน (หน้า+หลัง+ก้น) พร้อมส่งพิมพ์',
+  },
+  {
+    id: 'pouch-kraft',
+    nameTh: 'ถุงคราฟท์ตั้งได้',
+    detail: 'ฟิล์มคราฟท์สายอีโค่ ก้นตั้งได้ — ชา/ธัญพืช/สินค้าออร์แกนิก',
+    thickness: 0.14,
+    foldable: false,
+    form: 'pouch',
+    process: 'พิมพ์ + ลามิเนต + ซีลขอบขึ้นรูปถุง',
+    color: '#c8a778',
+    roughness: 0.85,
+    note: 'ถุงฟิล์มซีลขอบ — blueprint ที่เห็นคือแผ่นฟิล์มแบน (หน้า+หลัง+ก้น) พร้อมส่งพิมพ์',
+  },
+  {
+    id: 'pouch-clear',
+    nameTh: 'ถุงใสตั้งได้',
+    detail: 'ฟิล์มใสโชว์สินค้า ก้นตั้งได้ — ลูกอม/ขนม/ของแห้ง',
+    thickness: 0.1,
+    foldable: false,
+    form: 'pouch',
+    process: 'พิมพ์ + ซีลขอบขึ้นรูปถุง',
+    color: '#dbe7ec',
+    opacity: 0.4,
+    roughness: 0.2,
+    note: 'ถุงฟิล์มซีลขอบ — blueprint ที่เห็นคือแผ่นฟิล์มแบน (หน้า+หลัง+ก้น) พร้อมส่งพิมพ์',
   },
 ]
 
@@ -99,3 +141,8 @@ export function getMaterial(id: string): Material {
   if (!m) throw new Error(`unknown material: ${id}`)
   return m
 }
+
+// ชนิดงานที่ตัดสินใจ path (dieline/3D) จากวัสดุ: กล่องพับ / ภาชนะ revolve / ถุงฟิล์ม
+export type PackKind = 'box' | 'vessel' | 'pouch'
+export const packKind = (m: Material): PackKind =>
+  m.foldable ? 'box' : m.form === 'pouch' ? 'pouch' : 'vessel'
