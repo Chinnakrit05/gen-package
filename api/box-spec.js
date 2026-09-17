@@ -12162,6 +12162,13 @@ import { execFile as execFile2 } from "node:child_process";
 import { promisify as promisify2 } from "node:util";
 init_sdk();
 
+// server/http/legacyAiGuard.ts
+function isLegacyAiRouteEnabled(env) {
+  const appEnv = env.APP_ENV?.trim() || (env.NODE_ENV === "production" ? "production" : "development");
+  const appMode = env.VITE_APP_MODE?.trim() || "local";
+  return (appEnv === "development" || appEnv === "test") && appMode === "local";
+}
+
 // src/core/materials.ts
 var MATERIALS = [
   {
@@ -14298,6 +14305,10 @@ async function readJsonBody(req) {
   }
 }
 async function handler(req, res) {
+  if (!isLegacyAiRouteEnabled(process.env)) {
+    send(res, 410, { error: "AI endpoint \u0E23\u0E38\u0E48\u0E19\u0E40\u0E14\u0E34\u0E21\u0E16\u0E39\u0E01\u0E1B\u0E34\u0E14\u0E43\u0E19 cloud mode" });
+    return;
+  }
   if (req.method !== "POST") {
     send(res, 405, { error: "\u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 POST \u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19" });
     return;
@@ -14338,7 +14349,7 @@ async function handler(req, res) {
     send(res, 200, await askClaude(apiKey, model || "claude-opus-4-8", prompt, current, image));
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
-      send(res, 401, { error: "ANTHROPIC_API_KEY \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07 \u2014 \u0E15\u0E23\u0E27\u0E08\u0E04\u0E48\u0E32\u0E43\u0E19 Vercel" });
+      send(res, 502, { error: "ANTHROPIC_API_KEY \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07 \u2014 \u0E15\u0E23\u0E27\u0E08\u0E04\u0E48\u0E32\u0E43\u0E19 Vercel" });
     } else if (err instanceof Anthropic.RateLimitError) {
       send(res, 429, { error: "\u0E40\u0E23\u0E35\u0E22\u0E01\u0E16\u0E35\u0E48\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48" });
     } else if (err instanceof Anthropic.APIError) {

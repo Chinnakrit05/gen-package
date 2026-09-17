@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import Anthropic from '@anthropic-ai/sdk'
 import { askClaude, mockSpec, parseCurrent, parseImage } from './boxSpec'
+import { isLegacyAiRouteEnabled } from './http/legacyAiGuard'
 
 // ต้นทาง (source) ของ serverless function /api/box-spec บน Vercel
 // ถูก esbuild bundle เป็นไฟล์เดียว → api/box-spec.js (ดู scripts/build-api.mjs) เพราะ Vercel รัน
@@ -45,6 +46,10 @@ async function readJsonBody(req: Req): Promise<Record<string, unknown>> {
 }
 
 export default async function handler(req: Req, res: ServerResponse): Promise<void> {
+  if (!isLegacyAiRouteEnabled(process.env)) {
+    send(res, 410, { error: 'AI endpoint รุ่นเดิมถูกปิดใน cloud mode' })
+    return
+  }
   if (req.method !== 'POST') {
     send(res, 405, { error: 'ต้องเป็น POST เท่านั้น' })
     return
@@ -91,7 +96,7 @@ export default async function handler(req: Req, res: ServerResponse): Promise<vo
     send(res, 200, await askClaude(apiKey, model || 'claude-opus-4-8', prompt, current, image))
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
-      send(res, 401, { error: 'ANTHROPIC_API_KEY ไม่ถูกต้อง — ตรวจค่าใน Vercel' })
+      send(res, 502, { error: 'ANTHROPIC_API_KEY ไม่ถูกต้อง — ตรวจค่าใน Vercel' })
     } else if (err instanceof Anthropic.RateLimitError) {
       send(res, 429, { error: 'เรียกถี่เกินไป รอสักครู่แล้วลองใหม่' })
     } else if (err instanceof Anthropic.APIError) {

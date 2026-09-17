@@ -1,5 +1,5 @@
 // หน้าเข้าสู่ระบบของ PackIt — โมเดิร์นมินิมอลตามธีมเดิม
-// ปุ่ม Google เป็นแบบจำลอง (ยังไม่ต่อ OAuth จริง) กดแล้วเข้าแอปเลย
+// local demo ใช้ callback จำลอง ส่วน cloud mode ส่งต่อให้ Supabase OAuth adapter
 
 // โลโก้กล่องทรงไอโซเมตริก สื่อถึงงานบรรจุภัณฑ์
 function PackItMark() {
@@ -46,7 +46,17 @@ function GoogleG() {
   )
 }
 
-export function Login({ onLogin }: { onLogin: () => void }) {
+export function Login({
+  onLogin,
+  busy = false,
+  error,
+  finePrint = 'เดโม่ · ยังไม่ได้เชื่อมต่อบัญชี Google จริง',
+}: {
+  onLogin: () => void
+  busy?: boolean
+  error?: string | null
+  finePrint?: string
+}) {
   return (
     <div className="login-screen">
       <div className="login-card">
@@ -62,11 +72,12 @@ export function Login({ onLogin }: { onLogin: () => void }) {
           <br />
           เข้าสู่ระบบเพื่อเริ่มงานของคุณ
         </p>
-        <button className="google-btn" onClick={onLogin}>
+        <button className="google-btn" onClick={onLogin} disabled={busy}>
           <GoogleG />
-          <span>เข้าสู่ระบบด้วย Google</span>
+          <span>{busy ? 'กำลังเชื่อมต่อ…' : 'เข้าสู่ระบบด้วย Google'}</span>
         </button>
-        <p className="login-fine">เดโม่ · ยังไม่ได้เชื่อมต่อบัญชี Google จริง</p>
+        {error && <p className="login-fine" role="alert">{error}</p>}
+        <p className="login-fine">{finePrint}</p>
       </div>
       <p className="login-footer">PackIt · เครื่องมือสร้างแพ็กเกจแบบพารามิเตอร์</p>
     </div>

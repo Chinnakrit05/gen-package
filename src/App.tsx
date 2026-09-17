@@ -625,7 +625,7 @@ const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
 
 // --- บันทึกหลายงาน (project) + ประวัติเวอร์ชันของแต่ละงานลง localStorage ---
 
-// export ให้ตอน "ออกจากระบบ" ล้างงานทิ้งได้ (ยังไม่มีระบบ user — งานผูกกับเบราว์เซอร์)
+// local demo ใช้ key เดิมเพื่อรักษาความเข้ากันได้; cloud draft ส่ง storageKey ที่ผูกกับ app user
 export const STORAGE_KEY = 'gen-package-projects-v1'
 export const LEGACY_KEY = 'gen-package-design-v1'
 
@@ -680,9 +680,9 @@ function NameModal({
   )
 }
 
-function loadStore(): Store {
+function loadStore(storageKey: string, migrateLegacy: boolean): Store {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (raw) {
       const d = JSON.parse(raw) as Record<string, unknown>
       const projects = Array.isArray(d.projects)
@@ -701,31 +701,32 @@ function loadStore(): Store {
     // ตกไปเช็คข้อมูลรุ่นเก่า
   }
 
-  // ย้ายข้อมูลรุ่นเก่า (งานเดียว) เข้าระบบหลายงาน
-  try {
-    const legacy = localStorage.getItem(LEGACY_KEY)
-    if (legacy) {
-      const d = JSON.parse(legacy) as Record<string, unknown>
-      const live = parseSpec(d.live)
-      if (live) {
-        const history = parseHistory(d.history)
-        const p: Project = {
-          id: crypto.randomUUID(),
-          name: 'งาน 1',
-          updatedAt: Date.now(),
-          live,
-          qty: DEFAULT_QTY,
-          fillColor: null,
-          decos: [],
-          history,
-          histIdx: clampIdx(d.histIdx, history.length),
+  if (migrateLegacy) {
+    // ย้ายข้อมูลรุ่นเก่า (งานเดียว) เข้าระบบหลายงานเฉพาะ local demo
+    try {
+      const legacy = localStorage.getItem(LEGACY_KEY)
+      if (legacy) {
+        const d = JSON.parse(legacy) as Record<string, unknown>
+        const live = parseSpec(d.live)
+        if (live) {
+          const history = parseHistory(d.history)
+          const p: Project = {
+            id: crypto.randomUUID(),
+            name: 'งาน 1',
+            updatedAt: Date.now(),
+            live,
+            qty: DEFAULT_QTY,
+            fillColor: null,
+            decos: [],
+            history,
+            histIdx: clampIdx(d.histIdx, history.length),
+          }
+          return { projects: [p], activeId: p.id, showDims: d.showDims !== false }
         }
-        localStorage.removeItem(LEGACY_KEY)
-        return { projects: [p], activeId: p.id, showDims: d.showDims !== false }
       }
+    } catch {
+      // ใช้ค่าเริ่มต้น
     }
-  } catch {
-    // ใช้ค่าเริ่มต้น
   }
 
   const p = freshProject(1)
@@ -771,25 +772,35 @@ function ImpositionDiagram({
   )
 }
 
-const store0 = loadStore()
-const active0 = store0.projects.find((p) => p.id === store0.activeId) ?? store0.projects[0]
+interface AppProps {
+  onLogout?: () => void
+  storageKey?: string
+  migrateLegacy?: boolean
+}
 
-export default function App({ onLogout }: { onLogout?: () => void }) {
-  const [projects, setProjects] = useState<Project[]>(store0.projects)
-  const [activeId, setActiveId] = useState(active0.id)
-  const [templateId, setTemplateId] = useState(active0.live.template)
-  const [materialId, setMaterialId] = useState(active0.live.materialId)
-  const [W, setW] = useState(active0.live.W)
-  const [D, setD] = useState(active0.live.D)
-  const [H, setH] = useState(active0.live.H)
-  const [handle, setHandle] = useState(active0.live.handle)
-  const [qty, setQty] = useState(active0.qty)
-  const [fillColor, setFillColor] = useState<string | null>(active0.fillColor)
-  const [fillImage, setFillImage] = useState<FillImage | null>(active0.fillImage ?? null)
-  const [labelStyle, setLabelStyle] = useState<LabelStyle>(active0.labelStyle ?? 'body')
-  const [pouchStyle, setPouchStyle] = useState<PouchStyle>(active0.pouchStyle ?? 'stand')
-  const [zipper, setZipper] = useState<boolean>(active0.zipper ?? false)
-  const [pouchAddons, setPouchAddons] = useState<PouchAddons>(active0.pouchAddons ?? {})
+export default function App({
+  onLogout,
+  storageKey = STORAGE_KEY,
+  migrateLegacy = true,
+}: AppProps) {
+  const initialStore = useMemo(() => loadStore(storageKey, migrateLegacy), [storageKey, migrateLegacy])
+  const initialActive = initialStore.projects.find((p) => p.id === initialStore.activeId)
+    ?? initialStore.projects[0]
+  const [projects, setProjects] = useState<Project[]>(initialStore.projects)
+  const [activeId, setActiveId] = useState(initialActive.id)
+  const [templateId, setTemplateId] = useState(initialActive.live.template)
+  const [materialId, setMaterialId] = useState(initialActive.live.materialId)
+  const [W, setW] = useState(initialActive.live.W)
+  const [D, setD] = useState(initialActive.live.D)
+  const [H, setH] = useState(initialActive.live.H)
+  const [handle, setHandle] = useState(initialActive.live.handle)
+  const [qty, setQty] = useState(initialActive.qty)
+  const [fillColor, setFillColor] = useState<string | null>(initialActive.fillColor)
+  const [fillImage, setFillImage] = useState<FillImage | null>(initialActive.fillImage ?? null)
+  const [labelStyle, setLabelStyle] = useState<LabelStyle>(initialActive.labelStyle ?? 'body')
+  const [pouchStyle, setPouchStyle] = useState<PouchStyle>(initialActive.pouchStyle ?? 'stand')
+  const [zipper, setZipper] = useState<boolean>(initialActive.zipper ?? false)
+  const [pouchAddons, setPouchAddons] = useState<PouchAddons>(initialActive.pouchAddons ?? {})
   // ธีมสว่าง/มืด — เก็บใน localStorage, ตั้ง data-theme บน <html> (canvas/3D คงขาวเสมอ)
   const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark')
   useEffect(() => {
@@ -797,7 +808,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     else delete document.documentElement.dataset.theme
     localStorage.setItem('packit-theme', dark ? 'dark' : 'light')
   }, [dark])
-  const [decos, setDecos] = useState<Deco[]>(active0.decos)
+  const [decos, setDecos] = useState<Deco[]>(initialActive.decos)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [renamingId, setRenamingId] = useState<string | null>(null) // เลเยอร์ที่กำลังแก้ชื่อ (ดับเบิลคลิก)
   const [lockAspect, setLockAspect] = useState(true) // ล็อกสัดส่วนกรอบรูป: ปรับกว้าง/สูงพร้อมกันตามสัดส่วนรูปจริง
@@ -949,7 +960,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     if (selectedIds.length) setGroups((g) => (g.props ? g : { ...g, props: true }))
   }, [selectedIds.length])
   const [fold, setFold] = useState(1)
-  const [showDims, setShowDims] = useState(store0.showDims)
+  const [showDims, setShowDims] = useState(initialStore.showDims)
   const [showGuides, setShowGuides] = useState(false)
   const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
   const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>('design')
@@ -972,8 +983,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [customSheet, setCustomSheet] = useState({ w: 640, h: 900 })
   const [gutter, setGutter] = useState(DEFAULT_OPT.gutter)
   const [aiBusy, setAiBusy] = useState(false)
-  const [history, setHistory] = useState<DesignVersion[]>(active0.history)
-  const [histIdx, setHistIdx] = useState(active0.histIdx)
+  const [history, setHistory] = useState<DesignVersion[]>(initialActive.history)
+  const [histIdx, setHistIdx] = useState(initialActive.histIdx)
   const [undoStack, setUndoStack] = useState<EditSnapshot[]>([])
   const [redoStack, setRedoStack] = useState<EditSnapshot[]>([])
   // ข้ามการบันทึกลง undo หนึ่งครั้ง — ใช้ตอน apply undo/redo หรือสลับงาน (ไม่ใช่การแก้ของผู้ใช้)
@@ -1056,11 +1067,11 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   // save ทุกงานลง localStorage
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects, activeId, showDims }))
+      localStorage.setItem(storageKey, JSON.stringify({ projects, activeId, showDims }))
     } catch {
       // storage เต็มหรือถูกปิดไว้ — ข้ามการ save เงียบๆ
     }
-  }, [projects, activeId, showDims])
+  }, [projects, activeId, showDims, storageKey])
 
   // save จานสี (ใช้ร่วมทุกงาน)
   useEffect(() => {

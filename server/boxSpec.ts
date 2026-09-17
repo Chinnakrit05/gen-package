@@ -7,6 +7,7 @@ import { unlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import Anthropic from '@anthropic-ai/sdk'
+import { isLegacyAiRouteEnabled } from './http/legacyAiGuard'
 import { MATERIALS } from '../src/core/materials'
 import { TEMPLATES } from '../src/core/templates'
 
@@ -494,6 +495,10 @@ export async function handleBoxSpec(
   res: ServerResponse,
   env: Record<string, string | undefined>,
 ): Promise<void> {
+  if (!isLegacyAiRouteEnabled(env)) {
+    send(res, 410, { error: 'AI endpoint รุ่นเดิมถูกปิดใน cloud mode' })
+    return
+  }
   if (req.method !== 'POST') {
     send(res, 405, { error: 'ต้องเป็น POST เท่านั้น' })
     return
@@ -565,7 +570,7 @@ export async function handleBoxSpec(
     send(res, 200, mockSpec(prompt, current, image))
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
-      send(res, 401, { error: 'ANTHROPIC_API_KEY ไม่ถูกต้อง — ตรวจไฟล์ .env' })
+      send(res, 502, { error: 'ANTHROPIC_API_KEY ไม่ถูกต้อง — ตรวจไฟล์ .env' })
     } else if (err instanceof Anthropic.RateLimitError) {
       send(res, 429, { error: 'เรียกถี่เกินไป รอสักครู่แล้วลองใหม่' })
     } else if (err instanceof Anthropic.APIError) {
