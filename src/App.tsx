@@ -47,6 +47,16 @@ import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
 import { generatePouch, POUCH_STYLES, type PouchStyle, type PouchAddons } from './core/pouch'
 import {
+  applyVents,
+  DEFAULT_VENTS,
+  VENT_DIA_MIN,
+  VENT_DIA_MAX,
+  VENT_ROWS_MAX,
+  VENT_COLS_MAX,
+  type VentConfig,
+  type VentWalls,
+} from './core/vents'
+import {
   clamp,
   freshProject,
   parseProject,
@@ -596,6 +606,7 @@ interface EditSnapshot {
   pouchStyle: PouchStyle
   zipper: boolean
   pouchAddons: PouchAddons
+  vents: VentConfig
   decos: Deco[]
 }
 
@@ -613,6 +624,7 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.pouchStyle === b.pouchStyle &&
   a.zipper === b.zipper &&
   a.pouchAddons === b.pouchAddons &&
+  a.vents === b.vents &&
   a.decos === b.decos
 
 const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
@@ -790,6 +802,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [pouchStyle, setPouchStyle] = useState<PouchStyle>(active0.pouchStyle ?? 'stand')
   const [zipper, setZipper] = useState<boolean>(active0.zipper ?? false)
   const [pouchAddons, setPouchAddons] = useState<PouchAddons>(active0.pouchAddons ?? {})
+  const [vents, setVents] = useState<VentConfig>(active0.vents ?? DEFAULT_VENTS)
   // ธีมสว่าง/มืด — เก็บใน localStorage, ตั้ง data-theme บน <html> (canvas/3D คงขาวเสมอ)
   const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark')
   useEffect(() => {
@@ -1002,11 +1015,14 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const dieline = useMemo(
     () =>
       kind === 'box'
-        ? template.generate({ W, D, H, handle }, mat)
+        ? applyVents(
+            template.generate({ W, D, H, handle }, mat),
+            template.supportsVents ? vents : undefined,
+          )
         : kind === 'vessel'
           ? vessel!.label
           : pouch!.label,
-    [W, D, H, handle, mat, template, vessel, pouch, kind],
+    [W, D, H, handle, mat, template, vessel, pouch, kind, vents],
   )
   const guides = useMemo(
     () => (showGuides && dieline ? computeGuides(dieline.panels) : null),
@@ -1041,6 +1057,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 pouchStyle,
                 zipper,
                 pouchAddons,
+                vents,
                 decos,
                 history,
                 histIdx,
@@ -1051,7 +1068,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, decos, activeId])
 
   // save ทุกงานลง localStorage
   useEffect(() => {
@@ -1127,6 +1144,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     pouchStyle,
     zipper,
     pouchAddons,
+    vents,
     decos,
   })
 
@@ -1149,7 +1167,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, decos])
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -1166,6 +1184,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setPouchStyle(s.pouchStyle ?? 'stand')
     setZipper(s.zipper ?? false)
     setPouchAddons(s.pouchAddons ?? {})
+    setVents(s.vents ?? DEFAULT_VENTS)
     setDecos(s.decos)
     setSelectedIds([])
   }
@@ -1248,7 +1267,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const flushInto = (list: Project[]): Project[] =>
     list.map((p) =>
       p.id === activeId
-        ? { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, decos, history, histIdx, updatedAt: Date.now() }
+        ? { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -1267,6 +1286,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setPouchStyle(p.pouchStyle ?? 'stand')
     setZipper(p.zipper ?? false)
     setPouchAddons(p.pouchAddons ?? {})
+    setVents(p.vents ?? DEFAULT_VENTS)
     setDecos(p.decos)
     setSelectedIds([])
     setHistory(p.history)
@@ -1458,6 +1478,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
       H,
       qty,
       handle,
+      vents: kind === 'box' && template.supportsVents ? vents : undefined,
       assumptions: currentAi?.assumptions ?? [],
       layoutNote: currentAi?.layoutNote ?? '',
       reasoning: currentAi?.reasoning ?? '',
@@ -2160,6 +2181,68 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 />
                 เจาะรูหิ้ว (die-cut handle)
               </label>
+            )}
+            {mat.foldable && kind === 'box' && template.supportsVents && (
+              <div className="vent-block" style={{ marginTop: 12 }}>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={vents.on}
+                    disabled={aiBusy}
+                    onChange={(e) => setVents((v) => ({ ...v, on: e.target.checked }))}
+                  />
+                  รูระบายอากาศ (ผลไม้/ผัก)
+                </label>
+                {vents.on && (
+                  <div className="vent-opts">
+                    <div className="vent-walls" role="group" aria-label="ผนังที่เจาะรู">
+                      {(
+                        [
+                          ['sides', 'ด้านกว้าง'],
+                          ['ends', 'หัวท้าย'],
+                          ['all', 'ทุกด้าน'],
+                        ] as [VentWalls, string][]
+                      ).map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className={vents.walls === id ? 'active' : ''}
+                          aria-pressed={vents.walls === id}
+                          disabled={aiBusy}
+                          onClick={() => setVents((v) => ({ ...v, walls: id }))}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <DimField
+                      label="⌀ ขนาดรู (mm)"
+                      value={vents.dia}
+                      min={VENT_DIA_MIN}
+                      max={VENT_DIA_MAX}
+                      disabled={aiBusy}
+                      onChange={(n) => setVents((v) => ({ ...v, dia: n }))}
+                    />
+                    <DimField
+                      label="แถว"
+                      value={vents.rows}
+                      min={1}
+                      max={VENT_ROWS_MAX}
+                      disabled={aiBusy}
+                      onChange={(n) => setVents((v) => ({ ...v, rows: n }))}
+                    />
+                    <DimField
+                      label="คอลัมน์"
+                      value={vents.cols}
+                      min={1}
+                      max={VENT_COLS_MAX}
+                      disabled={aiBusy}
+                      onChange={(n) => setVents((v) => ({ ...v, cols: n }))}
+                    />
+                    <p className="hint">เจาะเป็นกริดกลางผนัง — โชว์ในภาพ 3D และไฟล์ตัด (DXF/PDF)</p>
+                  </div>
+                )}
+              </div>
             )}
             {kind === 'pouch' && (
               <>

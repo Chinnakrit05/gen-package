@@ -621,6 +621,28 @@ select {
   height: 15px;
 }
 
+.vent-opts {
+  margin: 2px 0 4px;
+  padding-left: 4px;
+  border-left: 2px solid var(--accent-weak);
+}
+.vent-walls {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.vent-walls button {
+  flex: 1;
+  padding: 7px 4px;
+  font-size: 12px;
+}
+.vent-walls button.active {
+  border-color: var(--accent);
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 button {
   width: 100%;
   padding: 9px 13px;

@@ -16,6 +16,7 @@ export interface BoxTemplate {
   defaults: BoxParams
   tilt: number
   supportsHandle: boolean
+  supportsVents?: boolean // รองรับรูระบายอากาศ (กล่องทรงปิด/ถาดที่มีผนังตั้ง)
   foldDepth: (box: BoxParams, mat: Material) => number
   generate: (box: BoxParams, mat: Material) => Dieline
 }
@@ -28,6 +29,7 @@ export const TEMPLATES: BoxTemplate[] = [
     defaults: { W: 80, D: 50, H: 120 },
     tilt: 0,
     supportsHandle: true,
+    supportsVents: true,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateTuckEndBox,
   },
@@ -38,6 +40,7 @@ export const TEMPLATES: BoxTemplate[] = [
     defaults: { W: 200, D: 140, H: 60 },
     tilt: -Math.PI / 2,
     supportsHandle: true,
+    supportsVents: true,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateMailerBox,
   },
@@ -48,6 +51,7 @@ export const TEMPLATES: BoxTemplate[] = [
     defaults: { W: 200, D: 140, H: 60 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
+    supportsVents: true,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateFefco0427,
   },
@@ -58,6 +62,7 @@ export const TEMPLATES: BoxTemplate[] = [
     defaults: { W: 250, D: 200, H: 150 },
     tilt: 0,
     supportsHandle: false,
+    supportsVents: true,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateRSCBox,
   },
@@ -88,6 +93,7 @@ export const TEMPLATES: BoxTemplate[] = [
     defaults: { W: 160, D: 110, H: 40 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
+    supportsVents: true,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateTrayBox,
   },
@@ -98,6 +104,7 @@ export const TEMPLATES: BoxTemplate[] = [
     defaults: { W: 120, D: 100, H: 150 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
+    supportsVents: true,
     foldDepth: (b) => b.H + b.D * 0.6,
     generate: generateGableBox,
   },

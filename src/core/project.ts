@@ -3,6 +3,7 @@ import { TEMPLATES } from './templates'
 import { parseDecos, parseFillImage, type Deco, type FillImage } from './artwork'
 import { LABEL_STYLES, type LabelStyle } from './vessel'
 import { POUCH_STYLES, type PouchStyle, type PouchAddons } from './pouch'
+import { parseVents, type VentConfig } from './vents'
 import type { CurrentSpec } from './ai'
 
 // โมเดลข้อมูลของ "งาน" หนึ่งชิ้น + ตัว parse ที่ตรวจ/ซ่อมข้อมูลจาก localStorage หรือไฟล์ที่นำเข้า
@@ -52,6 +53,7 @@ export interface Project {
   pouchStyle?: PouchStyle // รูปแบบถุง (เฉพาะโหมดถุง) — ไม่ใส่ = 'stand'
   zipper?: boolean // ซิปล็อก + รอยฉีก (เฉพาะโหมดถุง) — เก็บเฉพาะเมื่อ true
   pouchAddons?: PouchAddons // ออปชันเสริมถุง (รูแขวน/วาล์ว/tin-tie) — เก็บเฉพาะที่เปิด
+  vents?: VentConfig // รูระบายอากาศบนผนังกล่อง (เฉพาะกล่องพับ) — เก็บเฉพาะเมื่อเปิด
   decos: Deco[]
   history: DesignVersion[]
   histIdx: number
@@ -142,6 +144,7 @@ export function parseProject(v: unknown, idx: number): Project | null {
     pouchStyle: POUCH_STYLES.some((s) => s.id === o.pouchStyle) ? (o.pouchStyle as PouchStyle) : undefined,
     zipper: o.zipper === true ? true : undefined,
     pouchAddons: parsePouchAddons(o.pouchAddons),
+    vents: parseVents(o.vents),
     decos: parseDecos(o.decos, o.artwork),
     history,
     histIdx: clampIdx(o.histIdx, history.length),

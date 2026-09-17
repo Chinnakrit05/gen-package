@@ -3,7 +3,7 @@ import { parseProject, type Project } from './project'
 // นำเข้า/ส่งออก "งาน" หนึ่งชิ้นเป็นไฟล์ .genpkg.json — เพื่อสำรอง ย้ายเครื่อง หรือส่งให้ลูกค้า/โรงงานเปิดต่อ
 // ไฟล์เป็นข้อมูลล้วน (parse ด้วย JSON.parse) ไม่ execute อะไร; นำเข้าแล้วสร้าง id ใหม่เสมอ กันชนกับงานที่มีอยู่
 
-export const PROJECT_FILE_VERSION = 6
+export const PROJECT_FILE_VERSION = 7
 const APP_TAG = 'gen-package'
 
 // รูปแบบไฟล์: ห่อ project ไว้ใน envelope มี app/schemaVersion เพื่อ migrate ได้ในอนาคต
@@ -21,6 +21,7 @@ interface ProjectFile {
     pouchStyle?: Project['pouchStyle']
     zipper?: Project['zipper']
     pouchAddons?: Project['pouchAddons']
+    vents?: Project['vents']
     decos: Project['decos']
     history: Project['history']
     histIdx: number
@@ -50,6 +51,7 @@ export function serializeProject(p: Project): string {
       ...(p.pouchStyle && p.pouchStyle !== 'stand' ? { pouchStyle: p.pouchStyle } : {}),
       ...(p.zipper ? { zipper: true } : {}),
       ...(p.pouchAddons && Object.keys(p.pouchAddons).length ? { pouchAddons: p.pouchAddons } : {}),
+      ...(p.vents && p.vents.on ? { vents: p.vents } : {}),
       decos: p.decos,
       history: p.history,
       histIdx: p.histIdx,

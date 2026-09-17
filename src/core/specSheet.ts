@@ -1,4 +1,5 @@
 import type { Dieline } from './types'
+import type { VentConfig } from './vents'
 import { pathToPolylines } from './dxf'
 import { ensureThaiFont, drawFill, drawFillImage, drawDeco2D, type Deco, type FillImage } from './artwork'
 
@@ -20,6 +21,7 @@ export interface SpecSheetInput {
   H: number
   qty: number
   handle: boolean
+  vents?: VentConfig
   assumptions: string[]
   layoutNote: string
   reasoning: string
@@ -151,6 +153,20 @@ function renderCanvas(input: SpecSheetInput, imgs: Map<string, HTMLImageElement>
     ['ขนาดภายใน (ก×ล×ส)', `${fmt(input.W)} × ${fmt(input.D)} × ${fmt(input.H)} มม.`],
     ['ขนาดแผ่นคลี่', `${Math.ceil(input.dieline.width)} × ${Math.ceil(input.dieline.height)} มม.`],
     ['รูหิ้ว', input.handle ? 'มี' : 'ไม่มี'],
+    ...(input.vents && input.vents.on
+      ? ([
+          [
+            'รูระบายอากาศ',
+            `⌀${fmt(input.vents.dia)} มม. ${input.vents.rows}×${input.vents.cols} · ${
+              input.vents.walls === 'ends'
+                ? 'หัวท้าย'
+                : input.vents.walls === 'all'
+                  ? 'ทุกด้าน'
+                  : 'ด้านกว้าง'
+            }`,
+          ],
+        ] as [string, string][])
+      : []),
     ['จำนวนสั่งผลิต', `${input.qty.toLocaleString('th-TH')} ใบ`],
   ]
   const labelX = M

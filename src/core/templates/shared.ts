@@ -18,6 +18,24 @@ export const rect = (xa: number, ya: number, xb: number, yb: number): Vec2[] => 
   P(xa, yb),
 ]
 
+// วงกลม: ริงจุด (สำหรับ THREE.Shape.holes) และ path (สำหรับ blueprint/DXF)
+// ริงไม่ปิดจุดซ้ำท้าย (n จุด) — polygonizer/extruder ปิดวงให้เอง
+export function circlePts(cx: number, cy: number, r: number, n = 20): Vec2[] {
+  const pts: Vec2[] = []
+  for (let i = 0; i < n; i++) {
+    const a = (Math.PI * 2 * i) / n
+    pts.push(P(cx + r * Math.cos(a), cy + r * Math.sin(a)))
+  }
+  return pts
+}
+
+export function circlePath(cx: number, cy: number, r: number): string {
+  return (
+    `M ${cx - r} ${cy} A ${r} ${r} 0 1 0 ${cx + r} ${cy} ` +
+    `A ${r} ${r} 0 1 0 ${cx - r} ${cy} Z`
+  )
+}
+
 export const fmt = (v: number) => String(Math.round(v * 10) / 10)
 
 // รูทรงแคปซูล (obround) สำหรับรูหิ้ว — length = ความยาวรวม, thick = ความกว้างรู
