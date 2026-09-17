@@ -5,6 +5,10 @@
 Branch งาน: `feat/supabase-backend`
 จุดเริ่มต้น: `main` ที่ commit `8e0eea9`
 
+เอกสารลงรายละเอียดสำหรับผู้พัฒนา: [Backend Implementation Specification & Handoff](backend-implementation-spec.md)
+
+หมายเหตุการลงรายละเอียด: สเปกใหม่เลือก API-first สำหรับข้อมูลธุรกิจทั้งหมด โดยให้ Supabase อยู่หลัง server adapter เพื่อเตรียมย้ายไป NestJS; เป็นการเจาะจงทางเลือกจากแผนภาพรวม ไม่ใช่การเริ่มพัฒนาแล้ว
+
 ## ข้อสรุปที่ตกลงกัน
 
 - ก่อนโครงการได้รับอนุมัติ ใช้ Supabase เพื่อทำระบบทดลองกับผู้ใช้จริงได้เร็ว
@@ -40,7 +44,7 @@ Branch งาน: `feat/supabase-backend`
 1. **แยกการเข้าถึงบริการออกจาก UI**
    - รวมการเรียกบริการไว้ในโมดูล เช่น projectRepository, authService และ storageService
    - ไม่กระจาย Supabase SDK และชื่อ table ไปทั่ว React components
-   - ระยะแรก CRUD ทั่วไปเรียก Supabase ผ่านโมดูลเหล่านี้ได้ โดยต้องมี RLS ที่ถูกต้อง
+   - ตามสเปกละเอียด ให้ CRUD ผ่าน HTTP API ของเรา; browser ใช้ Supabase โดยตรงเฉพาะ Auth และ upload ticket ที่ได้รับอนุญาต
    - ไม่สร้าง abstraction ซับซ้อนเกินความจำเป็นของระบบทดลอง
 2. **กฎธุรกิจสำคัญอยู่บน server**
    - ตรวจตัวตน เจ้าของข้อมูล โควตา AI การชำระเงิน และสิทธิ์ export บน server
