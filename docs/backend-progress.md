@@ -173,11 +173,11 @@ Data/rollback impact: ไม่มี database migration/remote write; browser c
 - แต่ละรายการมี stable source key/hash/operation ID; source เดิมที่เนื้อหาเปลี่ยนถูก mark conflict ไม่ overwrite เป้าหมาย
 - เพิ่ม private `legacy_imports` mapping และ server-only `import_legacy_project` RPC/API; advisory lock + unique source mapping ทำให้ retry, lost response, StrictMode และ concurrent request คืนโปรเจกต์เดิม
 - migration อัปโหลด asset ผ่าน codec/sidecar เดิมด้วย concurrency ที่จำกัด แล้ว GET โปรเจกต์กลับมาตรวจ document ก่อน mark complete
-- built-in preset ไม่ render SVG ที่มากับข้อมูล: regenerate จาก preset ID/color ที่อยู่ใน registry เท่านั้นแล้ว rasterize เป็น PNG ด้านยาว 2048px; ใช้ได้ทั้งเพิ่ม/เปลี่ยนสีใน cloud, portable import และ legacy migration
+- built-in preset ไม่ render SVG ที่มากับข้อมูล: regenerate จาก preset ID/color ที่อยู่ใน registry เท่านั้นแล้ว rasterize เป็น PNG ด้านยาว 2048px; คำนวณมิติแบบ deterministic และรักษา aspect ratio สำหรับแนวตั้ง/แนวนอน/จัตุรัส ใช้ได้ทั้งเพิ่ม/เปลี่ยนสีใน cloud, portable import และ legacy migration
 - arbitrary/user SVG ยังไม่ผ่านเข้า cloud validator; migration เก็บ raw backup แล้วรายงาน skipped แทนการ render เนื้อหาที่ไม่น่าเชื่อถือ
 - local checks: unit 36 files/399 tests, pgTAP 5 files/133 assertions, PostgreSQL integration 6 files/9 tests และ production build ผ่าน
 
-Known gaps: ยังไม่ได้รัน real-browser migration flow ด้วย local Auth/Storage, ทดสอบ visual quality ของ preset rasterization หลาย DPI หรือเพิ่ม durable journal ให้ create/delete ทั่วไป; งานเหล่านี้อยู่ใน P1.8
+Known gaps ณ ตอนจบ P1.7: real-browser migration flow, persisted PNG metadata/reference และ durable journal สำหรับ create/delete ยังไม่ถูกตรวจ; ปิดครบใน P1.8 โดยตรวจ output pixel dimensions/aspect หลาย scale แทนการอ้าง DPI ที่ไฟล์ไม่ได้กำหนด
 
 Data/rollback impact: เพิ่ม local migration 1 table + 1 RPC; raw legacy backup อยู่ใน browser IndexedDB และ source localStorage ไม่ถูกลบ; ยังไม่ link/push migration ไป remote database
 
@@ -188,12 +188,14 @@ Data/rollback impact: เพิ่ม local migration 1 table + 1 RPC; raw legac
 - เพิ่ม IndexedDB journal สำหรับ create/delete โดย persist exact payload + operation ID ก่อน network, replay หลัง reload/reconnect และตรวจ scope/response ก่อนลบ receipt; same intent ที่ UI สร้าง operation ID ใหม่ยัง reuse pending operation เดิม
 - เพิ่ม workspace/account-scoped `BroadcastChannel` metadata events; clean tab โหลด revision ใหม่ ส่วน dirty tab เข้าสถานะ conflict และหยุด autosave ไม่ overwrite เงียบ
 - แก้ React StrictMode race ของ Three Fiber event target ด้วย guarded Canvas event manager และ pin React/Fiber/Drei เป็นชุดที่มี peer range ตรงกัน
-- browser E2E ใช้ local Auth/API/DB/Storage จริง: consent + raw backup + legacy dedupe, trusted preset add/color/save/reload, two-tab refresh, offline edit/reconnect, portable export/import พร้อม hydrated PNG/no `assetId` leak และสลับสองบัญชีโดยไม่เห็นงานข้ามกัน
-- restore drill dump/restore `app_private` ไป isolated temporary database แล้วตรวจ app user/project/document/operation receipt; สำรอง/ลบ/คืน Storage object ตัวอย่างแยกและตรวจ SHA-256 ก่อน cleanup
-- local checks ล่าสุด: unit 38 files/410 tests, pgTAP 5 files/133 assertions, integration 6 files/9 tests, restore drill, browser E2E และ production build ผ่าน
+- browser E2E ใช้ local Auth/API/DB/Storage จริง: consent + raw backup + legacy dedupe, trusted preset add/color/save/reload พร้อมตรวจ PNG 2048×2048/SHA-256/`project_assets`, clean-tab refresh, dirty-tab conflict/reload, offline create/delete/import/upload controls ถูกปิดแต่ geometry edit/reconnect ได้, portable export/import พร้อม hydrated PNG/no `assetId` leak, create/delete replay หลัง server commit แต่ response หาย และสลับสองบัญชีโดยไม่เห็นงานข้ามกัน
+- restore drill dump/restore `app_private` ไป isolated temporary database แล้วตรวจ app user/project/document/create+save receipts, ready asset metadata และ `project_assets`; สำรอง/ลบ/คืน Storage object ที่ project อ้างจริงและตรวจ ID/key/SHA-256 ก่อน cleanup
+- เพิ่ม dev/preview HTTP parity smoke ตรวจ health, JSON 401/404/405/410/413, `Allow` header, request ID, ES256 expired/foreign-shaped bearer rejection และ anon/authenticated direct Data API RPC denial ด้วย local Auth จริง
+- เพิ่ม cleanup dry-run ที่ reconcile DB/Storage โดยไม่ mutate และ local test-fixture cleanup ที่จำกัด strict email pattern; แก้ E2E ให้ lookup internal app user ใน `finally` แม้ล้มก่อน migration step เพื่อไม่ทิ้ง fixture
+- local checks ล่าสุด: unit 38 files/419 tests, pgTAP 5 files/133 assertions, integration 6 files/9 tests, restore drill, browser E2E, dev/preview HTTP parity และ production build ผ่าน
 - เพิ่ม [backend-acceptance-phase1.md](backend-acceptance-phase1.md) แยก PASS/PARTIAL/NOT RUN พร้อม evidence และ operational boundary
 
-Known gaps: Google OAuth จริง, remote Storage CORS, Vercel route/native Sharp packaging, staging tenant smoke และการเปิด project จาก restored staging snapshot ยัง **NOT RUN**; local restore query + checksum ไม่ถูกอ้างว่าเทียบเท่า full Supabase/Auth disaster recovery
+Known gaps: Google OAuth จริง, remote Storage CORS, Vercel route/native Sharp packaging, staging tenant smoke และการเปิด project จาก restored staging snapshot ยัง **NOT RUN**; local restore query + checksum ไม่ถูกอ้างว่าเทียบเท่า full Supabase/Auth disaster recovery ส่วน scheduled asset deletion/reaper ยังไม่เปิดโดยตั้งใจจนกว่าจะยืนยัน retention/grace period
 
 Data/rollback impact: ไม่มี migration ใหม่หรือ remote write; browser เพิ่ม journal/channel records ที่ scope ตาม account/workspace และ test scripts cleanup เฉพาะ fixture ที่สร้างเอง
 

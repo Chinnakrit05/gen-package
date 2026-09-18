@@ -40,14 +40,54 @@ try {
     )
   `
   actorId = actor.app_user_id
-  const operationId = randomUUID()
+  const createOperationId = randomUUID()
   const [created] = await source`
     select public.create_project(
-      ${actor.app_user_id}, ${actor.personal_workspace_id}, ${operationId}, ${'a'.repeat(64)},
+      ${actor.app_user_id}, ${actor.personal_workspace_id}, ${createOperationId}, ${'a'.repeat(64)},
       'Restore fixture', 1, ${source.json({ fixture: suffix, decos: [] })}
     ) as result
   `
   projectId = created.result.id
+
+  const objectBackup = await sharp({
+    create: { width: 3, height: 2, channels: 4, background: { r: 32, g: 96, b: 160, alpha: 1 } },
+  }).png().toBuffer()
+  const expectedObjectHash = sha256(objectBackup)
+  const assetId = randomUUID()
+  await uploadStorageObject(objectBackup)
+  storageObjectExists = true
+  if (await downloadStorageHash() !== expectedObjectHash) throw new Error('initial storage object checksum mismatch')
+
+  await source`
+    insert into app_private.assets (
+      id, workspace_id, created_by, purpose, state, staging_key, object_key,
+      declared_mime, declared_size, mime_type, byte_size, sha256, width, height, ticket_expires_at
+    ) values (
+      ${assetId}, ${actor.personal_workspace_id}, ${actor.app_user_id}, 'project-decoration', 'ready',
+      ${`restore-drill/staging/${assetId}`}, ${storagePath}, 'image/png', ${objectBackup.byteLength},
+      'image/png', ${objectBackup.byteLength}, ${expectedObjectHash}, 3, 2, now()
+    )
+  `
+  await source`
+    insert into app_private.storage_usage (workspace_id, committed_bytes)
+    values (${actor.personal_workspace_id}, ${objectBackup.byteLength})
+  `
+  const restoredDocument = {
+    fixture: suffix,
+    live: { template: 'tuck-end', materialId: 'carton-300', W: 80, D: 50, H: 120, handle: false },
+    qty: 500,
+    fillColor: null,
+    decos: [{ id: 'restore-image', type: 'image', assetId, x: 5, y: 5, w: 30, aspect: 1.5 }],
+    history: [],
+    histIdx: -1,
+  }
+  const saveOperationId = randomUUID()
+  await source`
+    select public.save_project(
+      ${actor.app_user_id}, ${projectId}, ${saveOperationId}, ${'b'.repeat(64)},
+      1, 'Restore fixture', 1, ${source.json(restoredDocument)}
+    )
+  `
 
   dockerExec('pg_dump', '-U', 'postgres', '-d', 'postgres', '--format=custom', '--no-owner',
     '--no-privileges', '--schema=app_private', '--file', containerDump)
@@ -62,23 +102,23 @@ try {
       (select count(*)::integer from app_private.app_users where id = ${actorId}) as users,
       (select count(*)::integer from app_private.projects where id = ${projectId}) as projects,
       (select count(*)::integer from app_private.project_operations
-        where operation_id = ${operationId}) as operations,
-      (select document->>'fixture' from app_private.projects where id = ${projectId}) as fixture
+        where operation_id in (${createOperationId}, ${saveOperationId})) as operations,
+      (select count(*)::integer from app_private.assets
+        where id = ${assetId} and object_key = ${storagePath} and sha256 = ${expectedObjectHash}) as assets,
+      (select count(*)::integer from app_private.project_assets
+        where project_id = ${projectId} and asset_id = ${assetId}) as links,
+      (select document->>'fixture' from app_private.projects where id = ${projectId}) as fixture,
+      (select document #>> '{decos,0,assetId}' from app_private.projects where id = ${projectId}) as document_asset_id
   `
   if (
     evidence.users !== 1
     || evidence.projects !== 1
-    || evidence.operations !== 1
+    || evidence.operations !== 2
+    || evidence.assets !== 1
+    || evidence.links !== 1
     || evidence.fixture !== suffix
+    || evidence.document_asset_id !== assetId
   ) throw new Error(`restore verification failed: ${JSON.stringify(evidence)}`)
-
-  const objectBackup = await sharp({
-    create: { width: 3, height: 2, channels: 4, background: { r: 32, g: 96, b: 160, alpha: 1 } },
-  }).png().toBuffer()
-  const expectedObjectHash = sha256(objectBackup)
-  await uploadStorageObject(objectBackup)
-  storageObjectExists = true
-  if (await downloadStorageHash() !== expectedObjectHash) throw new Error('initial storage object checksum mismatch')
 
   await removeStorageObject()
   storageObjectExists = false
@@ -87,7 +127,7 @@ try {
   if (await downloadStorageHash() !== expectedObjectHash) throw new Error('restored storage object checksum mismatch')
 
   process.stdout.write('Local database + Storage restore drill: PASS\n')
-  process.stdout.write('Verified app user, project document, durable operation receipt, and a sample object checksum after restore.\n')
+  process.stdout.write('Verified project-to-asset link, durable receipts, restored metadata, and linked object checksum.\n')
 } finally {
   if (storageObjectExists) await removeStorageObject().catch(() => undefined)
   if (restored) await restored.end({ timeout: 1 }).catch(() => undefined)
@@ -144,8 +184,19 @@ function dockerExecBestEffort(...args) {
 async function cleanupSourceFixture(sql, userId) {
   await sql.begin(async (tx) => {
     await tx`delete from app_private.legacy_imports where user_id = ${userId}`
+    await tx`delete from app_private.project_assets where workspace_id in (
+      select workspace_id from app_private.workspace_members where user_id = ${userId}
+    )`
     await tx`delete from app_private.project_operations where actor_user_id = ${userId}`
     await tx`delete from app_private.projects where created_by = ${userId}`
+    await tx`delete from app_private.asset_operations where actor_user_id = ${userId}`
+    await tx`delete from app_private.storage_reservations where workspace_id in (
+      select workspace_id from app_private.workspace_members where user_id = ${userId}
+    )`
+    await tx`delete from app_private.assets where created_by = ${userId}`
+    await tx`delete from app_private.storage_usage where workspace_id in (
+      select workspace_id from app_private.workspace_members where user_id = ${userId}
+    )`
     await tx`delete from app_private.workspace_members where user_id = ${userId}`
     await tx`delete from app_private.workspaces where owner_user_id = ${userId}`
     await tx`delete from app_private.auth_identities where app_user_id = ${userId}`

@@ -37,9 +37,10 @@ npm run db:test
 npm run db:test:integration
 npm run db:test:restore
 npm run test:e2e:local
+npm run test:http:local
 ```
 
-`db:reset` ในโปรเจกต์นี้ระบุ `--local` ชัดเจน: ลบและสร้างใหม่เฉพาะ local database แล้วใช้ migrations กับ `seed.sql` ตามลำดับ ส่วน `db:test` รัน pgTAP files ใต้ `supabase/tests/` และ `db:test:integration` ทดสอบ bootstrap/auth, project CAS/idempotency และ Storage asset lifecycle/quota กับ local services จริง `db:test:restore` dump/restore เฉพาะ `app_private` ไปฐานข้อมูลชั่วคราวชื่อ `packit_restore_*` และซ้อมสำรอง/ลบ/คืน Storage object ตัวอย่างพร้อม SHA-256 โดย cleanup fixture หลังจบ `test:e2e:local` ใช้ Chrome ที่ติดตั้งในเครื่องทดสอบ browser flow จริง ดูรูปแบบ pgTAP ทางการได้ที่ [Testing Overview](https://supabase.com/docs/guides/local-development/testing/overview)
+`db:reset` ในโปรเจกต์นี้ระบุ `--local` ชัดเจน: ลบและสร้างใหม่เฉพาะ local database แล้วใช้ migrations กับ `seed.sql` ตามลำดับ ส่วน `db:test` รัน pgTAP files ใต้ `supabase/tests/` และ `db:test:integration` ทดสอบ bootstrap/auth, project CAS/idempotency และ Storage asset lifecycle/quota กับ local services จริง `db:test:restore` dump/restore เฉพาะ `app_private` ไปฐานข้อมูลชั่วคราวชื่อ `packit_restore_*` และซ้อมสำรอง/ลบ/คืน Storage object ตัวอย่างพร้อม SHA-256 โดย cleanup fixture หลังจบ `test:e2e:local` ใช้ Chrome ที่ติดตั้งในเครื่องทดสอบ browser flow จริง และ `test:http:local` build แล้วตรวจ contract เดียวกันบน Vite dev/preview ดูรูปแบบ pgTAP ทางการได้ที่ [Testing Overview](https://supabase.com/docs/guides/local-development/testing/overview)
 
 หาก Chrome ไม่อยู่ที่ path มาตรฐานของ Windows ให้ตั้ง `PACKIT_E2E_CHROME` เป็น executable path ก่อนรัน browser E2E; script ใช้ `playwright-core` และไม่ดาวน์โหลด browser binary ซ้ำ
 
@@ -103,12 +104,22 @@ OAuth จริงต้องตรวจบน staging อีกครั้�
 
 ## Backup/restore boundary
 
-`npm run db:test:restore` เป็น local drill ที่พิสูจน์ application rows/operation receipt และ Storage bytes แยกกัน ไม่ใช่ full Supabase disaster recovery:
+`npm run db:test:restore` เป็น local drill ที่พิสูจน์ application rows/operation receipts, asset metadata, project-to-asset link และ Storage checksum ที่สัมพันธ์กัน แม้ database backup กับ object bytes ต้องจัดเก็บแยกกันจริง ไม่ใช่ full Supabase disaster recovery:
 
 - database dump ระบุ `app_private` ชัดเจน; ไม่อ้างว่ารวม managed `auth`/`storage` schemas หรือ provider configuration
 - Storage backup ต้องเก็บ object bytes/metadata/manifest/checksum แยกจาก database backup
 - Supabase Auth users, password/session และ OAuth provider settings ต้องใช้ขั้นตอน backup/migration ของ provider แยกต่างหาก
 - ก่อน public pilot ยังต้อง restore staging snapshot จริง แล้วชี้ staging app ไปเปิดงาน restored พร้อมตรวจ asset links/checksums
+
+## Cleanup แบบ dry-run
+
+```powershell
+npm run ops:cleanup:report
+```
+
+คำสั่งนี้อ่านอย่างเดียวและเทียบ `assets`/`project_assets`/reservations กับ object keys ใน `packit-staging` และ `packit-assets` เพื่อรายงาน expired tickets/leases, missing objects, orphan objects และ ready assets ที่ยังไม่มี reference โดย **ไม่ลบหรือแก้ข้อมูล** การลบ asset จริงยังห้ามเปิดอัตโนมัติจนกว่าจะยืนยัน retention, grace period และ operator approval
+
+หาก local E2E ถูกหยุดกลางทาง ใช้ `npm run ops:test-fixtures:report` ตรวจบัญชี fixture ก่อน แล้วจึง `npm run ops:test-fixtures:cleanup`; cleanup นี้จำกัดเฉพาะ email pattern ที่ test scripts สร้างใต้ `@example.test` และใช้กับ local stack เท่านั้น ไม่ใช่ account-deletion workflow ของผู้ใช้จริง
 
 ## Remote/staging checklist
 
@@ -132,10 +143,12 @@ OAuth จริงต้องตรวจบน staging อีกครั้�
 - `supabase db reset --local`: **PASS** — foundation, identity/workspace, project และ asset migrations พร้อม seed
 - `supabase test db`: **PASS** — 5 files, 133 assertions
 - `npm run db:test:integration`: **PASS** — 6 files, 9 tests; รวม Storage byte lifecycle, private access, quota/concurrency, project asset links และ legacy import dedupe
-- `npm test`: **PASS หลัง P1.8** — 38 files, 410 unit tests
+- `npm test`: **PASS หลัง P1.8** — 38 files, 419 unit tests
 - `npm run build`: **PASS หลัง P1.8** — API bundles, `tsc --noEmit` และ Vite production build
-- `npm run db:test:restore`: **PASS** — restore `app_private` ไป isolated database และคืน Storage object ตัวอย่างได้ checksum เดิม
-- `npm run test:e2e:local`: **PASS** — auth/account isolation, migration consent/raw backup/dedupe, trusted preset + portable roundtrip, cross-tab refresh และ offline reconnect
+- `npm run db:test:restore`: **PASS** — restore `app_private` ไป isolated database; project document, `project_assets`, asset metadata และ Storage object ที่คืนมามี ID/key/checksum ตรงกัน
+- `npm run test:e2e:local`: **PASS** — auth/account isolation, migration consent/raw backup/dedupe, trusted preset + portable roundtrip, clean/dirty cross-tab, offline create/delete/import/upload restrictions + edit/reconnect และ create/delete replay หลัง response หาย
+- `npm run test:http:local`: **PASS** — Vite dev/preview parity สำหรับ JSON 401/404/405/410/413, expired/foreign-shaped bearer rejection, anon/authenticated direct Data API RPC denial และ request ID
+- `npm run ops:cleanup:report`: **PASS** — read-only DB/Storage reconciliation; หลังล้าง fixture รายงาน assets/objects/candidates เป็นศูนย์
 - cloud-mode HTTP smoke: **PASS** — root 200, missing/forged bearer 401 JSON, legacy `/api/box-spec` 410
 - Google OAuth บน remote/staging: **NOT RUN** — ยังไม่มี remote project/provider credentials
 - Remote/staging: **NOT RUN**

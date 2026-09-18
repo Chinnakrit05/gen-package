@@ -15,6 +15,10 @@
     "db:test:integration": "vitest run --config vitest.db.config.ts",
     "db:test:restore": "node scripts/verify-local-restore.mjs",
     "test:e2e:local": "node scripts/e2e-local-cloud.mjs",
+    "test:http:local": "npm run build && node scripts/verify-local-http.mjs",
+    "ops:cleanup:report": "node scripts/report-local-cleanup.mjs",
+    "ops:test-fixtures:report": "node scripts/cleanup-local-test-fixtures.mjs",
+    "ops:test-fixtures:cleanup": "node scripts/cleanup-local-test-fixtures.mjs --apply",
     "test": "vitest run",
     "test:watch": "vitest"
   },

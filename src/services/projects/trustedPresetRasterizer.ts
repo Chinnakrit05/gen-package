@@ -12,6 +12,18 @@ export interface TrustedPresetRasterizationResult {
   rasterizedCount: number
 }
 
+export function trustedPresetRasterSize(
+  aspect: number,
+  longEdge = DEFAULT_LONG_EDGE,
+): { width: number; height: number } {
+  if (!Number.isFinite(aspect) || aspect <= 0 || !Number.isInteger(longEdge) || longEdge <= 0) {
+    throw new Error('ขนาด preset ภายในไม่ถูกต้อง')
+  }
+  return aspect >= 1
+    ? { width: longEdge, height: Math.max(1, Math.round(longEdge / aspect)) }
+    : { width: Math.max(1, Math.round(longEdge * aspect)), height: longEdge }
+}
+
 /**
  * Only regenerates artwork from a known built-in preset ID. The SVG carried in
  * persisted input is never rendered, so legacy content cannot smuggle active SVG.
@@ -47,8 +59,7 @@ export async function rasterizeTrustedPreset(
     throw new Error('การแปลง preset เป็น PNG ต้องทำใน browser')
   }
 
-  const width = aspect >= 1 ? DEFAULT_LONG_EDGE : Math.max(1, Math.round(DEFAULT_LONG_EDGE * aspect))
-  const height = aspect >= 1 ? Math.max(1, Math.round(DEFAULT_LONG_EDGE / aspect)) : DEFAULT_LONG_EDGE
+  const { width, height } = trustedPresetRasterSize(aspect)
   const blob = new Blob([preset.svg(color)], { type: 'image/svg+xml' })
   const url = URL.createObjectURL(blob)
   try {
