@@ -93,8 +93,41 @@ Data/rollback impact: มี local migration เพิ่ม 4 tables, constrain
 - real local auth integration ผ่าน: สร้าง auth user, sign-in รับ token, verify/bootstrap ซ้ำได้ identity/workspace เดิม, forged token เป็น 401 และ cleanup สำเร็จ
 - cloud-mode HTTP smoke ผ่าน: root 200, missing/forged bearer 401 JSON และ legacy AI 410
 
-Known gap: editor ใน cloud mode ยังเก็บเพียง account-scoped browser draft ไม่ได้ sync project ไปฐานข้อมูลจน P1.3; Google console/provider redirects และ Vercel preview ต้องทดสอบบน staging จริง
+Known gap: editor ใน cloud mode ยังเก็บเพียง account-scoped browser draft; P1.3 เพิ่ม project API แล้วแต่การแปล editor document/asset และ save queue อยู่ใน P1.5–P1.6; Google console/provider redirects และ Vercel preview ต้องทดสอบบน staging จริง
+
+## P1.3 — Project RPC, repository/API และ atomic save
+
+สถานะ: เสร็จและผ่าน local database/integration/unit/build checks
+
+- เพิ่ม private `projects` และ durable `project_operations` พร้อม RLS/revoke สำหรับ browser roles
+- เพิ่ม server-only RPC สำหรับ actor resolution, `/me`, list/get/create/save/soft-delete; ตรวจ workspace membership ใน RPC แม้เรียกด้วย privileged client
+- save/delete ใช้ row lock + expected revision compare-and-swap; retry ด้วย operation/payload เดิมคืน receipt เดิมโดยไม่เพิ่ม revision
+- mutation ทุกชนิด serialize ตาม `(workspace, actor, operationId)`; operation ID เดิมแต่ payload/type/project ต่างกันถูก 409
+- เพิ่ม strict Zod schemas สำหรับ project document/envelopes, 1 MiB JSON limit, safe bigint conversion, opaque cursor และ validation ของ `If-Match`/`Idempotency-Key`
+- เพิ่ม browser HTTP repository สำหรับ `/me` และ project endpoints; ยังไม่ต่อเข้า editor state ก่อน codec/asset lifecycle
+- unit tests ผ่าน 28 files, 368 tests; `tsc --noEmit` และ production build ผ่าน
+- `npm run db:reset` ผ่าน migration/seed ครบ; pgTAP ผ่าน 3 files, 82 assertions (project suite 38 assertions)
+- PostgreSQL integration ผ่าน 3 files, 4 tests: bootstrap/auth และ project ACL/concurrent create/CAS/receipt replay/cross-project operation-ID reuse
+
+Data/rollback impact: มี migration เพิ่ม 2 tables และ 8 RPCs ใน local migration history; ยังไม่ link/push ไป remote database
+
+## P1.4 — Image asset lifecycle และ private Storage
+
+สถานะ: เสร็จสำหรับ local PNG/JPEG flow; native packaging บน Vercel/staging ยัง **NOT RUN**
+
+- เพิ่ม private `assets`, `asset_operations`, `storage_usage`, `storage_reservations` และ `project_assets`; เปิด RLS และไม่มี browser allow policy
+- upload intent สร้าง staging key ฝั่ง server, จองเต็มเพดาน bucket 10 MiB ต่อ ticket กัน client แจ้ง size ต่ำกว่าจริง; technical default จำกัด 20 pending tickets และ 250 MiB ต่อ workspace
+- ใช้ Supabase signed upload URL อายุ 2 ชั่วโมงแบบ `upsert: false`; private download URL อายุ 5 นาที และไม่เก็บ capability URL ใน durable receipt
+- validator ใช้ Sharp 0.35.4 decode จริง, รับเฉพาะ PNG/JPEG เฟรมเดียว, compressed/final ≤ 10 MiB และ ≤ 20 MP; auto-orient, re-encode เพื่อตัด metadata แล้วเก็บ SHA-256/dimensions ของ canonical bytes
+- ready object เขียนด้วย server ไป immutable key ที่มี fencing version; completion claim จอง durable operation ก่อ decode กัน cross-asset retry/race
+- project create/save สกัด asset IDs จาก validated document เอง, lock/check ready + same workspace และ replace `project_assets` ใน transaction เดียว; privileged RPC ก็ไม่รับ inline `src`
+- SVG policy: cloud API **ยังไม่รองรับ SVG**; ไม่ส่ง SVG เข้า Sharp หรือ fetch resource ภายนอก migration ต้อง sanitize + rasterize แบบ isolated พร้อมขอความยินยอมเรื่องคุณภาพใน P1.5/P1.7; ระหว่างนี้ต้องรักษา portable original และรายงานว่าย้ายไม่ได้
+- local checks: unit 30 files/374 tests, pgTAP 4 files/121 assertions, PostgreSQL/Storage integration 5 files/8 tests และ production build ผ่าน
+
+Known gaps: ยังไม่มี scheduled reaper สำหรับ abandoned staging reservations/orphan fencing objects; ยังไม่ทดสอบ Sharp native dependency ใน Vercel runtime หรือ remote Storage CORS
+
+Data/rollback impact: มี local migration เพิ่ม 5 tables, asset RPCs และแก้ project RPC ให้ enforce asset references; ยังไม่ link/push ไป remote database
 
 ## งานถัดไป
 
-เริ่ม P1.3: project RPC/repository/API พร้อม atomic revision compare-and-swap และ operation idempotency
+เริ่ม P1.5 cloud/editor codec และ portable file compatibility; ก่อน deploy P1.4 ต้องทดสอบ Sharp native packaging และ Storage CORS บน staging

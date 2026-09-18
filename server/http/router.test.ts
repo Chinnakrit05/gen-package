@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import type { CloudProjectDocumentV1 } from '../../shared/contracts/projects'
 import type { SessionService } from '../modules/identity/sessionService'
+import type { AssetService } from '../modules/assets/assetService'
+import type { ProjectRepository } from '../modules/projects/projectRepository'
+import { ProjectService } from '../modules/projects/projectService'
 import { createApiRouter, type HttpRequest, type HttpResponse } from './router'
 
 function request(method: string, url: string, authorization?: string): HttpRequest {
@@ -23,6 +27,50 @@ function response() {
 
 const config = { appEnv: 'test' as const, allowedOrigins: [], supabase: null }
 const router = createApiRouter(config)
+
+const actor = {
+  userId: '10000000-0000-4000-8000-000000000001',
+  identityIssuer: 'https://test.supabase.local/auth/v1',
+  identitySubject: 'subject-1',
+  requestId: 'request-1',
+}
+const workspaceId = '20000000-0000-4000-8000-000000000001'
+const projectId = '30000000-0000-4000-8000-000000000001'
+const operationId = '40000000-0000-4000-8000-000000000001'
+const document: CloudProjectDocumentV1 = {
+  live: { template: 'tuck-end', materialId: 'carton-300', W: 80, D: 50, H: 120, handle: false },
+  qty: 500,
+  fillColor: null,
+  decos: [],
+  history: [],
+  histIdx: -1,
+}
+
+function projectRouter(repository: ProjectRepository) {
+  const sessionService: SessionService = {
+    bootstrap: async () => { throw new Error('must not be called') },
+    authenticate: async () => actor,
+    getMe: async () => ({
+      user: { id: actor.userId, displayName: 'Tester', email: null },
+      workspaces: [{ id: workspaceId, kind: 'personal', name: 'พื้นที่ส่วนตัว', role: 'owner' }],
+    }),
+  }
+  return createApiRouter(config, {
+    sessionService,
+    projectService: new ProjectService(repository),
+  })
+}
+
+function repositoryStub(overrides: Partial<ProjectRepository> = {}): ProjectRepository {
+  return {
+    list: async () => ({ items: [], nextCursor: null }),
+    get: async () => { throw new Error('must not be called') },
+    create: async () => { throw new Error('must not be called') },
+    save: async () => { throw new Error('must not be called') },
+    remove: async () => { throw new Error('must not be called') },
+    ...overrides,
+  }
+}
 
 describe('API router', () => {
   it('returns a minimal health response with a server request ID', async () => {
@@ -63,6 +111,8 @@ describe('API router', () => {
 
     const fakeService: SessionService = {
       bootstrap: async () => { throw new Error('must not be called') },
+      authenticate: async () => { throw new Error('must not be called') },
+      getMe: async () => { throw new Error('must not be called') },
     }
     const configuredRouter = createApiRouter(config, { sessionService: fakeService })
     const missingToken = response()
@@ -81,6 +131,8 @@ describe('API router', () => {
           personalWorkspace: { id: 'workspace-1', kind: 'personal', name: 'พื้นที่ส่วนตัว', role: 'owner' },
         }
       },
+      authenticate: async () => { throw new Error('must not be called') },
+      getMe: async () => { throw new Error('must not be called') },
     }
     const configuredRouter = createApiRouter(config, { sessionService: fakeService })
     const target = response()
@@ -96,11 +148,197 @@ describe('API router', () => {
   it('rejects malformed bearer schemes before calling the auth service', async () => {
     const fakeService: SessionService = {
       bootstrap: async () => { throw new Error('must not be called') },
+      authenticate: async () => { throw new Error('must not be called') },
+      getMe: async () => { throw new Error('must not be called') },
     }
     const configuredRouter = createApiRouter(config, { sessionService: fakeService })
     const target = response()
     await configuredRouter(request('POST', '/api/v1/session/bootstrap', 'Basic abc'), target.res)
     expect(target.res.statusCode).toBe(401)
     expect(target.readBody()).toMatchObject({ error: { code: 'SESSION_INVALID' } })
+  })
+
+  it('returns the verified profile and workspace summaries from /me', async () => {
+    const configuredRouter = projectRouter(repositoryStub())
+    const target = response()
+    await configuredRouter(request('GET', '/api/v1/me', 'Bearer verified-token'), target.res)
+    expect(target.res.statusCode).toBe(200)
+    expect(target.readBody()).toMatchObject({
+      data: {
+        user: { id: actor.userId },
+        workspaces: [{ id: workspaceId, role: 'owner' }],
+      },
+    })
+  })
+
+  it('validates and creates a project for the actor resolved from the bearer token', async () => {
+    const calls: unknown[] = []
+    const configuredRouter = projectRouter(repositoryStub({
+      async create(resolvedActor, input, hash) {
+        calls.push({ resolvedActor, input, hash })
+        return {
+          id: projectId,
+          workspaceId,
+          name: input.name,
+          documentSchemaVersion: 1,
+          document: input.document,
+          revision: 1,
+          createdAt: '2026-09-18T00:00:00.000Z',
+          updatedAt: '2026-09-18T00:00:00.000Z',
+          assets: [],
+        }
+      },
+    }))
+    const target = response()
+    await configuredRouter({
+      method: 'POST',
+      url: '/api/v1/projects',
+      headers: { authorization: 'Bearer verified-token', 'content-type': 'application/json' },
+      body: { workspaceId, operationId, name: 'กล่องทดสอบ', documentSchemaVersion: 1, document },
+    }, target.res)
+
+    expect(target.res.statusCode).toBe(201)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({
+      resolvedActor: { userId: actor.userId },
+      input: { workspaceId, operationId, name: 'กล่องทดสอบ' },
+      hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+    })
+  })
+
+  it('rejects unknown/mass-assignment fields before the repository is called', async () => {
+    let called = false
+    const configuredRouter = projectRouter(repositoryStub({
+      create: async () => {
+        called = true
+        throw new Error('must not be called')
+      },
+    }))
+    const target = response()
+    await configuredRouter({
+      method: 'POST',
+      url: '/api/v1/projects',
+      headers: { authorization: 'Bearer verified-token', 'content-type': 'application/json' },
+      body: {
+        workspaceId,
+        operationId,
+        name: 'กล่องทดสอบ',
+        documentSchemaVersion: 1,
+        document,
+        actorUserId: 'attacker-controlled',
+      },
+    }, target.res)
+
+    expect(target.res.statusCode).toBe(422)
+    expect(called).toBe(false)
+    expect(target.readBody()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } })
+  })
+
+  it('requires the exact JSON media type for project writes', async () => {
+    let called = false
+    const configuredRouter = projectRouter(repositoryStub({
+      create: async () => {
+        called = true
+        throw new Error('must not be called')
+      },
+    }))
+    const target = response()
+    await configuredRouter({
+      method: 'POST',
+      url: '/api/v1/projects',
+      headers: { authorization: 'Bearer verified-token', 'content-type': 'application/json-evil' },
+      body: { workspaceId, operationId, name: 'กล่องทดสอบ', documentSchemaVersion: 1, document },
+    }, target.res)
+
+    expect(target.res.statusCode).toBe(415)
+    expect(called).toBe(false)
+    expect(target.readBody()).toMatchObject({ error: { code: 'UNSUPPORTED_MEDIA_TYPE' } })
+  })
+
+  it('parses delete concurrency headers and returns the durable receipt', async () => {
+    const configuredRouter = projectRouter(repositoryStub({
+      async remove(_actor, input) {
+        expect(input).toEqual({ projectId, operationId, expectedRevision: 7 })
+        return {
+          projectId,
+          operationId,
+          revision: 8,
+          deletedAt: '2026-09-18T00:00:00.000Z',
+        }
+      },
+    }))
+    const target = response()
+    await configuredRouter({
+      method: 'DELETE',
+      url: `/api/v1/projects/${projectId}`,
+      headers: {
+        authorization: 'Bearer verified-token',
+        'if-match': '"7"',
+        'idempotency-key': operationId,
+      },
+    }, target.res)
+
+    expect(target.res.statusCode).toBe(200)
+    expect(target.readBody()).toMatchObject({ data: { projectId, revision: 8 } })
+  })
+
+  it('validates asset upload intents and resolves their actor from the bearer token', async () => {
+    const assetId = '50000000-0000-4000-8000-000000000001'
+    const calls: unknown[] = []
+    const assetService = {
+      async createIntent(resolvedActor: typeof actor, input: Record<string, unknown>) {
+        calls.push({ resolvedActor, input })
+        return {
+          asset: {
+            id: assetId,
+            workspaceId,
+            purpose: 'project-decoration' as const,
+            state: 'pending' as const,
+            declaredMime: 'image/png' as const,
+            declaredSize: 100,
+            mimeType: null,
+            byteSize: null,
+            sha256: null,
+            width: null,
+            height: null,
+            rejectionCode: null,
+            createdAt: '2026-09-18T00:00:00.000Z',
+            updatedAt: '2026-09-18T00:00:00.000Z',
+          },
+          upload: {
+            url: 'https://storage.test/upload',
+            method: 'PUT' as const,
+            headers: { 'content-type': 'image/png' },
+            expiresAt: '2026-09-18T02:00:00.000Z',
+          },
+        }
+      },
+    } as unknown as AssetService
+    const sessionService: SessionService = {
+      bootstrap: async () => { throw new Error('must not be called') },
+      authenticate: async () => actor,
+      getMe: async () => { throw new Error('must not be called') },
+    }
+    const configuredRouter = createApiRouter(config, { sessionService, assetService, projectService: null })
+    const target = response()
+    await configuredRouter({
+      method: 'POST',
+      url: '/api/v1/assets/upload-intents',
+      headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
+      body: {
+        workspaceId,
+        operationId,
+        purpose: 'project-decoration',
+        declaredMime: 'image/png',
+        declaredSize: 100,
+      },
+    }, target.res)
+
+    expect(target.res.statusCode).toBe(201)
+    expect(calls).toEqual([expect.objectContaining({
+      resolvedActor: expect.objectContaining({ userId: actor.userId }),
+      input: expect.objectContaining({ workspaceId, operationId, declaredSize: 100 }),
+    })])
+    expect(target.readBody()).toMatchObject({ data: { asset: { id: assetId, state: 'pending' } } })
   })
 })

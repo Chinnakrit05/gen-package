@@ -2,7 +2,7 @@
 
 อัปเดตล่าสุด: 18 กันยายน 2026
 
-คู่มือนี้ครอบคลุม local Supabase และ auth/session ของ Phase 1 ยังไม่สร้างหรือแก้ remote project
+คู่มือนี้ครอบคลุม local Supabase, auth/session และ project API ของ Phase 1 ยังไม่สร้างหรือแก้ remote project
 
 ## Prerequisites ที่ตรวจใช้
 
@@ -37,7 +37,7 @@ npm run db:test
 npm run db:test:integration
 ```
 
-`db:reset` ในโปรเจกต์นี้ระบุ `--local` ชัดเจน: ลบและสร้างใหม่เฉพาะ local database แล้วใช้ migrations กับ `seed.sql` ตามลำดับ ส่วน `db:test` รัน pgTAP files ใต้ `supabase/tests/` และ `db:test:integration` ทดสอบ bootstrap พร้อมกันหลาย request กับ local PostgreSQL จริง ดูรูปแบบ pgTAP ทางการได้ที่ [Testing Overview](https://supabase.com/docs/guides/local-development/testing/overview)
+`db:reset` ในโปรเจกต์นี้ระบุ `--local` ชัดเจน: ลบและสร้างใหม่เฉพาะ local database แล้วใช้ migrations กับ `seed.sql` ตามลำดับ ส่วน `db:test` รัน pgTAP files ใต้ `supabase/tests/` และ `db:test:integration` ทดสอบ bootstrap/auth, project CAS/idempotency และ Storage asset lifecycle/quota กับ local services จริง ดูรูปแบบ pgTAP ทางการได้ที่ [Testing Overview](https://supabase.com/docs/guides/local-development/testing/overview)
 
 ห้ามเปลี่ยนคำสั่งเป็น `supabase db reset --linked` เพราะคำสั่งนั้นลบฐานข้อมูล remote ที่ link อยู่ เอกสาร workflow อธิบายความต่างไว้ที่ [Local development workflow](https://supabase.com/docs/guides/local-development/cli-workflows)
 
@@ -75,7 +75,16 @@ SUPABASE_SECRET_KEY=<local secret/service-role key>
 
 P1.2 เชื่อม cloud mode แล้ว สำหรับ local smoke ให้ใช้ URL/publishable/secret values จาก `npx supabase status` เท่านั้น ห้ามคัดลอก local secret ไป staging/production และอย่า commit `.env.local`
 
-หลัง sign-in browser ส่ง access token ไป `POST /api/v1/session/bootstrap`; server ตรวจ token กับ Supabase Auth แล้วสร้าง app user/personal workspace ผ่าน server-only RPC งานใน editor ยังเป็น draft ใน browser ที่แยก key ตาม `app_user_id` จนกว่า P1.3 จะเชื่อม project repository จึงยังไม่ถือว่า sync ขึ้น cloud
+หลัง sign-in browser ส่ง access token ไป `POST /api/v1/session/bootstrap`; server ตรวจ token กับ Supabase Auth แล้วสร้าง app user/personal workspace ผ่าน server-only RPC หลังจากนั้นมี `GET /api/v1/me` และ `/api/v1/projects` CRUD สำหรับ bearer token เดิม แต่งานใน editor ยังเป็น account-scoped browser draft จนกว่า P1.5–P1.6 จะต่อ codec, asset references และ save queue เข้าด้วยกัน
+
+## Asset upload flow
+
+1. `POST /api/v1/assets/upload-intents` ด้วย workspace, purpose, MIME, byte size และ operation UUID
+2. PUT raw PNG/JPEG bytes ไป signed URL และ headers ที่ API คืนให้; URL/token นี้เป็น capability ห้าม log หรือ persist
+3. `POST /api/v1/assets/:id/complete` ด้วย operation UUID; server ดาวน์โหลด/decode/re-encode และเปลี่ยนเป็น ready หรือ rejected
+4. ออก URL อ่านด้วย `POST /api/v1/assets/download-tickets`; private bucket ไม่มี public URL
+
+ข้อจำกัด local: PNG/JPEG เท่านั้น, 10 MiB, 20 MP, เฟรมเดียว; SVG ถูกปฏิเสธจนกว่า strict sanitizer + isolated rasterizer จะผ่าน tests ห้ามแปลงแล้วลดคุณภาพเงียบ ๆ
 
 ## Google OAuth redirects
 
@@ -95,10 +104,11 @@ OAuth จริงต้องตรวจบน staging อีกครั้�
 ## Verification status บนเครื่องนี้
 
 - Supabase CLI 2.117.0: ติดตั้งและรันได้
-- Docker Desktop 4.91.0, Docker Engine 29.8.0 และ WSL 2.7.13: ติดตั้งและรันได้
-- `supabase db reset --local`: **PASS** — ใช้ foundation และ identity/workspace migrations พร้อม seed สำเร็จ
-- `supabase test db`: **PASS** — 2 files, 44 assertions
-- `npm run db:test:integration`: **PASS** — 2 tests: concurrent bootstrap 8 requests และ real Auth token → server bootstrap/forged-token rejection; cleanup สำเร็จ
+- Docker Desktop 4.91.0, Docker Engine 29.8.0 และ WSL 2.7.13: รัน local stack ได้; stale socket จากการเริ่มครั้งก่อนไม่ปรากฏแล้ว
+- `supabase db reset --local`: **PASS** — foundation, identity/workspace, project และ asset migrations พร้อม seed
+- `supabase test db`: **PASS** — 4 files, 121 assertions
+- `npm run db:test:integration`: **PASS** — 5 files, 8 tests; รวม Storage byte lifecycle, private access, quota/concurrency และ project asset links
+- `npm test`, `tsc --noEmit`, `npm run build`: **PASS หลัง P1.4** — 30 files, 374 unit tests
 - cloud-mode HTTP smoke: **PASS** — root 200, missing/forged bearer 401 JSON, legacy `/api/box-spec` 410
 - Google OAuth บน remote/staging: **NOT RUN** — ยังไม่มี remote project/provider credentials
 - Remote/staging: **NOT RUN**

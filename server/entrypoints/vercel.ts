@@ -16,5 +16,11 @@ export function normalizeVercelRequestUrl(rawUrl: string | undefined): string {
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  await router({ method: req.method, url: normalizeVercelRequestUrl(req.url), headers: req.headers }, res)
+  await router({
+    method: req.method,
+    url: normalizeVercelRequestUrl(req.url),
+    headers: req.headers,
+    body: (req as IncomingMessage & { body?: unknown }).body,
+    raw: req,
+  }, res)
 }

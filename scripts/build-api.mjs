@@ -1,7 +1,7 @@
 // Bundle the Vercel serverless entries into self-contained files. จำเป็นเพราะ Vercel รันฟังก์ชัน
 // แบบ native ESM และ "ไม่ bundle" import
 // ข้ามโฟลเดอร์ (../src, ../server) ให้ — ปล่อยไว้จะ ERR_MODULE_NOT_FOUND ตอนรัน
-// รวมทุก dependency ไว้ในไฟล์เดียว (ยกเว้น node builtins) เหลือแค่ import 'node:*' ที่ runtime มีให้อยู่แล้ว
+// รวม dependency ไว้ในไฟล์เดียวเกือบทั้งหมด; ยกเว้น node builtins และ sharp ที่ต้องให้ deployment เลือก native binary ตาม platform
 import * as esbuild from 'esbuild'
 import { readFile, writeFile } from 'node:fs/promises'
 
@@ -12,6 +12,8 @@ await esbuild.build({
   },
   outdir: 'api',
   bundle: true,
+  // sharp มี native runtime binaries; ปล่อยเป็น package dependency ให้ deployment เลือก binary ตาม platform
+  external: ['sharp'],
   platform: 'node',
   format: 'esm',
   target: 'node18',

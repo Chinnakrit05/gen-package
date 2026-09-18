@@ -6,12 +6,17 @@ export interface AppUserSummary {
 
 export interface WorkspaceSummary {
   id: string
-  kind: 'personal'
+  kind: 'personal' | 'team'
   name: string
-  role: 'owner'
+  role: 'owner' | 'editor' | 'viewer'
 }
 
 export interface SessionBootstrapData {
   user: AppUserSummary
   personalWorkspace: WorkspaceSummary
+}
+
+export interface MeData {
+  user: AppUserSummary
+  workspaces: WorkspaceSummary[]
 }

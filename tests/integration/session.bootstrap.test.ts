@@ -83,9 +83,16 @@ describe('real Supabase session bootstrap', () => {
     const first = await service.bootstrap(signedIn.session!.access_token, crypto.randomUUID())
     const second = await service.bootstrap(signedIn.session!.access_token, crypto.randomUUID())
     appUserId = first.user.id
+    const actor = await service.authenticate(signedIn.session!.access_token, 'request-authenticate')
 
     expect(second).toEqual(first)
     expect(first.user).toMatchObject({ displayName: 'Local Session Tester', email })
+    expect(actor).toMatchObject({
+      userId: first.user.id,
+      identityIssuer: `${status.API_URL}/auth/v1`,
+      identitySubject: authUserId,
+      requestId: 'request-authenticate',
+    })
 
     const [counts] = await sql!<[{ users: number; identities: number; workspaces: number; memberships: number }]>`
       select

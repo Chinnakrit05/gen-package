@@ -8,7 +8,7 @@ export function createViteApiMiddleware(env: Record<string, string | undefined>)
   return (req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
     const path = new URL(req.url ?? '/', 'http://packit.local').pathname
     if (path === '/api/v1' || path.startsWith('/api/v1/')) {
-      void router(req, res)
+      void router({ method: req.method, url: req.url, headers: req.headers, raw: req }, res)
       return
     }
     next()
