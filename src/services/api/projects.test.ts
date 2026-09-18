@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CloudProjectDocumentV1 } from '../../../shared/contracts/projects'
-import { deleteProject, saveProject } from './projects'
+import { deleteProject, importLegacyProject, saveProject } from './projects'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -60,5 +60,36 @@ describe('project API client', () => {
 
     await expect(deleteProject('/api/v1', 'token', { projectId, operationId, expectedRevision: 7 }))
       .resolves.toMatchObject({ revision: 8 })
+  })
+
+  it('posts the complete legacy source identity to the dedicated import endpoint', async () => {
+    const input = {
+      workspaceId: crypto.randomUUID(),
+      operationId: crypto.randomUUID(),
+      sourceInstallationId: crypto.randomUUID(),
+      sourceProjectKey: 'projects:0',
+      sourceHash: 'b'.repeat(64),
+      name: 'Legacy',
+      documentSchemaVersion: 1 as const,
+      document,
+    }
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      expect(url).toBe('/api/v1/projects/import-legacy')
+      expect(JSON.parse(String(init.body))).toEqual(input)
+      return new Response(JSON.stringify({
+        data: {
+          sourceInstallationId: input.sourceInstallationId,
+          sourceProjectKey: input.sourceProjectKey,
+          sourceHash: input.sourceHash,
+          project: {},
+          completedAt: '2026-09-18T00:00:00.000Z',
+        },
+        requestId: crypto.randomUUID(),
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }))
+
+    await expect(importLegacyProject('/api/v1', 'token', input)).resolves.toMatchObject({
+      sourceProjectKey: 'projects:0',
+    })
   })
 })

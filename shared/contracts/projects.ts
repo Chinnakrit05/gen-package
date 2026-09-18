@@ -87,3 +87,22 @@ export interface DeleteReceipt {
   deletedAt: string
   operationId: string
 }
+
+export interface LegacyImportInput {
+  workspaceId: string
+  operationId: string
+  sourceInstallationId: string
+  sourceProjectKey: string
+  sourceHash: string
+  name: string
+  documentSchemaVersion: 1
+  document: CloudProjectDocumentV1
+}
+
+export interface LegacyImportReceipt {
+  sourceInstallationId: string
+  sourceProjectKey: string
+  sourceHash: string
+  project: CloudProject
+  completedAt: string
+}

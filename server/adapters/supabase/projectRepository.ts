@@ -4,6 +4,8 @@ import type {
   CreateProjectInput,
   DeleteProjectInput,
   DeleteReceipt,
+  LegacyImportInput,
+  LegacyImportReceipt,
   ProjectPage,
   SaveProjectInput,
   SaveReceipt,
@@ -16,6 +18,7 @@ import type { ProjectListQuery, ProjectRepository } from '../../modules/projects
 import {
   cloudProjectSchema,
   deleteReceiptSchema,
+  legacyImportReceiptSchema,
   projectListRowSchema,
   saveReceiptSchema,
 } from '../../modules/projects/validation'
@@ -26,6 +29,9 @@ function mapDatabaseError(error: PostgrestError): HttpError {
   }
   if (error.message.includes('IDEMPOTENCY_KEY_REUSED')) {
     return new HttpError(409, 'IDEMPOTENCY_KEY_REUSED', 'operationId นี้ถูกใช้กับข้อมูลอื่นแล้ว')
+  }
+  if (error.message.includes('LEGACY_SOURCE_CHANGED')) {
+    return new HttpError(409, 'LEGACY_SOURCE_CHANGED', 'ข้อมูลต้นทางเดิมถูกแก้ไขหลังเริ่มย้ายข้อมูล')
   }
   if (error.message.includes('REVISION_CONFLICT')) {
     const currentRevision = Number(error.details)
@@ -104,6 +110,25 @@ export class SupabaseProjectRepository implements ProjectRepository {
     const parsed = cloudProjectSchema.safeParse(data)
     if (!parsed.success) throw providerContractError()
     return parsed.data as CloudProject
+  }
+
+  async importLegacy(actor: Actor, input: LegacyImportInput, hash: string): Promise<LegacyImportReceipt> {
+    const { data, error } = await this.client.rpc('import_legacy_project', {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: input.workspaceId,
+      p_operation_id: input.operationId,
+      p_request_hash: hash,
+      p_source_installation_id: input.sourceInstallationId,
+      p_source_project_key: input.sourceProjectKey,
+      p_source_hash: input.sourceHash,
+      p_name: input.name,
+      p_document_schema_version: input.documentSchemaVersion,
+      p_document: input.document,
+    })
+    if (error) throw mapDatabaseError(error)
+    const parsed = legacyImportReceiptSchema.safeParse(data)
+    if (!parsed.success) throw providerContractError()
+    return parsed.data as LegacyImportReceipt
   }
 
   async save(actor: Actor, input: SaveProjectInput, hash: string): Promise<SaveReceipt> {

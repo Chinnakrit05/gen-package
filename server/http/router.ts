@@ -22,6 +22,7 @@ import { ProjectService } from '../modules/projects/projectService'
 import {
   createProjectInputSchema,
   expectedRevisionSchema,
+  legacyImportInputSchema,
   operationIdSchema,
   projectIdSchema,
   projectListQuerySchema,
@@ -243,6 +244,29 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
         const httpError = error instanceof HttpError
           ? error
           : new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'ดำเนินการกับโปรเจกต์ไม่สำเร็จ')
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
+    if (path === '/api/v1/projects/import-legacy') {
+      try {
+        if (req.method !== 'POST') {
+          res.setHeader('allow', 'POST')
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!sessionService || !projectService) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Supabase')
+        }
+        requireJsonContentType(req)
+        const actor = await sessionService.authenticate(bearerToken(req), requestId)
+        const input = parseOrThrow(legacyImportInputSchema.safeParse(await readJsonBody(req)))
+        const data = await projectService.importLegacy(actor, input)
+        sendJson(res, 200, { data, requestId }, requestId)
+      } catch (error) {
+        const httpError = error instanceof HttpError
+          ? error
+          : new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'ย้ายโปรเจกต์เดิมไม่สำเร็จ')
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
       }
       return

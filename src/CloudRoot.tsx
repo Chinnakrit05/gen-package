@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import type { SessionBootstrapData } from '../shared/contracts/auth'
-import App from './App'
 import { Login } from './components/Login'
 import type { ClientConfig } from './config'
+import { CloudWorkspace } from './features/projects/CloudWorkspace'
 import { ApiClientError, bootstrapSession } from './services/api/session'
-import { cloudDraftStorageKey, createBrowserSupabaseClient } from './services/auth/supabaseAuth'
+import { createBrowserSupabaseClient } from './services/auth/supabaseAuth'
 
 type BootstrapState =
   | { status: 'idle' | 'loading' }
@@ -137,11 +137,13 @@ export function CloudRoot({ config }: { config: ClientConfig }) {
 
   const appUserId = bootstrap.data.user.id
   return (
-    <App
+    <CloudWorkspace
       key={appUserId}
-      onLogout={() => void signOut()}
-      storageKey={cloudDraftStorageKey(appUserId)}
-      migrateLegacy={false}
+      onLogout={signOut}
+      apiBaseUrl={config.apiBaseUrl}
+      accessToken={session.access_token}
+      appUserId={appUserId}
+      workspaceId={bootstrap.data.personalWorkspace.id}
     />
   )
 }

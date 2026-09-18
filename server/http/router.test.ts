@@ -66,6 +66,7 @@ function repositoryStub(overrides: Partial<ProjectRepository> = {}): ProjectRepo
     list: async () => ({ items: [], nextCursor: null }),
     get: async () => { throw new Error('must not be called') },
     create: async () => { throw new Error('must not be called') },
+    importLegacy: async () => { throw new Error('must not be called') },
     save: async () => { throw new Error('must not be called') },
     remove: async () => { throw new Error('must not be called') },
     ...overrides,
@@ -232,6 +233,54 @@ describe('API router', () => {
     expect(target.res.statusCode).toBe(422)
     expect(called).toBe(false)
     expect(target.readBody()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } })
+  })
+
+  it('imports a legacy project through the source-deduplicating endpoint', async () => {
+    const sourceInstallationId = '50000000-0000-4000-8000-000000000001'
+    const sourceHash = 'a'.repeat(64)
+    const configuredRouter = projectRouter(repositoryStub({
+      async importLegacy(resolvedActor, input, hash) {
+        expect(resolvedActor.userId).toBe(actor.userId)
+        expect(input).toMatchObject({ workspaceId, sourceInstallationId, sourceProjectKey: 'projects:0' })
+        expect(hash).toMatch(/^[0-9a-f]{64}$/)
+        return {
+          sourceInstallationId,
+          sourceProjectKey: input.sourceProjectKey,
+          sourceHash,
+          project: {
+            id: projectId,
+            workspaceId,
+            name: input.name,
+            documentSchemaVersion: 1,
+            document: input.document,
+            revision: 1,
+            createdAt: '2026-09-18T00:00:00.000Z',
+            updatedAt: '2026-09-18T00:00:00.000Z',
+            assets: [],
+          },
+          completedAt: '2026-09-18T00:00:00.000Z',
+        }
+      },
+    }))
+    const target = response()
+    await configuredRouter({
+      method: 'POST',
+      url: '/api/v1/projects/import-legacy',
+      headers: { authorization: 'Bearer verified-token', 'content-type': 'application/json' },
+      body: {
+        workspaceId,
+        operationId,
+        sourceInstallationId,
+        sourceProjectKey: 'projects:0',
+        sourceHash,
+        name: 'งานเดิม',
+        documentSchemaVersion: 1,
+        document,
+      },
+    }, target.res)
+
+    expect(target.res.statusCode).toBe(200)
+    expect(target.readBody()).toMatchObject({ data: { sourceHash, project: { id: projectId } } })
   })
 
   it('requires the exact JSON media type for project writes', async () => {

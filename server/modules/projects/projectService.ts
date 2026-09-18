@@ -3,6 +3,8 @@ import type {
   CreateProjectInput,
   DeleteProjectInput,
   DeleteReceipt,
+  LegacyImportInput,
+  LegacyImportReceipt,
   ProjectPage,
   SaveProjectInput,
   SaveReceipt,
@@ -25,6 +27,11 @@ export class ProjectService {
   create(actor: Actor, input: CreateProjectInput): Promise<CloudProject> {
     const hash = requestHash({ operationType: 'create', ...input })
     return this.repository.create(actor, input, hash)
+  }
+
+  importLegacy(actor: Actor, input: LegacyImportInput): Promise<LegacyImportReceipt> {
+    const hash = requestHash({ operationType: 'legacy-import', ...input })
+    return this.repository.importLegacy(actor, input, hash)
   }
 
   save(actor: Actor, input: SaveProjectInput): Promise<SaveReceipt> {

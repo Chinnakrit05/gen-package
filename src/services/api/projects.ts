@@ -2,6 +2,8 @@ import type {
   CloudProject,
   CreateProjectInput,
   DeleteReceipt,
+  LegacyImportInput,
+  LegacyImportReceipt,
   ProjectPage,
   SaveProjectInput,
   SaveReceipt,
@@ -40,6 +42,20 @@ export function createProject(
   signal?: AbortSignal,
 ): Promise<CloudProject> {
   return requestApi<CloudProject>(`${apiBaseUrl}/projects`, accessToken, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+    signal,
+  })
+}
+
+export function importLegacyProject(
+  apiBaseUrl: string,
+  accessToken: string,
+  input: LegacyImportInput,
+  signal?: AbortSignal,
+): Promise<LegacyImportReceipt> {
+  return requestApi<LegacyImportReceipt>(`${apiBaseUrl}/projects/import-legacy`, accessToken, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(input),

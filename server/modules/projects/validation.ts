@@ -209,6 +209,17 @@ export const createProjectInputSchema = z.object({
   document: cloudProjectDocumentSchema,
 }).strict()
 
+export const legacyImportInputSchema = z.object({
+  workspaceId: z.uuid(),
+  operationId: z.uuid(),
+  sourceInstallationId: z.uuid(),
+  sourceProjectKey: z.string().min(1).max(200),
+  sourceHash: z.string().regex(/^[0-9a-f]{64}$/),
+  name: z.string().trim().min(1).max(60),
+  documentSchemaVersion: z.literal(1),
+  document: cloudProjectDocumentSchema,
+}).strict()
+
 export const saveProjectInputSchema = z.object({
   operationId: z.uuid(),
   expectedRevision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -277,6 +288,14 @@ export const deleteReceiptSchema = z.object({
   revision: safeRevisionSchema,
   deletedAt: timestampSchema,
   operationId: z.uuid(),
+}).strict()
+
+export const legacyImportReceiptSchema = z.object({
+  sourceInstallationId: z.uuid(),
+  sourceProjectKey: z.string().min(1).max(200),
+  sourceHash: z.string().regex(/^[0-9a-f]{64}$/),
+  project: cloudProjectSchema,
+  completedAt: timestampSchema,
 }).strict()
 
 export const projectListRowSchema = z.object({

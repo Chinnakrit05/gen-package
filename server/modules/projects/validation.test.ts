@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cloudProjectDocumentSchema, createProjectInputSchema } from './validation'
+import { cloudProjectDocumentSchema, createProjectInputSchema, legacyImportInputSchema } from './validation'
 
 const validDocument = () => ({
   live: {
@@ -61,5 +61,21 @@ describe('cloud project validation', () => {
       document: validDocument(),
       actorUserId: crypto.randomUUID(),
     }).success).toBe(false)
+  })
+
+  it('requires stable, bounded legacy source identity and a SHA-256 hash', () => {
+    const input = {
+      workspaceId: crypto.randomUUID(),
+      operationId: crypto.randomUUID(),
+      sourceInstallationId: crypto.randomUUID(),
+      sourceProjectKey: 'projects:0',
+      sourceHash: 'a'.repeat(64),
+      name: 'งานเดิม',
+      documentSchemaVersion: 1,
+      document: validDocument(),
+    }
+    expect(legacyImportInputSchema.safeParse(input).success).toBe(true)
+    expect(legacyImportInputSchema.safeParse({ ...input, sourceHash: 'not-a-hash' }).success).toBe(false)
+    expect(legacyImportInputSchema.safeParse({ ...input, sourceProjectKey: '' }).success).toBe(false)
   })
 })

@@ -44282,6 +44282,16 @@ var createProjectInputSchema = external_exports.object({
   documentSchemaVersion: external_exports.literal(1),
   document: cloudProjectDocumentSchema
 }).strict();
+var legacyImportInputSchema = external_exports.object({
+  workspaceId: external_exports.uuid(),
+  operationId: external_exports.uuid(),
+  sourceInstallationId: external_exports.uuid(),
+  sourceProjectKey: external_exports.string().min(1).max(200),
+  sourceHash: external_exports.string().regex(/^[0-9a-f]{64}$/),
+  name: external_exports.string().trim().min(1).max(60),
+  documentSchemaVersion: external_exports.literal(1),
+  document: cloudProjectDocumentSchema
+}).strict();
 var saveProjectInputSchema = external_exports.object({
   operationId: external_exports.uuid(),
   expectedRevision: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -44344,6 +44354,13 @@ var deleteReceiptSchema = external_exports.object({
   deletedAt: timestampSchema,
   operationId: external_exports.uuid()
 }).strict();
+var legacyImportReceiptSchema = external_exports.object({
+  sourceInstallationId: external_exports.uuid(),
+  sourceProjectKey: external_exports.string().min(1).max(200),
+  sourceHash: external_exports.string().regex(/^[0-9a-f]{64}$/),
+  project: cloudProjectSchema,
+  completedAt: timestampSchema
+}).strict();
 var projectListRowSchema = external_exports.object({
   project_id: external_exports.uuid(),
   workspace_id: external_exports.uuid(),
@@ -44359,6 +44376,9 @@ function mapDatabaseError(error62) {
   }
   if (error62.message.includes("IDEMPOTENCY_KEY_REUSED")) {
     return new HttpError(409, "IDEMPOTENCY_KEY_REUSED", "operationId \u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2D\u0E37\u0E48\u0E19\u0E41\u0E25\u0E49\u0E27");
+  }
+  if (error62.message.includes("LEGACY_SOURCE_CHANGED")) {
+    return new HttpError(409, "LEGACY_SOURCE_CHANGED", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E15\u0E49\u0E19\u0E17\u0E32\u0E07\u0E40\u0E14\u0E34\u0E21\u0E16\u0E39\u0E01\u0E41\u0E01\u0E49\u0E44\u0E02\u0E2B\u0E25\u0E31\u0E07\u0E40\u0E23\u0E34\u0E48\u0E21\u0E22\u0E49\u0E32\u0E22\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25");
   }
   if (error62.message.includes("REVISION_CONFLICT")) {
     const currentRevision = Number(error62.details);
@@ -44432,6 +44452,24 @@ var SupabaseProjectRepository = class {
     });
     if (error62) throw mapDatabaseError(error62);
     const parsed = cloudProjectSchema.safeParse(data);
+    if (!parsed.success) throw providerContractError();
+    return parsed.data;
+  }
+  async importLegacy(actor, input2, hash2) {
+    const { data, error: error62 } = await this.client.rpc("import_legacy_project", {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: input2.workspaceId,
+      p_operation_id: input2.operationId,
+      p_request_hash: hash2,
+      p_source_installation_id: input2.sourceInstallationId,
+      p_source_project_key: input2.sourceProjectKey,
+      p_source_hash: input2.sourceHash,
+      p_name: input2.name,
+      p_document_schema_version: input2.documentSchemaVersion,
+      p_document: input2.document
+    });
+    if (error62) throw mapDatabaseError(error62);
+    const parsed = legacyImportReceiptSchema.safeParse(data);
     if (!parsed.success) throw providerContractError();
     return parsed.data;
   }
@@ -44635,6 +44673,10 @@ var ProjectService = class {
   create(actor, input2) {
     const hash2 = requestHash({ operationType: "create", ...input2 });
     return this.repository.create(actor, input2, hash2);
+  }
+  importLegacy(actor, input2) {
+    const hash2 = requestHash({ operationType: "legacy-import", ...input2 });
+    return this.repository.importLegacy(actor, input2, hash2);
   }
   save(actor, input2) {
     const hash2 = requestHash({ operationType: "save", ...input2 });
@@ -44857,6 +44899,26 @@ function createApiRouter(config2, dependencies = {}) {
         throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
       } catch (error63) {
         const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E14\u0E33\u0E40\u0E19\u0E34\u0E19\u0E01\u0E32\u0E23\u0E01\u0E31\u0E1A\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
+    if (path === "/api/v1/projects/import-legacy") {
+      try {
+        if (req.method !== "POST") {
+          res.setHeader("allow", "POST");
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!sessionService || !projectService) {
+          throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Supabase");
+        }
+        requireJsonContentType(req);
+        const actor = await sessionService.authenticate(bearerToken(req), requestId);
+        const input2 = parseOrThrow(legacyImportInputSchema.safeParse(await readJsonBody(req)));
+        const data = await projectService.importLegacy(actor, input2);
+        sendJson(res, 200, { data, requestId }, requestId);
+      } catch (error63) {
+        const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E22\u0E49\u0E32\u0E22\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E40\u0E14\u0E34\u0E21\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
       }
       return;

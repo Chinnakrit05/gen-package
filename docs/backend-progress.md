@@ -93,7 +93,7 @@ Data/rollback impact: มี local migration เพิ่ม 4 tables, constrain
 - real local auth integration ผ่าน: สร้าง auth user, sign-in รับ token, verify/bootstrap ซ้ำได้ identity/workspace เดิม, forged token เป็น 401 และ cleanup สำเร็จ
 - cloud-mode HTTP smoke ผ่าน: root 200, missing/forged bearer 401 JSON และ legacy AI 410
 
-Known gap: editor ใน cloud mode ยังเก็บเพียง account-scoped browser draft; P1.3 เพิ่ม project API แล้วแต่การแปล editor document/asset และ save queue อยู่ใน P1.5–P1.6; Google console/provider redirects และ Vercel preview ต้องทดสอบบน staging จริง
+Known gap: Google console/provider redirects และ Vercel preview ยังต้องทดสอบบน staging จริง; cloud editor เปลี่ยนมาใช้ IndexedDB/controller ใน P1.6 แล้ว แต่ legacy localStorage migration UI ยังอยู่ใน P1.7
 
 ## P1.3 — Project RPC, repository/API และ atomic save
 
@@ -128,6 +128,59 @@ Known gaps: ยังไม่มี scheduled reaper สำหรับ abandon
 
 Data/rollback impact: มี local migration เพิ่ม 5 tables, asset RPCs และแก้ project RPC ให้ enforce asset references; ยังไม่ link/push ไป remote database
 
+## P1.5 — Cloud/editor codec และ portable file compatibility
+
+สถานะ: เสร็จและผ่าน unit/build checks; ต่อเข้า cloud controller/editor แล้วใน P1.6
+
+- เพิ่ม codec แยก editor `Project` ออกจาก cloud document schema 1: `dehydrateProject` แทน runtime image `src` ด้วย `assetId` และ `hydrateProject` คืน authorized bytes เป็น data URL ก่อนเข้า parser เดิม
+- ตรวจ data URL signature จริงเบื้องต้น, รับเฉพาะ PNG/JPEG ≤ 10 MiB และหยุดพร้อม error สำหรับ SVG/ชนิดที่ไม่รองรับโดยไม่แก้ project ต้นฉบับ
+- dedupe upload ตาม SHA-256 + purpose และเพิ่ม sidecar snapshot ที่ scope ด้วย `appUserId/workspaceId`; sidecar เป็น cache hint เท่านั้น ส่วน save RPC ยังตรวจ tenant/readiness ซ้ำ
+- hydration ตรวจ metadata, workspace/purpose, byte size และ SHA-256; หากรูปขาดหรือ checksum ไม่ตรงจะไม่คืน project ที่รูปถูกตัดทิ้ง
+- เพิ่ม HTTP asset transfer สำหรับ intent → signed upload → complete และ signed download; bearer token ส่งเฉพาะ app API ไม่ส่งไป capability URL
+- portable export hydrate bytes ก่อนใช้ file schema 6 เดิม จึงยังฝัง data URL ครบและไม่รั่ว `assetId`/signed URL; ไม่ bump file schema โดยไม่จำเป็น
+- fixture round-trip ครอบคลุม image/text/shape/nutrition/path, background, history และ vessel/pouch options โดยไม่มี field/ภาพหาย
+- local checks: unit 32 files/380 tests, `tsc --noEmit` และ production build ผ่าน
+
+Data/rollback impact: ไม่มี migration หรือ remote write; เพิ่ม browser codec/transport และ tests เท่านั้น
+
+## P1.6 — Project controller, durable save queue และ IndexedDB drafts
+
+สถานะ: implemented และผ่าน local unit/build checks; real browser multi-tab/offline E2E ยัง **NOT RUN**
+
+- เพิ่ม IndexedDB `project-drafts` แยก key ตาม `appUserId/workspaceId/projectId/clientId`; แต่ละแท็บมี client ID จาก sessionStorage จึงไม่เขียน draft ทับกัน
+- ทุก edit persist editor project + asset sidecar ก่อน debounce/network; storage error เปลี่ยนสถานะเป็น error แทนการกลืนเงียบ
+- save queue ใช้ debounce 1 วินาที/max wait 5 วินาที, หนึ่ง in-flight ต่อโปรเจกต์ และ persist exact payload/expected revision/operationId ก่อนยิง API
+- reload หลัง commit แต่ response หาย replay mutation เดิม; retry 429/503 แบบ bounded และปุ่ม retry ยังใช้ operationId เดิม
+- edit ระหว่าง save แยกเป็น generation ใหม่ รอ receipt ก่อนใช้ revision ล่าสุดส่งต่อ; late response หลัง switch/logout ไม่ล้าง durable mutation
+- offline เก็บ draft และเปิดงานที่เคยโหลดครบจาก IndexedDB ได้; create/import/delete/เพิ่มรูปใหม่ถูกปิดจน online ส่วนการแก้ข้อความ/geometry ยังทำต่อได้
+- สองแท็บใช้ draft คนละ record และให้ server CAS ตัดสิน; revision conflict หยุด autosave พร้อมปุ่มโหลด cloud ล่าสุดหรือสร้างสำเนา ไม่ last-write-win เงียบ
+- ต่อ `CloudWorkspace` เข้า `CloudRoot/App`: list/get/create/save/delete/import, project switching, save-state indicator, token refresh retry และ capture ล่าสุดก่อน switch/logout
+- SVG import จากผู้ใช้ยังถูกปิดใน cloud mode; built-in preset เปิดผ่าน trusted rasterizer ใน P1.7 แล้ว และ local mode ไม่เปลี่ยน
+- unit tests จำลอง response loss, reload replay, edit-during-save, concurrent tabs, offline/reconnect, switch/dispose, explicit retry และ controller draft restore
+- local checks: unit 34 files/390 tests, `tsc --noEmit` และ production build ผ่าน
+
+Known gaps: ยังไม่มี durable journal สำหรับ create/delete ทั่วไปหรือ BroadcastChannel เพื่อแจ้งแท็บ clean ให้ reload เชิงรุก; CAS ยังป้องกัน overwrite ได้ งานเหล่านี้รวมกับ legacy migration journal/P1.7 และ browser E2E/P1.8
+
+Data/rollback impact: ไม่มี database migration/remote write; browser cloud mode เปลี่ยนจาก account-scoped localStorage draft เป็น IndexedDB โดยยังไม่ลบ key เดิม
+
+## P1.7 — Resumable legacy migration และ trusted preset rasterization
+
+สถานะ: implemented และผ่าน local database/integration/unit/build checks; real-browser migration UX/E2E ยัง **NOT RUN**
+
+- เพิ่ม IndexedDB migration journal ที่ scope ด้วย `appUserId/workspaceId/installationId`; สร้าง installation ID แบบคงที่ใน localStorage และเก็บ exact raw backup ก่อน parse/repair เสมอ
+- discovery รองรับทั้งคลัง `gen-package-projects-v1` และงานเดี่ยวรุ่น `gen-package-design-v1`; แสดงรายการ repair/skipped และไม่ลบหรือแก้ localStorage ต้นทาง
+- UI หลัง login ขอความยินยอมก่อนย้าย, แสดง progress/result/error, retry ได้ และ resume journal ที่ยินยอมแล้วอัตโนมัติ
+- แต่ละรายการมี stable source key/hash/operation ID; source เดิมที่เนื้อหาเปลี่ยนถูก mark conflict ไม่ overwrite เป้าหมาย
+- เพิ่ม private `legacy_imports` mapping และ server-only `import_legacy_project` RPC/API; advisory lock + unique source mapping ทำให้ retry, lost response, StrictMode และ concurrent request คืนโปรเจกต์เดิม
+- migration อัปโหลด asset ผ่าน codec/sidecar เดิมด้วย concurrency ที่จำกัด แล้ว GET โปรเจกต์กลับมาตรวจ document ก่อน mark complete
+- built-in preset ไม่ render SVG ที่มากับข้อมูล: regenerate จาก preset ID/color ที่อยู่ใน registry เท่านั้นแล้ว rasterize เป็น PNG ด้านยาว 2048px; ใช้ได้ทั้งเพิ่ม/เปลี่ยนสีใน cloud, portable import และ legacy migration
+- arbitrary/user SVG ยังไม่ผ่านเข้า cloud validator; migration เก็บ raw backup แล้วรายงาน skipped แทนการ render เนื้อหาที่ไม่น่าเชื่อถือ
+- local checks: unit 36 files/399 tests, pgTAP 5 files/133 assertions, PostgreSQL integration 6 files/9 tests และ production build ผ่าน
+
+Known gaps: ยังไม่ได้รัน real-browser migration flow ด้วย local Auth/Storage, ทดสอบ visual quality ของ preset rasterization หลาย DPI หรือเพิ่ม durable journal ให้ create/delete ทั่วไป; งานเหล่านี้อยู่ใน P1.8
+
+Data/rollback impact: เพิ่ม local migration 1 table + 1 RPC; raw legacy backup อยู่ใน browser IndexedDB และ source localStorage ไม่ถูกลบ; ยังไม่ link/push migration ไป remote database
+
 ## งานถัดไป
 
-เริ่ม P1.5 cloud/editor codec และ portable file compatibility; ก่อน deploy P1.4 ต้องทดสอบ Sharp native packaging และ Storage CORS บน staging
+เริ่ม P1.8 local/browser/staging E2E, restore checklist, Sharp native packaging, OAuth redirects และ Storage CORS; รวมทดสอบ migration UX, offline/multi-tab และ durable create/delete journal ที่ยังขาด

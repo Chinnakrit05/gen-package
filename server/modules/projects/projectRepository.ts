@@ -3,6 +3,8 @@ import type {
   CreateProjectInput,
   DeleteProjectInput,
   DeleteReceipt,
+  LegacyImportInput,
+  LegacyImportReceipt,
   ProjectPage,
   SaveProjectInput,
   SaveReceipt,
@@ -19,6 +21,7 @@ export interface ProjectRepository {
   list(actor: Actor, query: ProjectListQuery): Promise<ProjectPage>
   get(actor: Actor, projectId: string): Promise<CloudProject>
   create(actor: Actor, input: CreateProjectInput, hash: string): Promise<CloudProject>
+  importLegacy(actor: Actor, input: LegacyImportInput, hash: string): Promise<LegacyImportReceipt>
   save(actor: Actor, input: SaveProjectInput, hash: string): Promise<SaveReceipt>
   remove(actor: Actor, input: DeleteProjectInput, hash: string): Promise<DeleteReceipt>
 }
