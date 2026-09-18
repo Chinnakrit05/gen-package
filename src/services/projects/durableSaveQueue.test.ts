@@ -51,6 +51,35 @@ function queueOptions(
 }
 
 describe('durable project save queue', () => {
+  it('announces a committed receipt only after the durable state becomes clean', async () => {
+    const store = new MemoryProjectDraftStore()
+    const onSaved = vi.fn()
+    const save = vi.fn(async (input: SaveProjectInput) => receipt(input, 2))
+    const queue = new DurableProjectSaveQueue(queueOptions(store, save, { onSaved }))
+    await queue.start()
+    await queue.capture(project(undefined, 550), new ProjectAssetSidecar(scope).snapshot())
+    await queue.flush()
+
+    expect(queue.getStatus().state).toBe('clean')
+    expect(onSaved).toHaveBeenCalledOnce()
+    expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ revision: 2 }))
+    queue.dispose()
+  })
+
+  it('stops explicit and scheduled saves after another tab reports a conflict', async () => {
+    const store = new MemoryProjectDraftStore()
+    const save = vi.fn(async (input: SaveProjectInput) => receipt(input, 2))
+    const queue = new DurableProjectSaveQueue(queueOptions(store, save))
+    await queue.start()
+    await queue.capture(project(undefined, 551), new ProjectAssetSidecar(scope).snapshot())
+    queue.markConflict()
+    await queue.flush()
+
+    expect(queue.getStatus().state).toBe('conflict')
+    expect(save).not.toHaveBeenCalled()
+    queue.dispose()
+  })
+
   it('persists the latest editor draft before any network save', async () => {
     const store = new MemoryProjectDraftStore()
     const save = vi.fn<DurableSaveQueueOptions['save']>()

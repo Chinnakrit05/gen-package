@@ -35,9 +35,13 @@ npx supabase status
 npm run db:reset
 npm run db:test
 npm run db:test:integration
+npm run db:test:restore
+npm run test:e2e:local
 ```
 
-`db:reset` ในโปรเจกต์นี้ระบุ `--local` ชัดเจน: ลบและสร้างใหม่เฉพาะ local database แล้วใช้ migrations กับ `seed.sql` ตามลำดับ ส่วน `db:test` รัน pgTAP files ใต้ `supabase/tests/` และ `db:test:integration` ทดสอบ bootstrap/auth, project CAS/idempotency และ Storage asset lifecycle/quota กับ local services จริง ดูรูปแบบ pgTAP ทางการได้ที่ [Testing Overview](https://supabase.com/docs/guides/local-development/testing/overview)
+`db:reset` ในโปรเจกต์นี้ระบุ `--local` ชัดเจน: ลบและสร้างใหม่เฉพาะ local database แล้วใช้ migrations กับ `seed.sql` ตามลำดับ ส่วน `db:test` รัน pgTAP files ใต้ `supabase/tests/` และ `db:test:integration` ทดสอบ bootstrap/auth, project CAS/idempotency และ Storage asset lifecycle/quota กับ local services จริง `db:test:restore` dump/restore เฉพาะ `app_private` ไปฐานข้อมูลชั่วคราวชื่อ `packit_restore_*` และซ้อมสำรอง/ลบ/คืน Storage object ตัวอย่างพร้อม SHA-256 โดย cleanup fixture หลังจบ `test:e2e:local` ใช้ Chrome ที่ติดตั้งในเครื่องทดสอบ browser flow จริง ดูรูปแบบ pgTAP ทางการได้ที่ [Testing Overview](https://supabase.com/docs/guides/local-development/testing/overview)
+
+หาก Chrome ไม่อยู่ที่ path มาตรฐานของ Windows ให้ตั้ง `PACKIT_E2E_CHROME` เป็น executable path ก่อนรัน browser E2E; script ใช้ `playwright-core` และไม่ดาวน์โหลด browser binary ซ้ำ
 
 ห้ามเปลี่ยนคำสั่งเป็น `supabase db reset --linked` เพราะคำสั่งนั้นลบฐานข้อมูล remote ที่ link อยู่ เอกสาร workflow อธิบายความต่างไว้ที่ [Local development workflow](https://supabase.com/docs/guides/local-development/cli-workflows)
 
@@ -73,9 +77,9 @@ SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_SECRET_KEY=<local secret/service-role key>
 ```
 
-P1.2 เชื่อม cloud mode แล้ว สำหรับ local smoke ให้ใช้ URL/publishable/secret values จาก `npx supabase status` เท่านั้น ห้ามคัดลอก local secret ไป staging/production และอย่า commit `.env.local`
+cloud mode เชื่อม Auth, project controller, IndexedDB drafts/mutation journal, private assets และ legacy migration แล้ว สำหรับ local smoke ให้ใช้ URL/publishable/secret values จาก `npx supabase status` เท่านั้น ห้ามคัดลอก local secret ไป staging/production และอย่า commit `.env.local`
 
-หลัง sign-in browser ส่ง access token ไป `POST /api/v1/session/bootstrap`; server ตรวจ token กับ Supabase Auth แล้วสร้าง app user/personal workspace ผ่าน server-only RPC หลังจากนั้นมี `GET /api/v1/me` และ `/api/v1/projects` CRUD สำหรับ bearer token เดิม แต่งานใน editor ยังเป็น account-scoped browser draft จนกว่า P1.5–P1.6 จะต่อ codec, asset references และ save queue เข้าด้วยกัน
+หลัง sign-in browser ส่ง access token ไป `POST /api/v1/session/bootstrap`; server ตรวจ token กับ Supabase Auth แล้วสร้าง app user/personal workspace ผ่าน server-only RPC หลังจากนั้น editor โหลดและบันทึก `/api/v1/projects` ผ่าน durable queue; browser draft, pending save/create/delete และ migration journal ถูก scope ด้วย internal app user/workspace
 
 ## Asset upload flow
 
@@ -97,7 +101,27 @@ P1.2 เชื่อม cloud mode แล้ว สำหรับ local smoke �
 
 OAuth จริงต้องตรวจบน staging อีกครั้ง เพราะ local email-auth integration test พิสูจน์ token verification/bootstrap ได้ แต่ไม่พิสูจน์ Google console และ redirect allowlist ของ remote project
 
-## Remote/staging
+## Backup/restore boundary
+
+`npm run db:test:restore` เป็น local drill ที่พิสูจน์ application rows/operation receipt และ Storage bytes แยกกัน ไม่ใช่ full Supabase disaster recovery:
+
+- database dump ระบุ `app_private` ชัดเจน; ไม่อ้างว่ารวม managed `auth`/`storage` schemas หรือ provider configuration
+- Storage backup ต้องเก็บ object bytes/metadata/manifest/checksum แยกจาก database backup
+- Supabase Auth users, password/session และ OAuth provider settings ต้องใช้ขั้นตอน backup/migration ของ provider แยกต่างหาก
+- ก่อน public pilot ยังต้อง restore staging snapshot จริง แล้วชี้ staging app ไปเปิดงาน restored พร้อมตรวจ asset links/checksums
+
+## Remote/staging checklist
+
+ยังไม่ได้สั่งคำสั่งต่อไปนี้กับ remote ใน milestone นี้ เมื่อได้รับ staging project และสิทธิ์แล้วให้ทำกับ staging แยกเท่านั้น:
+
+1. ตรวจว่า project ref/environment เป็น staging แล้วจึง `supabase link --project-ref <staging-ref>`; ห้ามใช้ production ref
+2. ตรวจ migration plan ด้วย `supabase db push --dry-run` ก่อน `supabase db push`; ห้ามใช้ `db reset --linked`
+3. ตั้ง Site URL/Redirect URLs, Google callback/provider secret และ private buckets ตามหัวข้อด้านบน
+4. ตั้ง server secrets ใน deployment settings และ public `VITE_*` เฉพาะค่าที่เผยแพร่ได้; ตรวจ origin allowlist/CORS ด้วย staging origin จริง
+5. รัน health, Google login, create/save/reload, PNG/JPEG upload/download และ legacy migration smoke; ตรวจ `/api/v1` 401/404/413 parity บน Vercel preview
+6. ทดสอบ Sharp native packaging และซ้อม restore database + object manifest/checksum ก่อนเปิด public pilot
+
+## Remote/staging status
 
 ยังไม่ทำใน milestone นี้ การ link, `db push`, OAuth provider, storage CORS และ Vercel secrets ต้องทำภายหลังเมื่อได้รับ project/สิทธิ์ชัดเจน ห้ามใช้ `db reset --linked` กับ staging/production และห้ามใส่ secrets ลงเอกสารหรือ Git
 
@@ -106,9 +130,14 @@ OAuth จริงต้องตรวจบน staging อีกครั้�
 - Supabase CLI 2.117.0: ติดตั้งและรันได้
 - Docker Desktop 4.91.0, Docker Engine 29.8.0 และ WSL 2.7.13: รัน local stack ได้; stale socket จากการเริ่มครั้งก่อนไม่ปรากฏแล้ว
 - `supabase db reset --local`: **PASS** — foundation, identity/workspace, project และ asset migrations พร้อม seed
-- `supabase test db`: **PASS** — 4 files, 121 assertions
-- `npm run db:test:integration`: **PASS** — 5 files, 8 tests; รวม Storage byte lifecycle, private access, quota/concurrency และ project asset links
-- `npm test`, `tsc --noEmit`, `npm run build`: **PASS หลัง P1.4** — 30 files, 374 unit tests
+- `supabase test db`: **PASS** — 5 files, 133 assertions
+- `npm run db:test:integration`: **PASS** — 6 files, 9 tests; รวม Storage byte lifecycle, private access, quota/concurrency, project asset links และ legacy import dedupe
+- `npm test`: **PASS หลัง P1.8** — 38 files, 410 unit tests
+- `npm run build`: **PASS หลัง P1.8** — API bundles, `tsc --noEmit` และ Vite production build
+- `npm run db:test:restore`: **PASS** — restore `app_private` ไป isolated database และคืน Storage object ตัวอย่างได้ checksum เดิม
+- `npm run test:e2e:local`: **PASS** — auth/account isolation, migration consent/raw backup/dedupe, trusted preset + portable roundtrip, cross-tab refresh และ offline reconnect
 - cloud-mode HTTP smoke: **PASS** — root 200, missing/forged bearer 401 JSON, legacy `/api/box-spec` 410
 - Google OAuth บน remote/staging: **NOT RUN** — ยังไม่มี remote project/provider credentials
 - Remote/staging: **NOT RUN**
+
+ดู checklist รายกรณีและ evidence ที่ [backend-acceptance-phase1.md](backend-acceptance-phase1.md)

@@ -36,6 +36,7 @@ export interface DurableSaveQueueOptions {
   store: ProjectDraftStore
   prepare(draft: ProjectDraftSnapshot): Promise<PreparedProjectSave>
   save(input: SaveProjectInput): Promise<SaveReceipt>
+  onSaved?(receipt: SaveReceipt): void
   isOnline?: () => boolean
   createOperationId?: () => string
   debounceMs?: number
@@ -154,6 +155,7 @@ export class DurableProjectSaveQueue {
     if (this.retryTimer) clearTimeout(this.retryTimer)
     this.retryTimer = null
     if (this.disposed) return Promise.resolve()
+    if (this.status.state === 'conflict') return Promise.resolve()
     if (!this.online) {
       this.publish('offline', null)
       return Promise.resolve()
@@ -204,6 +206,13 @@ export class DurableProjectSaveQueue {
     })
     this.publish(this.online ? 'dirty' : 'offline', null)
     if (this.online) await this.flush()
+  }
+
+  markConflict(error = new Error('งานนี้ถูกแก้ไขจากอีกแท็บ')): void {
+    this.clearSaveTimers()
+    if (this.retryTimer) clearTimeout(this.retryTimer)
+    this.retryTimer = null
+    this.publish('conflict', error)
   }
 
   dispose(): void {
@@ -280,6 +289,7 @@ export class DurableProjectSaveQueue {
         await this.options.store.put(next)
         this.record = next
         this.publish(this.nextRestingState(), null)
+        this.options.onSaved?.(structuredClone(receipt))
       })
     } catch (error) {
       if (this.disposed) return

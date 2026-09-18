@@ -25,6 +25,7 @@ export interface CloudProjectControllerOptions {
   store: ProjectDraftStore
   transfer: ProjectAssetTransfer
   save(input: SaveProjectInput, signal?: AbortSignal): Promise<SaveReceipt>
+  onSaved?(receipt: SaveReceipt): void
   isOnline?: () => boolean
   debounceMs?: number
   maxWaitMs?: number
@@ -117,6 +118,7 @@ export class CloudProjectController {
           }
         },
         save: (input) => this.options.save(input, abortController.signal),
+        onSaved: this.options.onSaved,
       })
       this.queue = queue
       this.sidecar = sidecar
@@ -163,6 +165,10 @@ export class CloudProjectController {
 
   setOnline(online: boolean): void {
     this.queue?.setOnline(online)
+  }
+
+  markRemoteConflict(message?: string): void {
+    this.queue?.markConflict(new Error(message ?? 'งานนี้ถูกแก้ไขจากอีกแท็บ'))
   }
 
   async discardDraft(): Promise<void> {

@@ -14,6 +14,7 @@ import {
   IndexedDbLegacyMigrationStore,
   type LegacyMigrationJournal,
 } from '../../services/drafts/legacyMigrationStore'
+import { IndexedDbProjectMutationStore } from '../../services/drafts/projectMutationStore'
 import {
   getCloudDraftClientId,
   IndexedDbProjectDraftStore,
@@ -24,7 +25,14 @@ import { ProjectAssetSidecar, dehydrateProject, type ProjectAssetTransfer } from
 import { CloudProjectController } from '../../services/projects/cloudProjectController'
 import { createHttpAssetTransfer } from '../../services/projects/httpAssetTransfer'
 import type { ProjectSaveState } from '../../services/projects/durableSaveQueue'
+import {
+  executeDurableCreate,
+  executeDurableDelete,
+  replayDurableProjectMutations,
+  type DurableProjectMutationOptions,
+} from '../../services/projects/durableProjectMutations'
 import { rasterizeTrustedPresets } from '../../services/projects/trustedPresetRasterizer'
+import { ProjectSyncChannel } from '../../services/projects/projectSyncChannel'
 import {
   discoverLegacyMigration,
   resumeLegacyMigration,
@@ -59,6 +67,10 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
   const clientId = useMemo(() => getCloudDraftClientId(), [])
   const store = useMemo(() => new IndexedDbProjectDraftStore(), [])
   const migrationStore = useMemo(() => new IndexedDbLegacyMigrationStore(), [])
+  const mutationStore = useMemo(() => new IndexedDbProjectMutationStore(), [])
+  const sync = useMemo(() => new ProjectSyncChannel(scope, clientId), [clientId, scope])
+  const syncMounts = useRef(0)
+  const remoteProjectListeners = useRef(new Set<(project: Project) => void>())
 
   const transfer = useMemo<ProjectAssetTransfer>(() => ({
     upload: (input) => createHttpAssetTransfer({
@@ -78,7 +90,27 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     transfer,
     isOnline: () => navigator.onLine,
     save: (input, signal) => saveProject(props.apiBaseUrl, tokenRef.current, input, signal),
-  }), [clientId, props.apiBaseUrl, scope, store, transfer])
+    onSaved: (receipt) => sync.publish({
+      kind: 'saved',
+      projectId: receipt.projectId,
+      revision: receipt.revision,
+    }),
+  }), [clientId, props.apiBaseUrl, scope, store, sync, transfer])
+
+  const mutations = useMemo<DurableProjectMutationOptions>(() => ({
+    scope,
+    store: mutationStore,
+    create: async (input) => {
+      const project = await createRemoteProject(props.apiBaseUrl, tokenRef.current, input)
+      sync.publish({ kind: 'created', projectId: project.id, revision: project.revision })
+      return project
+    },
+    remove: async (input) => {
+      const receipt = await deleteRemoteProject(props.apiBaseUrl, tokenRef.current, input)
+      sync.publish({ kind: 'deleted', projectId: receipt.projectId, revision: receipt.revision })
+      return receipt
+    },
+  }), [mutationStore, props.apiBaseUrl, scope, sync])
 
   const refreshItems = useCallback(async (signal?: AbortSignal) => {
     const all: ProjectSummary[] = []
@@ -110,14 +142,70 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       transfer,
       signal,
     })
-    return createRemoteProject(props.apiBaseUrl, tokenRef.current, {
+    return executeDurableCreate(mutations, {
       workspaceId: props.workspaceId,
       operationId,
       name: dehydrated.name,
       documentSchemaVersion: 1,
       document: dehydrated.document,
-    }, signal)
-  }, [props.apiBaseUrl, props.workspaceId, scope, transfer])
+    })
+  }, [mutations, props.workspaceId, scope, transfer])
+
+  const subscribeRemoteProject = useCallback((listener: (project: Project) => void) => {
+    remoteProjectListeners.current.add(listener)
+    return () => remoteProjectListeners.current.delete(listener)
+  }, [])
+
+  const openCloudAndNotify = useCallback(async (cloud: CloudProject) => {
+    const project = await controller.open(cloud)
+    for (const listener of remoteProjectListeners.current) listener(structuredClone(project))
+    return project
+  }, [controller])
+
+  useEffect(() => {
+    let active = true
+    let work = Promise.resolve()
+    const unsubscribe = sync.subscribe((event) => {
+      work = work.then(async () => {
+        if (!active) return
+        const summaries = await refreshItems()
+        const state = controller.getState()
+        if (state.status !== 'ready' || state.project.id !== event.projectId) return
+        if (state.save.state !== 'clean') {
+          controller.markRemoteConflict(event.kind === 'deleted'
+            ? 'งานนี้ถูกลบจากอีกแท็บ กรุณาสร้างสำเนาหรือเลือกงานอื่น'
+            : 'งานนี้ถูกแก้ไขจากอีกแท็บ กรุณาโหลดเวอร์ชันล่าสุดหรือสร้างสำเนา')
+          return
+        }
+
+        let nextCloud: CloudProject
+        if (event.kind === 'deleted') {
+          if (summaries.length === 0) nextCloud = await createFromEditor(freshProject(1))
+          else nextCloud = await getProject(props.apiBaseUrl, tokenRef.current, summaries[0].id)
+        } else {
+          if (event.revision <= state.save.baseRevision) return
+          nextCloud = await getProject(props.apiBaseUrl, tokenRef.current, event.projectId)
+        }
+        if (active) await openCloudAndNotify(nextCloud)
+      }).catch(() => {
+        // A later sync event or ordinary project action retries from server state.
+      })
+    })
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [controller, createFromEditor, openCloudAndNotify, props.apiBaseUrl, refreshItems, sync])
+
+  useEffect(() => {
+    syncMounts.current += 1
+    return () => {
+      syncMounts.current -= 1
+      queueMicrotask(() => {
+        if (syncMounts.current === 0) sync.close()
+      })
+    }
+  }, [sync])
 
   const executeMigration = useCallback(async (journal: LegacyMigrationJournal) => {
     setMigrationBusy(true)
@@ -171,6 +259,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     })
     void (async () => {
       try {
+        if (navigator.onLine) await replayDurableProjectMutations(mutations)
         let summaries = await refreshItems(abortController.signal)
         let cloud
         if (summaries.length === 0) {
@@ -211,13 +300,34 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       unsubscribe()
       controller.dispose()
     }
-  }, [controller, createFromEditor, props.apiBaseUrl, refreshItems])
+  }, [controller, createFromEditor, mutations, props.apiBaseUrl, refreshItems])
 
   useEffect(() => {
     const update = () => {
       const next = navigator.onLine
       setOnline(next)
       controller.setOnline(next)
+      if (next) {
+        void (async () => {
+          const replayed = await replayDurableProjectMutations(mutations)
+          const summaries = await refreshItems()
+          const state = controller.getState()
+          if (state.status !== 'ready' || state.save.state !== 'clean') return
+          const replayedCreate = replayed.created.at(-1)
+          if (replayedCreate) {
+            await openCloudAndNotify(replayedCreate)
+            return
+          }
+          if (!summaries.some((item) => item.id === state.project.id)) {
+            const cloud = summaries.length
+              ? await getProject(props.apiBaseUrl, tokenRef.current, summaries[0].id)
+              : await createFromEditor(freshProject(1))
+            await openCloudAndNotify(cloud)
+          }
+        })().catch(() => {
+          // Journal remains durable and is replayed on the next reconnect/reload.
+        })
+      }
     }
     window.addEventListener('online', update)
     window.addEventListener('offline', update)
@@ -225,7 +335,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       window.removeEventListener('online', update)
       window.removeEventListener('offline', update)
     }
-  }, [controller])
+  }, [controller, createFromEditor, mutations, openCloudAndNotify, props.apiBaseUrl, refreshItems])
 
   useEffect(() => {
     controller.setOnline(navigator.onLine)
@@ -270,7 +380,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
           throw new Error('ยังลบงานไม่ได้จนกว่าจะจัดการ draft/conflict ที่ค้างอยู่')
         }
         if (state.save.state === 'offline') throw new Error('ต้องออนไลน์ก่อนลบงาน')
-        await deleteRemoteProject(props.apiBaseUrl, tokenRef.current, {
+        await executeDurableDelete(mutations, {
           projectId: targetId,
           operationId: crypto.randomUUID(),
           expectedRevision: state.save.baseRevision,
@@ -285,7 +395,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
         }
         return controller.open(nextCloud)
       }
-      await deleteRemoteProject(props.apiBaseUrl, tokenRef.current, {
+      await executeDurableDelete(mutations, {
         projectId: targetId,
         operationId: crypto.randomUUID(),
         expectedRevision: target.revision,
@@ -319,7 +429,8 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       return opened
     },
     retrySave: () => controller.retry(),
-  }), [clientId, controller, createFromEditor, items, online, props.apiBaseUrl, refreshItems, saveState, scope, store])
+    subscribeRemoteProject,
+  }), [clientId, controller, createFromEditor, items, mutations, online, props.apiBaseUrl, refreshItems, saveState, scope, store, subscribeRemoteProject])
 
   if (workspace.status === 'loading') {
     return <WorkspaceStatus title="กำลังเปิดงาน" message="กำลังโหลดโปรเจกต์และ draft ล่าสุด…" />

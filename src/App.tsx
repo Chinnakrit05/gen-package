@@ -655,6 +655,7 @@ export interface CloudProjectBridge {
   beforeLogout(current: Project): Promise<void>
   resolveConflict(current: Project, action: 'reload' | 'copy'): Promise<Project>
   retrySave(): Promise<void>
+  subscribeRemoteProject(listener: (project: Project) => void): () => void
 }
 
 function cloudSaveLabel(state: ProjectSaveState): string {
@@ -1357,6 +1358,16 @@ export default function App({
     setHistIdx(p.histIdx)
     setFold(1)
   }
+
+  useEffect(() => {
+    if (!cloud) return
+    return cloud.subscribeRemoteProject((project) => {
+      setProjects([project])
+      openProject(project)
+    })
+    // subscribeRemoteProject is stable for the lifetime of a cloud workspace.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloud?.subscribeRemoteProject])
 
   const switchProject = async (id: string) => {
     if (id === activeId || aiBusy || projectBusy) return

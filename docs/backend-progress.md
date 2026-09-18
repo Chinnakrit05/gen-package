@@ -181,6 +181,22 @@ Known gaps: ยังไม่ได้รัน real-browser migration flow ด
 
 Data/rollback impact: เพิ่ม local migration 1 table + 1 RPC; raw legacy backup อยู่ใน browser IndexedDB และ source localStorage ไม่ถูกลบ; ยังไม่ link/push migration ไป remote database
 
+## P1.8 — Durable mutations, browser E2E และ restore evidence
+
+สถานะ: **local complete; staging NOT RUN** เพราะยังไม่มี remote project/provider credentials หรือ deployment access
+
+- เพิ่ม IndexedDB journal สำหรับ create/delete โดย persist exact payload + operation ID ก่อน network, replay หลัง reload/reconnect และตรวจ scope/response ก่อนลบ receipt; same intent ที่ UI สร้าง operation ID ใหม่ยัง reuse pending operation เดิม
+- เพิ่ม workspace/account-scoped `BroadcastChannel` metadata events; clean tab โหลด revision ใหม่ ส่วน dirty tab เข้าสถานะ conflict และหยุด autosave ไม่ overwrite เงียบ
+- แก้ React StrictMode race ของ Three Fiber event target ด้วย guarded Canvas event manager และ pin React/Fiber/Drei เป็นชุดที่มี peer range ตรงกัน
+- browser E2E ใช้ local Auth/API/DB/Storage จริง: consent + raw backup + legacy dedupe, trusted preset add/color/save/reload, two-tab refresh, offline edit/reconnect, portable export/import พร้อม hydrated PNG/no `assetId` leak และสลับสองบัญชีโดยไม่เห็นงานข้ามกัน
+- restore drill dump/restore `app_private` ไป isolated temporary database แล้วตรวจ app user/project/document/operation receipt; สำรอง/ลบ/คืน Storage object ตัวอย่างแยกและตรวจ SHA-256 ก่อน cleanup
+- local checks ล่าสุด: unit 38 files/410 tests, pgTAP 5 files/133 assertions, integration 6 files/9 tests, restore drill, browser E2E และ production build ผ่าน
+- เพิ่ม [backend-acceptance-phase1.md](backend-acceptance-phase1.md) แยก PASS/PARTIAL/NOT RUN พร้อม evidence และ operational boundary
+
+Known gaps: Google OAuth จริง, remote Storage CORS, Vercel route/native Sharp packaging, staging tenant smoke และการเปิด project จาก restored staging snapshot ยัง **NOT RUN**; local restore query + checksum ไม่ถูกอ้างว่าเทียบเท่า full Supabase/Auth disaster recovery
+
+Data/rollback impact: ไม่มี migration ใหม่หรือ remote write; browser เพิ่ม journal/channel records ที่ scope ตาม account/workspace และ test scripts cleanup เฉพาะ fixture ที่สร้างเอง
+
 ## งานถัดไป
 
-เริ่ม P1.8 local/browser/staging E2E, restore checklist, Sharp native packaging, OAuth redirects และ Storage CORS; รวมทดสอบ migration UX, offline/multi-tab และ durable create/delete journal ที่ยังขาด
+เมื่อมี staging access ให้ทำรายการ NOT RUN ใน acceptance matrix: link/push เฉพาะ staging, Google OAuth/redirect, CORS, Vercel parity + Sharp และ full staging restore/open drill ก่อน public pilot ห้ามเริ่ม Phase 2 หรือ production deploy โดยอนุมานสิทธิ์เอง
