@@ -129,6 +129,17 @@ export async function setLegacyMigrationConsent(
   return next
 }
 
+export async function reopenLegacyMigrationConsent(
+  journal: LegacyMigrationJournal,
+  store: LegacyMigrationStore,
+): Promise<LegacyMigrationJournal> {
+  const next = structuredClone(journal)
+  next.consent = 'pending'
+  next.updatedAt = Date.now()
+  await store.put(next)
+  return next
+}
+
 export async function runLegacyMigration(options: LegacyMigrationRunOptions): Promise<LegacyMigrationJournal> {
   if (options.journal.consent !== 'accepted') throw new Error('ต้องได้รับความยินยอมก่อนย้ายข้อมูล')
   const journal = structuredClone(options.journal)

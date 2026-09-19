@@ -129,7 +129,7 @@ staging แยกถูกสร้างและ link แล้ว ขั้�
 2. **DONE** ตรวจ dry-run แล้ว push migrations 5 รายการ; `npm run staging:readiness` ยืนยัน remote up to date แบบ read-only
 3. **DONE** สร้าง private buckets, ตั้ง local Site URL/Redirect URLs, เปิด Google provider และทดสอบ callback/PKCE/server bootstrap กับ remote staging แล้ว
 4. ตั้ง server secrets ใน deployment settings และ public `VITE_*` เฉพาะค่าที่เผยแพร่ได้; ตรวจ origin allowlist/CORS ด้วย staging origin จริง
-5. Google login/bootstrap, create/save/reload และ PNG signed upload/download ผ่านจาก local cloud-mode app แล้ว; ยังต้องรัน legacy migration smoke และตรวจ `/api/v1` 401/404/413 parity/CORS ด้วย Vercel preview origin
+5. Google login/bootstrap, create/save/reload, PNG signed upload/download และ legacy migration 1 งานผ่านจาก local cloud-mode app แล้ว; ยังต้องตรวจ `/api/v1` 401/404/413 parity/CORS ด้วย Vercel preview origin
 6. ทดสอบ Sharp native packaging และซ้อม restore database + object manifest/checksum ก่อนเปิด public pilot
 
 ## Remote/staging status
@@ -140,6 +140,7 @@ staging แยกถูกสร้างและ link แล้ว ขั้�
 - Auth Site URL/Redirect URLs สำหรับ `127.0.0.1:5173` และ `localhost:5173`: **CONFIGURED**
 - Google OAuth provider/callback: **PASS remote + local app** — Google client และ test user ตั้งแล้ว; PKCE callback กลับ `127.0.0.1:5173`, server bootstrap และ editor mount สำเร็จ (Google app ยังเป็น Testing)
 - Storage signed upload/download จาก `127.0.0.1:5173`: **PASS remote + local app** — PNG fixture ผ่าน validation, autosave และโหลด private asset กลับหลัง reload; deployed-origin CORS ยัง **NOT RUN**
+- Legacy migration จาก `127.0.0.1:5173`: **PASS remote + local app** — decline/reopen consent, ย้าย 1 งาน, เปิด/reload แล้วได้ขนาดเดิม 80×50×120 มม.; source localStorage/raw backup ยังอยู่และไม่มี browser console error
 - Vercel secrets/runtime parity, Sharp และ restore/open drill: **NOT RUN** — รอ staging deployment origin/access
 
 รันตัวตรวจที่ไม่แก้ remote state ได้ด้วย:
@@ -157,7 +158,7 @@ npm run staging:readiness
 - `supabase db reset --local`: **PASS** — foundation, identity/workspace, project และ asset migrations พร้อม seed
 - `supabase test db`: **PASS** — 5 files, 133 assertions
 - `npm run db:test:integration`: **PASS** — 6 files, 9 tests; รวม Storage byte lifecycle, private access, quota/concurrency, project asset links และ legacy import dedupe
-- `npm test`: **PASS ล่าสุด** — 42 files, 429 unit tests
+- `npm test`: **PASS ล่าสุด** — 42 files, 430 unit tests
 - `npm run build`: **PASS หลัง P1.8** — API bundles, `tsc --noEmit` และ Vite production build
 - `npm run db:test:restore`: **PASS** — restore `app_private` ไป isolated database; project document, `project_assets`, asset metadata และ Storage object ที่คืนมามี ID/key/checksum ตรงกัน
 - `npm run test:e2e:local`: **PASS** — auth/account isolation, migration consent/raw backup/dedupe, trusted preset + portable roundtrip, clean/dirty cross-tab, offline create/delete/import/upload restrictions + edit/reconnect และ create/delete replay หลัง response หาย
@@ -165,6 +166,6 @@ npm run staging:readiness
 - `npm run ops:cleanup:report`: **PASS** — read-only DB/Storage reconciliation; หลังล้าง fixture รายงาน assets/objects/candidates เป็นศูนย์
 - cloud-mode HTTP smoke: **PASS** — root 200, missing/forged bearer 401 JSON, legacy `/api/box-spec` 410
 - Google OAuth บน remote/staging: **PASS** — provider, callback, PKCE, token verification, personal-workspace bootstrap และ editor mount ผ่านจาก local cloud-mode app; ไม่บันทึก credentials/tokens ลง Git
-- Remote/staging foundation: **PASS** — project healthy/link, migration parity, private buckets, Auth URLs, Google login/bootstrap, project create/save/reload และ private asset upload/download; deployment-dependent smoke ยัง NOT RUN
+- Remote/staging foundation: **PASS** — project healthy/link, migration parity, private buckets, Auth URLs, Google login/bootstrap, project create/save/reload, private asset upload/download และ legacy migration; deployment-dependent smoke ยัง NOT RUN
 
 ดู checklist รายกรณีและ evidence ที่ [backend-acceptance-phase1.md](backend-acceptance-phase1.md)

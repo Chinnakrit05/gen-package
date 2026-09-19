@@ -36,6 +36,7 @@ import { rasterizeTrustedPresets } from '../../services/projects/trustedPresetRa
 import { ProjectSyncChannel } from '../../services/projects/projectSyncChannel'
 import {
   discoverLegacyMigration,
+  reopenLegacyMigrationConsent,
   resumeLegacyMigration,
   setLegacyMigrationConsent,
 } from './legacyMigration'
@@ -239,7 +240,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
         const shouldShow = journal.consent === 'pending'
           || resumable
           || journal.items.some((item) => item.status === 'conflict')
-        if (shouldShow) setMigration(journal)
+        if (shouldShow || journal.consent === 'declined') setMigration(journal)
         if (resumable) void executeMigration(journal)
       })
       .catch((error: unknown) => {
@@ -464,6 +465,14 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
         initialStore={initialStore}
         cloud={bridge}
       />
+      {migration?.consent === 'declined' && (
+        <button
+          className="migration-reopen-button"
+          onClick={() => void reopenLegacyMigrationConsent(migration, migrationStore).then(setMigration)}
+        >
+          ย้ายงานเดิมขึ้น Cloud
+        </button>
+      )}
       {migration && migration.consent !== 'declined' && (
         <LegacyMigrationModal
           journal={migration}
@@ -474,7 +483,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
             setMigration(accepted)
             await executeMigration(accepted)
           })()}
-          onDecline={() => void setLegacyMigrationConsent(migration, migrationStore, false).then(() => setMigration(null))}
+          onDecline={() => void setLegacyMigrationConsent(migration, migrationStore, false).then(setMigration)}
           onRetry={() => void executeMigration(migration)}
           onClose={() => setMigration(null)}
         />

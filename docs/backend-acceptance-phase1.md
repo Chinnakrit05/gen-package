@@ -10,7 +10,7 @@
 
 | คำสั่ง | ผล |
 | --- | --- |
-| `npm test` | PASS — 42 files, 429 tests |
+| `npm test` | PASS — 42 files, 430 tests |
 | `npm run db:test` | PASS — 5 pgTAP files, 133 assertions |
 | `npm run db:test:integration` | PASS — 6 files, 9 tests บน local PostgreSQL/Auth/Storage จริง |
 | `npm run db:test:restore` | PASS — isolated `app_private` restore + linked asset metadata/project reference/Storage SHA-256 |
@@ -60,7 +60,7 @@
 | portable schema 6 roundtrip ครบ | PASS unit/browser | codec/project-file fixtures; browser export hydrates PNG, import สำเร็จ และไม่รั่ว `assetId` |
 | trusted preset add/color/save/reload | PASS browser | local Chrome + real API/Storage E2E; PNG จริง 2048×2048, SHA-256 และ `project_assets` link ตรงกับ document |
 | รูปเดิมไม่ upload ซ้ำเมื่อ save | PASS unit | SHA/sidecar dedupe tests |
-| migration raw backup/consent/skipped/resume/dedupe | PASS unit/browser | migration journal tests + browser consent/raw IndexedDB/dedupe E2E |
+| migration raw backup/consent/skipped/resume/dedupe | PASS unit/browser/remote | migration journal tests + browser consent/raw IndexedDB/dedupe E2E; remote staging ย้าย legacy project 1 งานหลัง decline/reopen แล้วเปิด/reload ได้ โดย source localStorage/raw backup ยังอยู่ |
 | unsupported SVG รายงานว่า skipped ไม่อ้างว่าย้ายครบ | PASS unit | migration repair/skipped + codec preservation tests |
 | hydrate failure ไม่ save งานที่รูปหาย | PASS unit | checksum/scope/corrupt download tests |
 
@@ -68,7 +68,7 @@
 
 | Requirement | สถานะ | Evidence / ขอบเขต |
 | --- | --- | --- |
-| geometry/export regression suite | PASS | รวมอยู่ใน unit 429 tests |
+| geometry/export regression suite | PASS | รวมอยู่ใน unit 430 tests |
 | build/typecheck/API bundles | PASS | `npm run build` |
 | frontend bundle ไม่มี server secret/private module | PASS local | bundle scan จาก foundation; build ล่าสุดผ่าน |
 | authenticated Cloud AI BYOK route | PASS unit/build | bearer ถูกตรวจ ก่อนส่ง request key ไป provider; key อยู่ใน header/session memory ไม่อยู่ body/response/storage; deployed smoke ยัง NOT RUN |
@@ -99,6 +99,7 @@
 9. ไม่มี uncaught browser page error ตลอด flow
 10. Google OAuth กับ remote staging ผ่าน PKCE callback, server token verification/personal-workspace bootstrap และเปิด cloud editor ได้จริงจาก `127.0.0.1:5173`
 11. Remote staging project create/save/reload รักษาความกว้าง 96 มม.; PNG signed upload/validation/autosave/download หลัง reload คืน image layer ได้และไม่มี browser console error
+12. Remote staging legacy migration: decline แล้วเปิด consent กลับมาได้, ย้าย 1 งานสำเร็จ, เปิด/reload cloud project ได้ 80×50×120 มม.; source localStorage และ exact raw backup ไม่ถูกลบ และไม่มี browser console error
 
 ## Gate ก่อน staging/public pilot
 
@@ -106,6 +107,7 @@
 - ~~ทดสอบ Google OAuth callback + app redirect จริงผ่าน local cloud-mode app~~ — DONE; ยังต้องเพิ่มและตรวจ deployed origin เมื่อมี staging deployment
 - ทดสอบ Vercel preview `/api/v1` parity, origin allowlist, body limit และ Sharp native runtime
 - ~~ทดสอบ Storage upload/download/CORS จาก local cloud-mode origin~~ — DONE; ยังต้องทดสอบซ้ำด้วย Vercel preview/staging origin
+- ~~ทดสอบ legacy migration กับ remote staging รวม decline/reopen consent และ reload งานที่ย้าย~~ — DONE; source localStorage/raw backup คงอยู่
 - restore staging database snapshot และ Storage manifest/objects แล้วเปิด project ที่มีรูปผ่าน app จริง
 - บันทึก rollback point, backup owner, alert owner และผล smoke test; จึงค่อยเปลี่ยนสถานะจาก NOT RUN
 

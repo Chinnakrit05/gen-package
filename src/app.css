@@ -2159,6 +2159,13 @@ aside .art-actions .file-pick:only-child {
   max-height: min(720px, 88vh);
   overflow: auto;
 }
+.migration-reopen-button {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 20;
+  box-shadow: 0 8px 24px rgba(60, 40, 100, 0.2);
+}
 .migration-modal p {
   margin: 8px 0;
   line-height: 1.6;

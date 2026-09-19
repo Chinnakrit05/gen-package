@@ -6,6 +6,7 @@ import type { ProjectAssetTransfer } from '../../services/projects/cloudProjectC
 import {
   LEGACY_PROJECTS_STORAGE_KEY,
   discoverLegacyMigration,
+  reopenLegacyMigrationConsent,
   resumeLegacyMigration,
   runLegacyMigration,
   setLegacyMigrationConsent,
@@ -76,6 +77,24 @@ describe('legacy migration journal', () => {
     const journal = await discoverLegacyMigration(scope, store, storage)
     expect(journal?.rawBackups[0].raw).toBe('{broken')
     expect(journal?.items[0]).toMatchObject({ status: 'skipped', project: null })
+  })
+
+  it('reopens declined consent without changing the source backup or migration items', async () => {
+    const storage = new MemoryStorage()
+    const store = new MemoryLegacyMigrationStore()
+    const source = freshProject(1)
+    source.id = 'reopen-project'
+    storage.setItem(LEGACY_PROJECTS_STORAGE_KEY, JSON.stringify({ projects: [source] }))
+    const discovered = await discoverLegacyMigration(scope, store, storage)
+    if (!discovered) throw new Error('journal missing')
+    const declined = await setLegacyMigrationConsent(discovered, store, false)
+
+    const reopened = await reopenLegacyMigrationConsent(declined, store)
+
+    expect(reopened.consent).toBe('pending')
+    expect(reopened.rawBackups).toEqual(declined.rawBackups)
+    expect(reopened.items).toEqual(declined.items)
+    await expect(store.get(reopened.key)).resolves.toMatchObject({ consent: 'pending' })
   })
 
   it('resumes verification with the same operation ID and completes without duplicate import', async () => {

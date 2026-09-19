@@ -165,11 +165,11 @@ Data/rollback impact: ไม่มี database migration/remote write; browser c
 
 ## P1.7 — Resumable legacy migration และ trusted preset rasterization
 
-สถานะ: implemented และผ่าน local database/integration/unit/build checks; real-browser migration UX/E2E ยัง **NOT RUN**
+สถานะ: implemented; ผ่าน local database/integration/unit/build/browser E2E และ remote-staging migration smoke
 
 - เพิ่ม IndexedDB migration journal ที่ scope ด้วย `appUserId/workspaceId/installationId`; สร้าง installation ID แบบคงที่ใน localStorage และเก็บ exact raw backup ก่อน parse/repair เสมอ
 - discovery รองรับทั้งคลัง `gen-package-projects-v1` และงานเดี่ยวรุ่น `gen-package-design-v1`; แสดงรายการ repair/skipped และไม่ลบหรือแก้ localStorage ต้นทาง
-- UI หลัง login ขอความยินยอมก่อนย้าย, แสดง progress/result/error, retry ได้ และ resume journal ที่ยินยอมแล้วอัตโนมัติ
+- UI หลัง login ขอความยินยอมก่อนย้าย, แสดง progress/result/error, retry ได้ และ resume journal ที่ยินยอมแล้วอัตโนมัติ; ถ้าเคยกด “ยังไม่ย้าย” จะมีปุ่มเปิด consent กลับมาได้โดยไม่เปลี่ยน raw backup/items
 - แต่ละรายการมี stable source key/hash/operation ID; source เดิมที่เนื้อหาเปลี่ยนถูก mark conflict ไม่ overwrite เป้าหมาย
 - เพิ่ม private `legacy_imports` mapping และ server-only `import_legacy_project` RPC/API; advisory lock + unique source mapping ทำให้ retry, lost response, StrictMode และ concurrent request คืนโปรเจกต์เดิม
 - migration อัปโหลด asset ผ่าน codec/sidecar เดิมด้วย concurrency ที่จำกัด แล้ว GET โปรเจกต์กลับมาตรวจ document ก่อน mark complete
@@ -177,7 +177,7 @@ Data/rollback impact: ไม่มี database migration/remote write; browser c
 - arbitrary/user SVG ยังไม่ผ่านเข้า cloud validator; migration เก็บ raw backup แล้วรายงาน skipped แทนการ render เนื้อหาที่ไม่น่าเชื่อถือ
 - local checks: unit 36 files/399 tests, pgTAP 5 files/133 assertions, PostgreSQL integration 6 files/9 tests และ production build ผ่าน
 
-Known gaps ณ ตอนจบ P1.7: real-browser migration flow, persisted PNG metadata/reference และ durable journal สำหรับ create/delete ยังไม่ถูกตรวจ; ปิดครบใน P1.8 โดยตรวจ output pixel dimensions/aspect หลาย scale แทนการอ้าง DPI ที่ไฟล์ไม่ได้กำหนด
+Known gaps ณ ตอนจบ P1.7: real-browser migration flow, persisted PNG metadata/reference และ durable journal สำหรับ create/delete ยังไม่ถูกตรวจ; ปิดครบใน P1.8 และ remote-staging migration smoke แล้ว โดยตรวจ output pixel dimensions/aspect หลาย scale แทนการอ้าง DPI ที่ไฟล์ไม่ได้กำหนด
 
 Data/rollback impact: เพิ่ม local migration 1 table + 1 RPC; raw legacy backup อยู่ใน browser IndexedDB และ source localStorage ไม่ถูกลบ; ยังไม่ link/push migration ไป remote database
 
@@ -192,14 +192,14 @@ Data/rollback impact: เพิ่ม local migration 1 table + 1 RPC; raw legac
 - restore drill dump/restore `app_private` ไป isolated temporary database แล้วตรวจ app user/project/document/create+save receipts, ready asset metadata และ `project_assets`; สำรอง/ลบ/คืน Storage object ที่ project อ้างจริงและตรวจ ID/key/SHA-256 ก่อน cleanup
 - เพิ่ม dev/preview HTTP parity smoke ตรวจ health, JSON 401/404/405/410/413, `Allow` header, request ID, ES256 expired/foreign-shaped bearer rejection และ anon/authenticated direct Data API RPC denial ด้วย local Auth จริง
 - เพิ่ม cleanup dry-run ที่ reconcile DB/Storage โดยไม่ mutate และ local test-fixture cleanup ที่จำกัด strict email pattern; แก้ E2E ให้ lookup internal app user ใน `finally` แม้ล้มก่อน migration step เพื่อไม่ทิ้ง fixture
-- local checks ล่าสุด: unit 42 files/429 tests, pgTAP 5 files/133 assertions, integration 6 files/9 tests, restore drill, browser E2E, dev/preview HTTP parity (รวม Cloud AI auth/BYOK guards) และ production build ผ่าน
+- local checks ล่าสุด: unit 42 files/430 tests, pgTAP 5 files/133 assertions, integration 6 files/9 tests, restore drill, browser E2E, dev/preview HTTP parity (รวม Cloud AI auth/BYOK guards) และ production build ผ่าน
 - เพิ่ม [backend-acceptance-phase1.md](backend-acceptance-phase1.md) แยก PASS/PARTIAL/NOT RUN พร้อม evidence และ operational boundary
 
 Staging update 19 กันยายน 2026: สร้าง/link project `gen-package-staging`, push migrations 5 รายการ, สร้าง private buckets สองชุด, ตั้ง local Auth URLs และเปิด Google OAuth แล้ว; ทดสอบ PKCE callback, server bootstrap และ editor mount กับ remote Supabase สำเร็จ `npm run staging:readiness` ตรวจ project health, ref/org, migration parity, dry-run up-to-date และ committed policies โดยไม่แก้ remote state
 
-Staging app smoke 19 กันยายน 2026: สร้าง `Staging Smoke 2026-09-19`, เปลี่ยนความกว้างเป็น 96 มม., autosave/reload แล้วยังได้ค่าเดิม จากนั้นอัปโหลด PNG fixture ผ่าน signed URL/validator, autosave และ reload แล้ว private asset กลับมาเป็น image layer ได้ โดย browser console ไม่มี error
+Staging app smoke 19–20 กันยายน 2026: สร้าง `Staging Smoke 2026-09-19`, เปลี่ยนความกว้างเป็น 96 มม., autosave/reload แล้วยังได้ค่าเดิม จากนั้นอัปโหลด PNG fixture ผ่าน signed URL/validator, autosave และ reload แล้ว private asset กลับมาเป็น image layer ได้ โดย browser console ไม่มี error ต่อมาทดสอบ decline/reopen consent แล้วย้าย legacy project 1 งานขึ้น remote staging สำเร็จ; source localStorage และ exact raw backup ยังอยู่ เปิด cloud project ได้ 80×50×120 มม. และ reload แล้วค่าเดิมยังอยู่โดยไม่มี console error
 
-Known gaps: deployed-origin Storage CORS, Vercel route/native Sharp packaging, staging legacy migration smoke และการเปิด project จาก restored staging snapshot ยัง **NOT RUN**; Google OAuth/login/bootstrap และ local-origin CRUD/asset smoke ผ่านแล้ว แต่ยังไม่ได้ตรวจ deployed origin และ Google Auth app ยังเป็น Testing; local restore query + checksum ไม่ถูกอ้างว่าเทียบเท่า full Supabase/Auth disaster recovery ส่วน scheduled asset deletion/reaper ยังไม่เปิดโดยตั้งใจจนกว่าจะยืนยัน retention/grace period
+Known gaps: deployed-origin Storage CORS, Vercel route/native Sharp packaging และการเปิด project จาก restored staging snapshot ยัง **NOT RUN**; Google OAuth/login/bootstrap, local-origin CRUD/asset smoke และ staging legacy migration ผ่านแล้ว แต่ยังไม่ได้ตรวจ deployed origin และ Google Auth app ยังเป็น Testing; local restore query + checksum ไม่ถูกอ้างว่าเทียบเท่า full Supabase/Auth disaster recovery ส่วน scheduled asset deletion/reaper ยังไม่เปิดโดยตั้งใจจนกว่าจะยืนยัน retention/grace period
 
 Data/rollback impact: migrations 5 รายการถูก push ไป staging เท่านั้น; ไม่มี production write staging มี Google test user/personal workspace และ smoke project/PNG fixture ที่สร้างจากการทดสอบจริง Browser เพิ่ม journal/channel records ที่ scope ตาม account/workspace และ test scripts cleanup เฉพาะ fixture ที่สร้างเอง
 
