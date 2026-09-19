@@ -19,6 +19,7 @@
     "ops:cleanup:report": "node scripts/report-local-cleanup.mjs",
     "ops:test-fixtures:report": "node scripts/cleanup-local-test-fixtures.mjs",
     "ops:test-fixtures:cleanup": "node scripts/cleanup-local-test-fixtures.mjs --apply",
+    "staging:readiness": "node scripts/verify-staging-readiness.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

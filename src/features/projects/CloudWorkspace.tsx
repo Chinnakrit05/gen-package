@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CloudProject, ProjectSummary } from '../../../shared/contracts/projects'
 import App, { type CloudProjectBridge, type ProjectStoreSnapshot } from '../../App'
 import { freshProject, type Project } from '../../core/project'
+import { requestCloudBoxSpec } from '../../services/api/ai'
 import {
   createProject as createRemoteProject,
   deleteProject as deleteRemoteProject,
@@ -430,6 +431,17 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     },
     retrySave: () => controller.retry(),
     subscribeRemoteProject,
+    requestAiSpec: (prompt, current, imageBase64, apiKey) => {
+      if (!apiKey) throw new Error('กรุณาใส่ Anthropic API key')
+      return requestCloudBoxSpec(
+        props.apiBaseUrl,
+        tokenRef.current,
+        apiKey,
+        prompt,
+        current,
+        imageBase64,
+      )
+    },
   }), [clientId, controller, createFromEditor, items, mutations, online, props.apiBaseUrl, refreshItems, saveState, scope, store, subscribeRemoteProject])
 
   if (workspace.status === 'loading') {

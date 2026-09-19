@@ -11,6 +11,9 @@ import { createSupabaseSessionService } from '../adapters/supabase/sessionServic
 import type { ServerConfig } from '../config'
 import type { SessionService } from '../modules/identity/sessionService'
 import { AssetService } from '../modules/assets/assetService'
+import { AiProviderError, AnthropicAiService, type AiService } from '../modules/ai/aiService'
+import { readRequestApiKey } from '../modules/ai/requestApiKey'
+import { parseCurrent, parseImage } from '../boxSpec'
 import {
   assetDownloadRequestSchema,
   assetIdSchema,
@@ -51,6 +54,7 @@ export interface ApiRouterDependencies {
   sessionService?: SessionService | null
   projectService?: ProjectService | null
   assetService?: AssetService | null
+  aiService?: AiService | null
 }
 
 function requestPath(req: HttpRequest): string {
@@ -130,6 +134,7 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
   const assetService = dependencies.assetService === undefined
     ? config.supabase && createSupabaseAssetService(config.supabase)
     : dependencies.assetService
+  const aiService = dependencies.aiService === undefined ? new AnthropicAiService() : dependencies.aiService
 
   return async (req, res) => {
     const requestId = randomUUID()
@@ -187,6 +192,68 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
         const httpError = error instanceof HttpError
           ? error
           : new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'โหลดข้อมูลบัญชีไม่สำเร็จ')
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
+    if (path === '/api/v1/ai/box-spec') {
+      try {
+        if (req.method !== 'POST') {
+          res.setHeader('allow', 'POST')
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!sessionService || !aiService) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า AI หรือ Supabase')
+        }
+        requireJsonContentType(req)
+        await sessionService.authenticate(bearerToken(req), requestId)
+
+        const apiKey = readRequestApiKey(req.headers)
+        if (apiKey === undefined) {
+          throw new HttpError(422, 'AI_API_KEY_REQUIRED', 'กรุณาใส่ Anthropic API key')
+        }
+        if (apiKey === null) {
+          throw new HttpError(400, 'AI_API_KEY_INVALID', 'รูปแบบ Anthropic API key ไม่ถูกต้อง')
+        }
+
+        const body = await readJsonBody(req, 6 * 1024 * 1024)
+        if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+          throw new HttpError(422, 'VALIDATION_ERROR', 'ข้อมูล AI ไม่ถูกต้อง')
+        }
+        const input = body as Record<string, unknown>
+        const allowedKeys = new Set(['prompt', 'current', 'image'])
+        if (Object.keys(input).some((key) => !allowedKeys.has(key))) {
+          throw new HttpError(422, 'VALIDATION_ERROR', 'ข้อมูล AI มี field ที่ไม่รองรับ')
+        }
+        if (typeof input.prompt !== 'string' || !input.prompt.trim() || input.prompt.length > 2000) {
+          throw new HttpError(422, 'VALIDATION_ERROR', 'prompt ต้องเป็นข้อความ 1-2000 ตัวอักษร')
+        }
+        const current = parseCurrent(input.current)
+        if (input.current !== undefined && !current) {
+          throw new HttpError(422, 'VALIDATION_ERROR', 'สเปกปัจจุบันไม่ถูกต้อง')
+        }
+        const image = parseImage(input.image)
+        if (input.image !== undefined && !image) {
+          throw new HttpError(422, 'VALIDATION_ERROR', 'รูปอ้างอิงไม่ถูกต้องหรือใหญ่เกินไป')
+        }
+
+        const data = await aiService.generateBoxSpec(apiKey, {
+          prompt: input.prompt.trim(),
+          ...(current ? { current } : {}),
+          ...(image ? { image } : {}),
+        })
+        sendJson(res, 200, { data, requestId }, requestId)
+      } catch (error) {
+        let httpError: HttpError
+        if (error instanceof HttpError) httpError = error
+        else if (error instanceof AiProviderError && error.kind === 'authentication') {
+          httpError = new HttpError(401, 'AI_API_KEY_INVALID', 'Anthropic API key ไม่ถูกต้อง')
+        } else if (error instanceof AiProviderError && error.kind === 'rate-limit') {
+          httpError = new HttpError(429, 'AI_RATE_LIMITED', 'เรียก AI ถี่เกินไป รอสักครู่แล้วลองใหม่')
+        } else {
+          httpError = new HttpError(502, 'AI_PROVIDER_UNAVAILABLE', 'บริการ AI ขัดข้อง ลองใหม่อีกครั้ง')
+        }
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
       }
       return

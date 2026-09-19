@@ -1,8 +1,8 @@
 # PackIt backend local setup
 
-อัปเดตล่าสุด: 18 กันยายน 2026
+อัปเดตล่าสุด: 19 กันยายน 2026
 
-คู่มือนี้ครอบคลุม local Supabase, auth/session และ project API ของ Phase 1 ยังไม่สร้างหรือแก้ remote project
+คู่มือนี้ครอบคลุม local Supabase, auth/session, project API ของ Phase 1 และสถานะ staging ที่ link แล้ว
 
 ## Prerequisites ที่ตรวจใช้
 
@@ -123,18 +123,31 @@ npm run ops:cleanup:report
 
 ## Remote/staging checklist
 
-ยังไม่ได้สั่งคำสั่งต่อไปนี้กับ remote ใน milestone นี้ เมื่อได้รับ staging project และสิทธิ์แล้วให้ทำกับ staging แยกเท่านั้น:
+staging แยกถูกสร้างและ link แล้ว ขั้นตอนที่ทำเสร็จและขั้นตอนที่ยังต้องใช้ deployment/provider access มีดังนี้:
 
-1. ตรวจว่า project ref/environment เป็น staging แล้วจึง `supabase link --project-ref <staging-ref>`; ห้ามใช้ production ref
-2. ตรวจ migration plan ด้วย `supabase db push --dry-run` ก่อน `supabase db push`; ห้ามใช้ `db reset --linked`
-3. ตั้ง Site URL/Redirect URLs, Google callback/provider secret และ private buckets ตามหัวข้อด้านบน
+1. **DONE** link เฉพาะ `gen-package-staging` (`feuwdzgixarxpsscrwxp`); ห้ามใช้ production ref
+2. **DONE** ตรวจ dry-run แล้ว push migrations 5 รายการ; `npm run staging:readiness` ยืนยัน remote up to date แบบ read-only
+3. **PARTIAL** สร้าง private buckets และตั้ง local Site URL/Redirect URLs แล้ว; Google callback/provider secret ยังรอ Google OAuth client
 4. ตั้ง server secrets ใน deployment settings และ public `VITE_*` เฉพาะค่าที่เผยแพร่ได้; ตรวจ origin allowlist/CORS ด้วย staging origin จริง
 5. รัน health, Google login, create/save/reload, PNG/JPEG upload/download และ legacy migration smoke; ตรวจ `/api/v1` 401/404/413 parity บน Vercel preview
 6. ทดสอบ Sharp native packaging และซ้อม restore database + object manifest/checksum ก่อนเปิด public pilot
 
 ## Remote/staging status
 
-ยังไม่ทำใน milestone นี้ การ link, `db push`, OAuth provider, storage CORS และ Vercel secrets ต้องทำภายหลังเมื่อได้รับ project/สิทธิ์ชัดเจน ห้ามใช้ `db reset --linked` กับ staging/production และห้ามใส่ secrets ลงเอกสารหรือ Git
+- Supabase project `gen-package-staging` ใน Singapore: **ACTIVE_HEALTHY และ link แล้ว**
+- migrations 5 รายการ: **PUSHED / local-remote parity PASS**
+- private buckets `packit-staging` และ `packit-assets`: **CREATED** — PNG/JPEG, 10 MiB; ไม่มี broad browser Storage policy โดยตั้งใจ เพราะ browser ใช้ API-issued signed URL
+- Auth Site URL/Redirect URLs สำหรับ `127.0.0.1:5173` และ `localhost:5173`: **CONFIGURED**
+- Google OAuth provider: **NOT RUN** — รอ Google client ID/secret
+- remote Storage CORS, Vercel secrets/runtime parity, Sharp และ restore/open drill: **NOT RUN** — รอ staging deployment origin/access
+
+รันตัวตรวจที่ไม่แก้ remote state ได้ด้วย:
+
+```powershell
+npm run staging:readiness
+```
+
+ห้ามใช้ `db reset --linked` กับ staging/production และห้ามใส่ access token, service secret, Google secret หรือ AI key ลงเอกสาร/Git
 
 ## Verification status บนเครื่องนี้
 
@@ -143,14 +156,14 @@ npm run ops:cleanup:report
 - `supabase db reset --local`: **PASS** — foundation, identity/workspace, project และ asset migrations พร้อม seed
 - `supabase test db`: **PASS** — 5 files, 133 assertions
 - `npm run db:test:integration`: **PASS** — 6 files, 9 tests; รวม Storage byte lifecycle, private access, quota/concurrency, project asset links และ legacy import dedupe
-- `npm test`: **PASS หลัง P1.8** — 38 files, 419 unit tests
+- `npm test`: **PASS ล่าสุด** — 42 files, 429 unit tests
 - `npm run build`: **PASS หลัง P1.8** — API bundles, `tsc --noEmit` และ Vite production build
 - `npm run db:test:restore`: **PASS** — restore `app_private` ไป isolated database; project document, `project_assets`, asset metadata และ Storage object ที่คืนมามี ID/key/checksum ตรงกัน
 - `npm run test:e2e:local`: **PASS** — auth/account isolation, migration consent/raw backup/dedupe, trusted preset + portable roundtrip, clean/dirty cross-tab, offline create/delete/import/upload restrictions + edit/reconnect และ create/delete replay หลัง response หาย
-- `npm run test:http:local`: **PASS** — Vite dev/preview parity สำหรับ JSON 401/404/405/410/413, expired/foreign-shaped bearer rejection, anon/authenticated direct Data API RPC denial และ request ID
+- `npm run test:http:local`: **PASS** — Vite dev/preview parity สำหรับ JSON 401/404/405/410/413, Cloud AI auth/BYOK guards, expired/foreign-shaped bearer rejection, anon/authenticated direct Data API RPC denial และ request ID
 - `npm run ops:cleanup:report`: **PASS** — read-only DB/Storage reconciliation; หลังล้าง fixture รายงาน assets/objects/candidates เป็นศูนย์
 - cloud-mode HTTP smoke: **PASS** — root 200, missing/forged bearer 401 JSON, legacy `/api/box-spec` 410
-- Google OAuth บน remote/staging: **NOT RUN** — ยังไม่มี remote project/provider credentials
-- Remote/staging: **NOT RUN**
+- Google OAuth บน remote/staging: **NOT RUN** — รอ Google provider credentials
+- Remote/staging foundation: **PASS** — project healthy/link, migration parity, private buckets และ Auth local redirect config; deployment-dependent smoke ยัง NOT RUN
 
 ดู checklist รายกรณีและ evidence ที่ [backend-acceptance-phase1.md](backend-acceptance-phase1.md)

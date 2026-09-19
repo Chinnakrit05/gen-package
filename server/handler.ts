@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import Anthropic from '@anthropic-ai/sdk'
-import { askClaude, mockSpec, parseCurrent, parseImage, readRequestApiKey } from './boxSpec'
+import { askClaude, mockSpec, parseCurrent, parseImage } from './boxSpec'
 import { isLegacyAiRouteEnabled } from './http/legacyAiGuard'
+import { readRequestApiKey } from './modules/ai/requestApiKey'
 
 // ต้นทาง (source) ของ serverless function /api/box-spec บน Vercel
 // ถูก esbuild bundle เป็นไฟล์เดียว → api/box-spec.js (ดู scripts/build-api.mjs) เพราะ Vercel รัน
@@ -80,7 +81,7 @@ export default async function handler(req: Req, res: ServerResponse): Promise<vo
   const current = parseCurrent(body.current)
   const image = parseImage(body.image)
 
-  const requestApiKey = readRequestApiKey(req)
+  const requestApiKey = readRequestApiKey(req.headers)
   if (requestApiKey === null) {
     send(res, 400, { error: 'รูปแบบ Anthropic API key ไม่ถูกต้อง' })
     return

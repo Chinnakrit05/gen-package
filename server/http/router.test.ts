@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CloudProjectDocumentV1 } from '../../shared/contracts/projects'
 import type { SessionService } from '../modules/identity/sessionService'
 import type { AssetService } from '../modules/assets/assetService'
+import { AiProviderError, type AiService } from '../modules/ai/aiService'
 import type { ProjectRepository } from '../modules/projects/projectRepository'
 import { ProjectService } from '../modules/projects/projectService'
 import { createApiRouter, type HttpRequest, type HttpResponse } from './router'
@@ -170,6 +171,136 @@ describe('API router', () => {
         workspaces: [{ id: workspaceId, role: 'owner' }],
       },
     })
+  })
+
+  it('authenticates cloud AI requests and forwards the BYOK key without echoing it', async () => {
+    const calls: unknown[] = []
+    const sessionService: SessionService = {
+      bootstrap: async () => { throw new Error('must not be called') },
+      authenticate: async (token) => {
+        expect(token).toBe('verified-token')
+        return actor
+      },
+      getMe: async () => { throw new Error('must not be called') },
+    }
+    const aiService: AiService = {
+      async generateBoxSpec(apiKey, input) {
+        calls.push({ apiKey, input })
+        return {
+          template: 'tuck-end',
+          materialId: 'carton-300',
+          W: 80,
+          D: 50,
+          H: 120,
+          handle: false,
+          assumptions: [],
+          layoutNote: '-',
+          reasoning: 'test',
+          mock: false,
+        }
+      },
+    }
+    const configuredRouter = createApiRouter(config, {
+      sessionService,
+      aiService,
+      projectService: null,
+      assetService: null,
+    })
+    const target = response()
+    const apiKey = 'sk-ant-test-request-only'
+
+    await configuredRouter({
+      method: 'POST',
+      url: '/api/v1/ai/box-spec',
+      headers: {
+        authorization: 'Bearer verified-token',
+        'content-type': 'application/json',
+        'x-packit-anthropic-api-key': apiKey,
+      },
+      body: { prompt: 'กล่องของฝาก' },
+    }, target.res)
+
+    expect(target.res.statusCode).toBe(200)
+    expect(calls).toEqual([{ apiKey, input: { prompt: 'กล่องของฝาก' } }])
+    expect(JSON.stringify(target.readBody())).not.toContain(apiKey)
+    expect(target.readBody()).toMatchObject({ data: { template: 'tuck-end', mock: false } })
+  })
+
+  it('rejects cloud AI requests without a bearer token or BYOK key', async () => {
+    let called = false
+    const sessionService: SessionService = {
+      bootstrap: async () => { throw new Error('must not be called') },
+      authenticate: async () => actor,
+      getMe: async () => { throw new Error('must not be called') },
+    }
+    const aiService: AiService = {
+      generateBoxSpec: async () => {
+        called = true
+        throw new Error('must not be called')
+      },
+    }
+    const configuredRouter = createApiRouter(config, { sessionService, aiService })
+
+    const missingBearer = response()
+    await configuredRouter({
+      method: 'POST',
+      url: '/api/v1/ai/box-spec',
+      headers: { 'content-type': 'application/json', 'x-packit-anthropic-api-key': 'sk-ant-test-request-only' },
+      body: { prompt: 'กล่องของฝาก' },
+    }, missingBearer.res)
+    expect(missingBearer.res.statusCode).toBe(401)
+    expect(missingBearer.readBody()).toMatchObject({ error: { code: 'AUTH_REQUIRED' } })
+
+    const missingKey = response()
+    await configuredRouter({
+      method: 'POST',
+      url: '/api/v1/ai/box-spec',
+      headers: { authorization: 'Bearer verified-token', 'content-type': 'application/json' },
+      body: { prompt: 'กล่องของฝาก' },
+    }, missingKey.res)
+    expect(missingKey.res.statusCode).toBe(422)
+    expect(missingKey.readBody()).toMatchObject({ error: { code: 'AI_API_KEY_REQUIRED' } })
+    expect(called).toBe(false)
+  })
+
+  it('maps malformed and provider-rejected AI keys to stable API errors', async () => {
+    const sessionService: SessionService = {
+      bootstrap: async () => { throw new Error('must not be called') },
+      authenticate: async () => actor,
+      getMe: async () => { throw new Error('must not be called') },
+    }
+    const aiService: AiService = {
+      generateBoxSpec: async () => { throw new AiProviderError('authentication') },
+    }
+    const configuredRouter = createApiRouter(config, { sessionService, aiService })
+
+    const malformed = response()
+    await configuredRouter({
+      method: 'POST',
+      url: '/api/v1/ai/box-spec',
+      headers: {
+        authorization: 'Bearer verified-token',
+        'content-type': 'application/json',
+        'x-packit-anthropic-api-key': 'short',
+      },
+      body: { prompt: 'กล่องของฝาก' },
+    }, malformed.res)
+    expect(malformed.res.statusCode).toBe(400)
+    expect(malformed.readBody()).toMatchObject({ error: { code: 'AI_API_KEY_INVALID' } })
+
+    const rejected = response()
+    await configuredRouter({
+      method: 'POST',
+      url: '/api/v1/ai/box-spec',
+      headers: {
+        authorization: 'Bearer verified-token',
+        'content-type': 'application/json',
+        'x-packit-anthropic-api-key': 'sk-ant-rejected-test-key',
+      },
+      body: { prompt: 'กล่องของฝาก' },
+    }, rejected.res)
+    expect(rejected.res.statusCode).toBe(401)
+    expect(rejected.readBody()).toMatchObject({ error: { code: 'AI_API_KEY_INVALID' } })
   })
 
   it('validates and creates a project for the actor resolved from the bearer token', async () => {

@@ -183,7 +183,7 @@ Data/rollback impact: เพิ่ม local migration 1 table + 1 RPC; raw legac
 
 ## P1.8 — Durable mutations, browser E2E และ restore evidence
 
-สถานะ: **local complete; staging NOT RUN** เพราะยังไม่มี remote project/provider credentials หรือ deployment access
+สถานะ: **local complete; staging foundation complete; deployed smoke PARTIAL**
 
 - เพิ่ม IndexedDB journal สำหรับ create/delete โดย persist exact payload + operation ID ก่อน network, replay หลัง reload/reconnect และตรวจ scope/response ก่อนลบ receipt; same intent ที่ UI สร้าง operation ID ใหม่ยัง reuse pending operation เดิม
 - เพิ่ม workspace/account-scoped `BroadcastChannel` metadata events; clean tab โหลด revision ใหม่ ส่วน dirty tab เข้าสถานะ conflict และหยุด autosave ไม่ overwrite เงียบ
@@ -192,13 +192,27 @@ Data/rollback impact: เพิ่ม local migration 1 table + 1 RPC; raw legac
 - restore drill dump/restore `app_private` ไป isolated temporary database แล้วตรวจ app user/project/document/create+save receipts, ready asset metadata และ `project_assets`; สำรอง/ลบ/คืน Storage object ที่ project อ้างจริงและตรวจ ID/key/SHA-256 ก่อน cleanup
 - เพิ่ม dev/preview HTTP parity smoke ตรวจ health, JSON 401/404/405/410/413, `Allow` header, request ID, ES256 expired/foreign-shaped bearer rejection และ anon/authenticated direct Data API RPC denial ด้วย local Auth จริง
 - เพิ่ม cleanup dry-run ที่ reconcile DB/Storage โดยไม่ mutate และ local test-fixture cleanup ที่จำกัด strict email pattern; แก้ E2E ให้ lookup internal app user ใน `finally` แม้ล้มก่อน migration step เพื่อไม่ทิ้ง fixture
-- local checks ล่าสุด: unit 38 files/419 tests, pgTAP 5 files/133 assertions, integration 6 files/9 tests, restore drill, browser E2E, dev/preview HTTP parity และ production build ผ่าน
+- local checks ล่าสุด: unit 42 files/429 tests, pgTAP 5 files/133 assertions, integration 6 files/9 tests, restore drill, browser E2E, dev/preview HTTP parity (รวม Cloud AI auth/BYOK guards) และ production build ผ่าน
 - เพิ่ม [backend-acceptance-phase1.md](backend-acceptance-phase1.md) แยก PASS/PARTIAL/NOT RUN พร้อม evidence และ operational boundary
+
+Staging update 19 กันยายน 2026: สร้าง/link project `gen-package-staging`, push migrations 5 รายการ, สร้าง private buckets สองชุด และตั้ง local Auth URLs แล้ว; `npm run staging:readiness` ตรวจ project health, ref/org, migration parity, dry-run up-to-date และ committed policies โดยไม่แก้ remote state
 
 Known gaps: Google OAuth จริง, remote Storage CORS, Vercel route/native Sharp packaging, staging tenant smoke และการเปิด project จาก restored staging snapshot ยัง **NOT RUN**; local restore query + checksum ไม่ถูกอ้างว่าเทียบเท่า full Supabase/Auth disaster recovery ส่วน scheduled asset deletion/reaper ยังไม่เปิดโดยตั้งใจจนกว่าจะยืนยัน retention/grace period
 
-Data/rollback impact: ไม่มี migration ใหม่หรือ remote write; browser เพิ่ม journal/channel records ที่ scope ตาม account/workspace และ test scripts cleanup เฉพาะ fixture ที่สร้างเอง
+Data/rollback impact: migrations 5 รายการถูก push ไป staging เท่านั้น; ไม่มี production write และไม่มีข้อมูลผู้ใช้จริง Browser เพิ่ม journal/channel records ที่ scope ตาม account/workspace และ test scripts cleanup เฉพาะ fixture ที่สร้างเอง
+
+## Cloud AI BYOK bridge
+
+สถานะ: **implemented และผ่าน unit/type/build checks; deployed smoke NOT RUN**
+
+- cloud editor ใช้ authenticated `POST /api/v1/ai/box-spec` แทน legacy endpoint ที่ cloud ตอบ 410
+- ผู้ใช้ใส่ Anthropic API key ในช่อง password; เก็บใน React memory เฉพาะ session ของหน้า ไม่ลง localStorage, env หรือ project document
+- browser ส่งคีย์ใน dedicated request header ไม่ใส่ JSON body; server ตรวจ bearer ก่อนอ่านคีย์ และไม่ echo คีย์ใน response
+- Anthropic client ถูกสร้างต่อ request เพื่อไม่ cache/reuse BYOK key ข้ามผู้ใช้ พร้อม stable error codes สำหรับ missing/invalid/rate-limit/provider unavailable
+- local/demo flow เดิมยังใช้ `/api/box-spec` และรองรับ mock ตาม config เดิม
+
+Known gap: ต้องทดสอบ route นี้บน Vercel preview ด้วยคีย์ทดสอบของผู้ใช้หลัง deployment พร้อมตรวจ platform logs ว่าไม่บันทึก sensitive headers
 
 ## งานถัดไป
 
-เมื่อมี staging access ให้ทำรายการ NOT RUN ใน acceptance matrix: link/push เฉพาะ staging, Google OAuth/redirect, CORS, Vercel parity + Sharp และ full staging restore/open drill ก่อน public pilot ห้ามเริ่ม Phase 2 หรือ production deploy โดยอนุมานสิทธิ์เอง
+เมื่อมี Google OAuth client และ staging deployment access ให้ทำรายการที่ยัง NOT RUN ใน acceptance matrix: Google provider/callback, CORS, Vercel parity + Sharp + Cloud AI BYOK smoke และ full staging restore/open drill ก่อน public pilot ห้าม production deploy โดยอนุมานสิทธิ์เอง

@@ -656,6 +656,12 @@ export interface CloudProjectBridge {
   resolveConflict(current: Project, action: 'reload' | 'copy'): Promise<Project>
   retrySave(): Promise<void>
   subscribeRemoteProject(listener: (project: Project) => void): () => void
+  requestAiSpec: (
+    prompt: string,
+    current?: CurrentSpec,
+    imageBase64?: string,
+    apiKey?: string,
+  ) => Promise<AiBoxSpec>
 }
 
 function cloudSaveLabel(state: ProjectSaveState): string {
@@ -2121,7 +2127,8 @@ export default function App({
           hasDesign={history.length > 0}
           onApply={applySpec}
           onLoadingChange={setAiBusy}
-          disabledReason={cloud ? 'AI บน Cloud จะเปิดหลังระบบโควตาและความปลอดภัยพร้อม' : undefined}
+          apiKeyRequired={Boolean(cloud)}
+          requestSpec={cloud?.requestAiSpec}
         />
         <button
           className="theme-btn"

@@ -1,16 +1,16 @@
 # Phase 1 backend acceptance evidence
 
-อัปเดตล่าสุด: 18 กันยายน 2026
+อัปเดตล่าสุด: 19 กันยายน 2026
 
-สถานะรวม: **ผ่าน local acceptance; ยังไม่อนุมัติ staging/public pilot**
+สถานะรวม: **ผ่าน local acceptance และ staging foundation; ยังไม่อนุมัติ public pilot**
 
-คำจำกัดความ: `PASS` คือรันจริงบน local Supabase/Chrome หรือ test layer ที่ระบุ, `PARTIAL` คือผ่านเฉพาะบาง environment/กรณี, `NOT RUN` คือยังไม่มี staging credentials/deployment access และ `NOT ENABLED` คือจงใจไม่เปิดเพราะยังขาด policy/approval ผล mock ไม่ถูกนับแทน service จริง
+คำจำกัดความ: `PASS` คือรันจริงบน environment หรือ test layer ที่ระบุ, `PARTIAL` คือผ่านเฉพาะบาง environment/กรณี, `NOT RUN` คือยังขาด provider/deployment input หรือ access ที่จำเป็น และ `NOT ENABLED` คือจงใจไม่เปิดเพราะยังขาด policy/approval ผล mock ไม่ถูกนับแทน service จริง
 
 ## Evidence ที่รันล่าสุด
 
 | คำสั่ง | ผล |
 | --- | --- |
-| `npm test` | PASS — 38 files, 419 tests |
+| `npm test` | PASS — 42 files, 429 tests |
 | `npm run db:test` | PASS — 5 pgTAP files, 133 assertions |
 | `npm run db:test:integration` | PASS — 6 files, 9 tests บน local PostgreSQL/Auth/Storage จริง |
 | `npm run db:test:restore` | PASS — isolated `app_private` restore + linked asset metadata/project reference/Storage SHA-256 |
@@ -68,9 +68,10 @@
 
 | Requirement | สถานะ | Evidence / ขอบเขต |
 | --- | --- | --- |
-| geometry/export regression suite | PASS | รวมอยู่ใน unit 419 tests |
+| geometry/export regression suite | PASS | รวมอยู่ใน unit 429 tests |
 | build/typecheck/API bundles | PASS | `npm run build` |
 | frontend bundle ไม่มี server secret/private module | PASS local | bundle scan จาก foundation; build ล่าสุดผ่าน |
+| authenticated Cloud AI BYOK route | PASS unit/build | bearer ถูกตรวจ ก่อนส่ง request key ไป provider; key อยู่ใน header/session memory ไม่อยู่ body/response/storage; deployed smoke ยัง NOT RUN |
 | local dev API 401/404/405 และ legacy 410 | PASS local | HTTP smoke |
 | preview/deployed route parity รวม 413 | PARTIAL | Vite dev และ `vite preview` ผ่าน JSON 401/404/405/410/413 + request ID; Vercel preview ยัง NOT RUN |
 | empty local DB migrate + ACL | PASS local | `db:reset --local` และ pgTAP 133 assertions |
@@ -79,6 +80,9 @@
 | Google OAuth redirects/provider | NOT RUN | ต้องใช้ Google console + staging Supabase settings |
 | remote Storage CORS/private tickets | NOT RUN | local signed upload/download ผ่าน; remote origin ยังไม่ตรวจ |
 | Vercel Sharp native packaging | NOT RUN | local native Sharp ผ่าน; deployment runtime ยังไม่ตรวจ |
+| staging project/link/migration parity | PASS remote | `gen-package-staging` ACTIVE_HEALTHY; linked ref/org ตรง, migrations 5 รายการตรง และ `db push --dry-run` up to date |
+| staging private bucket configuration | PASS remote/config | `packit-staging`/`packit-assets` private, PNG/JPEG, 10 MiB; browser policy count 0 โดยตั้งใจ ใช้ signed URL จาก API |
+| staging Auth local URL configuration | PASS remote | Site URL `127.0.0.1:5173`; allowlist มีทั้ง `127.0.0.1` และ `localhost` |
 | cleanup inventory ก่อน retention | PASS local | dry-run รายงาน expired tickets/leases/reservations, unreferenced rows, orphan/missing objects โดยไม่ mutate |
 | scheduled asset deletion/reaper | NOT ENABLED | ต้องยืนยัน retention/grace period และ operator approval ก่อน; ไม่อนุมานนโยบายลบข้อมูล |
 
@@ -96,7 +100,7 @@
 
 ## Gate ก่อน staging/public pilot
 
-- สร้าง staging resource แยก, push migrations แบบตรวจ dry-run และห้าม `db reset --linked`
+- ~~สร้าง staging resource แยก, push migrations แบบตรวจ dry-run~~ — DONE; ยังคงห้าม `db reset --linked`
 - ทดสอบ Google OAuth callback + app redirect จริง
 - ทดสอบ Vercel preview `/api/v1` parity, origin allowlist, body limit และ Sharp native runtime
 - ทดสอบ Storage upload/download/CORS ด้วย staging origin

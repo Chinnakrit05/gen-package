@@ -1263,9 +1263,9 @@ function filterLogger(logger, logLevel) {
   cachedLoggers.set(logger, [logLevel, levelLogger]);
   return levelLogger;
 }
-function loggerFor(client2) {
-  const logger = client2.logger;
-  const logLevel = client2.logLevel ?? "off";
+function loggerFor(client) {
+  const logger = client.logger;
+  const logLevel = client.logLevel ?? "off";
   if (!logger) {
     return noopLogger;
   }
@@ -1996,11 +1996,11 @@ var init_streaming = __esm({
     init_log();
     init_error();
     Stream = class _Stream {
-      constructor(iterator, controller, client2) {
+      constructor(iterator, controller, client) {
         this.iterator = iterator;
         _Stream_client.set(this, void 0);
         this.controller = controller;
-        __classPrivateFieldSet(this, _Stream_client, client2, "f");
+        __classPrivateFieldSet(this, _Stream_client, client, "f");
       }
       /**
        * Iterate the raw Server-Sent Events from `response` — `{event, data, raw}`
@@ -2013,9 +2013,9 @@ var init_streaming = __esm({
       static rawEvents(response, controller = new AbortController()) {
         return _iterSSEMessages(response, controller);
       }
-      static fromSSEResponse(response, controller, client2) {
+      static fromSSEResponse(response, controller, client) {
         let consumed = false;
-        const logger = client2 ? loggerFor(client2) : console;
+        const logger = client ? loggerFor(client) : console;
         async function* iterator() {
           if (consumed) {
             throw new AnthropicError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -2061,13 +2061,13 @@ var init_streaming = __esm({
               controller.abort();
           }
         }
-        return new _Stream(iterator, controller, client2);
+        return new _Stream(iterator, controller, client);
       }
       /**
        * Generates a Stream from a newline-separated ReadableStream
        * where each item is a JSON value.
        */
-      static fromReadableStream(readableStream, controller, client2) {
+      static fromReadableStream(readableStream, controller, client) {
         let consumed = false;
         async function* iterLines() {
           const lineDecoder = new LineDecoder();
@@ -2104,7 +2104,7 @@ var init_streaming = __esm({
               controller.abort();
           }
         }
-        return new _Stream(iterator, controller, client2);
+        return new _Stream(iterator, controller, client);
       }
       [(_Stream_client = /* @__PURE__ */ new WeakMap(), Symbol.asyncIterator)]() {
         return this.iterator();
@@ -2206,11 +2206,11 @@ var init_streaming = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/internal/parse.mjs
-async function defaultParseResponse(client2, props) {
+async function defaultParseResponse(client, props) {
   const { response, requestLogID, retryOfRequestLogID, startTime } = props;
   const body = await (async () => {
     if (props.options.stream) {
-      loggerFor(client2).debug("response", response.status, response.url, response.headers, response.body);
+      loggerFor(client).debug("response", response.status, response.url, response.headers, response.body);
       return Stream.fromSSEResponse(response, props.controller);
     }
     if (response.status === 204) {
@@ -2233,7 +2233,7 @@ async function defaultParseResponse(client2, props) {
     const text = await response.text();
     return text;
   })();
-  loggerFor(client2).debug(`[${requestLogID}] response parsed`, formatRequestDetails({
+  loggerFor(client).debug(`[${requestLogID}] response parsed`, formatRequestDetails({
     retryOfRequestLogID,
     url: response.url,
     status: response.status,
@@ -2273,13 +2273,13 @@ function isRetryableError(err) {
   }
   return false;
 }
-function wrapFetchWithMiddleware(fetchFn, middleware, options, client2) {
+function wrapFetchWithMiddleware(fetchFn, middleware, options, client) {
   return async (url, init = {}) => {
     if (middleware.length === 0) {
       return fetchFn.call(void 0, url, init);
     }
     const headers = init.headers instanceof Headers ? init.headers : new Headers(init.headers);
-    const response = await applyMiddleware(fetchFn, middleware, options, client2)({
+    const response = await applyMiddleware(fetchFn, middleware, options, client)({
       ...init,
       headers,
       url: typeof url === "string" ? url : url instanceof URL ? url.href : url.url
@@ -2290,13 +2290,13 @@ function wrapFetchWithMiddleware(fetchFn, middleware, options, client2) {
     return response;
   };
 }
-function createMiddlewareContext(options, client2) {
+function createMiddlewareContext(options, client) {
   const cache = /* @__PURE__ */ new WeakMap();
   return {
     options,
     // Resolved per chain, so changes to the client's `logLevel`/`logger`
     // apply to subsequent requests.
-    logger: client2 ? loggerFor(client2) : defaultLogger(),
+    logger: client ? loggerFor(client) : defaultLogger(),
     parse(response) {
       if (options?.stream && response.ok) {
         return parseMiddlewareResponse(response, options);
@@ -2334,7 +2334,7 @@ async function parseMiddlewareResponse(response, options) {
   }
   return await response.clone().text();
 }
-function applyMiddleware(fetchFn, middleware, options, client2) {
+function applyMiddleware(fetchFn, middleware, options, client) {
   let next = async ({ url, ...init }) => {
     try {
       return await fetchFn.call(void 0, url, init);
@@ -2344,7 +2344,7 @@ function applyMiddleware(fetchFn, middleware, options, client2) {
       throw error;
     }
   };
-  const ctx = createMiddlewareContext(options, client2);
+  const ctx = createMiddlewareContext(options, client);
   for (let i = middleware.length - 1; i >= 0; i--) {
     const mw = middleware[i];
     const nextInner = next;
@@ -2371,17 +2371,17 @@ var init_api_promise = __esm({
     init_tslib();
     init_parse();
     APIPromise = class _APIPromise extends Promise {
-      constructor(client2, responsePromise, parseResponse = defaultParseResponse) {
+      constructor(client, responsePromise, parseResponse = defaultParseResponse) {
         super((resolve4) => {
           resolve4(null);
         });
         this.responsePromise = responsePromise;
         this.parseResponse = parseResponse;
         _APIPromise_client.set(this, void 0);
-        __classPrivateFieldSet(this, _APIPromise_client, client2, "f");
+        __classPrivateFieldSet(this, _APIPromise_client, client, "f");
       }
       _thenUnwrap(transform) {
-        return new _APIPromise(__classPrivateFieldGet(this, _APIPromise_client, "f"), this.responsePromise, async (client2, props) => addRequestID(transform(await this.parseResponse(client2, props), props), props.response));
+        return new _APIPromise(__classPrivateFieldGet(this, _APIPromise_client, "f"), this.responsePromise, async (client, props) => addRequestID(transform(await this.parseResponse(client, props), props), props.response));
       }
       /**
        * Gets the raw `Response` instance instead of parsing the response
@@ -2443,9 +2443,9 @@ var init_pagination = __esm({
     init_api_promise();
     init_values();
     AbstractPage = class {
-      constructor(client2, response, body, options) {
+      constructor(client, response, body, options) {
         _AbstractPage_client.set(this, void 0);
-        __classPrivateFieldSet(this, _AbstractPage_client, client2, "f");
+        __classPrivateFieldSet(this, _AbstractPage_client, client, "f");
         this.options = options;
         this.response = response;
         this.body = body;
@@ -2480,8 +2480,8 @@ var init_pagination = __esm({
       }
     };
     PagePromise = class extends APIPromise {
-      constructor(client2, request, Page2) {
-        super(client2, request, async (client3, props) => new Page2(client3, props.response, await defaultParseResponse(client3, props), props.options));
+      constructor(client, request, Page2) {
+        super(client, request, async (client2, props) => new Page2(client2, props.response, await defaultParseResponse(client2, props), props.options));
       }
       /**
        * Allow auto-paginating iteration on an unawaited list call, eg:
@@ -2498,8 +2498,8 @@ var init_pagination = __esm({
       }
     };
     Page = class extends AbstractPage {
-      constructor(client2, response, body, options) {
-        super(client2, response, body, options);
+      constructor(client, response, body, options) {
+        super(client, response, body, options);
         this.data = body.data || [];
         this.has_more = body.has_more || false;
         this.first_id = body.first_id || null;
@@ -2542,8 +2542,8 @@ var init_pagination = __esm({
       }
     };
     PageCursor = class extends AbstractPage {
-      constructor(client2, response, body, options) {
-        super(client2, response, body, options);
+      constructor(client, response, body, options) {
+        super(client, response, body, options);
         this.data = body.data || [];
         this.next_page = body.next_page || null;
       }
@@ -2565,8 +2565,8 @@ var init_pagination = __esm({
       }
     };
     BidirectionalPageCursor = class extends AbstractPage {
-      constructor(client2, response, body, options) {
-        super(client2, response, body, options);
+      constructor(client, response, body, options) {
+        super(client, response, body, options);
         this.data = body.data || [];
         this.next_page = body.next_page || null;
         this.prev_page = body.prev_page || null;
@@ -2756,8 +2756,8 @@ var APIResource;
 var init_resource = __esm({
   "node_modules/@anthropic-ai/sdk/core/resource.mjs"() {
     APIResource = class {
-      constructor(client2) {
-        this._client = client2;
+      constructor(client) {
+        this._client = client;
       }
     };
   }
@@ -4659,11 +4659,11 @@ var init_backoff = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/lib/helper-client.mjs
-function copyClientForHelper(client2, { authToken, helper }) {
+function copyClientForHelper(client, { authToken, helper }) {
   if (!authToken) {
     throw new AnthropicError(`copyClientForHelper: expected a non-empty authToken but received ${JSON.stringify(authToken)}`);
   }
-  const internal = client2;
+  const internal = client;
   const parentDefaults = internal._options.defaultHeaders;
   const parentAuthExtraHeaders = internal._authState?.extraHeaders;
   const inheritedAuthExtraHeaders = parentAuthExtraHeaders ? Object.fromEntries(Object.entries(parentAuthExtraHeaders).filter(([name]) => {
@@ -4675,10 +4675,10 @@ function copyClientForHelper(client2, { authToken, helper }) {
     parentDefaults,
     { [STAINLESS_HELPER_HEADER]: helper }
   ]);
-  return client2.withOptions({
+  return client.withOptions({
     apiKey: null,
     authToken,
-    baseURL: client2.baseURL,
+    baseURL: client.baseURL,
     credentials: void 0,
     defaultHeaders
   });
@@ -5603,18 +5603,18 @@ import { promisify } from "node:util";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 async function setupSkills(ctx) {
-  const { client: client2, sessionId } = ctx;
-  if (!client2 || !sessionId)
+  const { client, sessionId } = ctx;
+  if (!client || !sessionId)
     return async () => {
     };
-  const log = loggerFor(client2);
-  const session = await client2.beta.sessions.retrieve(sessionId);
+  const log = loggerFor(client);
+  const session = await client.beta.sessions.retrieve(sessionId);
   const skillsRoot = path3.resolve(ctx.workdir, "skills");
   const created = [];
   for (const skill of session.agent.skills) {
     try {
-      const versionId = await resolveSkillVersion(client2, skill.skill_id, skill.version);
-      const version = await client2.beta.skills.versions.retrieve(versionId, { skill_id: skill.skill_id });
+      const versionId = await resolveSkillVersion(client, skill.skill_id, skill.version);
+      const version = await client.beta.skills.versions.retrieve(versionId, { skill_id: skill.skill_id });
       let dirname4 = path3.basename(version.name.trim());
       if (dirname4 === "" || dirname4 === "." || dirname4 === "..")
         dirname4 = skill.skill_id;
@@ -5626,7 +5626,7 @@ async function setupSkills(ctx) {
         });
         continue;
       }
-      const resp = await client2.beta.skills.versions.download(versionId, { skill_id: skill.skill_id });
+      const resp = await client.beta.skills.versions.download(versionId, { skill_id: skill.skill_id });
       await fs2.rm(dest, { recursive: true, force: true });
       await fs2.mkdir(dest, { recursive: true, mode: DIR_CREATE_MODE });
       created.push(dest);
@@ -5653,11 +5653,11 @@ async function setupSkills(ctx) {
     }
   };
 }
-async function resolveSkillVersion(client2, skillId, version) {
+async function resolveSkillVersion(client, skillId, version) {
   if (/^\d+$/.test(version))
     return version;
   let newest;
-  for await (const v of client2.beta.skills.versions.list(skillId)) {
+  for await (const v of client.beta.skills.versions.list(skillId)) {
     if (/^\d+$/.test(v.version) && (newest === void 0 || BigInt(v.version) > BigInt(newest))) {
       newest = v.version;
     }
@@ -6357,9 +6357,9 @@ ${out}`;
 });
 
 // node_modules/@anthropic-ai/sdk/lib/environments/worker.mjs
-async function forceStop(client2, work, log, requestOptions) {
+async function forceStop(client, work, log, requestOptions) {
   try {
-    await client2.beta.environments.work.stop(
+    await client.beta.environments.work.stop(
       work.id,
       { environment_id: work.environment_id, force: true },
       // Caller's headers pass through; the helper-tag header is on the scoped
@@ -6373,12 +6373,12 @@ async function forceStop(client2, work, log, requestOptions) {
     }
   }
 }
-async function heartbeatLoop(client2, work, ctrl, logger, requestOptions) {
+async function heartbeatLoop(client, work, ctrl, logger, requestOptions) {
   let intervalMs = HEARTBEAT_DEFAULT_MS;
   let last = NO_HEARTBEAT_SENTINEL;
   const beat = async () => {
     try {
-      const resp = await client2.beta.environments.work.heartbeat(work.id, { environment_id: work.environment_id, expected_last_heartbeat: last }, { ...requestOptions, headers: buildHeaders([requestOptions?.headers]), signal: ctrl.signal });
+      const resp = await client.beta.environments.work.heartbeat(work.id, { environment_id: work.environment_id, expected_last_heartbeat: last }, { ...requestOptions, headers: buildHeaders([requestOptions?.headers]), signal: ctrl.signal });
       last = resp.last_heartbeat;
       if (resp.ttl_seconds > 0) {
         intervalMs = Math.max(1e3, Math.min(resp.ttl_seconds * 1e3 / 2, HEARTBEAT_DEFAULT_MS));
@@ -8673,9 +8673,9 @@ var init_BetaToolRunner = __esm({
     init_CompactionControl();
     init_stainless_helper_header();
     BetaToolRunner = class {
-      constructor(client2, params, options) {
+      constructor(client, params, options) {
         _BetaToolRunner_instances.add(this);
-        this.client = client2;
+        this.client = client;
         _BetaToolRunner_consumed.set(this, false);
         _BetaToolRunner_mutated.set(this, false);
         _BetaToolRunner_state.set(this, void 0);
@@ -12169,6 +12169,16 @@ function isLegacyAiRouteEnabled(env) {
   return (appEnv === "development" || appEnv === "test") && appMode === "local";
 }
 
+// server/modules/ai/requestApiKey.ts
+function readRequestApiKey(headers) {
+  const raw = headers["x-packit-anthropic-api-key"];
+  if (raw === void 0) return void 0;
+  if (Array.isArray(raw) || typeof raw !== "string") return null;
+  const key = raw.trim();
+  if (key.length < 10 || key.length > 512 || /\s/.test(key)) return null;
+  return key;
+}
+
 // src/core/materials.ts
 var MATERIALS = [
   {
@@ -14239,9 +14249,8 @@ function buildUserContent(prompt, current) {
 
 \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14\u0E08\u0E32\u0E01\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32: ${prompt}` : prompt;
 }
-var client = null;
 async function askClaude(apiKey, model, prompt, current, image) {
-  client ??= new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey });
   const content = [];
   if (image) {
     content.push({
@@ -14273,14 +14282,6 @@ var JSON_INSTRUCTION = `
 ## \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E04\u0E33\u0E15\u0E2D\u0E1A (\u0E2A\u0E33\u0E04\u0E31\u0E0D\u0E21\u0E32\u0E01)
 \u0E15\u0E2D\u0E1A\u0E40\u0E1B\u0E47\u0E19 JSON object \u0E40\u0E14\u0E35\u0E22\u0E27\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 \u0E2B\u0E49\u0E32\u0E21\u0E21\u0E35\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2D\u0E37\u0E48\u0E19\u0E2B\u0E23\u0E37\u0E2D markdown fence \u0E19\u0E33\u0E2B\u0E19\u0E49\u0E32/\u0E15\u0E32\u0E21\u0E2B\u0E25\u0E31\u0E07:
 {"template":"<${TEMPLATE_IDS.join("|")}>","materialId":"<id>","W":<number>,"D":<number>,"H":<number>,"handle":<true|false>,"assumptions":["..."],"layoutNote":"...","reasoning":"..."}`;
-function readRequestApiKey(req) {
-  const raw = req.headers["x-packit-anthropic-api-key"];
-  if (raw === void 0) return void 0;
-  if (Array.isArray(raw) || typeof raw !== "string") return null;
-  const key = raw.trim();
-  if (key.length < 10 || key.length > 512 || /\s/.test(key)) return null;
-  return key;
-}
 
 // server/handler.ts
 function send(res, status, body) {
@@ -14343,7 +14344,7 @@ async function handler(req, res) {
   const prompt = body.prompt.trim();
   const current = parseCurrent(body.current);
   const image = parseImage(body.image);
-  const requestApiKey = readRequestApiKey(req);
+  const requestApiKey = readRequestApiKey(req.headers);
   if (requestApiKey === null) {
     send(res, 400, { error: "\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A Anthropic API key \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07" });
     return;

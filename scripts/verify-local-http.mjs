@@ -39,7 +39,7 @@ try {
   }
 
   process.stdout.write('Local dev/preview HTTP parity: PASS\n')
-  process.stdout.write('Verified JSON 401/404/405/410/413, expired/foreign bearer rejection, direct Data API denial, and request IDs.\n')
+  process.stdout.write('Verified JSON 401/404/405/410/413, Cloud AI auth/BYOK guards, expired/foreign bearer rejection, direct Data API denial, and request IDs.\n')
 } finally {
   if (!appUserId && authUserId) {
     const rows = await sql`select app_user_id from app_private.auth_identities where subject = ${authUserId}`.catch(() => [])
@@ -82,6 +82,46 @@ async function verifyApiContract(mode, accessToken) {
     200,
     (body) => typeof body.data?.user?.id === 'string',
     `${mode} session bootstrap`,
+  )
+  await expectJson(
+    request('/api/v1/ai/box-spec', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-packit-anthropic-api-key': 'sk-ant-http-smoke-only',
+      },
+      body: JSON.stringify({ prompt: 'test' }),
+    }),
+    401,
+    (body) => body.error?.code === 'AUTH_REQUIRED',
+    `${mode} Cloud AI missing bearer`,
+  )
+  await expectJson(
+    request('/api/v1/ai/box-spec', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: 'test' }),
+    }),
+    422,
+    (body) => body.error?.code === 'AI_API_KEY_REQUIRED',
+    `${mode} Cloud AI missing BYOK key`,
+  )
+  await expectJson(
+    request('/api/v1/ai/box-spec', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'content-type': 'application/json',
+        'x-packit-anthropic-api-key': 'short',
+      },
+      body: JSON.stringify({ prompt: 'test' }),
+    }),
+    400,
+    (body) => body.error?.code === 'AI_API_KEY_INVALID',
+    `${mode} Cloud AI malformed BYOK key`,
   )
   const now = Math.floor(Date.now() / 1000)
   const expiredToken = resignJwt(accessToken, { iat: now - 3600, exp: now - 60 }, localSigningKey)

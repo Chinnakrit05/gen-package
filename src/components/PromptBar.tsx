@@ -38,9 +38,19 @@ interface PromptBarProps {
   onApply: (spec: AiBoxSpec, label: string) => void
   onLoadingChange: (loading: boolean) => void
   disabledReason?: string
+  apiKeyRequired?: boolean
+  requestSpec?: typeof requestBoxSpec
 }
 
-export function PromptBar({ current, hasDesign, onApply, onLoadingChange, disabledReason }: PromptBarProps) {
+export function PromptBar({
+  current,
+  hasDesign,
+  onApply,
+  onLoadingChange,
+  disabledReason,
+  apiKeyRequired = false,
+  requestSpec = requestBoxSpec,
+}: PromptBarProps) {
   const [text, setText] = useState('')
   const [image, setImage] = useState<RefImage | null>(null)
   const [loading, setLoading] = useState(false)
@@ -87,12 +97,12 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange, disabl
   }
 
   const run = async (prompt: string, withCurrent: boolean, label: string): Promise<boolean> => {
-    if (!prompt.trim() || loading) return false
+    if (!prompt.trim() || loading || (apiKeyRequired && !apiKey.trim())) return false
     setBusy(true)
     setError(null)
     setResult(null)
     try {
-      const spec = await requestBoxSpec(
+      const spec = await requestSpec(
         prompt,
         withCurrent ? current : undefined,
         image?.base64,
@@ -151,7 +161,9 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange, disabl
           <button type="button" className="pb-keyclear" onClick={() => setApiKey('')}>ล้าง</button>
         )}
         <span id="anthropic-api-key-note" className="hint">
-          ใช้เฉพาะแท็บนี้และส่งตรงไป backend ของแอปเมื่อกดสร้าง
+          {apiKeyRequired
+            ? 'Cloud ต้องใช้คีย์ของคุณ คีย์อยู่เฉพาะแท็บนี้และส่งไป backend เมื่อกดสร้าง'
+            : 'ใช้เฉพาะแท็บนี้และส่งตรงไป backend ของแอปเมื่อกดสร้าง'}
         </span>
       </div>
       <form
@@ -212,7 +224,8 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange, disabl
                 <button
                   key={q.label}
                   role="menuitem"
-                  aria-disabled={loading}
+                  aria-disabled={loading || (apiKeyRequired && !apiKey.trim())}
+                  disabled={loading || (apiKeyRequired && !apiKey.trim())}
                   onClick={() => {
                     setQuickOpen(false)
                     void run(q.prompt, true, q.label)
@@ -228,7 +241,8 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange, disabl
         <button
           type="submit"
           className="primary pb-go"
-          aria-disabled={loading || !text.trim()}
+          aria-disabled={loading || !text.trim() || (apiKeyRequired && !apiKey.trim())}
+          disabled={loading || !text.trim() || (apiKeyRequired && !apiKey.trim())}
         >
           {loading ? 'กำลังคิด…' : 'สร้างกล่อง'}
         </button>
