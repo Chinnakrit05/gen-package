@@ -77,8 +77,8 @@
 | empty local DB migrate + ACL | PASS local | `db:reset --local` และ pgTAP 133 assertions |
 | DB + sample object restore/checksum | PASS local | isolated DB มี project document → `project_assets` → ready asset ID/key/hash ตรงกับ Storage object ที่ลบ/คืนและตรวจ SHA-256 |
 | เปิดงานจาก restored deployment snapshot | NOT RUN | ต้อง restore staging snapshot แล้วชี้ staging app ไปเปิด project/asset จริงก่อน public pilot |
-| Google OAuth redirects/provider | NOT RUN | ต้องใช้ Google console + staging Supabase settings |
-| remote Storage CORS/private tickets | NOT RUN | local signed upload/download ผ่าน; remote origin ยังไม่ตรวจ |
+| Google OAuth redirects/provider | PASS remote + local app | Google Web client + Supabase provider ตั้งแล้ว; PKCE callback กลับ local cloud-mode app, server bootstrap และ editor mount สำเร็จ Google app ยังเป็น Testing และ deployed origin ยังไม่ตรวจ |
+| remote Storage private tickets/CORS | PARTIAL | local cloud-mode app ใช้ remote signed upload/download ผ่าน `127.0.0.1:5173`; PNG ผ่าน validator/autosave และโหลด private asset กลับหลัง reload; deployed origin ยังไม่ตรวจ |
 | Vercel Sharp native packaging | NOT RUN | local native Sharp ผ่าน; deployment runtime ยังไม่ตรวจ |
 | staging project/link/migration parity | PASS remote | `gen-package-staging` ACTIVE_HEALTHY; linked ref/org ตรง, migrations 5 รายการตรง และ `db push --dry-run` up to date |
 | staging private bucket configuration | PASS remote/config | `packit-staging`/`packit-assets` private, PNG/JPEG, 10 MiB; browser policy count 0 โดยตั้งใจ ใช้ signed URL จาก API |
@@ -97,13 +97,15 @@
 7. สลับบัญชีแล้วไม่เห็น project ของบัญชีแรก; สลับกลับเปิดงานเดิมได้
 8. create/delete ที่ server commit แล้ว response ถูกตัด replay operation ID เดิมหลัง reload; ไม่ duplicate และ journal ถูกล้าง
 9. ไม่มี uncaught browser page error ตลอด flow
+10. Google OAuth กับ remote staging ผ่าน PKCE callback, server token verification/personal-workspace bootstrap และเปิด cloud editor ได้จริงจาก `127.0.0.1:5173`
+11. Remote staging project create/save/reload รักษาความกว้าง 96 มม.; PNG signed upload/validation/autosave/download หลัง reload คืน image layer ได้และไม่มี browser console error
 
 ## Gate ก่อน staging/public pilot
 
 - ~~สร้าง staging resource แยก, push migrations แบบตรวจ dry-run~~ — DONE; ยังคงห้าม `db reset --linked`
-- ทดสอบ Google OAuth callback + app redirect จริง
+- ~~ทดสอบ Google OAuth callback + app redirect จริงผ่าน local cloud-mode app~~ — DONE; ยังต้องเพิ่มและตรวจ deployed origin เมื่อมี staging deployment
 - ทดสอบ Vercel preview `/api/v1` parity, origin allowlist, body limit และ Sharp native runtime
-- ทดสอบ Storage upload/download/CORS ด้วย staging origin
+- ~~ทดสอบ Storage upload/download/CORS จาก local cloud-mode origin~~ — DONE; ยังต้องทดสอบซ้ำด้วย Vercel preview/staging origin
 - restore staging database snapshot และ Storage manifest/objects แล้วเปิด project ที่มีรูปผ่าน app จริง
 - บันทึก rollback point, backup owner, alert owner และผล smoke test; จึงค่อยเปลี่ยนสถานะจาก NOT RUN
 

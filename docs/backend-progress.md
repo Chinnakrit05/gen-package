@@ -80,7 +80,7 @@ Data/rollback impact: มี local migration เพิ่ม 4 tables, constrain
 
 ## P1.2 — Real auth, session hydration และ legacy AI guard
 
-สถานะ: implemented และผ่าน local auth/API checks; Google OAuth บน remote/staging ยัง **NOT RUN**
+สถานะ: implemented และผ่าน local auth/API checks; Google OAuth บน remote staging **PASS** ผ่าน local cloud-mode app
 
 - เพิ่ม Supabase browser client แบบ PKCE สำหรับ Google OAuth; cloud mode ไม่ fallback ไป mock login
 - เพิ่ม lifecycle `loading → anonymous → bootstrap → authenticated/error`; ทุก session เรียก `POST /api/v1/session/bootstrap` ก่อน mount editor
@@ -93,7 +93,7 @@ Data/rollback impact: มี local migration เพิ่ม 4 tables, constrain
 - real local auth integration ผ่าน: สร้าง auth user, sign-in รับ token, verify/bootstrap ซ้ำได้ identity/workspace เดิม, forged token เป็น 401 และ cleanup สำเร็จ
 - cloud-mode HTTP smoke ผ่าน: root 200, missing/forged bearer 401 JSON และ legacy AI 410
 
-Known gap: Google console/provider redirects และ Vercel preview ยังต้องทดสอบบน staging จริง; cloud editor เปลี่ยนมาใช้ IndexedDB/controller ใน P1.6 แล้ว แต่ legacy localStorage migration UI ยังอยู่ใน P1.7
+Remote evidence 19 กันยายน 2026: ตั้ง Google Cloud Web client และ Supabase Google provider, เพิ่ม test user, ผ่าน PKCE callback กลับ `127.0.0.1:5173`, server token verification/personal-workspace bootstrap และ editor mount จริง โดย Google Auth app ยังอยู่สถานะ Testing ส่วน Vercel preview origin ยังต้องทดสอบหลัง deploy; cloud editor เปลี่ยนมาใช้ IndexedDB/controller ใน P1.6 แล้ว และ legacy localStorage migration UI อยู่ใน P1.7
 
 ## P1.3 — Project RPC, repository/API และ atomic save
 
@@ -195,11 +195,13 @@ Data/rollback impact: เพิ่ม local migration 1 table + 1 RPC; raw legac
 - local checks ล่าสุด: unit 42 files/429 tests, pgTAP 5 files/133 assertions, integration 6 files/9 tests, restore drill, browser E2E, dev/preview HTTP parity (รวม Cloud AI auth/BYOK guards) และ production build ผ่าน
 - เพิ่ม [backend-acceptance-phase1.md](backend-acceptance-phase1.md) แยก PASS/PARTIAL/NOT RUN พร้อม evidence และ operational boundary
 
-Staging update 19 กันยายน 2026: สร้าง/link project `gen-package-staging`, push migrations 5 รายการ, สร้าง private buckets สองชุด และตั้ง local Auth URLs แล้ว; `npm run staging:readiness` ตรวจ project health, ref/org, migration parity, dry-run up-to-date และ committed policies โดยไม่แก้ remote state
+Staging update 19 กันยายน 2026: สร้าง/link project `gen-package-staging`, push migrations 5 รายการ, สร้าง private buckets สองชุด, ตั้ง local Auth URLs และเปิด Google OAuth แล้ว; ทดสอบ PKCE callback, server bootstrap และ editor mount กับ remote Supabase สำเร็จ `npm run staging:readiness` ตรวจ project health, ref/org, migration parity, dry-run up-to-date และ committed policies โดยไม่แก้ remote state
 
-Known gaps: Google OAuth จริง, remote Storage CORS, Vercel route/native Sharp packaging, staging tenant smoke และการเปิด project จาก restored staging snapshot ยัง **NOT RUN**; local restore query + checksum ไม่ถูกอ้างว่าเทียบเท่า full Supabase/Auth disaster recovery ส่วน scheduled asset deletion/reaper ยังไม่เปิดโดยตั้งใจจนกว่าจะยืนยัน retention/grace period
+Staging app smoke 19 กันยายน 2026: สร้าง `Staging Smoke 2026-09-19`, เปลี่ยนความกว้างเป็น 96 มม., autosave/reload แล้วยังได้ค่าเดิม จากนั้นอัปโหลด PNG fixture ผ่าน signed URL/validator, autosave และ reload แล้ว private asset กลับมาเป็น image layer ได้ โดย browser console ไม่มี error
 
-Data/rollback impact: migrations 5 รายการถูก push ไป staging เท่านั้น; ไม่มี production write และไม่มีข้อมูลผู้ใช้จริง Browser เพิ่ม journal/channel records ที่ scope ตาม account/workspace และ test scripts cleanup เฉพาะ fixture ที่สร้างเอง
+Known gaps: deployed-origin Storage CORS, Vercel route/native Sharp packaging, staging legacy migration smoke และการเปิด project จาก restored staging snapshot ยัง **NOT RUN**; Google OAuth/login/bootstrap และ local-origin CRUD/asset smoke ผ่านแล้ว แต่ยังไม่ได้ตรวจ deployed origin และ Google Auth app ยังเป็น Testing; local restore query + checksum ไม่ถูกอ้างว่าเทียบเท่า full Supabase/Auth disaster recovery ส่วน scheduled asset deletion/reaper ยังไม่เปิดโดยตั้งใจจนกว่าจะยืนยัน retention/grace period
+
+Data/rollback impact: migrations 5 รายการถูก push ไป staging เท่านั้น; ไม่มี production write staging มี Google test user/personal workspace และ smoke project/PNG fixture ที่สร้างจากการทดสอบจริง Browser เพิ่ม journal/channel records ที่ scope ตาม account/workspace และ test scripts cleanup เฉพาะ fixture ที่สร้างเอง
 
 ## Cloud AI BYOK bridge
 
@@ -215,4 +217,4 @@ Known gap: ต้องทดสอบ route นี้บน Vercel preview ด�
 
 ## งานถัดไป
 
-เมื่อมี Google OAuth client และ staging deployment access ให้ทำรายการที่ยัง NOT RUN ใน acceptance matrix: Google provider/callback, CORS, Vercel parity + Sharp + Cloud AI BYOK smoke และ full staging restore/open drill ก่อน public pilot ห้าม production deploy โดยอนุมานสิทธิ์เอง
+เมื่อมี staging deployment access ให้ทำรายการที่ยัง NOT RUN ใน acceptance matrix: deployed-origin callback, CORS, Vercel parity + Sharp + Cloud AI BYOK smoke และ full staging restore/open drill ก่อน public pilot ห้าม production deploy โดยอนุมานสิทธิ์เอง

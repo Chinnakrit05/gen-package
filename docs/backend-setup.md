@@ -100,7 +100,7 @@ cloud mode เชื่อม Auth, project controller, IndexedDB drafts/mutatio
 
 จากนั้นเปิด Google provider ใน Supabase และใส่ Google client ID/secret ใน provider settings เท่านั้น ไม่ใส่ Google secret ใน `VITE_*` หรือ Git ดูขั้นตอนปัจจุบันได้ที่ [Login with Google](https://supabase.com/docs/guides/auth/social-login/auth-google)
 
-OAuth จริงต้องตรวจบน staging อีกครั้ง เพราะ local email-auth integration test พิสูจน์ token verification/bootstrap ได้ แต่ไม่พิสูจน์ Google console และ redirect allowlist ของ remote project
+staging ตรวจ Google OAuth จริงแล้วเมื่อ 19 กันยายน 2026: Google Cloud client แบบ Web ชี้ callback ไป remote Supabase, Supabase Google provider เปิดใช้งาน, แอปที่ `127.0.0.1:5173` ใช้ PKCE redirect กลับสำเร็จ และ server bootstrap session ก่อนเปิด editor ได้จริง Google Auth app ยังอยู่สถานะ Testing จึงใช้ได้เฉพาะ test users จนกว่าจะพร้อมเผยแพร่
 
 ## Backup/restore boundary
 
@@ -127,9 +127,9 @@ staging แยกถูกสร้างและ link แล้ว ขั้�
 
 1. **DONE** link เฉพาะ `gen-package-staging` (`feuwdzgixarxpsscrwxp`); ห้ามใช้ production ref
 2. **DONE** ตรวจ dry-run แล้ว push migrations 5 รายการ; `npm run staging:readiness` ยืนยัน remote up to date แบบ read-only
-3. **PARTIAL** สร้าง private buckets และตั้ง local Site URL/Redirect URLs แล้ว; Google callback/provider secret ยังรอ Google OAuth client
+3. **DONE** สร้าง private buckets, ตั้ง local Site URL/Redirect URLs, เปิด Google provider และทดสอบ callback/PKCE/server bootstrap กับ remote staging แล้ว
 4. ตั้ง server secrets ใน deployment settings และ public `VITE_*` เฉพาะค่าที่เผยแพร่ได้; ตรวจ origin allowlist/CORS ด้วย staging origin จริง
-5. รัน health, Google login, create/save/reload, PNG/JPEG upload/download และ legacy migration smoke; ตรวจ `/api/v1` 401/404/413 parity บน Vercel preview
+5. Google login/bootstrap, create/save/reload และ PNG signed upload/download ผ่านจาก local cloud-mode app แล้ว; ยังต้องรัน legacy migration smoke และตรวจ `/api/v1` 401/404/413 parity/CORS ด้วย Vercel preview origin
 6. ทดสอบ Sharp native packaging และซ้อม restore database + object manifest/checksum ก่อนเปิด public pilot
 
 ## Remote/staging status
@@ -138,8 +138,9 @@ staging แยกถูกสร้างและ link แล้ว ขั้�
 - migrations 5 รายการ: **PUSHED / local-remote parity PASS**
 - private buckets `packit-staging` และ `packit-assets`: **CREATED** — PNG/JPEG, 10 MiB; ไม่มี broad browser Storage policy โดยตั้งใจ เพราะ browser ใช้ API-issued signed URL
 - Auth Site URL/Redirect URLs สำหรับ `127.0.0.1:5173` และ `localhost:5173`: **CONFIGURED**
-- Google OAuth provider: **NOT RUN** — รอ Google client ID/secret
-- remote Storage CORS, Vercel secrets/runtime parity, Sharp และ restore/open drill: **NOT RUN** — รอ staging deployment origin/access
+- Google OAuth provider/callback: **PASS remote + local app** — Google client และ test user ตั้งแล้ว; PKCE callback กลับ `127.0.0.1:5173`, server bootstrap และ editor mount สำเร็จ (Google app ยังเป็น Testing)
+- Storage signed upload/download จาก `127.0.0.1:5173`: **PASS remote + local app** — PNG fixture ผ่าน validation, autosave และโหลด private asset กลับหลัง reload; deployed-origin CORS ยัง **NOT RUN**
+- Vercel secrets/runtime parity, Sharp และ restore/open drill: **NOT RUN** — รอ staging deployment origin/access
 
 รันตัวตรวจที่ไม่แก้ remote state ได้ด้วย:
 
@@ -163,7 +164,7 @@ npm run staging:readiness
 - `npm run test:http:local`: **PASS** — Vite dev/preview parity สำหรับ JSON 401/404/405/410/413, Cloud AI auth/BYOK guards, expired/foreign-shaped bearer rejection, anon/authenticated direct Data API RPC denial และ request ID
 - `npm run ops:cleanup:report`: **PASS** — read-only DB/Storage reconciliation; หลังล้าง fixture รายงาน assets/objects/candidates เป็นศูนย์
 - cloud-mode HTTP smoke: **PASS** — root 200, missing/forged bearer 401 JSON, legacy `/api/box-spec` 410
-- Google OAuth บน remote/staging: **NOT RUN** — รอ Google provider credentials
-- Remote/staging foundation: **PASS** — project healthy/link, migration parity, private buckets และ Auth local redirect config; deployment-dependent smoke ยัง NOT RUN
+- Google OAuth บน remote/staging: **PASS** — provider, callback, PKCE, token verification, personal-workspace bootstrap และ editor mount ผ่านจาก local cloud-mode app; ไม่บันทึก credentials/tokens ลง Git
+- Remote/staging foundation: **PASS** — project healthy/link, migration parity, private buckets, Auth URLs, Google login/bootstrap, project create/save/reload และ private asset upload/download; deployment-dependent smoke ยัง NOT RUN
 
 ดู checklist รายกรณีและ evidence ที่ [backend-acceptance-phase1.md](backend-acceptance-phase1.md)
