@@ -487,7 +487,17 @@ async function readBody(req: IncomingMessage): Promise<string> {
 function send(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status
   res.setHeader('content-type', 'application/json; charset=utf-8')
+  res.setHeader('cache-control', 'no-store')
   res.end(JSON.stringify(body))
+}
+
+export function readRequestApiKey(req: Pick<IncomingMessage, 'headers'>): string | undefined | null {
+  const raw = req.headers['x-packit-anthropic-api-key']
+  if (raw === undefined) return undefined
+  if (Array.isArray(raw) || typeof raw !== 'string') return null
+  const key = raw.trim()
+  if (key.length < 10 || key.length > 512 || /\s/.test(key)) return null
+  return key
 }
 
 export async function handleBoxSpec(
@@ -540,8 +550,13 @@ export async function handleBoxSpec(
 
   // ลำดับ backend: บังคับด้วย BOX_SPEC_BACKEND (api|cli|mock) หรืออัตโนมัติ:
   // มี ANTHROPIC_API_KEY → API, ไม่มีแต่มี claude CLI ในเครื่อง → CLI, ไม่มีทั้งคู่ → จำลอง
-  const backend = env.BOX_SPEC_BACKEND
-  const apiKey = env.ANTHROPIC_API_KEY
+  const requestApiKey = readRequestApiKey(req)
+  if (requestApiKey === null) {
+    send(res, 400, { error: 'รูปแบบ Anthropic API key ไม่ถูกต้อง' })
+    return
+  }
+  const backend = requestApiKey ? 'api' : env.BOX_SPEC_BACKEND
+  const apiKey = requestApiKey ?? env.ANTHROPIC_API_KEY
   const model = env.BOX_SPEC_MODEL
 
   try {
@@ -570,7 +585,7 @@ export async function handleBoxSpec(
     send(res, 200, mockSpec(prompt, current, image))
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
-      send(res, 502, { error: 'ANTHROPIC_API_KEY ไม่ถูกต้อง — ตรวจไฟล์ .env' })
+      send(res, 502, { error: 'Anthropic API key ไม่ถูกต้อง' })
     } else if (err instanceof Anthropic.RateLimitError) {
       send(res, 429, { error: 'เรียกถี่เกินไป รอสักครู่แล้วลองใหม่' })
     } else if (err instanceof Anthropic.APIError) {

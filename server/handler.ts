@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import Anthropic from '@anthropic-ai/sdk'
-import { askClaude, mockSpec, parseCurrent, parseImage } from './boxSpec'
+import { askClaude, mockSpec, parseCurrent, parseImage, readRequestApiKey } from './boxSpec'
 import { isLegacyAiRouteEnabled } from './http/legacyAiGuard'
 
 // ต้นทาง (source) ของ serverless function /api/box-spec บน Vercel
@@ -16,6 +16,7 @@ type Req = IncomingMessage & { body?: unknown }
 function send(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status
   res.setHeader('content-type', 'application/json; charset=utf-8')
+  res.setHeader('cache-control', 'no-store')
   res.end(JSON.stringify(body))
 }
 
@@ -79,8 +80,13 @@ export default async function handler(req: Req, res: ServerResponse): Promise<vo
   const current = parseCurrent(body.current)
   const image = parseImage(body.image)
 
-  const backend = process.env.BOX_SPEC_BACKEND
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const requestApiKey = readRequestApiKey(req)
+  if (requestApiKey === null) {
+    send(res, 400, { error: 'รูปแบบ Anthropic API key ไม่ถูกต้อง' })
+    return
+  }
+  const backend = requestApiKey ? 'api' : process.env.BOX_SPEC_BACKEND
+  const apiKey = requestApiKey ?? process.env.ANTHROPIC_API_KEY
   const model = process.env.BOX_SPEC_MODEL
 
   try {
@@ -96,7 +102,7 @@ export default async function handler(req: Req, res: ServerResponse): Promise<vo
     send(res, 200, await askClaude(apiKey, model || 'claude-opus-4-8', prompt, current, image))
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
-      send(res, 502, { error: 'ANTHROPIC_API_KEY ไม่ถูกต้อง — ตรวจค่าใน Vercel' })
+      send(res, 502, { error: 'Anthropic API key ไม่ถูกต้อง' })
     } else if (err instanceof Anthropic.RateLimitError) {
       send(res, 429, { error: 'เรียกถี่เกินไป รอสักครู่แล้วลองใหม่' })
     } else if (err instanceof Anthropic.APIError) {

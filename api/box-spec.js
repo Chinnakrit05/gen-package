@@ -14273,11 +14273,20 @@ var JSON_INSTRUCTION = `
 ## \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E04\u0E33\u0E15\u0E2D\u0E1A (\u0E2A\u0E33\u0E04\u0E31\u0E0D\u0E21\u0E32\u0E01)
 \u0E15\u0E2D\u0E1A\u0E40\u0E1B\u0E47\u0E19 JSON object \u0E40\u0E14\u0E35\u0E22\u0E27\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 \u0E2B\u0E49\u0E32\u0E21\u0E21\u0E35\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2D\u0E37\u0E48\u0E19\u0E2B\u0E23\u0E37\u0E2D markdown fence \u0E19\u0E33\u0E2B\u0E19\u0E49\u0E32/\u0E15\u0E32\u0E21\u0E2B\u0E25\u0E31\u0E07:
 {"template":"<${TEMPLATE_IDS.join("|")}>","materialId":"<id>","W":<number>,"D":<number>,"H":<number>,"handle":<true|false>,"assumptions":["..."],"layoutNote":"...","reasoning":"..."}`;
+function readRequestApiKey(req) {
+  const raw = req.headers["x-packit-anthropic-api-key"];
+  if (raw === void 0) return void 0;
+  if (Array.isArray(raw) || typeof raw !== "string") return null;
+  const key = raw.trim();
+  if (key.length < 10 || key.length > 512 || /\s/.test(key)) return null;
+  return key;
+}
 
 // server/handler.ts
 function send(res, status, body) {
   res.statusCode = status;
   res.setHeader("content-type", "application/json; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
   res.end(JSON.stringify(body));
 }
 async function readJsonBody(req) {
@@ -14334,8 +14343,13 @@ async function handler(req, res) {
   const prompt = body.prompt.trim();
   const current = parseCurrent(body.current);
   const image = parseImage(body.image);
-  const backend = process.env.BOX_SPEC_BACKEND;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const requestApiKey = readRequestApiKey(req);
+  if (requestApiKey === null) {
+    send(res, 400, { error: "\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A Anthropic API key \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07" });
+    return;
+  }
+  const backend = requestApiKey ? "api" : process.env.BOX_SPEC_BACKEND;
+  const apiKey = requestApiKey ?? process.env.ANTHROPIC_API_KEY;
   const model = process.env.BOX_SPEC_MODEL;
   try {
     if (backend === "mock" || !apiKey && backend !== "api") {
@@ -14349,7 +14363,7 @@ async function handler(req, res) {
     send(res, 200, await askClaude(apiKey, model || "claude-opus-4-8", prompt, current, image));
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
-      send(res, 502, { error: "ANTHROPIC_API_KEY \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07 \u2014 \u0E15\u0E23\u0E27\u0E08\u0E04\u0E48\u0E32\u0E43\u0E19 Vercel" });
+      send(res, 502, { error: "Anthropic API key \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07" });
     } else if (err instanceof Anthropic.RateLimitError) {
       send(res, 429, { error: "\u0E40\u0E23\u0E35\u0E22\u0E01\u0E16\u0E35\u0E48\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48" });
     } else if (err instanceof Anthropic.APIError) {

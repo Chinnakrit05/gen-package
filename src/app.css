@@ -842,6 +842,8 @@ main {
 .promptbar-dock {
   position: relative;
   display: inline-flex;
+  align-items: center;
+  gap: 8px;
   z-index: 45;
 }
 /* ปุ่มทริกเกอร์บน header */
@@ -852,6 +854,16 @@ main {
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
+}
+.pb-fab:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+.pb-disabled-note {
+  max-width: 220px;
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.25;
 }
 /* แผงช่องพิมพ์ AI = dropdown มุมขวาใต้ header, portal ไป body + z สูงสุด (ลอยเหนือทุกอย่าง) */
 .promptbar {
@@ -878,6 +890,27 @@ main {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-2);
+}
+.pb-keyrow {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  align-items: center;
+  gap: 6px 8px;
+}
+.pb-keyrow label {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.pb-keyrow input {
+  min-width: 0;
+}
+.pb-keyrow .hint {
+  grid-column: 2 / -1;
+}
+.pb-keyclear {
+  width: auto;
+  white-space: nowrap;
 }
 .pb-min {
   width: 28px;

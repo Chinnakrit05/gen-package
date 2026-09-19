@@ -2121,6 +2121,7 @@ export default function App({
           hasDesign={history.length > 0}
           onApply={applySpec}
           onLoadingChange={setAiBusy}
+          disabledReason={cloud ? 'AI บน Cloud จะเปิดหลังระบบโควตาและความปลอดภัยพร้อม' : undefined}
         />
         <button
           className="theme-btn"
