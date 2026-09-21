@@ -86,7 +86,7 @@ describe('API router', () => {
           return { items: [], nextCursor: null }
         },
       }))
-      const url = `${runtimePath}?apiPath=projects&workspaceId=${workspaceId}&limit=10`
+      const url = `${runtimePath}?apiPath=projects&path=projects&workspaceId=${workspaceId}&limit=10`
       const target = response()
       await handler(request('GET', normalizeVercelRequestUrl(url), 'Bearer token'), target.res)
       expect(target.res.statusCode).toBe(200)

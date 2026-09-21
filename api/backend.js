@@ -57446,12 +57446,14 @@ function normalizeVercelRequestUrl(rawUrl) {
   const url2 = new URL(rawUrl ?? "/", "http://packit.local");
   if (url2.pathname.startsWith("/api/v1/")) {
     url2.searchParams.delete("apiPath");
+    url2.searchParams.delete("path");
     return `${url2.pathname}${url2.search}`;
   }
   if (url2.pathname !== "/api/backend") return `${url2.pathname}${url2.search}`;
   const apiPath = url2.searchParams.get("apiPath");
   if (!apiPath) return `${url2.pathname}${url2.search}`;
   url2.searchParams.delete("apiPath");
+  url2.searchParams.delete("path");
   const query = url2.searchParams.toString();
   return `/api/v1/${apiPath.replace(/^\/+/, "")}${query ? `?${query}` : ""}`;
 }
