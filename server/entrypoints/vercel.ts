@@ -6,6 +6,12 @@ const router = createApiRouter(loadServerConfig())
 
 export function normalizeVercelRequestUrl(rawUrl: string | undefined): string {
   const url = new URL(rawUrl ?? '/', 'http://packit.local')
+  // Vercel can retain the source pathname while adding destination query params.
+  // apiPath is routing metadata, not a caller filter; keep strict API validation.
+  if (url.pathname.startsWith('/api/v1/')) {
+    url.searchParams.delete('apiPath')
+    return `${url.pathname}${url.search}`
+  }
   if (url.pathname !== '/api/backend') return `${url.pathname}${url.search}`
 
   const apiPath = url.searchParams.get('apiPath')

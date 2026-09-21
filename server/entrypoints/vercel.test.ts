@@ -11,4 +11,24 @@ describe('Vercel API rewrite adapter', () => {
   it('preserves a source path when the runtime exposes it directly', () => {
     expect(normalizeVercelRequestUrl('/api/v1/health?probe=1')).toBe('/api/v1/health?probe=1')
   })
+
+  it('strips the internal rewrite parameter when Vercel preserves the source path', () => {
+    expect(normalizeVercelRequestUrl('/api/v1/projects?workspaceId=workspace-1&apiPath=projects&limit=10'))
+      .toBe('/api/v1/projects?workspaceId=workspace-1&limit=10')
+  })
+
+  it('does not let rewrite metadata replace an already resolved API path', () => {
+    expect(normalizeVercelRequestUrl('/api/v1/projects?apiPath=health&workspaceId=workspace-1'))
+      .toBe('/api/v1/projects?workspaceId=workspace-1')
+  })
+
+  it('preserves cursor values and unknown or duplicate caller parameters for router validation', () => {
+    expect(normalizeVercelRequestUrl('/api/v1/projects?apiPath=projects&cursor=a%2Bb%2Fc%3D&limit=10&limit=20&unexpected=1'))
+      .toBe('/api/v1/projects?cursor=a%2Bb%2Fc%3D&limit=10&limit=20&unexpected=1')
+  })
+
+  it('does not consume rewrite metadata outside API routes', () => {
+    expect(normalizeVercelRequestUrl('/elsewhere?apiPath=projects')).toBe('/elsewhere?apiPath=projects')
+    expect(normalizeVercelRequestUrl('/api/backend')).toBe('/api/backend')
+  })
 })

@@ -5,6 +5,7 @@ import type { AssetService } from '../modules/assets/assetService'
 import { AiProviderError, type AiService } from '../modules/ai/aiService'
 import type { ProjectRepository } from '../modules/projects/projectRepository'
 import { ProjectService } from '../modules/projects/projectService'
+import { normalizeVercelRequestUrl } from '../entrypoints/vercel'
 import { createApiRouter, type HttpRequest, type HttpResponse } from './router'
 
 function request(method: string, url: string, authorization?: string): HttpRequest {
@@ -75,6 +76,33 @@ function repositoryStub(overrides: Partial<ProjectRepository> = {}): ProjectRepo
 }
 
 describe('API router', () => {
+  it.each(['/api/backend', '/api/v1/projects'])(
+    'lists projects through the Vercel adapter at %s without relaxing query validation',
+    async (runtimePath) => {
+      const listed: unknown[] = []
+      const handler = projectRouter(repositoryStub({
+        list: async (_actor, query) => {
+          listed.push(query)
+          return { items: [], nextCursor: null }
+        },
+      }))
+      const url = `${runtimePath}?apiPath=projects&workspaceId=${workspaceId}&limit=10`
+      const target = response()
+      await handler(request('GET', normalizeVercelRequestUrl(url), 'Bearer token'), target.res)
+      expect(target.res.statusCode).toBe(200)
+      expect(target.readBody()).toMatchObject({ data: { items: [], nextCursor: null } })
+      expect(listed).toEqual([{ workspaceId, limit: 10, cursor: null }])
+
+      for (const extra of ['&unexpected=1', '&limit=20']) {
+        const rejected = response()
+        await handler(request('GET', normalizeVercelRequestUrl(`${url}${extra}`), 'Bearer token'), rejected.res)
+        expect(rejected.res.statusCode).toBe(422)
+        expect(rejected.readBody()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } })
+      }
+      expect(listed).toHaveLength(1)
+    },
+  )
+
   it('returns a minimal health response with a server request ID', async () => {
     const target = response()
     await router(request('GET', '/api/v1/health?probe=readiness'), target.res)
