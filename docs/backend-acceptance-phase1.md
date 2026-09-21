@@ -1,6 +1,6 @@
 # Phase 1 backend acceptance evidence
 
-อัปเดตล่าสุด: 19 กันยายน 2026
+อัปเดตล่าสุด: 22 กันยายน 2026
 
 สถานะรวม: **ผ่าน local acceptance และ staging foundation; ยังไม่อนุมัติ public pilot**
 
@@ -10,7 +10,7 @@
 
 | คำสั่ง | ผล |
 | --- | --- |
-| `npm test` | PASS — 42 files, 430 tests |
+| `npm test` | PASS — 42 files, 436 tests (22 กันยายน; รวม Vercel rewrite regression) |
 | `npm run db:test` | PASS — 5 pgTAP files, 133 assertions |
 | `npm run db:test:integration` | PASS — 6 files, 9 tests บน local PostgreSQL/Auth/Storage จริง |
 | `npm run db:test:restore` | PASS — isolated `app_private` restore + linked asset metadata/project reference/Storage SHA-256 |
@@ -68,21 +68,21 @@
 
 | Requirement | สถานะ | Evidence / ขอบเขต |
 | --- | --- | --- |
-| geometry/export regression suite | PASS | รวมอยู่ใน unit 430 tests |
+| geometry/export regression suite | PASS | รวมอยู่ใน unit 436 tests |
 | build/typecheck/API bundles | PASS | `npm run build` |
-| frontend bundle ไม่มี server secret/private module | PASS local | bundle scan จาก foundation; build ล่าสุดผ่าน |
+| frontend bundle ไม่มี server secret/private module | PASS local; remote key scan PASS | local foundation scan; fetched Vercel frontend entry/chunks มี publishable key/expected Supabase URL และไม่พบ `sb_secret_` pattern |
 | authenticated Cloud AI BYOK route | PASS unit/build | bearer ถูกตรวจ ก่อนส่ง request key ไป provider; key อยู่ใน header/session memory ไม่อยู่ body/response/storage; deployed smoke ยัง NOT RUN |
 | local dev API 401/404/405 และ legacy 410 | PASS local | HTTP smoke |
-| preview/deployed route parity รวม 413 | PARTIAL | Vite dev และ `vite preview` ผ่าน JSON 401/404/405/410/413 + request ID; Vercel preview ยัง NOT RUN |
+| preview/deployed route parity รวม 413 | PARTIAL | Vite dev/preview ผ่าน JSON 401/404/405/410/413; Vercel staging ผ่าน root/health 200, missing/invalid bearer 401, 404/405/410 + request ID/Allow; authenticated 413 ยัง NOT RUN |
 | empty local DB migrate + ACL | PASS local | `db:reset --local` และ pgTAP 133 assertions |
 | DB + sample object restore/checksum | PASS local | isolated DB มี project document → `project_assets` → ready asset ID/key/hash ตรงกับ Storage object ที่ลบ/คืนและตรวจ SHA-256 |
 | เปิดงานจาก restored deployment snapshot | NOT RUN | ต้อง restore staging snapshot แล้วชี้ staging app ไปเปิด project/asset จริงก่อน public pilot |
-| Google OAuth redirects/provider | PASS remote + local app | Google Web client + Supabase provider ตั้งแล้ว; PKCE callback กลับ local cloud-mode app, server bootstrap และ editor mount สำเร็จ Google app ยังเป็น Testing และ deployed origin ยังไม่ตรวจ |
+| Google OAuth redirects/provider | PASS remote + local/deployed app | local PKCE/bootstrap/editor ผ่าน; หลังแพตช์ `26381fa` เปิด editor/งานเดิม W80 และ smoke W96 บน staging origin เดิมได้; ผู้ใช้ login ซ้ำที่ `packit-design.vercel.app` แล้วตรวจ editor/งานเดิม 80×50×120 พร้อมสถานะบันทึกแล้ว; Google app ยังเป็น Testing |
 | remote Storage private tickets/CORS | PARTIAL | local cloud-mode app ใช้ remote signed upload/download ผ่าน `127.0.0.1:5173`; PNG ผ่าน validator/autosave และโหลด private asset กลับหลัง reload; deployed origin ยังไม่ตรวจ |
 | Vercel Sharp native packaging | NOT RUN | local native Sharp ผ่าน; deployment runtime ยังไม่ตรวจ |
 | staging project/link/migration parity | PASS remote | `gen-package-staging` ACTIVE_HEALTHY; linked ref/org ตรง, migrations 5 รายการตรง และ `db push --dry-run` up to date |
 | staging private bucket configuration | PASS remote/config | `packit-staging`/`packit-assets` private, PNG/JPEG, 10 MiB; browser policy count 0 โดยตั้งใจ ใช้ signed URL จาก API |
-| staging Auth local URL configuration | PASS remote | Site URL `127.0.0.1:5173`; allowlist มีทั้ง `127.0.0.1` และ `localhost` |
+| staging Auth URL configuration | PASS remote | Site URL `https://packit-design.vercel.app`; allowlist มีโดเมนใหม่นี้, `https://gen-package-staging.vercel.app` และ local `127.0.0.1:5173`/`localhost:5173` |
 | cleanup inventory ก่อน retention | PASS local | dry-run รายงาน expired tickets/leases/reservations, unreferenced rows, orphan/missing objects โดยไม่ mutate |
 | scheduled asset deletion/reaper | NOT ENABLED | ต้องยืนยัน retention/grace period และ operator approval ก่อน; ไม่อนุมานนโยบายลบข้อมูล |
 
@@ -104,8 +104,8 @@
 ## Gate ก่อน staging/public pilot
 
 - ~~สร้าง staging resource แยก, push migrations แบบตรวจ dry-run~~ — DONE; ยังคงห้าม `db reset --linked`
-- ~~ทดสอบ Google OAuth callback + app redirect จริงผ่าน local cloud-mode app~~ — DONE; ยังต้องเพิ่มและตรวจ deployed origin เมื่อมี staging deployment
-- ทดสอบ Vercel preview `/api/v1` parity, origin allowlist, body limit และ Sharp native runtime
+- ~~ทดสอบ Google OAuth callback + app redirect จริงผ่าน local และ Vercel staging app~~ — DONE ทั้ง staging origin เดิมและชื่อใหม่ `packit-design.vercel.app`; โดเมนเก่าส่งต่อ 307
+- ทดสอบ Vercel `/api/v1` parity ต่อ: unauthenticated checks ผ่านแล้ว; ยังเหลือ authenticated body limit, Sharp processing และ deployed app flows ทั้งนี้ `APP_ALLOWED_ORIGINS` ถูก validate ใน config แต่ shared router ยังไม่ใช้เพื่อ enforce CORS allowlist
 - ~~ทดสอบ Storage upload/download/CORS จาก local cloud-mode origin~~ — DONE; ยังต้องทดสอบซ้ำด้วย Vercel preview/staging origin
 - ~~ทดสอบ legacy migration กับ remote staging รวม decline/reopen consent และ reload งานที่ย้าย~~ — DONE; source localStorage/raw backup คงอยู่
 - restore staging database snapshot และ Storage manifest/objects แล้วเปิด project ที่มีรูปผ่าน app จริง

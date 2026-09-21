@@ -1,6 +1,6 @@
 # Backend implementation progress
 
-อัปเดตล่าสุด: 18 กันยายน 2026
+อัปเดตล่าสุด: 22 กันยายน 2026
 
 เอกสารนี้บันทึกผลที่รันจริง แยกจาก blueprint ใน `backend-implementation-spec.md`
 
@@ -217,4 +217,17 @@ Known gap: ต้องทดสอบ route นี้บน Vercel preview ด�
 
 ## งานถัดไป
 
-เมื่อมี staging deployment access ให้ทำรายการที่ยัง NOT RUN ใน acceptance matrix: deployed-origin callback, CORS, Vercel parity + Sharp + Cloud AI BYOK smoke และ full staging restore/open drill ก่อน public pilot ห้าม production deploy โดยอนุมานสิทธิ์เอง
+ทำรายการที่ยัง NOT RUN ใน acceptance matrix: deployed-origin app flows/CORS, authenticated Vercel parity + Sharp + Cloud AI BYOK smoke และ full staging restore/open drill ก่อน public pilot ห้าม production deploy โดยอนุมานสิทธิ์เอง
+
+## Vercel staging — 21–22 กันยายน 2026
+
+- สร้าง Vercel project `gen-package-staging` แยก, connect repo และใช้ Production slot ติดตาม `feat/supabase-backend` โดย `APP_ENV=staging` และ credentials ของ Supabase staging เท่านั้น
+- Deployment แรก `d592815` Ready ที่ `https://gen-package-staging.vercel.app`; build command `npm run build`, Vite, Node 24.x, output `dist`; server key เป็น Vercel Secret และ frontend ใช้ publishable key
+- Supabase Site URL เปลี่ยนเป็น staging URL และเพิ่มใน redirect allowlist โดยคง local URLs ทั้งสองไว้
+- HTTP smoke ผ่าน root/health 200, missing/invalid bearer 401, unknown API 404, method 405/Allow, legacy AI 410 และ request ID; deployed frontend bundle ไม่พบ `sb_secret_` pattern
+- User login Google บน staging แล้วพบ “query parameter ไม่ถูกต้อง” ตอน list projects: runtime log แสดงทั้ง `apiPath=projects` และ `path=projects`; แพตช์แรก `c78d463` รองรับ source-path แต่ยังไม่ตัด `path` จึงแก้ครบใน `26381fa` โดยไม่ยอมให้ metadata retarget route หรือทิ้ง caller query อื่น; regression 3 กรณี fail ก่อนแก้ และ suite 42 files/436 tests ผ่านหลังแก้ พร้อม API build/typecheck
+- หลัง `26381fa` Ready ตรวจ browser เปิด editor/งานเดิม 80×50×120 และ `Staging Smoke 2026-09-19` ที่ W96 ได้แล้ว ไม่มี remote schema change หรือ fixture ใหม่จากการแก้ครั้งนี้
+- `packit.vercel.app` ถูก Vercel ปฏิเสธเพราะ assigned ให้โปรเจกต์อื่น ผู้ใช้เลือก `packit-design.vercel.app` แทนและเพิ่มสำเร็จ; Site URL/redirect allowlist และ `APP_ALLOWED_ORIGINS` อัปเดตแล้ว โดยคง local redirect URLs และโดเมน staging เดิม
+- redeploy `26381fa` พร้อม domain config ล่าสุด Ready (`GRLAfTcAyiK9K2985qkBMqgUdkKQ`); HTTP smoke บน `packit-design.vercel.app` ผ่าน 200/401/404/405/410 ผู้ใช้ยืนยัน Google login และตรวจ editor/งานเดิม 80×50×120 พร้อมสถานะบันทึกแล้วบน origin ใหม่
+- โดเมน staging เดิมและ `project-glry1.vercel.app` ส่งต่อ 307 ไปชื่อใหม่แล้ว ไม่มี alias หรือข้อมูล cloud ถูกลบ
+- ยังไม่อ้าง PASS สำหรับ deployed Storage CORS/Sharp processing, authenticated 413/AI BYOK หรือ staging restore/open drill; ไม่มีการเปิด reaper/retention

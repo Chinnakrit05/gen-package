@@ -87,4 +87,4 @@ expectConfig(config, /site_url\s*=\s*"http:\/\/127\.0\.0\.1:5173"/, 'local Auth 
 expectConfig(config, /additional_redirect_urls\s*=\s*\["http:\/\/127\.0\.0\.1:5173",\s*"http:\/\/localhost:5173"\]/, 'local Auth redirect allowlist is tracked')
 
 console.log('\nREADY  Linked staging project, migrations, and committed policies are consistent.')
-console.log('MANUAL Deployed-origin OAuth/Vercel/Sharp parity, deployed-origin Storage CORS, and restore/open drill remain gated.')
+console.log('MANUAL This check does not verify deployed OAuth/API/Storage/Sharp or restore/open; see docs/backend-acceptance-phase1.md for current evidence.')

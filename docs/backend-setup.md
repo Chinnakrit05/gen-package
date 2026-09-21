@@ -1,6 +1,6 @@
 # PackIt backend local setup
 
-อัปเดตล่าสุด: 19 กันยายน 2026
+อัปเดตล่าสุด: 22 กันยายน 2026
 
 คู่มือนี้ครอบคลุม local Supabase, auth/session, project API ของ Phase 1 และสถานะ staging ที่ link แล้ว
 
@@ -128,8 +128,8 @@ staging แยกถูกสร้างและ link แล้ว ขั้�
 1. **DONE** link เฉพาะ `gen-package-staging` (`feuwdzgixarxpsscrwxp`); ห้ามใช้ production ref
 2. **DONE** ตรวจ dry-run แล้ว push migrations 5 รายการ; `npm run staging:readiness` ยืนยัน remote up to date แบบ read-only
 3. **DONE** สร้าง private buckets, ตั้ง local Site URL/Redirect URLs, เปิด Google provider และทดสอบ callback/PKCE/server bootstrap กับ remote staging แล้ว
-4. ตั้ง server secrets ใน deployment settings และ public `VITE_*` เฉพาะค่าที่เผยแพร่ได้; ตรวจ origin allowlist/CORS ด้วย staging origin จริง
-5. Google login/bootstrap, create/save/reload, PNG signed upload/download และ legacy migration 1 งานผ่านจาก local cloud-mode app แล้ว; ยังต้องตรวจ `/api/v1` 401/404/413 parity/CORS ด้วย Vercel preview origin
+4. **DONE** ตั้ง Vercel staging config: frontend ใช้ publishable key; `SUPABASE_SECRET_KEY` เป็น Secret ฝั่ง server; ยังต้องตรวจ Storage CORS ด้วย staging origin จริง
+5. Google login/bootstrap และเปิดงานผ่านบน Vercel แล้ว; create/save/reload, PNG signed upload/download และ legacy migration ผ่านจาก local cloud-mode app; ยังเหลือ deployed write/upload flows, authenticated 413 และ Storage CORS
 6. ทดสอบ Sharp native packaging และซ้อม restore database + object manifest/checksum ก่อนเปิด public pilot
 
 ## Remote/staging status
@@ -137,11 +137,24 @@ staging แยกถูกสร้างและ link แล้ว ขั้�
 - Supabase project `gen-package-staging` ใน Singapore: **ACTIVE_HEALTHY และ link แล้ว**
 - migrations 5 รายการ: **PUSHED / local-remote parity PASS**
 - private buckets `packit-staging` และ `packit-assets`: **CREATED** — PNG/JPEG, 10 MiB; ไม่มี broad browser Storage policy โดยตั้งใจ เพราะ browser ใช้ API-issued signed URL
-- Auth Site URL/Redirect URLs สำหรับ `127.0.0.1:5173` และ `localhost:5173`: **CONFIGURED**
+- Auth Site URL: `https://packit-design.vercel.app`; Redirect URLs มีโดเมนใหม่นี้, `https://gen-package-staging.vercel.app` และ local `127.0.0.1:5173`/`localhost:5173`: **CONFIGURED**
 - Google OAuth provider/callback: **PASS remote + local app** — Google client และ test user ตั้งแล้ว; PKCE callback กลับ `127.0.0.1:5173`, server bootstrap และ editor mount สำเร็จ (Google app ยังเป็น Testing)
 - Storage signed upload/download จาก `127.0.0.1:5173`: **PASS remote + local app** — PNG fixture ผ่าน validation, autosave และโหลด private asset กลับหลัง reload; deployed-origin CORS ยัง **NOT RUN**
 - Legacy migration จาก `127.0.0.1:5173`: **PASS remote + local app** — decline/reopen consent, ย้าย 1 งาน, เปิด/reload แล้วได้ขนาดเดิม 80×50×120 มม.; source localStorage/raw backup ยังอยู่และไม่มี browser console error
-- Vercel secrets/runtime parity, Sharp และ restore/open drill: **NOT RUN** — รอ staging deployment origin/access
+- Vercel project `gen-package-staging`: **DEPLOYED** ที่ `https://packit-design.vercel.app` โดยใช้ Production slot ของโปรเจกต์ staging แยก, `APP_ENV=staging`, remote Supabase staging และ branch `feat/supabase-backend`; ไม่ใช่ production ของแอปเดิม
+- Vercel runtime smoke: **PARTIAL** — root/health 200, missing/invalid bearer 401, unknown API 404, unsupported method 405 พร้อม `Allow`, legacy AI 410 และ request ID ผ่าน; frontend bundle มี publishable key แต่ไม่พบ `sb_secret_` pattern
+- Deployed Google callback/session และ editor: **PASS ทั้งโดเมน staging เดิมและ `packit-design.vercel.app`** หลังแพตช์ `26381fa` ลบ Vercel rewrite metadata ทั้ง `apiPath`/`path` โดยคง strict query validation; เปิดงานเดิม 80×50×120 และ smoke W96 บนโดเมนเดิมได้ จากนั้นผู้ใช้ login ซ้ำบนโดเมนใหม่และตรวจ editor/งานเดิม 80×50×120 พร้อมสถานะบันทึกแล้ว
+- โดเมน `gen-package-staging.vercel.app` และ `project-glry1.vercel.app` ส่งต่อ 307 ไป `packit-design.vercel.app`; ไม่ลบ alias เดิมหรือข้อมูล cloud โดย browser session/drafts แยกตาม origin จึงต้อง login ใหม่เมื่อย้ายโดเมน
+- `APP_ALLOWED_ORIGINS` ตั้งชื่อใหม่และโดเมน staging เดิม แล้ว redeploy `26381fa` ด้วย settings ล่าสุด (`GRLAfTcAyiK9K2985qkBMqgUdkKQ`, Ready); ค่านี้ถูก validate แต่ shared router ยังไม่ได้ enforce CORS allowlist
+- Deployed-origin Storage upload/download, Sharp processing, authenticated body limit/AI guards และ restore/open drill: **NOT RUN**
+
+### เปลี่ยน staging ไปติดตาม main ในอนาคต
+
+1. merge งาน backend และแพตช์ที่ทดสอบแล้วเข้า `main` ก่อน
+2. ใน Vercel project นี้ เปิด Settings → Environments → Production → Branch Tracking แล้วเปลี่ยน `feat/supabase-backend` เป็น `main`
+3. deploy commit จาก `main` ใหม่ และทดสอบ login, เปิด/บันทึกงาน และรูปภาพซ้ำ
+
+การเปลี่ยน branch ไม่จำเป็นต้องเปลี่ยนโดเมนหรือสร้าง Supabase ใหม่; คง `APP_ENV=staging` และ credentials staging ไว้ อย่าสลับเป็น production data โดยปริยาย
 
 รันตัวตรวจที่ไม่แก้ remote state ได้ด้วย:
 
@@ -158,7 +171,7 @@ npm run staging:readiness
 - `supabase db reset --local`: **PASS** — foundation, identity/workspace, project และ asset migrations พร้อม seed
 - `supabase test db`: **PASS** — 5 files, 133 assertions
 - `npm run db:test:integration`: **PASS** — 6 files, 9 tests; รวม Storage byte lifecycle, private access, quota/concurrency, project asset links และ legacy import dedupe
-- `npm test`: **PASS ล่าสุด** — 42 files, 430 unit tests
+- `npm test`: **PASS ล่าสุด** — 42 files, 436 unit tests
 - `npm run build`: **PASS หลัง P1.8** — API bundles, `tsc --noEmit` และ Vite production build
 - `npm run db:test:restore`: **PASS** — restore `app_private` ไป isolated database; project document, `project_assets`, asset metadata และ Storage object ที่คืนมามี ID/key/checksum ตรงกัน
 - `npm run test:e2e:local`: **PASS** — auth/account isolation, migration consent/raw backup/dedupe, trusted preset + portable roundtrip, clean/dirty cross-tab, offline create/delete/import/upload restrictions + edit/reconnect และ create/delete replay หลัง response หาย
@@ -166,6 +179,6 @@ npm run staging:readiness
 - `npm run ops:cleanup:report`: **PASS** — read-only DB/Storage reconciliation; หลังล้าง fixture รายงาน assets/objects/candidates เป็นศูนย์
 - cloud-mode HTTP smoke: **PASS** — root 200, missing/forged bearer 401 JSON, legacy `/api/box-spec` 410
 - Google OAuth บน remote/staging: **PASS** — provider, callback, PKCE, token verification, personal-workspace bootstrap และ editor mount ผ่านจาก local cloud-mode app; ไม่บันทึก credentials/tokens ลง Git
-- Remote/staging foundation: **PASS** — project healthy/link, migration parity, private buckets, Auth URLs, Google login/bootstrap, project create/save/reload, private asset upload/download และ legacy migration; deployment-dependent smoke ยัง NOT RUN
+- Remote/staging foundation: **PASS** — project healthy/link, migration parity, private buckets, Auth URLs, Google login/bootstrap, local-origin project create/save/reload, private asset upload/download และ legacy migration; deployment-dependent smoke **PARTIAL** ตามขอบเขตด้านบน
 
 ดู checklist รายกรณีและ evidence ที่ [backend-acceptance-phase1.md](backend-acceptance-phase1.md)
