@@ -231,3 +231,16 @@ Known gap: ต้องทดสอบ route นี้บน Vercel preview ด�
 - redeploy `26381fa` พร้อม domain config ล่าสุด Ready (`GRLAfTcAyiK9K2985qkBMqgUdkKQ`); HTTP smoke บน `packit-design.vercel.app` ผ่าน 200/401/404/405/410 ผู้ใช้ยืนยัน Google login และตรวจ editor/งานเดิม 80×50×120 พร้อมสถานะบันทึกแล้วบน origin ใหม่
 - โดเมน staging เดิมและ `project-glry1.vercel.app` ส่งต่อ 307 ไปชื่อใหม่แล้ว ไม่มี alias หรือข้อมูล cloud ถูกลบ
 - ยังไม่อ้าง PASS สำหรับ deployed Storage CORS/Sharp processing, authenticated 413/AI BYOK หรือ staging restore/open drill; ไม่มีการเปิด reaper/retention
+
+## Tab-focus session stability — 22 กันยายน 2026
+
+สถานะ: **แก้ใน local worktree; ยังไม่ deploy**
+
+- พบว่า Supabase ส่ง `SIGNED_IN` ซ้ำตอนกลับมาแท็บเดิม แต่ `CloudRoot` เดิม bootstrap ใหม่ทุกครั้งที่ session object เปลี่ยน ทำให้ editor unmount และโหลด project/draft ใหม่
+- แยก bootstrap lifecycle ตาม account: repeated session confirmation และ token refresh ของบัญชีที่พร้อมแล้วไม่เปลี่ยน ready state; token ใหม่ยังส่งต่อให้ API ตามปกติ และ server authorization ไม่ถูกลดทอน
+- session ว่าง/ออกจากระบบและสลับ account ต้อง bootstrap ใหม่; abort/epoch ป้องกัน response เก่าหรือ refresh ที่เสร็จหลัง logout คืนข้อมูลบัญชีเก่า พร้อม retry 401 ได้หนึ่งครั้ง
+- ป้องกัน initial `getSession` ที่เสร็จช้าทับ Auth event ใหม่กว่า และไม่ render workspace ของคนเดิมระหว่าง account switch
+- unit regression 15 กรณีผ่าน; suite 43 files/451 tests และ production build ผ่าน ยังไม่ได้ตรวจ browser tab-focus บน deployed patch
+- ผู้ใช้เลือก loading animation แบบ 01 (Fold Studio); นำกล่องพับ CSS-only โทน teal มาใช้ร่วมกันที่ lazy cloud startup, account bootstrap และ project/draft loading แล้ว โดยไม่เพิ่มเวลารอหรือแสดงเปอร์เซ็นต์สมมติ; error states คงข้อความ/การออกจากระบบตามเดิม
+- รองรับ light/dark theme, สถานะอ่านด้วย screen reader และ `prefers-reduced-motion` (กล่องอยู่นิ่ง); ตรวจ component จริงผ่าน local browser ทั้ง desktop light และ mobile dark 360px ไม่มี horizontal overflow หรือ console error
+- หลังเพิ่ม loader render tests 3 กรณี: suite **44 files/454 tests** และ production build ผ่าน (คำเตือนขนาด 3D chunk เดิมยังอยู่); loading UI และ tab-focus fix ยังไม่ได้ push/deploy
