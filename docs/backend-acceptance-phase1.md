@@ -10,7 +10,8 @@
 
 | คำสั่ง | ผล |
 | --- | --- |
-| `npm test` | PASS — 44 files, 454 tests (22 กันยายน; รวม Vercel rewrite, tab-focus bootstrap และ loading UI regression) |
+| `npm test` | PASS — 44 files, 455 tests (22 กันยายน; รวม Vercel rewrite, tab-focus bootstrap และ loading UI/logo regression) |
+| Loading animation continuity | PASS local browser — 12 checks (StrictMode, same DOM/CSS animation across stages, ready/error/login cleanup); deployed NOT RUN |
 | `npm run db:test` | PASS — 5 pgTAP files, 133 assertions |
 | `npm run db:test:integration` | PASS — 6 files, 9 tests บน local PostgreSQL/Auth/Storage จริง |
 | `npm run db:test:restore` | PASS — isolated `app_private` restore + linked asset metadata/project reference/Storage SHA-256 |
@@ -69,7 +70,7 @@
 
 | Requirement | สถานะ | Evidence / ขอบเขต |
 | --- | --- | --- |
-| geometry/export regression suite | PASS | รวมอยู่ใน unit 454 tests |
+| geometry/export regression suite | PASS | รวมอยู่ใน unit 455 tests |
 | build/typecheck/API bundles | PASS | `npm run build` |
 | frontend bundle ไม่มี server secret/private module | PASS local; remote key scan PASS | local foundation scan; fetched Vercel frontend entry/chunks มี publishable key/expected Supabase URL และไม่พบ `sb_secret_` pattern |
 | authenticated Cloud AI BYOK route | PASS unit/build | bearer ถูกตรวจ ก่อนส่ง request key ไป provider; key อยู่ใน header/session memory ไม่อยู่ body/response/storage; deployed smoke ยัง NOT RUN |

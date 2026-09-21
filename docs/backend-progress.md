@@ -244,3 +244,14 @@ Known gap: ต้องทดสอบ route นี้บน Vercel preview ด�
 - ผู้ใช้เลือก loading animation แบบ 01 (Fold Studio); นำกล่องพับ CSS-only โทน teal มาใช้ร่วมกันที่ lazy cloud startup, account bootstrap และ project/draft loading แล้ว โดยไม่เพิ่มเวลารอหรือแสดงเปอร์เซ็นต์สมมติ; error states คงข้อความ/การออกจากระบบตามเดิม
 - รองรับ light/dark theme, สถานะอ่านด้วย screen reader และ `prefers-reduced-motion` (กล่องอยู่นิ่ง); ตรวจ component จริงผ่าน local browser ทั้ง desktop light และ mobile dark 360px ไม่มี horizontal overflow หรือ console error
 - หลังเพิ่ม loader render tests 3 กรณี: suite **44 files/454 tests** และ production build ผ่าน (คำเตือนขนาด 3D chunk เดิมยังอยู่); loading UI และ tab-focus fix ยังไม่ได้ push/deploy
+
+## Loading motion continuity — 22 กันยายน 2026
+
+สถานะ: **แก้ใน local worktree; ยังไม่ commit/push/deploy**
+
+- หลัง `e304ba2` ผู้ใช้พบว่ากล่องเริ่ม animation ใหม่เมื่อ response เปลี่ยนขั้นตอน: ตัวโหลดเดิมอยู่คนละ React subtree ของ lazy fallback, account bootstrap และ project loading จึงถูก unmount/remount แม้เป็น loading ต่อเนื่อง
+- เพิ่ม `LoadingBoundary` ครอบ cloud flow เหนือ Suspense ให้เป็นเจ้าของ animated DOM เพียงชุดเดียว; แต่ละ `LoadingStage` ลงทะเบียนเฉพาะข้อความผ่าน layout effect และ cleanup แบบตรวจเจ้าของ จึงส่งต่องานใน commit เดียวโดยไม่ถอดกล่องหรือ reset CSS animation
+- ไม่เปลี่ยน keyframes, โลโก้, reduced-motion, auth lifecycle หรือเวลารอ; ready/error/login ถอดตัวโหลดตามจริง ไม่มี timer หน่วงหรือเปอร์เซ็นต์สมมติ
+- ตรวจ local browser regression **12 กรณีผ่าน** (รวม StrictMode): lazy → account → nested project, response update, keyed account/workspace switch ยืนยันว่า DOM และ animation objects/start times เป็นตัวเดิม; ready/error/login/unmount ไม่เหลือตัวโหลดค้าง และไม่มี console error
+- รันทวนได้ด้วย `npm run dev` แล้วเปิด `/tests/browser/loading-continuity.html` และกด Run; fixture ใช้ component/CSS จริง ไม่ต้องเชื่อม backend และไม่เพิ่ม dependency (เป็น browser check แยก ไม่รวมใน `npm test`)
+- `npm test`: **44 files/455 tests PASS**; production build PASS โดยมีคำเตือนขนาด 3D chunk เดิม ยังไม่ได้ตรวจแพตช์นี้บน deployed staging

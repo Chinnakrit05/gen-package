@@ -15,7 +15,7 @@ import '@fontsource/kanit/400.css'
 import '@fontsource/kanit/700.css'
 import App from './App'
 import { Login } from './components/Login'
-import { LoadingScreen } from './components/LoadingScreen'
+import { LoadingBoundary, LoadingStage } from './components/LoadingBoundary'
 import { ClientConfigError, loadClientConfig } from './config'
 import './app.css'
 
@@ -44,9 +44,11 @@ function Root() {
   }
   if (clientConfig.value?.mode === 'cloud') {
     return (
-      <Suspense fallback={<LoadingScreen title="กำลังเปิดระบบบัญชี" message="กำลังเชื่อมต่อพื้นที่ทำงานของคุณ…" />}>
-        <CloudRoot config={clientConfig.value} />
-      </Suspense>
+      <LoadingBoundary>
+        <Suspense fallback={<LoadingStage title="กำลังเปิดระบบบัญชี" message="กำลังเชื่อมต่อพื้นที่ทำงานของคุณ…" />}>
+          <CloudRoot config={clientConfig.value} />
+        </Suspense>
+      </LoadingBoundary>
     )
   }
 

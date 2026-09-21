@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CloudProject, ProjectSummary } from '../../../shared/contracts/projects'
 import App, { type CloudProjectBridge, type ProjectStoreSnapshot } from '../../App'
-import { LoadingScreen } from '../../components/LoadingScreen'
+import { LoadingStage } from '../../components/LoadingBoundary'
 import { freshProject, type Project } from '../../core/project'
 import { requestCloudBoxSpec } from '../../services/api/ai'
 import {
@@ -447,7 +447,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
   }), [clientId, controller, createFromEditor, items, mutations, online, props.apiBaseUrl, refreshItems, saveState, scope, store, subscribeRemoteProject])
 
   if (workspace.status === 'loading') {
-    return <LoadingScreen title="กำลังเปิดงาน" message="กำลังโหลดโปรเจกต์และฉบับร่างล่าสุด…" />
+    return <LoadingStage title="กำลังเปิดงาน" message="กำลังโหลดโปรเจกต์และฉบับร่างล่าสุด…" />
   }
   if (workspace.status === 'error') {
     return <WorkspaceStatus title="เปิดงานไม่ได้" message={workspace.message} />

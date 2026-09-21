@@ -1,7 +1,7 @@
 import packitMark from '../assets/packit-mark.png'
 import './LoadingScreen.css'
 
-interface LoadingScreenProps {
+export interface LoadingScreenProps {
   title: string
   message: string
 }

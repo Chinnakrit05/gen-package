@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { Login } from './components/Login'
-import { LoadingScreen } from './components/LoadingScreen'
+import { LoadingStage } from './components/LoadingBoundary'
 import type { ClientConfig } from './config'
 import { CloudWorkspace } from './features/projects/CloudWorkspace'
 import { bootstrapSession } from './services/api/session'
@@ -82,7 +82,7 @@ export function CloudRoot({ config }: { config: ClientConfig }) {
   }
 
   if (session === undefined || (session && bootstrap.status === 'loading')) {
-    return <LoadingScreen title="กำลังตรวจสอบบัญชี" message="กำลังเตรียมพื้นที่ทำงานของคุณ…" />
+    return <LoadingStage title="กำลังตรวจสอบบัญชี" message="กำลังเตรียมพื้นที่ทำงานของคุณ…" />
   }
   if (!session) {
     return (
@@ -105,7 +105,7 @@ export function CloudRoot({ config }: { config: ClientConfig }) {
     )
   }
   if (bootstrap.status !== 'ready' || bootstrap.identityUserId !== session.user.id) {
-    return <LoadingScreen title="กำลังตรวจสอบบัญชี" message="กำลังเตรียมพื้นที่ทำงานของคุณ…" />
+    return <LoadingStage title="กำลังตรวจสอบบัญชี" message="กำลังเตรียมพื้นที่ทำงานของคุณ…" />
   }
 
   const appUserId = bootstrap.data.user.id
