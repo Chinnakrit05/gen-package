@@ -125,11 +125,14 @@
   transform: rotateX(-90deg);
   animation-name: packit-fold-lid;
 }
-.packit-loading__lid > span {
-  font-family: 'Prompt', sans-serif;
-  font-size: 27px;
-  font-weight: 500;
-  color: #154049;
+.packit-loading__lid-logo {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  /* Preserve the supplied artwork; its white background blends into the paper. */
+  mix-blend-mode: multiply;
+  pointer-events: none;
   transform: rotateZ(180deg);
 }
 

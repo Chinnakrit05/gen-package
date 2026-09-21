@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { LoadingScreen } from './LoadingScreen'
+import packitMark from '../assets/packit-mark.png'
 
 describe('LoadingScreen', () => {
   it('announces the actual loading stage once, without invented progress', () => {
@@ -22,6 +23,13 @@ describe('LoadingScreen', () => {
     expect(markup).toContain('class="packit-loading__stage" aria-hidden="true"')
     expect(markup.match(/class="packit-loading__face /g)).toHaveLength(6)
     expect(markup).not.toContain('tabindex')
+  })
+
+  it('uses the supplied logo on the lid instead of the lettermark', () => {
+    const markup = renderToStaticMarkup(createElement(LoadingScreen, { title: 'Loading', message: 'Please wait' }))
+    expect(markup).toContain(`class="packit-loading__lid-logo" src="${packitMark}" alt=""`)
+    expect(markup).toContain('width="48" height="48" draggable="false"')
+    expect(markup).not.toContain('<span>p.</span>')
   })
 
   it('escapes caller text and can render without a browser or animation timer', () => {

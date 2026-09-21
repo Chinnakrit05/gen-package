@@ -1,3 +1,4 @@
+import packitMark from '../assets/packit-mark.png'
 import './LoadingScreen.css'
 
 interface LoadingScreenProps {
@@ -18,7 +19,9 @@ export function LoadingScreen({ title, message }: LoadingScreenProps) {
               <div className="packit-loading__face packit-loading__base" />
               <div className="packit-loading__face packit-loading__front" />
               <div className="packit-loading__face packit-loading__back">
-                <div className="packit-loading__face packit-loading__lid"><span>p.</span></div>
+                <div className="packit-loading__face packit-loading__lid">
+                  <img className="packit-loading__lid-logo" src={packitMark} alt="" width="48" height="48" draggable={false} />
+                </div>
               </div>
               <div className="packit-loading__face packit-loading__left" />
               <div className="packit-loading__face packit-loading__right" />
