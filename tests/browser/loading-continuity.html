@@ -10,7 +10,17 @@
     </style>
   </head>
   <body>
-    <aside id="checks"><button id="run">Run loading continuity checks</button><ol id="results"></ol></aside>
+    <aside id="checks">
+      <button id="run">Run loading continuity checks</button>
+      <select id="preview" aria-label="Preview loading state">
+        <option value="ready">Choose preview</option>
+        <option value="session">Login skeleton</option>
+        <option value="login">Login ready</option>
+        <option value="account">Folding box</option>
+      </select>
+      <button id="theme">Toggle theme</button>
+      <details><summary>Check results</summary><ol id="results"></ol></details>
+    </aside>
     <div id="test-root"></div>
     <script type="module" src="./loading-continuity.tsx"></script>
   </body>

@@ -45,7 +45,7 @@ function Root() {
   if (clientConfig.value?.mode === 'cloud') {
     return (
       <LoadingBoundary>
-        <Suspense fallback={<LoadingStage title="กำลังเปิดระบบบัญชี" message="กำลังเชื่อมต่อพื้นที่ทำงานของคุณ…" />}>
+        <Suspense fallback={<LoadingStage variant="login" title="กำลังเตรียมหน้าเข้าสู่ระบบ" message="กำลังตรวจสอบการเข้าสู่ระบบของคุณ…" />}>
           <CloudRoot config={clientConfig.value} />
         </Suspense>
       </LoadingBoundary>

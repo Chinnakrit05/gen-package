@@ -81,7 +81,10 @@ export function CloudRoot({ config }: { config: ClientConfig }) {
     setSession(null)
   }
 
-  if (session === undefined || (session && bootstrap.status === 'loading')) {
+  if (session === undefined) {
+    return <LoadingStage variant="login" title="กำลังเตรียมหน้าเข้าสู่ระบบ" message="กำลังตรวจสอบการเข้าสู่ระบบของคุณ…" />
+  }
+  if (session && bootstrap.status === 'loading') {
     return <LoadingStage title="กำลังตรวจสอบบัญชี" message="กำลังเตรียมพื้นที่ทำงานของคุณ…" />
   }
   if (!session) {

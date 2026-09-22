@@ -1,0 +1,46 @@
+.login-skeleton__block {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: var(--accent-weak);
+  border-radius: 6px;
+}
+
+.login-skeleton__block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 15%, var(--surface-2) 50%, transparent 85%);
+  transform: translateX(-100%);
+  animation: login-skeleton-shimmer 1.8s ease-in-out infinite;
+}
+
+.login-skeleton__mark { width: 46px; height: 46px; border-radius: 12px; }
+.login-skeleton__name { width: 88px; height: 27px; }
+.login-skeleton__title { width: 142px; height: 23px; margin: 0 auto 14px; }
+.login-skeleton__description { display: grid; gap: 9px; margin-bottom: 26px; }
+.login-skeleton__line { width: 100%; height: 12px; margin-inline: auto; }
+.login-skeleton__line--short { width: 68%; }
+.login-skeleton__button { width: 100%; height: 46px; border-radius: 10px; }
+.login-skeleton__fine { width: 78%; height: 10px; margin: 18px auto 4px; }
+.login-skeleton__footer { width: min(260px, 100%); height: 11px; }
+
+.login-skeleton__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes login-skeleton-shimmer {
+  to { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-skeleton__block::after { animation: none; }
+}
