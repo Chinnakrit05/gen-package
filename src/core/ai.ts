@@ -24,10 +24,13 @@ export async function requestBoxSpec(
   prompt: string,
   current?: CurrentSpec,
   imageBase64?: string,
+  anthropicApiKey?: string,
 ): Promise<AiBoxSpec> {
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  if (anthropicApiKey) headers['x-packit-anthropic-api-key'] = anthropicApiKey
   const res = await fetch('/api/box-spec', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: JSON.stringify({
       prompt,
       current,

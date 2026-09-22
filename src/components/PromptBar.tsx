@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { requestBoxSpec, type AiBoxSpec, type CurrentSpec } from '../core/ai'
 
 const QUICK_ADJUSTS = [
@@ -36,15 +37,47 @@ interface PromptBarProps {
   hasDesign: boolean
   onApply: (spec: AiBoxSpec, label: string) => void
   onLoadingChange: (loading: boolean) => void
+  disabledReason?: string
+  apiKeyRequired?: boolean
+  requestSpec?: typeof requestBoxSpec
 }
 
-export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: PromptBarProps) {
+export function PromptBar({
+  current,
+  hasDesign,
+  onApply,
+  onLoadingChange,
+  disabledReason,
+  apiKeyRequired = false,
+  requestSpec = requestBoxSpec,
+}: PromptBarProps) {
   const [text, setText] = useState('')
   const [image, setImage] = useState<RefImage | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<AiBoxSpec | null>(null)
+  const [quickOpen, setQuickOpen] = useState(false)
+  const [open, setOpen] = useState(false) // แถบลอยล่าง: ย่อเป็นปุ่มก่อน คลิกแล้วป็อปอัปช่องพิมพ์
+  const [apiKey, setApiKey] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const quickRef = useRef<HTMLDivElement>(null)
+
+  // ปิด popover ปรับเร็วเมื่อคลิกนอกกรอบ หรือกด Esc
+  useEffect(() => {
+    if (!quickOpen) return
+    const onDoc = (e: MouseEvent) => {
+      if (quickRef.current && !quickRef.current.contains(e.target as Node)) setQuickOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setQuickOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [quickOpen])
 
   const setBusy = (v: boolean) => {
     setLoading(v)
@@ -64,12 +97,17 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
   }
 
   const run = async (prompt: string, withCurrent: boolean, label: string): Promise<boolean> => {
-    if (!prompt.trim() || loading) return false
+    if (!prompt.trim() || loading || (apiKeyRequired && !apiKey.trim())) return false
     setBusy(true)
     setError(null)
     setResult(null)
     try {
-      const spec = await requestBoxSpec(prompt, withCurrent ? current : undefined, image?.base64)
+      const spec = await requestSpec(
+        prompt,
+        withCurrent ? current : undefined,
+        image?.base64,
+        apiKey.trim() || undefined,
+      )
       setResult(spec)
       onApply(spec, label)
       setImage(null)
@@ -84,8 +122,50 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
 
   const showChips = result && (result.assumptions.length > 0 || result.layoutNote !== '-')
 
+  // ปุ่มทริกเกอร์อยู่บน header (หน้าปุ่มโหมดมืด) คลิกแล้วแผงช่องพิมพ์หย่อนลงมา
   return (
-    <div className="promptbar card">
+    <div className={`promptbar-dock${open ? ' open' : ''}`}>
+      <button
+        type="button"
+        className="pb-fab primary"
+        aria-expanded={open}
+        aria-disabled={Boolean(disabledReason)}
+        disabled={Boolean(disabledReason)}
+        title={disabledReason ?? 'สั่ง AI สร้าง/แก้กล่องด้วยข้อความ'}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span aria-hidden="true">✨</span> {disabledReason ? 'AI ยังไม่เปิดใช้' : 'สั่ง AI'}
+      </button>
+      {disabledReason && <span className="pb-disabled-note" role="status">{disabledReason}</span>}
+      {open && createPortal(
+      <div className="promptbar card">
+      <div className="pb-dockhead">
+        <span className="pb-docktitle">✨ สั่ง AI สร้าง/แก้กล่อง</span>
+        <button type="button" className="pb-min" aria-label="ปิดแถบ AI" onClick={() => setOpen(false)}>
+          ✕
+        </button>
+      </div>
+      <div className="pb-keyrow">
+        <label htmlFor="anthropic-api-key">Anthropic API key</label>
+        <input
+          id="anthropic-api-key"
+          type="password"
+          value={apiKey}
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="sk-ant-… (ไม่บันทึก)"
+          aria-describedby="anthropic-api-key-note"
+          onChange={(event) => setApiKey(event.target.value)}
+        />
+        {apiKey && (
+          <button type="button" className="pb-keyclear" onClick={() => setApiKey('')}>ล้าง</button>
+        )}
+        <span id="anthropic-api-key-note" className="hint">
+          {apiKeyRequired
+            ? 'Cloud ต้องใช้คีย์ของคุณ คีย์อยู่เฉพาะแท็บนี้และส่งไป backend เมื่อกดสร้าง'
+            : 'ใช้เฉพาะแท็บนี้และส่งตรงไป backend ของแอปเมื่อกดสร้าง'}
+        </span>
+      </div>
       <form
         className="pb-row"
         onSubmit={(e) => {
@@ -112,11 +192,12 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
           className="pb-attach"
           aria-disabled={loading}
           title="แนบรูปสินค้า/กล่องตัวอย่างให้ AI ดูประกอบ"
+          aria-label="แนบรูปสินค้า/กล่องตัวอย่างให้ AI ดูประกอบ"
           onClick={() => {
             if (!loading) fileRef.current?.click()
           }}
         >
-          แนบรูป
+          📎
         </button>
         <input
           ref={fileRef}
@@ -126,10 +207,42 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
           aria-label="แนบรูปอ้างอิง"
           onChange={(e) => void pickImage(e.target.files?.[0])}
         />
+        <div className="pb-quickwrap" ref={quickRef}>
+          <button
+            type="button"
+            className="pb-quickbtn"
+            aria-haspopup="true"
+            aria-expanded={quickOpen}
+            title="คำสั่งปรับเร็ว"
+            onClick={() => setQuickOpen((v) => !v)}
+          >
+            ⚡ ปรับเร็ว
+          </button>
+          {quickOpen && (
+            <div className="pb-quickpop card" role="menu">
+              {QUICK_ADJUSTS.map((q) => (
+                <button
+                  key={q.label}
+                  role="menuitem"
+                  aria-disabled={loading || (apiKeyRequired && !apiKey.trim())}
+                  disabled={loading || (apiKeyRequired && !apiKey.trim())}
+                  onClick={() => {
+                    setQuickOpen(false)
+                    void run(q.prompt, true, q.label)
+                  }}
+                >
+                  {q.label}
+                </button>
+              ))}
+              <span className="hint">หรือลากปรับขนาด/วัสดุเองได้ตลอด</span>
+            </div>
+          )}
+        </div>
         <button
           type="submit"
           className="primary pb-go"
-          aria-disabled={loading || !text.trim()}
+          aria-disabled={loading || !text.trim() || (apiKeyRequired && !apiKey.trim())}
+          disabled={loading || !text.trim() || (apiKeyRequired && !apiKey.trim())}
         >
           {loading ? 'กำลังคิด…' : 'สร้างกล่อง'}
         </button>
@@ -145,20 +258,6 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
           </button>
         </div>
       )}
-
-      <div className="pb-quick">
-        <span className="hint">ปรับเร็ว:</span>
-        {QUICK_ADJUSTS.map((q) => (
-          <button
-            key={q.label}
-            aria-disabled={loading}
-            onClick={() => void run(q.prompt, true, q.label)}
-          >
-            {q.label}
-          </button>
-        ))}
-        <span className="hint pb-tail">หรือลากปรับขนาด/วัสดุเองได้ตลอด</span>
-      </div>
 
       {error && (
         <div className="pb-error" role="alert">
@@ -193,6 +292,9 @@ export function PromptBar({ current, hasDesign, onApply, onLoadingChange }: Prom
           </div>
         )}
       </div>
+      </div>,
+        document.body,
+      )}
     </div>
   )
 }

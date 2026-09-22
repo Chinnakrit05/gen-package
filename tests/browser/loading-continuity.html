@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PackIt loading continuity regression</title>
+    <style>
+      #checks { position: fixed; top: 12px; left: 12px; z-index: 10; max-width: calc(100% - 24px); padding: 16px; background: white; color: #154049; border: 1px solid #aac4c8; border-radius: 12px; }
+      #results { padding-left: 20px; font: 12px/1.8 sans-serif; }
+    </style>
+  </head>
+  <body>
+    <aside id="checks"><button id="run">Run loading continuity checks</button><ol id="results"></ol></aside>
+    <div id="test-root"></div>
+    <script type="module" src="./loading-continuity.tsx"></script>
+  </body>
+</html>
