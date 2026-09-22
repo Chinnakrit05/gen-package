@@ -17,6 +17,7 @@ import App from './App'
 import { Login } from './components/Login'
 import { LoadingBoundary, LoadingStage } from './components/LoadingBoundary'
 import { ClientConfigError, loadClientConfig } from './config'
+import { getCloudStartupVariant } from './services/auth/startupLoading'
 import './app.css'
 
 const AUTH_KEY = 'packit-auth'
@@ -36,6 +37,10 @@ if (localStorage.getItem('packit-theme') === 'dark') {
 
 // local demo เก็บ gate จำลองไว้; cloud mode ใช้ Supabase session จริงใน CloudRoot
 function Root() {
+  // Capture once, before lazy auth can consume the OAuth callback or refresh storage.
+  const [startupVariant] = useState(() => clientConfig.value?.mode === 'cloud' && clientConfig.value.supabase
+    ? getCloudStartupVariant(clientConfig.value.supabase.url)
+    : 'login')
   if (clientConfig.error) {
     const message = clientConfig.error instanceof ClientConfigError
       ? clientConfig.error.message
@@ -45,8 +50,8 @@ function Root() {
   if (clientConfig.value?.mode === 'cloud') {
     return (
       <LoadingBoundary>
-        <Suspense fallback={<LoadingStage variant="login" title="กำลังเตรียมหน้าเข้าสู่ระบบ" message="กำลังตรวจสอบการเข้าสู่ระบบของคุณ…" />}>
-          <CloudRoot config={clientConfig.value} />
+        <Suspense fallback={<LoadingStage variant={startupVariant} title="กำลังตรวจสอบบัญชี" message="กำลังเตรียมพื้นที่ทำงานของคุณ…" />}>
+          <CloudRoot config={clientConfig.value} startupVariant={startupVariant} />
         </Suspense>
       </LoadingBoundary>
     )

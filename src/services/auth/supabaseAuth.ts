@@ -1,11 +1,13 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { ClientConfig } from '../../config'
+import { supabaseAuthStorageKey } from './startupLoading'
 
 export function createBrowserSupabaseClient(
   config: NonNullable<ClientConfig['supabase']>,
 ): SupabaseClient {
   return createClient(config.url, config.publishableKey, {
     auth: {
+      storageKey: supabaseAuthStorageKey(config.url),
       detectSessionInUrl: true,
       flowType: 'pkce',
       persistSession: true,

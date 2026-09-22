@@ -4,6 +4,7 @@ import { act, lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { LoadingBoundary, LoadingStage } from '../../src/components/LoadingBoundary'
 import { Login } from '../../src/components/Login'
+import { getCloudStartupVariant, type CloudStartupVariant } from '../../src/services/auth/startupLoading'
 import '@fontsource/noto-sans-thai/400.css'
 import '@fontsource/prompt/400.css'
 import '../../src/app.css'
@@ -11,14 +12,14 @@ import '../../src/app.css'
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 type Phase = 'session' | 'account' | 'project' | 'ready' | 'error' | 'login'
-interface StepProps { phase: Phase; revision: number; account: string }
+interface StepProps { phase: Phase; revision: number; account: string; startupVariant?: CloudStartupVariant }
 
 function ProjectStep({ revision }: StepProps) {
   return <LoadingStage title="กำลังเปิดงาน" message={`กำลังโหลดโปรเจกต์และฉบับร่างล่าสุด… ${revision}`} />
 }
 
 function AccountStep(props: StepProps) {
-  if (props.phase === 'session') return <LoadingStage variant="login" title="กำลังเตรียมหน้าเข้าสู่ระบบ" message={`กำลังตรวจสอบการเข้าสู่ระบบของคุณ… ${props.revision}`} />
+  if (props.phase === 'session') return <LoadingStage variant={props.startupVariant ?? 'login'} title="กำลังเตรียมหน้าเข้าสู่ระบบ" message={`กำลังตรวจสอบการเข้าสู่ระบบของคุณ… ${props.revision}`} />
   if (props.phase === 'account') return <LoadingStage title="กำลังตรวจสอบบัญชี" message={`กำลังเตรียมพื้นที่ทำงานของคุณ… ${props.revision}`} />
   if (props.phase === 'project') return <ProjectStep key={props.account} {...props} />
   if (props.phase === 'error') return <p role="alert">เปิดงานไม่ได้</p>
@@ -125,6 +126,60 @@ async function run() {
     await render('session')
     await act(async () => root.render(null))
     check(!host.querySelector('.login-skeleton'), 'unmount cleans up the login skeleton')
+
+    // Saved-session reload and first OAuth return must use the box even before
+    // the lazy module resolves. No real auth/storage/network is used by this fixture.
+    for (const source of ['saved session', 'OAuth callback']) {
+      const storageKey = 'sb-startup-test-auth-token'
+      const items = new Map(source === 'saved session'
+        ? [[storageKey, JSON.stringify({ access_token: 'test', refresh_token: 'test', expires_at: 1 })]]
+        : [[`${storageKey}-code-verifier`, JSON.stringify('test-verifier')]])
+      const startupVariant = getCloudStartupVariant('https://startup-test.supabase.co', {
+        storage: { getItem: (key) => items.get(key) ?? null },
+        search: source === 'OAuth callback' ? '?code=test-code' : '',
+      })
+      let resolveReturning!: (module: { default: typeof AccountStep }) => void
+      const ReturningAccount = lazy(() => new Promise<{ default: typeof AccountStep }>((resolve) => { resolveReturning = resolve }))
+      const renderReturning = async (phase: Phase) => {
+        await act(async () => root.render(
+          <StrictMode>
+            <LoadingBoundary>
+              <Suspense fallback={<LoadingStage variant={startupVariant} title="กำลังตรวจสอบบัญชี" message="กำลังเตรียมพื้นที่ทำงานของคุณ…" />}>
+                <ReturningAccount phase={phase} revision={1} account="returning" startupVariant={startupVariant} />
+              </Suspense>
+            </LoadingBoundary>
+          </StrictMode>,
+        ))
+        await frame()
+      }
+      await renderReturning('session')
+      const returningScreen = host.querySelector('.packit-loading')!
+      check(returningScreen && !host.querySelector('.login-skeleton'), `${source}: very first lazy frame is the folding box`)
+      const returningMotions = returningScreen.getAnimations({ subtree: true })
+      await Promise.all(returningMotions.map((motion) => motion.ready))
+      const returningStarts = returningMotions.map((motion) => motion.startTime)
+      const returningContinuous = (label: string) => {
+        const current = returningScreen.getAnimations({ subtree: true })
+        check(host.querySelector('.packit-loading') === returningScreen && !host.querySelector('.login-skeleton')
+          && current.length === returningMotions.length
+          && current.every((motion, index) => motion === returningMotions[index] && motion.startTime === returningStarts[index]), label)
+      }
+      items.clear() // The SDK may consume the verifier while the lazy module loads.
+      await act(async () => resolveReturning({ default: AccountStep }))
+      await frame()
+      returningContinuous(`${source}: session check keeps the box with no skeleton flash`)
+      await renderReturning('account')
+      returningContinuous(`${source}: confirmed account keeps the same animation`)
+      await renderReturning('project')
+      returningContinuous(`${source}: project loading keeps the same animation`)
+      await renderReturning('ready')
+      check(!host.querySelector('.packit-loading') && host.textContent?.includes('Editor ready'), `${source}: ready removes the box`)
+      await renderReturning('session')
+      await renderReturning('login')
+      check(!host.querySelector('.packit-loading') && !host.querySelector('.login-skeleton')
+        && host.querySelector('.google-btn'), `${source}: rejected session returns to login, not the editor`)
+      await act(async () => root.render(null))
+    }
     runButton.textContent = `All ${results.children.length} checks passed — run again`
   } catch (error) {
     const item = document.createElement('li')

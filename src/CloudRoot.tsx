@@ -7,8 +7,9 @@ import { CloudWorkspace } from './features/projects/CloudWorkspace'
 import { bootstrapSession } from './services/api/session'
 import { createBrowserSupabaseClient } from './services/auth/supabaseAuth'
 import { WorkspaceBootstrapController, type WorkspaceBootstrapState } from './services/auth/workspaceBootstrap'
+import type { CloudStartupVariant } from './services/auth/startupLoading'
 
-export function CloudRoot({ config }: { config: ClientConfig }) {
+export function CloudRoot({ config, startupVariant }: { config: ClientConfig; startupVariant: CloudStartupVariant }) {
   if (!config.supabase) throw new Error('CloudRoot ต้องมี Supabase client config')
   const auth = useMemo(() => createBrowserSupabaseClient(config.supabase!), [config.supabase])
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -82,7 +83,7 @@ export function CloudRoot({ config }: { config: ClientConfig }) {
   }
 
   if (session === undefined) {
-    return <LoadingStage variant="login" title="กำลังเตรียมหน้าเข้าสู่ระบบ" message="กำลังตรวจสอบการเข้าสู่ระบบของคุณ…" />
+    return <LoadingStage variant={startupVariant} title="กำลังตรวจสอบบัญชี" message="กำลังเตรียมพื้นที่ทำงานของคุณ…" />
   }
   if (session && bootstrap.status === 'loading') {
     return <LoadingStage title="กำลังตรวจสอบบัญชี" message="กำลังเตรียมพื้นที่ทำงานของคุณ…" />
