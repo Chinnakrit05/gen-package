@@ -864,6 +864,8 @@ main {
 .promptbar-dock {
   position: relative;
   display: inline-flex;
+  align-items: center;
+  gap: 8px;
   z-index: 45;
 }
 /* ปุ่มทริกเกอร์บน header */
@@ -874,6 +876,16 @@ main {
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
+}
+.pb-fab:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+.pb-disabled-note {
+  max-width: 220px;
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.25;
 }
 /* แผงช่องพิมพ์ AI = dropdown มุมขวาใต้ header, portal ไป body + z สูงสุด (ลอยเหนือทุกอย่าง) */
 .promptbar {
@@ -900,6 +912,27 @@ main {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-2);
+}
+.pb-keyrow {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  align-items: center;
+  gap: 6px 8px;
+}
+.pb-keyrow label {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.pb-keyrow input {
+  min-width: 0;
+}
+.pb-keyrow .hint {
+  grid-column: 2 / -1;
+}
+.pb-keyclear {
+  width: auto;
+  white-space: nowrap;
 }
 .pb-min {
   width: 28px;
@@ -2143,6 +2176,52 @@ aside .art-actions .file-pick:only-child {
 .modal-actions button {
   flex: 1;
 }
+.migration-modal {
+  width: min(560px, 92vw);
+  max-height: min(720px, 88vh);
+  overflow: auto;
+}
+.migration-reopen-button {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 20;
+  box-shadow: 0 8px 24px rgba(60, 40, 100, 0.2);
+}
+.migration-modal p {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+.migration-note,
+.migration-warning {
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+.migration-warning {
+  margin-top: 6px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: var(--surface-2);
+}
+.migration-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.migration-item small {
+  grid-column: 1 / -1;
+  color: var(--danger);
+}
+.migration-complete > span:last-of-type {
+  color: var(--success, #287a48);
+}
+.migration-error > span:last-of-type,
+.migration-conflict > span:last-of-type {
+  color: var(--danger);
+}
 
 /* --- แท็บแถบซ้าย (ออกแบบ/ตกแต่ง/ส่งออก) --- */
 .tabbar {
@@ -2966,6 +3045,33 @@ aside .art-actions .file-pick:only-child {
 }
 
 /* ปุ่มสลับธีมสว่าง/มืด */
+.cloud-save-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.cloud-save-state {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.cloud-save-state.offline,
+.cloud-save-state.conflict,
+.cloud-save-state.error {
+  color: var(--danger);
+}
+.cloud-save-state.saving,
+.cloud-save-state.dirty {
+  color: var(--accent-ink);
+}
+.cloud-conflict-btn {
+  width: auto;
+  padding: 4px 7px;
+  font-size: 10.5px;
+}
+
 .theme-btn {
   flex-shrink: 0;
   width: auto;

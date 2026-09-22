@@ -13,5 +13,5 @@
     "noEmit": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src", "vite.config.ts", "server", "api"]
+  "include": ["src", "shared", "server", "tests", "vite.config.ts", "vitest.db.config.ts", "api"]
 }

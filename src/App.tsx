@@ -72,6 +72,9 @@ import {
   type Project,
 } from './core/project'
 import { serializeProject, parseProjectFile, projectFileName } from './core/projectFile'
+import type { ProjectSummary } from '../shared/contracts/projects'
+import type { ProjectSaveState } from './services/projects/durableSaveQueue'
+import { rasterizeTrustedPreset } from './services/projects/trustedPresetRasterizer'
 import { PRESETS, PRESET_CATS, presetById, presetDataUrl, type Preset } from './core/presets'
 import {
   SHEET_PRESETS,
@@ -635,16 +638,68 @@ const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
   a.H === b.H &&
   a.handle === b.handle
 
+const samePouchAddons = (a: PouchAddons | undefined, b: PouchAddons | undefined) =>
+  Boolean(a?.hangHole) === Boolean(b?.hangHole)
+  && Boolean(a?.valve) === Boolean(b?.valve)
+  && Boolean(a?.tinTie) === Boolean(b?.tinTie)
+
+// เทียบรูระบายอากาศ — ไม่เปิดทั้งคู่ = เท่ากัน (undefined = ปิด); เปิดทั้งคู่ค่อยเทียบค่า
+const sameVents = (a: VentConfig | undefined, b: VentConfig | undefined) => {
+  const ao = Boolean(a?.on)
+  const bo = Boolean(b?.on)
+  if (!ao && !bo) return true
+  return (
+    ao === bo &&
+    a!.walls === b!.walls &&
+    a!.dia === b!.dia &&
+    a!.rows === b!.rows &&
+    a!.cols === b!.cols
+  )
+}
+
 // --- บันทึกหลายงาน (project) + ประวัติเวอร์ชันของแต่ละงานลง localStorage ---
 
-// export ให้ตอน "ออกจากระบบ" ล้างงานทิ้งได้ (ยังไม่มีระบบ user — งานผูกกับเบราว์เซอร์)
+// local demo ใช้ key เดิมเพื่อรักษาความเข้ากันได้; cloud draft ส่ง storageKey ที่ผูกกับ app user
 export const STORAGE_KEY = 'gen-package-projects-v1'
 export const LEGACY_KEY = 'gen-package-design-v1'
 
-interface Store {
+export interface ProjectStoreSnapshot {
   projects: Project[]
   activeId: string
   showDims: boolean
+}
+
+export interface CloudProjectBridge {
+  items: ProjectSummary[]
+  online: boolean
+  saveState: ProjectSaveState
+  onProjectChange(project: Project): Promise<void>
+  switchProject(current: Project, targetId: string): Promise<Project>
+  createProject(current: Project, name: string): Promise<Project>
+  deleteProject(current: Project, targetId: string): Promise<Project>
+  importProject(current: Project, imported: Project): Promise<Project>
+  beforeLogout(current: Project): Promise<void>
+  resolveConflict(current: Project, action: 'reload' | 'copy'): Promise<Project>
+  retrySave(): Promise<void>
+  subscribeRemoteProject(listener: (project: Project) => void): () => void
+  requestAiSpec: (
+    prompt: string,
+    current?: CurrentSpec,
+    imageBase64?: string,
+    apiKey?: string,
+  ) => Promise<AiBoxSpec>
+}
+
+function cloudSaveLabel(state: ProjectSaveState): string {
+  switch (state) {
+    case 'loading': return 'กำลังโหลด…'
+    case 'clean': return 'บันทึกแล้ว'
+    case 'dirty': return 'มีการแก้ไข'
+    case 'saving': return 'กำลังบันทึก…'
+    case 'offline': return 'ออฟไลน์ · เก็บ draft แล้ว'
+    case 'conflict': return 'มีการแก้ไขจากอีกแท็บ'
+    case 'error': return 'บันทึกไม่สำเร็จ'
+  }
 }
 
 // modal ตั้งชื่องาน — ใช้ทั้งตอนสร้างงานใหม่และเปลี่ยนชื่อ (แทน window.prompt เดิม)
@@ -692,9 +747,9 @@ function NameModal({
   )
 }
 
-function loadStore(): Store {
+function loadStore(storageKey: string, migrateLegacy: boolean): ProjectStoreSnapshot {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (raw) {
       const d = JSON.parse(raw) as Record<string, unknown>
       const projects = Array.isArray(d.projects)
@@ -713,31 +768,32 @@ function loadStore(): Store {
     // ตกไปเช็คข้อมูลรุ่นเก่า
   }
 
-  // ย้ายข้อมูลรุ่นเก่า (งานเดียว) เข้าระบบหลายงาน
-  try {
-    const legacy = localStorage.getItem(LEGACY_KEY)
-    if (legacy) {
-      const d = JSON.parse(legacy) as Record<string, unknown>
-      const live = parseSpec(d.live)
-      if (live) {
-        const history = parseHistory(d.history)
-        const p: Project = {
-          id: crypto.randomUUID(),
-          name: 'งาน 1',
-          updatedAt: Date.now(),
-          live,
-          qty: DEFAULT_QTY,
-          fillColor: null,
-          decos: [],
-          history,
-          histIdx: clampIdx(d.histIdx, history.length),
+  if (migrateLegacy) {
+    // ย้ายข้อมูลรุ่นเก่า (งานเดียว) เข้าระบบหลายงานเฉพาะ local demo
+    try {
+      const legacy = localStorage.getItem(LEGACY_KEY)
+      if (legacy) {
+        const d = JSON.parse(legacy) as Record<string, unknown>
+        const live = parseSpec(d.live)
+        if (live) {
+          const history = parseHistory(d.history)
+          const p: Project = {
+            id: crypto.randomUUID(),
+            name: 'งาน 1',
+            updatedAt: Date.now(),
+            live,
+            qty: DEFAULT_QTY,
+            fillColor: null,
+            decos: [],
+            history,
+            histIdx: clampIdx(d.histIdx, history.length),
+          }
+          return { projects: [p], activeId: p.id, showDims: d.showDims !== false }
         }
-        localStorage.removeItem(LEGACY_KEY)
-        return { projects: [p], activeId: p.id, showDims: d.showDims !== false }
       }
+    } catch {
+      // ใช้ค่าเริ่มต้น
     }
-  } catch {
-    // ใช้ค่าเริ่มต้น
   }
 
   const p = freshProject(1)
@@ -783,26 +839,44 @@ function ImpositionDiagram({
   )
 }
 
-const store0 = loadStore()
-const active0 = store0.projects.find((p) => p.id === store0.activeId) ?? store0.projects[0]
+interface AppProps {
+  onLogout?: () => void | Promise<void>
+  storageKey?: string
+  migrateLegacy?: boolean
+  initialStore?: ProjectStoreSnapshot
+  cloud?: CloudProjectBridge
+}
 
-export default function App({ onLogout }: { onLogout?: () => void }) {
-  const [projects, setProjects] = useState<Project[]>(store0.projects)
-  const [activeId, setActiveId] = useState(active0.id)
-  const [templateId, setTemplateId] = useState(active0.live.template)
-  const [materialId, setMaterialId] = useState(active0.live.materialId)
-  const [W, setW] = useState(active0.live.W)
-  const [D, setD] = useState(active0.live.D)
-  const [H, setH] = useState(active0.live.H)
-  const [handle, setHandle] = useState(active0.live.handle)
-  const [qty, setQty] = useState(active0.qty)
-  const [fillColor, setFillColor] = useState<string | null>(active0.fillColor)
-  const [fillImage, setFillImage] = useState<FillImage | null>(active0.fillImage ?? null)
-  const [labelStyle, setLabelStyle] = useState<LabelStyle>(active0.labelStyle ?? 'body')
-  const [pouchStyle, setPouchStyle] = useState<PouchStyle>(active0.pouchStyle ?? 'stand')
-  const [zipper, setZipper] = useState<boolean>(active0.zipper ?? false)
-  const [pouchAddons, setPouchAddons] = useState<PouchAddons>(active0.pouchAddons ?? {})
-  const [vents, setVents] = useState<VentConfig>(active0.vents ?? DEFAULT_VENTS)
+export default function App({
+  onLogout,
+  storageKey = STORAGE_KEY,
+  migrateLegacy = true,
+  initialStore: suppliedStore,
+  cloud,
+}: AppProps) {
+  const initialStore = useMemo(
+    () => suppliedStore ?? loadStore(storageKey, migrateLegacy),
+    [suppliedStore, storageKey, migrateLegacy],
+  )
+  const initialActive = initialStore.projects.find((p) => p.id === initialStore.activeId)
+    ?? initialStore.projects[0]
+  const [projects, setProjects] = useState<Project[]>(initialStore.projects)
+  const [activeId, setActiveId] = useState(initialActive.id)
+  const [projectBusy, setProjectBusy] = useState(false)
+  const [templateId, setTemplateId] = useState(initialActive.live.template)
+  const [materialId, setMaterialId] = useState(initialActive.live.materialId)
+  const [W, setW] = useState(initialActive.live.W)
+  const [D, setD] = useState(initialActive.live.D)
+  const [H, setH] = useState(initialActive.live.H)
+  const [handle, setHandle] = useState(initialActive.live.handle)
+  const [qty, setQty] = useState(initialActive.qty)
+  const [fillColor, setFillColor] = useState<string | null>(initialActive.fillColor)
+  const [fillImage, setFillImage] = useState<FillImage | null>(initialActive.fillImage ?? null)
+  const [labelStyle, setLabelStyle] = useState<LabelStyle>(initialActive.labelStyle ?? 'body')
+  const [pouchStyle, setPouchStyle] = useState<PouchStyle>(initialActive.pouchStyle ?? 'stand')
+  const [zipper, setZipper] = useState<boolean>(initialActive.zipper ?? false)
+  const [pouchAddons, setPouchAddons] = useState<PouchAddons>(initialActive.pouchAddons ?? {})
+  const [vents, setVents] = useState<VentConfig>(initialActive.vents ?? DEFAULT_VENTS)
   // ธีมสว่าง/มืด — เก็บใน localStorage, ตั้ง data-theme บน <html> (canvas/3D คงขาวเสมอ)
   const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark')
   useEffect(() => {
@@ -810,7 +884,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     else delete document.documentElement.dataset.theme
     localStorage.setItem('packit-theme', dark ? 'dark' : 'light')
   }, [dark])
-  const [decos, setDecos] = useState<Deco[]>(active0.decos)
+  const [decos, setDecos] = useState<Deco[]>(initialActive.decos)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [renamingId, setRenamingId] = useState<string | null>(null) // เลเยอร์ที่กำลังแก้ชื่อ (ดับเบิลคลิก)
   const [lockAspect, setLockAspect] = useState(true) // ล็อกสัดส่วนกรอบรูป: ปรับกว้าง/สูงพร้อมกันตามสัดส่วนรูปจริง
@@ -962,7 +1036,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     if (selectedIds.length) setGroups((g) => (g.props ? g : { ...g, props: true }))
   }, [selectedIds.length])
   const [fold, setFold] = useState(1)
-  const [showDims, setShowDims] = useState(store0.showDims)
+  const [showDims, setShowDims] = useState(initialStore.showDims)
   const [showGuides, setShowGuides] = useState(false)
   const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
   const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>('design')
@@ -985,8 +1059,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const [customSheet, setCustomSheet] = useState({ w: 640, h: 900 })
   const [gutter, setGutter] = useState(DEFAULT_OPT.gutter)
   const [aiBusy, setAiBusy] = useState(false)
-  const [history, setHistory] = useState<DesignVersion[]>(active0.history)
-  const [histIdx, setHistIdx] = useState(active0.histIdx)
+  const [history, setHistory] = useState<DesignVersion[]>(initialActive.history)
+  const [histIdx, setHistIdx] = useState(initialActive.histIdx)
   const [undoStack, setUndoStack] = useState<EditSnapshot[]>([])
   const [redoStack, setRedoStack] = useState<EditSnapshot[]>([])
   // ข้ามการบันทึกลง undo หนึ่งครั้ง — ใช้ตอน apply undo/redo หรือสลับงาน (ไม่ใช่การแก้ของผู้ใช้)
@@ -1047,22 +1121,35 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
       setProjects((prev) =>
         prev.map((p) =>
           p.id === activeId
-            ? {
-                ...p,
-                live: { template: templateId, materialId, W, D, H, handle },
-                qty,
-                fillColor,
-                fillImage,
-                labelStyle,
-                pouchStyle,
-                zipper,
-                pouchAddons,
-                vents,
-                decos,
-                history,
-                histIdx,
-                updatedAt: Date.now(),
-              }
+            ? sameSpec(p.live, { template: templateId, materialId, W, D, H, handle })
+              && p.qty === qty
+              && p.fillColor === fillColor
+              && p.fillImage === fillImage
+              && (p.labelStyle ?? 'body') === labelStyle
+              && (p.pouchStyle ?? 'stand') === pouchStyle
+              && Boolean(p.zipper) === zipper
+              && samePouchAddons(p.pouchAddons, pouchAddons)
+              && sameVents(p.vents, vents)
+              && p.decos === decos
+              && p.history === history
+              && p.histIdx === histIdx
+                ? p
+                : {
+                    ...p,
+                    live: { template: templateId, materialId, W, D, H, handle },
+                    qty,
+                    fillColor,
+                    fillImage,
+                    labelStyle,
+                    pouchStyle,
+                    zipper,
+                    pouchAddons,
+                    vents,
+                    decos,
+                    history,
+                    histIdx,
+                    updatedAt: Date.now(),
+                  }
             : p,
         ),
       )
@@ -1070,14 +1157,21 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     return () => clearTimeout(t)
   }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, decos, activeId])
 
-  // save ทุกงานลง localStorage
+  // local demo เขียน localStorage; cloud ส่ง active project เข้า durable IndexedDB/save queue
   useEffect(() => {
+    if (cloud) {
+      const active = projects.find((project) => project.id === activeId)
+      if (active) void cloud.onProjectChange(active).catch(() => {
+        // Cloud bridge exposes the durable-save error in its status indicator.
+      })
+      return
+    }
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects, activeId, showDims }))
+      localStorage.setItem(storageKey, JSON.stringify({ projects, activeId, showDims }))
     } catch {
       // storage เต็มหรือถูกปิดไว้ — ข้ามการ save เงียบๆ
     }
-  }, [projects, activeId, showDims])
+  }, [projects, activeId, showDims, storageKey])
 
   // save จานสี (ใช้ร่วมทุกงาน)
   useEffect(() => {
@@ -1267,7 +1361,20 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   const flushInto = (list: Project[]): Project[] =>
     list.map((p) =>
       p.id === activeId
-        ? { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, decos, history, histIdx, updatedAt: Date.now() }
+        ? sameSpec(p.live, liveSpec())
+          && p.qty === qty
+          && p.fillColor === fillColor
+          && p.fillImage === fillImage
+          && (p.labelStyle ?? 'body') === labelStyle
+          && (p.pouchStyle ?? 'stand') === pouchStyle
+          && Boolean(p.zipper) === zipper
+          && samePouchAddons(p.pouchAddons, pouchAddons)
+          && sameVents(p.vents, vents)
+          && p.decos === decos
+          && p.history === history
+          && p.histIdx === histIdx
+            ? p
+            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -1294,8 +1401,33 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     setFold(1)
   }
 
-  const switchProject = (id: string) => {
-    if (id === activeId || aiBusy) return
+  useEffect(() => {
+    if (!cloud) return
+    return cloud.subscribeRemoteProject((project) => {
+      setProjects([project])
+      openProject(project)
+    })
+    // subscribeRemoteProject is stable for the lifetime of a cloud workspace.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloud?.subscribeRemoteProject])
+
+  const switchProject = async (id: string) => {
+    if (id === activeId || aiBusy || projectBusy) return
+    if (cloud) {
+      const current = flushInto(projects).find((project) => project.id === activeId)
+      if (!current) return
+      setProjectBusy(true)
+      try {
+        const target = await cloud.switchProject(current, id)
+        setProjects([target])
+        openProject(target)
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : 'เปิดงานไม่สำเร็จ')
+      } finally {
+        setProjectBusy(false)
+      }
+      return
+    }
     const target = projects.find((p) => p.id === id)
     if (!target) return
     setProjects((prev) => flushInto(prev))
@@ -1303,11 +1435,23 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   }
 
   const newProject = () => {
-    if (aiBusy) return
+    if (aiBusy || projectBusy || (cloud && !cloud.online)) return
     setNameModal({
       title: 'ตั้งชื่องานใหม่',
-      value: `งาน ${projects.length + 1}`,
+      value: `งาน ${(cloud?.items.length ?? projects.length) + 1}`,
       onOk: (name) => {
+        if (cloud) {
+          const current = flushInto(projects).find((project) => project.id === activeId)
+          if (!current) return
+          setProjectBusy(true)
+          void cloud.createProject(current, name).then((created) => {
+            setProjects([created])
+            openProject(created)
+          }).catch((error: unknown) => {
+            window.alert(error instanceof Error ? error.message : 'สร้างงานไม่สำเร็จ')
+          }).finally(() => setProjectBusy(false))
+          return
+        }
         const p = freshProject(projects.length + 1)
         p.name = name.slice(0, 60) || p.name
         setProjects((prev) => [...flushInto(prev), p])
@@ -1317,10 +1461,22 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   }
 
   const deleteProject = (id: string) => {
-    if (aiBusy) return
-    const victim = projects.find((p) => p.id === id)
+    if (aiBusy || projectBusy || (cloud && !cloud.online)) return
+    const victim = cloud?.items.find((project) => project.id === id) ?? projects.find((p) => p.id === id)
     if (!victim) return
     if (!window.confirm(`ลบงาน "${victim.name}" ทั้งงานรวมประวัติ?`)) return
+    if (cloud) {
+      const current = flushInto(projects).find((project) => project.id === activeId)
+      if (!current) return
+      setProjectBusy(true)
+      void cloud.deleteProject(current, id).then((next) => {
+        setProjects([next])
+        if (next.id !== activeId) openProject(next)
+      }).catch((error: unknown) => {
+        window.alert(error instanceof Error ? error.message : 'ลบงานไม่สำเร็จ')
+      }).finally(() => setProjectBusy(false))
+      return
+    }
     let rest = projects.filter((p) => p.id !== id)
     if (rest.length === 0) rest = [freshProject(1)]
     setProjects(rest)
@@ -1359,7 +1515,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   }
 
   const importProject = async (file: File | undefined) => {
-    if (!file || aiBusy) return
+    if (!file || aiBusy || projectBusy || (cloud && !cloud.online)) return
     let res
     try {
       res = parseProjectFile(await file.text())
@@ -1369,6 +1525,25 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
     }
     if (!res.ok) {
       window.alert(`นำเข้าไม่สำเร็จ: ${res.error}`)
+      return
+    }
+    if (cloud) {
+      const current = flushInto(projects).find((project) => project.id === activeId)
+      if (!current) return
+      setProjectBusy(true)
+      try {
+        const imported = await cloud.importProject(current, res.project)
+        setProjects([imported])
+        openProject(imported)
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : 'นำเข้างานขึ้น cloud ไม่สำเร็จ')
+        return
+      } finally {
+        setProjectBusy(false)
+      }
+      if (res.warnings.length) {
+        window.alert(`นำเข้าสำเร็จ แต่มีการปรับข้อมูลบางส่วน:\n• ${res.warnings.join('\n• ')}`)
+      }
       return
     }
     // บันทึกงานที่เปิดอยู่ก่อน แล้วเพิ่มงานที่นำเข้าเป็นงานใหม่ (ไม่ทับของเดิม) และสลับไป
@@ -1492,6 +1667,14 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
 
   const addImage = async (file: File | undefined) => {
     if (!file || !dieline) return
+    if (cloud && !cloud.online) {
+      window.alert('ต้องออนไลน์ก่อนเพิ่มรูปใหม่ งานแก้ไขอื่นยังเก็บเป็น draft ได้')
+      return
+    }
+    if (cloud && file.type === 'image/svg+xml') {
+      window.alert('Cloud ยังไม่รองรับ SVG ที่นำเข้า กรุณาแปลงเป็น PNG หรือ JPG ก่อน')
+      return
+    }
     try {
       const { src, aspect } = await loadImageFile(file)
       const el = makeImageEl(dieline, src, aspect)
@@ -1510,16 +1693,56 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
   }
 
   // วางลายจากไลบรารี — เก็บ preset id + สีไว้บนชิ้น เพื่อเปลี่ยนสีทีหลังได้
-  const addPreset = (p: Preset) => {
+  const addPreset = async (p: Preset) => {
     if (!dieline) return
-    const el = { ...makeImageEl(dieline, presetDataUrl(p.svg(presetColor)), p.aspect), preset: p.id, presetColor }
-    setDecos((ds) => [...ds, el])
-    setSelectedIds([el.id])
+    if (cloud && !cloud.online) {
+      window.alert('ต้องออนไลน์ก่อนเพิ่มลาย preset ใหม่')
+      return
+    }
+    try {
+      const src = cloud
+        ? await rasterizeTrustedPreset(p.id, presetColor, p.aspect)
+        : presetDataUrl(p.svg(presetColor))
+      const el = { ...makeImageEl(dieline, src, p.aspect), preset: p.id, presetColor }
+      setDecos((ds) => [...ds, el])
+      setSelectedIds([el.id])
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'แปลงลาย preset ไม่สำเร็จ')
+    }
+  }
+
+  const changePresetColor = async (targetId: string, presetId: string, hex: string) => {
+    const preset = presetById(presetId)
+    if (!preset) return
+    if (cloud && !cloud.online) {
+      window.alert('ต้องออนไลน์ก่อนเปลี่ยนสีลาย preset')
+      return
+    }
+    try {
+      const src = cloud
+        ? await rasterizeTrustedPreset(preset.id, hex, preset.aspect)
+        : presetDataUrl(preset.svg(hex))
+      setDecos((current) => current.map((deco) => (
+        deco.id === targetId && deco.type === 'image'
+          ? { ...deco, presetColor: hex, src, aspect: preset.aspect }
+          : deco
+      )))
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'เปลี่ยนสีลาย preset ไม่สำเร็จ')
+    }
   }
 
   // รูปพื้นแพ็กเกจ: โหลด+ย่อไฟล์เดียวกับโลโก้ แล้วตั้งเป็นพื้น (fit=cover ครอปพอดี blueprint)
   const addFillImage = async (file: File | undefined) => {
     if (!file) return
+    if (cloud && !cloud.online) {
+      window.alert('ต้องออนไลน์ก่อนเพิ่มรูปพื้นใหม่ งานแก้ไขอื่นยังเก็บเป็น draft ได้')
+      return
+    }
+    if (cloud && file.type === 'image/svg+xml') {
+      window.alert('Cloud ยังไม่รองรับ SVG ที่นำเข้า กรุณาแปลงเป็น PNG หรือ JPG ก่อน')
+      return
+    }
     try {
       const { src, aspect } = await loadImageFile(file)
       setFillImage({ src, aspect, fit: 'cover' })
@@ -1846,17 +2069,23 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
       <header>
         <h1>PackIt</h1>
         <nav className="projects" aria-label="งานที่บันทึกไว้">
-          <button className="proj-new" aria-disabled={aiBusy} onClick={newProject}>
+          <button
+            className="proj-new"
+            disabled={aiBusy || projectBusy || (cloud !== undefined && !cloud.online)}
+            aria-disabled={aiBusy || projectBusy || (cloud !== undefined && !cloud.online)}
+            onClick={newProject}
+          >
             + งานใหม่
           </button>
-          {projects.map((p) => (
+          {(cloud?.items ?? projects).map((p) => (
             <div key={p.id} className={`proj-tab${p.id === activeId ? ' active' : ''}`}>
               <button
                 className="proj-name"
                 title={`${p.name} · แก้ล่าสุด ${new Date(p.updatedAt).toLocaleString('th-TH')}`}
                 aria-current={p.id === activeId ? 'true' : undefined}
-                aria-disabled={aiBusy}
-                onClick={() => switchProject(p.id)}
+                aria-disabled={aiBusy || projectBusy}
+                disabled={projectBusy}
+                onClick={() => void switchProject(p.id)}
               >
                 {p.name}
               </button>
@@ -1874,6 +2103,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                 className="proj-act"
                 aria-label={`ลบงาน ${p.name}`}
                 title="ลบงานนี้"
+                disabled={projectBusy || (cloud !== undefined && !cloud.online)}
                 onClick={() => deleteProject(p.id)}
               >
                 ✕
@@ -1881,11 +2111,61 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
             </div>
           ))}
         </nav>
+        {cloud && (
+          <div className="cloud-save-wrap">
+            <span className={`cloud-save-state ${cloud.saveState}`} title="สถานะบันทึก cloud">
+              {cloudSaveLabel(cloud.saveState)}
+            </span>
+            {cloud.saveState === 'conflict' && (
+              <>
+                <button
+                  className="cloud-conflict-btn"
+                  disabled={projectBusy || !cloud.online}
+                  onClick={() => {
+                    const current = flushInto(projects).find((project) => project.id === activeId)
+                    if (!current || !window.confirm('ทิ้ง draft ในแท็บนี้แล้วโหลด cloud ล่าสุด?')) return
+                    setProjectBusy(true)
+                    void cloud.resolveConflict(current, 'reload').then((resolved) => {
+                      setProjects([resolved])
+                      openProject(resolved)
+                    }).catch((error: unknown) => {
+                      window.alert(error instanceof Error ? error.message : 'โหลด cloud ล่าสุดไม่สำเร็จ')
+                    }).finally(() => setProjectBusy(false))
+                  }}
+                >โหลดล่าสุด</button>
+                <button
+                  className="cloud-conflict-btn"
+                  disabled={projectBusy || !cloud.online}
+                  onClick={() => {
+                    const current = flushInto(projects).find((project) => project.id === activeId)
+                    if (!current) return
+                    setProjectBusy(true)
+                    void cloud.resolveConflict(current, 'copy').then((resolved) => {
+                      setProjects([resolved])
+                      openProject(resolved)
+                    }).catch((error: unknown) => {
+                      window.alert(error instanceof Error ? error.message : 'บันทึกเป็นสำเนาไม่สำเร็จ')
+                    }).finally(() => setProjectBusy(false))
+                  }}
+                >เก็บเป็นสำเนา</button>
+              </>
+            )}
+            {cloud.saveState === 'error' && (
+              <button
+                className="cloud-conflict-btn"
+                disabled={projectBusy || !cloud.online}
+                onClick={() => void cloud.retrySave()}
+              >ลองอีกครั้ง</button>
+            )}
+          </div>
+        )}
         <PromptBar
           current={{ template: templateId, materialId, W, D, H, handle }}
           hasDesign={history.length > 0}
           onApply={applySpec}
           onLoadingChange={setAiBusy}
+          apiKeyRequired={Boolean(cloud)}
+          requestSpec={cloud?.requestAiSpec}
         />
         <button
           className="theme-btn"
@@ -1897,7 +2177,21 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
           {dark ? '☀' : '☾'}
         </button>
         {onLogout && (
-          <button className="logout-btn" title="ออกจากระบบ" onClick={onLogout}>
+          <button
+            className="logout-btn"
+            title="ออกจากระบบ"
+            disabled={projectBusy}
+            onClick={() => {
+              const current = flushInto(projects).find((project) => project.id === activeId)
+              setProjectBusy(true)
+              void (async () => {
+                if (cloud && current) await cloud.beforeLogout(current)
+                await onLogout()
+              })().catch((error: unknown) => {
+                window.alert(error instanceof Error ? error.message : 'ออกจากระบบไม่สำเร็จ')
+              }).finally(() => setProjectBusy(false))
+            }}
+          >
             ออกจากระบบ
           </button>
         )}
@@ -2326,8 +2620,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   <label className="file-pick inline">
                     <input
                       type="file"
-                      accept="image/*,.svg"
-                      disabled={aiBusy}
+                      accept={cloud ? 'image/png,image/jpeg' : 'image/*,.svg'}
+                      disabled={aiBusy || (cloud !== undefined && !cloud.online)}
                       onChange={(e) => {
                         void addFillImage(e.target.files?.[0])
                         e.target.value = ''
@@ -2449,8 +2743,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                   <label className="file-pick inline">
                     <input
                       type="file"
-                      accept="image/*,.svg"
-                      disabled={aiBusy}
+                      accept={cloud ? 'image/png,image/jpeg' : 'image/*,.svg'}
+                      disabled={aiBusy || projectBusy || (cloud !== undefined && !cloud.online)}
                       onChange={(e) => {
                         void addImage(e.target.files?.[0])
                         e.target.value = ''
@@ -2523,8 +2817,8 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                             className="preset-item"
                             title={p.nameTh}
                             aria-label={`เพิ่ม ${p.nameTh}`}
-                            disabled={aiBusy}
-                            onClick={() => addPreset(p)}
+                            disabled={aiBusy || (cloud !== undefined && !cloud.online)}
+                            onClick={() => void addPreset(p)}
                           >
                             <img src={presetDataUrl(p.svg(presetColor))} alt={p.nameTh} />
                           </button>
@@ -3267,16 +3561,10 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                         <span>สีลาย</span>
                         <ColorField
                           value={selected.presetColor ?? '#2f8a99'}
-                          onChange={(hex) =>
-                            patchSelected((d) => {
-                              if (d.type !== 'image' || !d.preset) return d
-                              const p = presetById(d.preset)
-                              return p ? { ...d, presetColor: hex, src: presetDataUrl(p.svg(hex)) } : { ...d, presetColor: hex }
-                            })
-                          }
+                          onChange={(hex) => void changePresetColor(selected.id, selected.preset!, hex)}
                           palette={palette}
                           onSave={saveSwatch}
-                          disabled={aiBusy}
+                          disabled={aiBusy || (cloud !== undefined && !cloud.online)}
                           label="สีลาย"
                         />
                       </div>
@@ -3739,7 +4027,7 @@ export default function App({ onLogout }: { onLogout?: () => void }) {
                     <input
                       type="file"
                       accept=".json,application/json"
-                      disabled={aiBusy}
+                      disabled={aiBusy || projectBusy || (cloud !== undefined && !cloud.online)}
                       onChange={(e) => {
                         void importProject(e.target.files?.[0])
                         e.target.value = ''

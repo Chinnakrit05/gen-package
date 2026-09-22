@@ -7,6 +7,8 @@ import { unlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import Anthropic from '@anthropic-ai/sdk'
+import { isLegacyAiRouteEnabled } from './http/legacyAiGuard'
+import { readRequestApiKey } from './modules/ai/requestApiKey'
 import { MATERIALS } from '../src/core/materials'
 import { TEMPLATES } from '../src/core/templates'
 
@@ -324,8 +326,6 @@ function buildUserContent(prompt: string, current?: CurrentSpec): string {
     : prompt
 }
 
-let client: Anthropic | null = null
-
 export async function askClaude(
   apiKey: string,
   model: string,
@@ -333,7 +333,8 @@ export async function askClaude(
   current?: CurrentSpec,
   image?: RefImage,
 ): Promise<BoxSpecResult> {
-  client ??= new Anthropic({ apiKey })
+  // BYOK requests must never reuse a client created with another user's key.
+  const client = new Anthropic({ apiKey })
   const content: Anthropic.ContentBlockParam[] = []
   if (image) {
     content.push({
@@ -486,6 +487,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
 function send(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status
   res.setHeader('content-type', 'application/json; charset=utf-8')
+  res.setHeader('cache-control', 'no-store')
   res.end(JSON.stringify(body))
 }
 
@@ -494,6 +496,10 @@ export async function handleBoxSpec(
   res: ServerResponse,
   env: Record<string, string | undefined>,
 ): Promise<void> {
+  if (!isLegacyAiRouteEnabled(env)) {
+    send(res, 410, { error: 'AI endpoint รุ่นเดิมถูกปิดใน cloud mode' })
+    return
+  }
   if (req.method !== 'POST') {
     send(res, 405, { error: 'ต้องเป็น POST เท่านั้น' })
     return
@@ -535,8 +541,13 @@ export async function handleBoxSpec(
 
   // ลำดับ backend: บังคับด้วย BOX_SPEC_BACKEND (api|cli|mock) หรืออัตโนมัติ:
   // มี ANTHROPIC_API_KEY → API, ไม่มีแต่มี claude CLI ในเครื่อง → CLI, ไม่มีทั้งคู่ → จำลอง
-  const backend = env.BOX_SPEC_BACKEND
-  const apiKey = env.ANTHROPIC_API_KEY
+  const requestApiKey = readRequestApiKey(req.headers)
+  if (requestApiKey === null) {
+    send(res, 400, { error: 'รูปแบบ Anthropic API key ไม่ถูกต้อง' })
+    return
+  }
+  const backend = requestApiKey ? 'api' : env.BOX_SPEC_BACKEND
+  const apiKey = requestApiKey ?? env.ANTHROPIC_API_KEY
   const model = env.BOX_SPEC_MODEL
 
   try {
@@ -565,7 +576,7 @@ export async function handleBoxSpec(
     send(res, 200, mockSpec(prompt, current, image))
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
-      send(res, 401, { error: 'ANTHROPIC_API_KEY ไม่ถูกต้อง — ตรวจไฟล์ .env' })
+      send(res, 502, { error: 'Anthropic API key ไม่ถูกต้อง' })
     } else if (err instanceof Anthropic.RateLimitError) {
       send(res, 429, { error: 'เรียกถี่เกินไป รอสักครู่แล้วลองใหม่' })
     } else if (err instanceof Anthropic.APIError) {

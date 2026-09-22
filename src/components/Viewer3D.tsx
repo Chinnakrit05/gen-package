@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Dieline, Material } from '../core/types'
 import {
   drawFill,
@@ -346,6 +347,7 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillIm
 export function Viewer3D(props: ModelProps) {
   return (
     <Canvas
+      events={safeCanvasEvents}
       camera={{ position: [280, 220, 340], fov: 36, near: 1, far: 8000 }}
       role="img"
       aria-label="มุมมอง 3 มิติของกล่องที่กำลังพับ"

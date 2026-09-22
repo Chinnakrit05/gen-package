@@ -1,0 +1,209 @@
+.packit-loading {
+  --fold-paper: #438f99;
+  --fold-paper-light: #a0cdd0;
+  --fold-paper-deep: #225664;
+  --fold-shadow: rgba(21, 64, 73, .24);
+  --fold-duration: 3.6s;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(ellipse at 50% 35%, var(--surface-2), transparent 65%), var(--bg);
+}
+
+:root[data-theme='dark'] .packit-loading {
+  --fold-paper: #58a8ae;
+  --fold-paper-light: #aad8d6;
+  --fold-paper-deep: #326775;
+  --fold-shadow: rgba(0, 0, 0, .45);
+}
+
+.packit-loading__card {
+  width: min(100%, 420px);
+  padding: 30px 24px 26px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 30px;
+  box-shadow: var(--shadow);
+}
+
+.packit-loading__brand {
+  color: var(--accent-ink);
+  font-family: 'Prompt', 'Noto Sans Thai', sans-serif;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -.05em;
+}
+
+.packit-loading__brand > span { color: var(--pink); }
+
+.packit-loading__stage {
+  position: relative;
+  height: 184px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.packit-loading__shadow {
+  position: absolute;
+  width: 160px;
+  height: 50px;
+  top: 125px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, var(--fold-shadow), transparent 70%);
+  animation: packit-fold-shadow var(--fold-duration) ease-in-out infinite;
+}
+
+.packit-loading__scene {
+  width: 60px;
+  height: 60px;
+  perspective: 650px;
+  transform: translateY(9px);
+}
+
+.packit-loading__net {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  transform-style: preserve-3d;
+  transform: translateY(16px) scale(.93) rotateX(58deg) rotateZ(-42deg);
+  animation: packit-fold-drift var(--fold-duration) ease-in-out infinite;
+}
+
+.packit-loading__face {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border: 1px solid rgba(21, 64, 73, .24);
+  transform-style: preserve-3d;
+  animation-duration: var(--fold-duration);
+  animation-timing-function: cubic-bezier(.5, 0, .2, 1);
+  animation-iteration-count: infinite;
+}
+
+.packit-loading__base { background: var(--fold-paper-deep); }
+.packit-loading__front {
+  top: 100%;
+  transform-origin: top;
+  background: var(--fold-paper);
+  transform: rotateX(90deg);
+  animation-name: packit-fold-front;
+}
+.packit-loading__back {
+  top: -100%;
+  transform-origin: bottom;
+  background: var(--fold-paper);
+  transform: rotateX(-90deg);
+  animation-name: packit-fold-back;
+}
+.packit-loading__left {
+  left: -100%;
+  transform-origin: right;
+  background: var(--fold-paper-light);
+  transform: rotateY(90deg);
+  animation-name: packit-fold-left;
+}
+.packit-loading__right {
+  left: 100%;
+  transform-origin: left;
+  background: var(--fold-paper-deep);
+  transform: rotateY(-90deg);
+  animation-name: packit-fold-right;
+}
+.packit-loading__lid {
+  top: -100%;
+  left: -1px;
+  transform-origin: bottom;
+  background: var(--fold-paper-light);
+  display: grid;
+  place-items: center;
+  transform: rotateX(-90deg);
+  animation-name: packit-fold-lid;
+}
+.packit-loading__lid-logo {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  /* Preserve the supplied artwork; its white background blends into the paper. */
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  transform: rotateZ(180deg);
+}
+
+.packit-loading__title {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.packit-loading__message {
+  margin-top: 8px;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.packit-loading__signature {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 28px;
+  color: var(--text-3);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .15em;
+}
+.packit-loading__signature > span {
+  width: 20px;
+  height: 1px;
+  background: var(--border-strong);
+}
+
+@keyframes packit-fold-front {
+  0%, 10%, 94%, 100% { transform: rotateX(0); }
+  35%, 74% { transform: rotateX(90deg); }
+}
+@keyframes packit-fold-back {
+  0%, 12%, 94%, 100% { transform: rotateX(0); }
+  37%, 74% { transform: rotateX(-90deg); }
+}
+@keyframes packit-fold-left {
+  0%, 2%, 94%, 100% { transform: rotateY(0); }
+  28%, 77% { transform: rotateY(90deg); }
+}
+@keyframes packit-fold-right {
+  0%, 6%, 94%, 100% { transform: rotateY(0); }
+  31%, 77% { transform: rotateY(-90deg); }
+}
+@keyframes packit-fold-lid {
+  0%, 32%, 86%, 100% { transform: rotateX(0); }
+  52%, 68% { transform: rotateX(-90deg); }
+}
+@keyframes packit-fold-drift {
+  0%, 100% { transform: translateY(1px) scale(.68) rotateX(55deg) rotateZ(-35deg); }
+  48%, 70% { transform: translateY(16px) scale(.93) rotateX(58deg) rotateZ(-42deg); }
+}
+@keyframes packit-fold-shadow {
+  0%, 100% { transform: scale(1.05); opacity: .5; }
+  50% { transform: scale(.7); opacity: 1; }
+}
+
+@media (max-width: 380px) {
+  .packit-loading { padding: 16px; }
+  .packit-loading__card { padding: 26px 16px 24px; }
+}
+
+/* Keep the finished carton visible without motion; never hide the status text. */
+@media (prefers-reduced-motion: reduce) {
+  .packit-loading__net,
+  .packit-loading__face,
+  .packit-loading__shadow { animation: none; }
+}

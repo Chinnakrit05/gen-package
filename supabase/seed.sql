@@ -1,0 +1,2 @@
+-- Local-only seed file. P0.3 has no business tables yet; P1 fixtures belong here
+-- after their migrations exist. Never add production PII or credentials.

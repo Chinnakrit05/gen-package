@@ -1,5 +1,5 @@
 // หน้าเข้าสู่ระบบของ PackIt — โมเดิร์นมินิมอลตามธีมเดิม
-// ปุ่ม Google เป็นแบบจำลอง (ยังไม่ต่อ OAuth จริง) กดแล้วเข้าแอปเลย
+// local demo ใช้ callback จำลอง ส่วน cloud mode ส่งต่อให้ Supabase OAuth adapter
 
 // โลโก้กล่องทรงไอโซเมตริก สื่อถึงงานบรรจุภัณฑ์
 function PackItMark() {
@@ -46,7 +46,19 @@ function GoogleG() {
   )
 }
 
-export function Login({ onLogin }: { onLogin: () => void }) {
+export function Login({
+  onLogin,
+  mode = 'cloud',
+  busy = false,
+  error,
+  finePrint,
+}: {
+  onLogin: () => void
+  mode?: 'local' | 'cloud'
+  busy?: boolean
+  error?: string | null
+  finePrint?: string
+}) {
   return (
     <div className="login-screen">
       <div className="login-card">
@@ -60,13 +72,16 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         <p className="login-sub">
           ออกแบบบรรจุภัณฑ์ 3D พร้อม blueprint การพับ
           <br />
-          เข้าสู่ระบบเพื่อเริ่มงานของคุณ
+          {mode === 'local' ? 'เริ่มออกแบบได้ทันที ไม่ต้องเข้าสู่ระบบ' : 'เข้าสู่ระบบเพื่อเริ่มงานของคุณ'}
         </p>
-        <button className="google-btn" onClick={onLogin}>
-          <GoogleG />
-          <span>เข้าสู่ระบบด้วย Google</span>
+        <button className="google-btn" onClick={onLogin} disabled={busy}>
+          {mode === 'cloud' && <GoogleG />}
+          <span>{busy ? 'กำลังเชื่อมต่อ…' : mode === 'local' ? 'เริ่มใช้งานบนเครื่องนี้' : 'เข้าสู่ระบบด้วย Google'}</span>
         </button>
-        <p className="login-fine">เดโม่ · ยังไม่ได้เชื่อมต่อบัญชี Google จริง</p>
+        {error && <p className="login-fine" role="alert">{error}</p>}
+        <p className="login-fine">{finePrint ?? (mode === 'local'
+          ? 'งานบันทึกในเบราว์เซอร์นี้เท่านั้น · ไม่เชื่อมบัญชีหรือข้อมูล Cloud'
+          : 'เข้าสู่ระบบอย่างปลอดภัยผ่าน Google')}</p>
       </div>
       <p className="login-footer">PackIt · เครื่องมือสร้างแพ็กเกจแบบพารามิเตอร์</p>
     </div>

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
 import type { Vessel } from '../core/vessel'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
@@ -177,6 +178,7 @@ export function VesselViewer3D({
   const dist = Math.max(vessel.H, vessel.labelR * 4) * 2.2
   return (
     <Canvas
+      events={safeCanvasEvents}
       camera={{ position: [dist * 0.45, dist * 0.3, dist], fov: 36, near: 1, far: 8000 }}
       role="img"
       aria-label="มุมมอง 3 มิติของภาชนะพร้อมฉลาก"

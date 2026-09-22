@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
 import {
   type Pouch,
@@ -287,6 +288,7 @@ export function PouchViewer3D({
   const dist = Math.max(pouch.H, pouch.W) * 2.6
   return (
     <Canvas
+      events={safeCanvasEvents}
       camera={{ position: [dist * 0.35, dist * 0.25, dist], fov: 36, near: 1, far: 8000 }}
       role="img"
       aria-label="มุมมอง 3 มิติของถุงพร้อมลาย"
