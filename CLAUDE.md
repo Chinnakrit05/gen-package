@@ -4,7 +4,10 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 
 ## คำสั่ง
 
+- ผู้ใช้ใหม่เริ่มที่ `README.md`: Node 24/npm 11, `npm ci` แล้ว `npm run dev:local` โดยไม่ต้องมี env/Docker; local-demo mode ไม่อ่าน env เดิมและใช้ mock AI หากไม่ได้กรอกคีย์ใน UI
+- `npm run setup:cloud` — สร้าง `.env.local` จาก `.env.cloud.example` เฉพาะเมื่อยังไม่มีไฟล์ ไม่ทับหรือพิมพ์คีย์
 - `npm run dev` — dev server ที่ port 5173 (strict)
+- `npm run build:local` / `npm run preview:local` — build/preview โหมด local แบบไม่ใช้ env Cloud (preview port 5173)
 - `npm run build` — typecheck (`tsc --noEmit`) + vite build
 - `npx tsc --noEmit` — typecheck อย่างเดียว
 - `npm test` — vitest (unit test ใน `src/**/*.test.ts`) — เทสต์เรขาคณิตเป็นเชิงตัวเลขล้วน:

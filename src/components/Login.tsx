@@ -48,11 +48,13 @@ function GoogleG() {
 
 export function Login({
   onLogin,
+  mode = 'cloud',
   busy = false,
   error,
-  finePrint = 'เดโม่ · ยังไม่ได้เชื่อมต่อบัญชี Google จริง',
+  finePrint,
 }: {
   onLogin: () => void
+  mode?: 'local' | 'cloud'
   busy?: boolean
   error?: string | null
   finePrint?: string
@@ -70,14 +72,16 @@ export function Login({
         <p className="login-sub">
           ออกแบบบรรจุภัณฑ์ 3D พร้อม blueprint การพับ
           <br />
-          เข้าสู่ระบบเพื่อเริ่มงานของคุณ
+          {mode === 'local' ? 'เริ่มออกแบบได้ทันที ไม่ต้องเข้าสู่ระบบ' : 'เข้าสู่ระบบเพื่อเริ่มงานของคุณ'}
         </p>
         <button className="google-btn" onClick={onLogin} disabled={busy}>
-          <GoogleG />
-          <span>{busy ? 'กำลังเชื่อมต่อ…' : 'เข้าสู่ระบบด้วย Google'}</span>
+          {mode === 'cloud' && <GoogleG />}
+          <span>{busy ? 'กำลังเชื่อมต่อ…' : mode === 'local' ? 'เริ่มใช้งานบนเครื่องนี้' : 'เข้าสู่ระบบด้วย Google'}</span>
         </button>
         {error && <p className="login-fine" role="alert">{error}</p>}
-        <p className="login-fine">{finePrint}</p>
+        <p className="login-fine">{finePrint ?? (mode === 'local'
+          ? 'งานบันทึกในเบราว์เซอร์นี้เท่านั้น · ไม่เชื่อมบัญชีหรือข้อมูล Cloud'
+          : 'เข้าสู่ระบบอย่างปลอดภัยผ่าน Google')}</p>
       </div>
       <p className="login-footer">PackIt · เครื่องมือสร้างแพ็กเกจแบบพารามิเตอร์</p>
     </div>

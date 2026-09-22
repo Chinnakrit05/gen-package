@@ -22,8 +22,21 @@ function boxSpecApi(env: Record<string, string | undefined>): Plugin {
 }
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
+  // Explicit opt-in sandbox: ignore both .env files and inherited public keys.
+  // Normal dev/build continue using the team's existing cloud configuration.
+  const localDemo = mode === 'local-demo'
+  const env = localDemo
+    ? { APP_ENV: 'development', VITE_APP_MODE: 'local', BOX_SPEC_BACKEND: 'mock' }
+    : loadEnv(mode, process.cwd(), '')
   return {
+    ...(localDemo ? {
+      envDir: false as const,
+      envPrefix: [],
+      define: {
+        'import.meta.env.VITE_APP_MODE': JSON.stringify('local'),
+        'import.meta.env.VITE_API_BASE_URL': JSON.stringify('/api/v1'),
+      },
+    } : {}),
     plugins: [
       react(),
       {

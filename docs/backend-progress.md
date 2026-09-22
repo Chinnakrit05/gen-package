@@ -255,3 +255,17 @@ Known gap: ต้องทดสอบ route นี้บน Vercel preview ด�
 - ตรวจ local browser regression **12 กรณีผ่าน** (รวม StrictMode): lazy → account → nested project, response update, keyed account/workspace switch ยืนยันว่า DOM และ animation objects/start times เป็นตัวเดิม; ready/error/login/unmount ไม่เหลือตัวโหลดค้าง และไม่มี console error
 - รันทวนได้ด้วย `npm run dev` แล้วเปิด `/tests/browser/loading-continuity.html` และกด Run; fixture ใช้ component/CSS จริง ไม่ต้องเชื่อม backend และไม่เพิ่ม dependency (เป็น browser check แยก ไม่รวมใน `npm test`)
 - `npm test`: **44 files/455 tests PASS**; production build PASS โดยมีคำเตือนขนาด 3D chunk เดิม ยังไม่ได้ตรวจแพตช์นี้บน deployed staging
+
+## Main onboarding preparation — 23 กันยายน 2026
+
+สถานะการเตรียม: **ผ่านการตรวจใน feature worktree; ต่อมาผู้ใช้อนุมัติ commit/push และรวมเข้า main เมื่อ 23 กันยายน 2026** ผล deploy และรายการ staging ที่ยังค้างต้องตรวจแยก ไม่ได้เปลี่ยน provider/config ในขั้นตอน Git
+
+- เพิ่ม README ทางเริ่มต้น Node 24/npm 11 → `npm ci` → `npm run dev:local`; ไม่ต้องมี env, Docker, Supabase หรือ Google login ใช้ local browser data ตามเดิม
+- `local-demo` แยก server config และปิด envDir/public env prefix; default AI เป็น mock โดยไม่ใช้คีย์/CLI ในเครื่องอัตโนมัติ แต่ผู้ใช้เลือกส่ง BYOK ผ่าน UI ได้ตามเดิม
+- เพิ่ม `build:local`/`preview:local` และหน้า local entry ที่บอกว่าเก็บงานในเครื่อง ไม่แสดง Google sign-in ปลอม; normal dev/build กับ Cloud config ไม่เปลี่ยน
+- เพิ่ม runtime pins, `.env.cloud.example` และ `setup:cloud` แบบ exclusive copy ที่ไม่ทับ/พิมพ์ env เดิม; `.gitignore` อนุญาตเฉพาะ env templates ที่ระบุชื่อไว้
+- ตรวจจาก clean source snapshot ที่ไม่มี `.env.local` และติดตั้ง `node_modules` ใหม่ด้วย `npm ci`: **46 files/460 tests PASS**, local build PASS, dev/preview root+health 200 และ AI mock PASS; ตั้ง inherited env เป็นค่าจำลอง Cloud/production ที่ใช้ไม่ได้แล้ว `dev:local` ยังรัน isolated ได้
+- Browser บน origin ทดสอบแยก `packit-onboarding.localhost:5173`: local entry → editor/3D → export UI → reload จาก preview ผ่านโดยไม่ login/ไม่มี console error; มี THREE.Clock deprecation warning เดิม ส่วน download event ของ SVG timeout จึงยังไม่รับรอง browser file delivery รอบนี้ (export byte/structure unit tests ผ่าน)
+- Normal Cloud build ด้วย dummy public/private sentinels ผ่าน และตรวจ frontend ว่ามี public config แต่ไม่มี server secret; ไม่ใช้ credentials จริงหรือเรียก remote Cloud ในการตรวจนี้
+- รันทดสอบเฉพาะ Windows/Node 24.19.0/npm 11.17.0; npm มี allow-scripts warning ของ esbuild แต่ install/tests/build ผ่านโดยไม่เปลี่ยน global approval policy; ยังมีคำเตือนขนาด 3D chunk เดิม
+- `origin/main` หลัง fetch ยังเป็น `8e0eea9` และรวมอยู่ใน feature history แล้ว; ไม่แก้ branch tracking, Vercel, Google, Supabase หรือ database นอกเครื่อง รายการก่อน merge อยู่ใน `docs/main-handoff.md` โดยต้องให้เจ้าของ Vercel ที่ติดตาม main ตรวจผลกระทบก่อน

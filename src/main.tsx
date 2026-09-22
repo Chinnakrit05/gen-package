@@ -66,7 +66,7 @@ function LocalDemoRoot() {
     localStorage.removeItem(AUTH_KEY)
     setAuthed(false)
   }
-  return authed ? <App onLogout={logout} /> : <Login onLogin={login} />
+  return authed ? <App onLogout={logout} /> : <Login mode="local" onLogin={login} />
 }
 
 function StartupMessage({ title, message }: { title: string; message: string }) {

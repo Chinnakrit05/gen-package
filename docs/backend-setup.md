@@ -1,8 +1,12 @@
 # PackIt backend local setup
 
-อัปเดตล่าสุด: 22 กันยายน 2026
+อัปเดตล่าสุด: 23 กันยายน 2026
 
 คู่มือนี้ครอบคลุม local Supabase, auth/session, project API ของ Phase 1 และสถานะ staging ที่ link แล้ว
+
+ถ้าต้องการออกแบบในเครื่องอย่างเดียว ดู [README](../README.md): `npm ci` แล้ว `npm run dev:local` ได้เลย **ไม่ต้องมี Docker หรือคีย์ใด ๆ** ขั้นตอนข้างล่างสำหรับผู้พัฒนา backend/Cloud เท่านั้น
+
+ถ้าใช้ Supabase development/staging ที่ทีมเตรียมไว้แล้ว รัน `npm run setup:cloud` เพื่อสร้าง `.env.local` แบบไม่ทับของเดิม รับ URL/keys จากผู้ดูแลผ่านช่องทางปลอดภัย แล้วรัน `npm run dev`; ไม่ต้องสร้าง OAuth client ใหม่ทุกเครื่อง และห้ามนำ server secret ไปไว้ใน `VITE_*`
 
 ## Prerequisites ที่ตรวจใช้
 
@@ -64,7 +68,7 @@ npm run supabase:stop
 
 ## Environment สำหรับแอป
 
-คัดลอก `.env.example` เป็น `.env.local` แล้วใช้ค่าจาก `npx supabase status`:
+รัน `npm run setup:cloud` (สร้างจาก `.env.cloud.example` เฉพาะเมื่อยังไม่มี `.env.local`) แล้วใช้ค่าจาก `npx supabase status`; ถ้ามีไฟล์อยู่แล้วให้แก้เฉพาะค่าที่ต้องการโดยรักษาค่าเดิมไว้:
 
 ```dotenv
 VITE_APP_MODE=cloud
@@ -171,7 +175,7 @@ npm run staging:readiness
 - `supabase db reset --local`: **PASS** — foundation, identity/workspace, project และ asset migrations พร้อม seed
 - `supabase test db`: **PASS** — 5 files, 133 assertions
 - `npm run db:test:integration`: **PASS** — 6 files, 9 tests; รวม Storage byte lifecycle, private access, quota/concurrency, project asset links และ legacy import dedupe
-- `npm test`: **PASS ล่าสุดใน local worktree** — 44 files, 455 unit tests (รวม tab-focus bootstrap และ loading UI/logo); loading continuity browser checks 12 กรณีผ่านแยกต่างหาก แพตช์ continuity ยังไม่ deploy
+- `npm test`: **PASS ล่าสุดใน local worktree** — 46 files, 460 unit tests (รวม onboarding isolation/no-overwrite, tab-focus bootstrap และ loading UI/logo); loading continuity browser checks 12 กรณีผ่านแยกต่างหาก; ผล deploy ของ continuity ยังไม่ได้ตรวจ
 - `npm run build`: **PASS หลัง P1.8** — API bundles, `tsc --noEmit` และ Vite production build
 - `npm run db:test:restore`: **PASS** — restore `app_private` ไป isolated database; project document, `project_assets`, asset metadata และ Storage object ที่คืนมามี ID/key/checksum ตรงกัน
 - `npm run test:e2e:local`: **PASS** — auth/account isolation, migration consent/raw backup/dedupe, trusted preset + portable roundtrip, clean/dirty cross-tab, offline create/delete/import/upload restrictions + edit/reconnect และ create/delete replay หลัง response หาย

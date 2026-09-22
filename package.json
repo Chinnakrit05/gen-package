@@ -3,11 +3,19 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": "24.x",
+    "npm": "11.x"
+  },
   "scripts": {
     "dev": "vite",
+    "dev:local": "vite --mode local-demo",
+    "setup:cloud": "node scripts/setup-cloud.mjs",
     "build:api": "node scripts/build-api.mjs",
     "build": "node scripts/build-api.mjs && tsc --noEmit && vite build",
+    "build:local": "npm run build -- --mode local-demo",
     "preview": "vite preview",
+    "preview:local": "vite preview --mode local-demo --port 5173 --strictPort",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "db:reset": "supabase db reset --local",
