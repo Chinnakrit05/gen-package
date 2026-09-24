@@ -313,7 +313,9 @@ export const DielineSVG = memo(function DielineSVG({
     setGuideLines((gs) => gs.filter((g) => g.id !== id))
     setHoverGuide(null)
   }
-  const pan = useRef<{ sx: number; sy: number; cx: number; cy: number; moved: boolean } | null>(null)
+  const pan = useRef<{ sx: number; sy: number; cx: number; cy: number; moved: boolean; over: boolean } | null>(null)
+  // กด space ค้าง = โหมดจับลากเลื่อน blueprint ได้ทุกระดับซูม (รวม 100% พอดีจอ) แบบ overscroll
+  const [spacePan, setSpacePan] = useState(false)
   // พินช์สองนิ้ว (ทัช/iPad) → ซูมเข้า-ออกที่จุดกึ่งกลางสองนิ้ว (เดสก์ท็อปใช้ Ctrl+ล้อ)
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map())
   const pinch = useRef<{ dist: number } | null>(null)
@@ -493,6 +495,42 @@ export const DielineSVG = memo(function DielineSVG({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [penMode, pen])
 
+  // กด space ค้าง = เข้าโหมดจับลากเลื่อนมุมมอง (เหมือนโปรแกรมออกแบบ) — ใช้ได้ทุกระดับซูม
+  // เว้นเมื่อกำลังพิมพ์ในช่อง/ปุ่มโฟกัสอยู่ หรือกำลังแก้ข้อความบน blueprint (space ต้องพิมพ์เว้นวรรคได้)
+  useEffect(() => {
+    if (!editable || penMode) return
+    // เว้นเฉพาะช่องกรอกข้อความจริง — ปุ่ม/แท็บที่โฟกัสอยู่ไม่กัน (preventDefault กันปุ่มถูกกดซ้ำเอง)
+    const typing = () => {
+      const el = document.activeElement as HTMLElement | null
+      return (
+        !!el &&
+        (el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          el.tagName === 'SELECT' ||
+          el.isContentEditable)
+      )
+    }
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' && e.key !== ' ') return
+      if (editing || typing()) return
+      e.preventDefault() // กันหน้าเลื่อน/ปุ่มโฟกัสถูกกด
+      if (!e.repeat) setSpacePan(true)
+    }
+    const up = (e: KeyboardEvent) => {
+      if (e.code === 'Space' || e.key === ' ') setSpacePan(false)
+    }
+    const reset = () => setSpacePan(false)
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    window.addEventListener('blur', reset)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', reset)
+      setSpacePan(false)
+    }
+  }, [editable, penMode, editing])
+
   // --- แก้จุด path ทีละจุด (เฟส 2) ---
   const rotPt = (px: number, py: number, cx: number, cy: number, deg: number) => {
     const r = (deg * Math.PI) / 180
@@ -578,9 +616,12 @@ export const DielineSVG = memo(function DielineSVG({
       const dxS = e.clientX - pan.current.sx
       const dyS = e.clientY - pan.current.sy
       if (Math.abs(dxS) + Math.abs(dyS) > 3) pan.current.moved = true
-      if (zoom > 1) {
+      // ซูมเข้า → เลื่อนได้ในกรอบเนื้อหา; กด space → เลื่อนได้อิสระ (overscroll) แม้พอดีจอ
+      if (pan.current.over || zoom > 1) {
         const scale = svgRef.current?.getScreenCTM()?.a || 1
-        setCenter(clampCenter(pan.current.cx - dxS / scale, pan.current.cy - dyS / scale))
+        const nx = pan.current.cx - dxS / scale
+        const ny = pan.current.cy - dyS / scale
+        setCenter(pan.current.over ? clampPan(nx, ny) : clampCenter(nx, ny))
       }
       return
     }
@@ -712,8 +753,20 @@ export const DielineSVG = memo(function DielineSVG({
     if (penMode) return penDown(e)
     if (!editable || grab.current || pinch.current) return
     if (editing) setEditing(null) // คลิกพื้นที่ว่าง = ออกจากโหมดแก้ข้อความ
-    pan.current = { sx: e.clientX, sy: e.clientY, cx: viewCx, cy: viewCy, moved: false }
+    pan.current = { sx: e.clientX, sy: e.clientY, cx: viewCx, cy: viewCy, moved: false, over: spacePan }
     capture(e)
+  }
+
+  // กด space ค้างแล้วลาก = จับเลื่อนมุมมองได้จากทุกที่ (แม้บนลาย) — ดัก capture phase เพื่อกันไม่ให้ไปลากลาย
+  const onDownCapture = (e: React.PointerEvent) => {
+    if (spacePan && editable && !penMode && !pinch.current && !grab.current) {
+      e.stopPropagation()
+      if (editing) setEditing(null)
+      pan.current = { sx: e.clientX, sy: e.clientY, cx: viewCx, cy: viewCy, moved: false, over: true }
+      capture(e)
+      return
+    }
+    pinchDown(e)
   }
 
   // เพิ่มเส้นไกด์ตรงกลางมุมมองปัจจุบัน
@@ -740,6 +793,15 @@ export const DielineSVG = memo(function DielineSVG({
     x: Math.min(Math.max(x, -pad), dieline.width + pad),
     y: Math.min(Math.max(y, -pad), dieline.height + pad),
   })
+  // ขอบเขตแบบ overscroll (โหมด space) — เลื่อนแผ่นออกได้อิสระ แต่คงเนื้อหาไว้ในจออย่างน้อย ~25%
+  const clampPan = (x: number, y: number) => {
+    const keepX = Math.min(dieline.width, vw) * 0.25
+    const keepY = Math.min(dieline.height, vh) * 0.25
+    return {
+      x: Math.min(Math.max(x, keepX - vw / 2), dieline.width - keepX + vw / 2),
+      y: Math.min(Math.max(y, keepY - vh / 2), dieline.height - keepY + vh / 2),
+    }
+  }
   // ซูมโดยตรึงจุดโฟกัส (fx,fy บนแผ่น) ให้อยู่ที่เดิม
   const zoomAt = (factor: number, fx: number, fy: number) => {
     const nz = Math.min(MAXZOOM, Math.max(1, zoom * factor))
@@ -874,7 +936,7 @@ export const DielineSVG = memo(function DielineSVG({
     )}
     <svg
       ref={svgRef}
-      className={`dieline-svg${zoom > 1 ? ' zoomed' : ''}${penMode ? ' pen' : ''}`}
+      className={`dieline-svg${zoom > 1 ? ' zoomed' : ''}${spacePan ? ' grabbable' : ''}${penMode ? ' pen' : ''}`}
       viewBox={`${viewCx - vw / 2} ${viewCy - vh / 2} ${vw} ${vh}`}
       preserveAspectRatio="xMidYMid meet"
       onPointerMove={onMoveEvt}
@@ -883,7 +945,7 @@ export const DielineSVG = memo(function DielineSVG({
       // กดพื้นที่ว่าง = เริ่ม pan / คลิกเปล่า = ยกเลิกการเลือก
       onPointerDown={onBgDown}
       // พินช์สองนิ้ว: ติดตามที่ capture phase (ทำงานก่อน handler ของ artwork ที่ stopPropagation)
-      onPointerDownCapture={pinchDown}
+      onPointerDownCapture={onDownCapture}
       onPointerMoveCapture={pinchMove}
       onPointerUpCapture={pinchUp}
       onPointerCancelCapture={pinchUp}

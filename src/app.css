@@ -1677,6 +1677,15 @@ button[aria-disabled='true'] {
 .dieline-svg.zoomed:active {
   cursor: grabbing;
 }
+/* กด space ค้าง = โหมดจับเลื่อน (grab) ทุกที่บนแผ่น แม้ยังไม่ซูม */
+.dieline-svg.grabbable,
+.dieline-svg.grabbable * {
+  cursor: grab;
+}
+.dieline-svg.grabbable:active,
+.dieline-svg.grabbable:active * {
+  cursor: grabbing;
+}
 .bp-tools {
   position: absolute;
   left: 12px;
