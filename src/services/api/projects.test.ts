@@ -49,7 +49,8 @@ describe('project API client', () => {
     const operationId = crypto.randomUUID()
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       const headers = new Headers(init.headers)
-      expect(headers.get('if-match')).toBe('"7"')
+      expect(headers.get('x-expected-revision')).toBe('7')
+      expect(headers.has('if-match')).toBe(false)
       expect(headers.get('idempotency-key')).toBe(operationId)
       expect(init.body).toBeUndefined()
       return new Response(JSON.stringify({

@@ -322,7 +322,7 @@ interface CloudProject {
 | POST `/projects` | workspaceId, name, documentSchemaVersion, document, operationId | CloudProject, revision 1 |
 | GET `/projects/:id` | project id | CloudProject + referenced asset metadata ที่ได้รับอนุญาต |
 | PUT `/projects/:id` | expectedRevision, name, documentSchemaVersion, document, operationId | mutation receipt; revision และ updatedAt ของการ save นี้ |
-| DELETE `/projects/:id` | `If-Match: "<revision>"` และ `Idempotency-Key: <operation UUID>` | soft-delete receipt; validate headers และไม่ใช้ DELETE body |
+| DELETE `/projects/:id` | `X-Expected-Revision: <revision>` และ `Idempotency-Key: <operation UUID>` | soft-delete receipt; validate headers และไม่ใช้ DELETE body (Vercel ตรวจ `If-Match` ก่อนถึง API) |
 | POST `/projects/import-legacy` | stable source identifiers + hash + document/name + operationId | project mapping/receipt; duplicate import ไม่สร้างงานซ้ำ |
 | POST `/assets/upload-intents` | workspaceId, purpose, declaredMime, declaredSize, operationId | assetId + restricted upload ticket + provider-specific expiry |
 | POST `/assets/:id/complete` | operationId | ready metadata หรือ processing/rejected; ต้องตรวจ bytes จริง |
