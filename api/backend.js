@@ -57417,10 +57417,11 @@ function createApiRouter(config2, dependencies = {}) {
         }
         if (req.method === "DELETE") {
           rejectDeleteBody(req);
-          const ifMatch = headerValue(req, "if-match");
-          const match = ifMatch && /^"([1-9]\d*)"$/.exec(ifMatch.trim());
-          if (!match) throw new HttpError(422, "VALIDATION_ERROR", "If-Match \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 revision \u0E43\u0E19\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2B\u0E21\u0E32\u0E22\u0E04\u0E33\u0E1E\u0E39\u0E14");
-          const expectedRevision = parseOrThrow(expectedRevisionSchema.safeParse(match[1]));
+          const revisionHeader = headerValue(req, "x-expected-revision");
+          if (!revisionHeader || !/^[1-9]\d*$/.test(revisionHeader)) {
+            throw new HttpError(422, "VALIDATION_ERROR", "X-Expected-Revision \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 revision \u0E08\u0E33\u0E19\u0E27\u0E19\u0E40\u0E15\u0E47\u0E21\u0E1A\u0E27\u0E01");
+          }
+          const expectedRevision = parseOrThrow(expectedRevisionSchema.safeParse(revisionHeader));
           const operationId = parseOrThrow(operationIdSchema.safeParse(headerValue(req, "idempotency-key")));
           const input2 = { projectId, operationId, expectedRevision };
           const data = await projectService.remove(actor, input2);
