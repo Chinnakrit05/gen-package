@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   elCenter,
   elH,
@@ -12,6 +12,7 @@ import {
   faceBounds,
   decoLabel,
   FONTS,
+  ensureThaiFont,
   imgPAR,
   imageMaskSVG,
   textFont,
@@ -320,6 +321,9 @@ describe('ฟอนต์ + น้ำหนักตัวอักษร', () =
 
   it('มี Noto เป็นตัวแรก (ค่าเริ่มต้น) และทุกตัวมี css/nameTh', () => {
     expect(FONTS[0].id).toBe('noto')
+    expect(FONTS.map((f) => f.id)).toEqual(expect.arrayContaining([
+      'bai-jamjuree', 'mitr', 'chakra-petch', 'mali', 'pridi', 'kodchasan',
+    ]))
     for (const f of FONTS) {
       expect(f.css).toMatch(/^'.+'$/)
       expect(f.nameTh.length).toBeGreaterThan(0)
@@ -330,9 +334,35 @@ describe('ฟอนต์ + น้ำหนักตัวอักษร', () =
     const t = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', x: 0, y: 0, rot: 0, font: 'prompt', weight: 700 }) as { font?: string; weight?: number }
     expect(t.font).toBe('prompt')
     expect(t.weight).toBe(700)
+    const added = parseDeco({ type: 'text', text: 'ไทย', size: 10, color: '#000', x: 0, y: 0, rot: 0, font: 'mali' }) as TextEl
+    expect(added.font).toBe('mali')
     const plain = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', x: 0, y: 0, rot: 0, font: 'เดา', weight: 500 }) as { font?: string; weight?: number }
     expect(plain.font).toBeUndefined()
     expect(plain.weight).toBeUndefined()
+  })
+
+  it('โหลดเฉพาะฟอนต์ที่ใช้ก่อน export รวมไทยและละติน', async () => {
+    const doc = globalThis.document as unknown as { fonts?: { load: ReturnType<typeof vi.fn> } }
+    const previous = doc.fonts
+    const load = vi.fn(async (_font: string, _text: string) => [])
+    doc.fonts = { load }
+    try {
+      const selected: TextEl = {
+        id: 'text', type: 'text', text: 'Mali ไทย', size: 10, color: '#000', w: 40,
+        x: 0, y: 0, rot: 0, font: 'mali', weight: 700,
+      }
+      await ensureThaiFont([selected, { ...selected, id: 'hidden', font: 'mitr', hidden: true }])
+      expect(load.mock.calls.map(([font]) => font)).toEqual([
+        "400 16px 'Noto Sans Thai'",
+        "600 16px 'Noto Sans Thai'",
+        "700 16px 'Noto Sans Thai'",
+        "700 16px 'Mali'",
+      ])
+      expect(load.mock.calls[3][1]).toContain('Mali ไทย')
+    } finally {
+      if (previous) doc.fonts = previous
+      else delete doc.fonts
+    }
   })
 })
 

@@ -52,13 +52,18 @@ export interface TextEl extends BaseEl {
   curve?: number // ดัดข้อความเป็นส่วนโค้ง: องศารวมของส่วนโค้ง (+ = โก่งขึ้น, − = โก่งลง; 0 = ตรง)
 }
 
-// ฟอนต์ไทยที่ให้เลือก — ต้อง import ไฟล์น้ำหนัก 400/700 ใน main.tsx ให้ครบทุกตัว
-// (Noto เป็นค่าเริ่มต้น; เพิ่มฟอนต์ใหม่ต้องเพิ่มที่นี่ + import ใน main.tsx + ensureThaiFont โหลดให้)
+// ฟอนต์ไทยจาก Google Fonts ที่โฮสต์ในแอป (น้ำหนัก 400/700 อยู่ใน main.tsx)
 export const FONTS: { id: string; nameTh: string; css: string }[] = [
   { id: 'noto', nameTh: 'Noto Sans Thai', css: "'Noto Sans Thai'" },
   { id: 'sarabun', nameTh: 'Sarabun', css: "'Sarabun'" },
   { id: 'prompt', nameTh: 'Prompt', css: "'Prompt'" },
   { id: 'kanit', nameTh: 'Kanit', css: "'Kanit'" },
+  { id: 'bai-jamjuree', nameTh: 'Bai Jamjuree', css: "'Bai Jamjuree'" },
+  { id: 'mitr', nameTh: 'Mitr', css: "'Mitr'" },
+  { id: 'chakra-petch', nameTh: 'Chakra Petch', css: "'Chakra Petch'" },
+  { id: 'mali', nameTh: 'Mali', css: "'Mali'" },
+  { id: 'pridi', nameTh: 'Pridi', css: "'Pridi'" },
+  { id: 'kodchasan', nameTh: 'Kodchasan', css: "'Kodchasan'" },
 ]
 export const fontCss = (id?: string) => (FONTS.find((f) => f.id === id) ?? FONTS[0]).css
 // สตริง font สำหรับ canvas/measure: "<weight> <px>px <family>, sans-serif"
@@ -333,22 +338,34 @@ export function measureText(text: string, size: number, font?: string, weight?: 
   return Math.max(1, measureCtx.measureText(text || ' ').width)
 }
 
-// รอให้ฟอนต์ไทยโหลดครบก่อน rasterize ลง canvas — ถ้าฟอนต์ยังไม่มา canvas จะ fallback ไปฟอนต์ระบบ
-// ทำให้ตัวอักษรไทยในไฟล์ที่ export เพี้ยน/เมตริกไม่ตรงกับที่เห็นบนจอ
-export async function ensureThaiFont(): Promise<void> {
+const FONT_LOAD_SAMPLE = 'กขคง้๊AaZz09'
+
+export async function loadTextFont(font?: string, weight = 400, text = ''): Promise<void> {
   const fonts = document.fonts
   if (!fonts?.load) return
   try {
-    // ระบุตัวอย่างอักษรไทยเพื่อบังคับโหลด subset ที่มีสระ/วรรณยุกต์จริง — ทุกฟอนต์ที่ให้เลือก
-    const jobs: Promise<unknown>[] = []
-    for (const f of FONTS) {
-      for (const w of ['400', '700']) jobs.push(fonts.load(`${w} 16px ${f.css}`, 'กขคง้๊'))
-    }
-    await Promise.all(jobs)
-    await fonts.ready
+    await fonts.load(`${weight} 16px ${fontCss(font)}`, FONT_LOAD_SAMPLE + text)
   } catch {
-    // โหลดฟอนต์ไม่ได้ (ออฟไลน์ครั้งแรก ฯลฯ) — ปล่อยให้ fallback ดีกว่าค้างการ export
+    // ฟอนต์โหลดไม่ได้: ให้ browser ใช้ fallback แทนการค้างแก้ไข/ส่งออก
   }
+}
+
+// โหลดเฉพาะฟอนต์ที่งานใช้ก่อน rasterize; ใบสเปกและตารางโภชนาการใช้ Noto เพิ่มเอง
+export async function ensureThaiFont(decos: readonly Deco[] = []): Promise<void> {
+  const required = new Map<string, { font?: string; weight: number; text: string }>()
+  const add = (font: string | undefined, weight: number, text: string) => {
+    const key = `${font ?? 'noto'}:${weight}`
+    const existing = required.get(key)
+    if (existing) existing.text += text
+    else required.set(key, { font, weight, text })
+  }
+  add(undefined, 400, '')
+  add(undefined, 600, '')
+  add(undefined, 700, '')
+  for (const d of decos) {
+    if (d.type === 'text' && !d.hidden) add(d.font, d.weight ?? 400, d.text)
+  }
+  await Promise.all([...required.values()].map(({ font, weight, text }) => loadTextFont(font, weight, text)))
 }
 
 // อัปเดตความกว้างที่เก็บของ text element หลังแก้ข้อความ/ขนาด/ฟอนต์/น้ำหนัก
@@ -1376,7 +1393,7 @@ export async function renderArtworkCanvas(
   const visible = decos.filter((d) => !d.hidden)
   // ไม่มีทั้งลายและรูปพื้น → ไม่ต้อง raster (สีพื้นทึบวาดเป็น vector ใน PDF เอง)
   if (!visible.length && !base) return null
-  await ensureThaiFont() // ให้ตัวอักษรไทยที่ฝังลง PDF ตรงกับที่เห็นบนจอ
+  await ensureThaiFont(visible) // ให้ตัวอักษรที่ฝังลง PDF ตรงกับที่เห็นบนจอ
   const s = dpi / 25.4
   const canvas = document.createElement('canvas')
   canvas.width = Math.max(1, Math.round(sheetW * s))

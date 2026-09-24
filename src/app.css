@@ -1095,6 +1095,10 @@ main {
   max-width: 118px;
   text-overflow: ellipsis;
 }
+.deco-topbar .font-row select {
+  width: 150px;
+  max-width: 150px;
+}
 .deco-topbar .hint {
   display: none; /* คำอธิบายยาว ๆ ไม่ต้องแสดงในแถบ */
 }

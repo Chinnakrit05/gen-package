@@ -19,6 +19,7 @@ import {
   alignToFace,
   fontCss,
   FONTS,
+  loadTextFont,
   alignInSelection,
   distribute,
   stepRepeat,
@@ -39,6 +40,7 @@ import {
   renderArtworkCanvas,
   makeNutritionEl,
   type Deco,
+  type TextEl,
   type FillImage,
   type ShapeKind,
   type NutriRow,
@@ -910,6 +912,33 @@ export default function App({
     localStorage.setItem('packit-theme', dark ? 'dark' : 'light')
   }, [dark])
   const [decos, setDecos] = useState<Deco[]>(initialActive.decos)
+  const textFontKey = decos
+    .filter((d): d is TextEl => d.type === 'text' && !d.hidden)
+    .map((d) => `${d.id}:${d.font ?? 'noto'}:${d.weight ?? 400}:${d.size}:${d.text}`)
+    .sort()
+    .join('\u0000')
+  useEffect(() => {
+    const textDecos = decos.filter((d): d is TextEl => d.type === 'text' && !d.hidden)
+    if (!textDecos.length) return
+    let cancelled = false
+    void Promise.all(textDecos.map((d) => loadTextFont(d.font, d.weight ?? 400, d.text))).then(() => {
+      if (cancelled) return
+      setDecos((current) => {
+        let changed = false
+        const measured = current.map((d) => {
+          if (d.type !== 'text') return d
+          const width = withTextW(d).w
+          if (Math.abs(width - d.w) < 0.01) return d
+          changed = true
+          return { ...d, w: width }
+        })
+        return changed ? measured : current
+      })
+    })
+    return () => { cancelled = true }
+    // The key tracks text, face, weight, and size without rerunning after width-only corrections.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [textFontKey])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [renamingId, setRenamingId] = useState<string | null>(null) // เลเยอร์ที่กำลังแก้ชื่อ (ดับเบิลคลิก)
   const [lockAspect, setLockAspect] = useState(true) // ล็อกสัดส่วนกรอบรูป: ปรับกว้าง/สูงพร้อมกันตามสัดส่วนรูปจริง

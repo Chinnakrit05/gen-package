@@ -309,7 +309,7 @@ function assemblePDF(jpeg: Uint8Array, imgW: number, imgH: number): Uint8Array {
 }
 
 export async function specSheetPDFBytes(input: SpecSheetInput): Promise<Uint8Array> {
-  await ensureThaiFont() // รอฟอนต์ไทยก่อน rasterize ไม่งั้นข้อความในใบสเปกเพี้ยน
+  await ensureThaiFont(input.decos) // รอฟอนต์ที่ใบสเปกใช้ก่อน rasterize
   // โหลดรูปที่ลายอ้างถึง (โลโก้ภาพ + รูปพื้น) ก่อน rasterize ไม่งั้นพรีวิวจะขาดรูป
   const srcs = new Set<string>()
   for (const e of input.decos ?? []) if (!e.hidden && e.type === 'image') srcs.add(e.src)
