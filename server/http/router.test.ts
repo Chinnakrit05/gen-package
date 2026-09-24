@@ -481,13 +481,32 @@ describe('API router', () => {
       url: `/api/v1/projects/${projectId}`,
       headers: {
         authorization: 'Bearer verified-token',
-        'if-match': '"7"',
+        'x-expected-revision': '7',
         'idempotency-key': operationId,
       },
     }, target.res)
 
     expect(target.res.statusCode).toBe(200)
     expect(target.readBody()).toMatchObject({ data: { projectId, revision: 8 } })
+  })
+
+  it('rejects a delete without the application revision header', async () => {
+    const configuredRouter = projectRouter(repositoryStub({
+      async remove() { throw new Error('must not be called') },
+    }))
+    const target = response()
+    await configuredRouter({
+      method: 'DELETE',
+      url: `/api/v1/projects/${projectId}`,
+      headers: {
+        authorization: 'Bearer verified-token',
+        'if-match': '"7"',
+        'idempotency-key': operationId,
+      },
+    }, target.res)
+
+    expect(target.res.statusCode).toBe(422)
+    expect(target.readBody()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } })
   })
 
   it('validates asset upload intents and resolves their actor from the bearer token', async () => {

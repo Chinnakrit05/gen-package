@@ -431,10 +431,11 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
 
         if (req.method === 'DELETE') {
           rejectDeleteBody(req)
-          const ifMatch = headerValue(req, 'if-match')
-          const match = ifMatch && /^"([1-9]\d*)"$/.exec(ifMatch.trim())
-          if (!match) throw new HttpError(422, 'VALIDATION_ERROR', 'If-Match ต้องเป็น revision ในเครื่องหมายคำพูด')
-          const expectedRevision = parseOrThrow(expectedRevisionSchema.safeParse(match[1]))
+          const revisionHeader = headerValue(req, 'x-expected-revision')
+          if (!revisionHeader || !/^[1-9]\d*$/.test(revisionHeader)) {
+            throw new HttpError(422, 'VALIDATION_ERROR', 'X-Expected-Revision ต้องเป็น revision จำนวนเต็มบวก')
+          }
+          const expectedRevision = parseOrThrow(expectedRevisionSchema.safeParse(revisionHeader))
           const operationId = parseOrThrow(operationIdSchema.safeParse(headerValue(req, 'idempotency-key')))
           const input: DeleteProjectInput = { projectId, operationId, expectedRevision }
           const data = await projectService.remove(actor, input)

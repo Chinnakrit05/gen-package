@@ -94,7 +94,7 @@ export function deleteProject(
     {
       method: 'DELETE',
       headers: {
-        'if-match': `"${input.expectedRevision}"`,
+        'x-expected-revision': String(input.expectedRevision),
         'idempotency-key': input.operationId,
       },
       signal,
