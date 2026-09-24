@@ -862,7 +862,32 @@ export default function App({
     ?? initialStore.projects[0]
   const [projects, setProjects] = useState<Project[]>(initialStore.projects)
   const [activeId, setActiveId] = useState(initialActive.id)
-  const [projectBusy, setProjectBusy] = useState(false)
+  const [projectOperation, setProjectOperation] = useState<'create' | 'delete' | 'switch' | 'import' | 'reload' | 'copy' | 'logout' | null>(null)
+  const projectBusy = projectOperation !== null
+  const [visibleProjectOperation, setVisibleProjectOperation] = useState<typeof projectOperation>(null)
+  const startProjectOperation = (operation: NonNullable<typeof projectOperation>) => {
+    setVisibleProjectOperation(null)
+    setProjectOperation(operation)
+  }
+
+  useEffect(() => {
+    if (!projectOperation) {
+      setVisibleProjectOperation(null)
+      return
+    }
+    const timer = window.setTimeout(() => setVisibleProjectOperation(projectOperation), 320)
+    return () => window.clearTimeout(timer)
+  }, [projectOperation])
+
+  const projectOperationLabel = projectOperation && projectOperation === visibleProjectOperation ? {
+    create: 'กำลังสร้างงานใหม่…',
+    delete: 'กำลังลบงาน…',
+    switch: 'กำลังเปิดงาน…',
+    import: 'กำลังนำเข้างาน…',
+    reload: 'กำลังโหลดงานล่าสุด…',
+    copy: 'กำลังเก็บสำเนา…',
+    logout: 'กำลังออกจากระบบ…',
+  }[projectOperation] : null
   const [templateId, setTemplateId] = useState(initialActive.live.template)
   const [materialId, setMaterialId] = useState(initialActive.live.materialId)
   const [W, setW] = useState(initialActive.live.W)
@@ -1041,6 +1066,7 @@ export default function App({
   const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
   const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>('design')
   const asideRef = useRef<HTMLElement>(null)
+  const headerRef = useRef<HTMLElement>(null)
   // สลับขั้นตอน + เลื่อน sidebar ขึ้นบนสุด (จะได้ไม่ต้องเลื่อนหาแท็บเอง)
   const goStep = (tab: 'design' | 'artwork' | 'export') => {
     setSideTab(tab)
@@ -1416,7 +1442,7 @@ export default function App({
     if (cloud) {
       const current = flushInto(projects).find((project) => project.id === activeId)
       if (!current) return
-      setProjectBusy(true)
+      startProjectOperation('switch')
       try {
         const target = await cloud.switchProject(current, id)
         setProjects([target])
@@ -1424,7 +1450,7 @@ export default function App({
       } catch (error) {
         window.alert(error instanceof Error ? error.message : 'เปิดงานไม่สำเร็จ')
       } finally {
-        setProjectBusy(false)
+        setProjectOperation(null)
       }
       return
     }
@@ -1443,13 +1469,13 @@ export default function App({
         if (cloud) {
           const current = flushInto(projects).find((project) => project.id === activeId)
           if (!current) return
-          setProjectBusy(true)
+          startProjectOperation('create')
           void cloud.createProject(current, name).then((created) => {
             setProjects([created])
             openProject(created)
           }).catch((error: unknown) => {
             window.alert(error instanceof Error ? error.message : 'สร้างงานไม่สำเร็จ')
-          }).finally(() => setProjectBusy(false))
+          }).finally(() => setProjectOperation(null))
           return
         }
         const p = freshProject(projects.length + 1)
@@ -1468,13 +1494,13 @@ export default function App({
     if (cloud) {
       const current = flushInto(projects).find((project) => project.id === activeId)
       if (!current) return
-      setProjectBusy(true)
+      startProjectOperation('delete')
       void cloud.deleteProject(current, id).then((next) => {
         setProjects([next])
         if (next.id !== activeId) openProject(next)
       }).catch((error: unknown) => {
         window.alert(error instanceof Error ? error.message : 'ลบงานไม่สำเร็จ')
-      }).finally(() => setProjectBusy(false))
+      }).finally(() => setProjectOperation(null))
       return
     }
     let rest = projects.filter((p) => p.id !== id)
@@ -1530,7 +1556,7 @@ export default function App({
     if (cloud) {
       const current = flushInto(projects).find((project) => project.id === activeId)
       if (!current) return
-      setProjectBusy(true)
+      startProjectOperation('import')
       try {
         const imported = await cloud.importProject(current, res.project)
         setProjects([imported])
@@ -1539,7 +1565,7 @@ export default function App({
         window.alert(error instanceof Error ? error.message : 'นำเข้างานขึ้น cloud ไม่สำเร็จ')
         return
       } finally {
-        setProjectBusy(false)
+        setProjectOperation(null)
       }
       if (res.warnings.length) {
         window.alert(`นำเข้าสำเร็จ แต่มีการปรับข้อมูลบางส่วน:\n• ${res.warnings.join('\n• ')}`)
@@ -2063,10 +2089,42 @@ export default function App({
   )
   // แท็บ "ออกแบบ" = โชว์ 3D ของแพ็กเกจเป็นจอหลัก (แทน blueprint)
   const design3D = sideTab === 'design'
+  const renderStepTabs = (className: string) => (
+    <div className={`tabbar ${className}`} role="tablist" aria-label="ขั้นตอนงาน">
+      {(
+        [
+          ['design', 'ออกแบบ'],
+          ['artwork', 'ตกแต่ง'],
+          ['export', 'ส่งออก'],
+        ] as const
+      ).map(([id, label]) => (
+        <button
+          key={id}
+          role="tab"
+          className={`tab${sideTab === id ? ' active' : ''}`}
+          aria-selected={sideTab === id}
+          onClick={() => {
+            setSideTab(id)
+            if (className === 'mobile-tabbar') {
+              requestAnimationFrame(() => {
+                const aside = asideRef.current
+                const header = headerRef.current
+                if (!aside || !header) return
+                aside.scrollTop = 0
+                window.scrollTo({ top: window.scrollY + aside.getBoundingClientRect().top - header.getBoundingClientRect().height - 8 })
+              })
+            }
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
 
   return (
     <div className="app">
-      <header>
+      <header ref={headerRef}>
         <h1>PackIt</h1>
         <nav className="projects" aria-label="งานที่บันทึกไว้">
           <button
@@ -2113,8 +2171,13 @@ export default function App({
         </nav>
         {cloud && (
           <div className="cloud-save-wrap">
-            <span className={`cloud-save-state ${cloud.saveState}`} title="สถานะบันทึก cloud">
-              {cloudSaveLabel(cloud.saveState)}
+            <span
+              className={`cloud-save-state ${projectOperationLabel ? 'saving' : cloud.saveState}`}
+              title={projectOperationLabel || 'สถานะบันทึก cloud'}
+              role={projectOperationLabel ? 'status' : undefined}
+              aria-live={projectOperationLabel ? 'polite' : undefined}
+            >
+              {projectOperationLabel || cloudSaveLabel(cloud.saveState)}
             </span>
             {cloud.saveState === 'conflict' && (
               <>
@@ -2124,13 +2187,13 @@ export default function App({
                   onClick={() => {
                     const current = flushInto(projects).find((project) => project.id === activeId)
                     if (!current || !window.confirm('ทิ้ง draft ในแท็บนี้แล้วโหลด cloud ล่าสุด?')) return
-                    setProjectBusy(true)
+                    startProjectOperation('reload')
                     void cloud.resolveConflict(current, 'reload').then((resolved) => {
                       setProjects([resolved])
                       openProject(resolved)
                     }).catch((error: unknown) => {
                       window.alert(error instanceof Error ? error.message : 'โหลด cloud ล่าสุดไม่สำเร็จ')
-                    }).finally(() => setProjectBusy(false))
+                    }).finally(() => setProjectOperation(null))
                   }}
                 >โหลดล่าสุด</button>
                 <button
@@ -2139,13 +2202,13 @@ export default function App({
                   onClick={() => {
                     const current = flushInto(projects).find((project) => project.id === activeId)
                     if (!current) return
-                    setProjectBusy(true)
+                    startProjectOperation('copy')
                     void cloud.resolveConflict(current, 'copy').then((resolved) => {
                       setProjects([resolved])
                       openProject(resolved)
                     }).catch((error: unknown) => {
                       window.alert(error instanceof Error ? error.message : 'บันทึกเป็นสำเนาไม่สำเร็จ')
-                    }).finally(() => setProjectBusy(false))
+                    }).finally(() => setProjectOperation(null))
                   }}
                 >เก็บเป็นสำเนา</button>
               </>
@@ -2183,40 +2246,30 @@ export default function App({
             disabled={projectBusy}
             onClick={() => {
               const current = flushInto(projects).find((project) => project.id === activeId)
-              setProjectBusy(true)
+              startProjectOperation('logout')
               void (async () => {
                 if (cloud && current) await cloud.beforeLogout(current)
                 await onLogout()
               })().catch((error: unknown) => {
                 window.alert(error instanceof Error ? error.message : 'ออกจากระบบไม่สำเร็จ')
-              }).finally(() => setProjectBusy(false))
+              }).finally(() => setProjectOperation(null))
             }}
           >
             ออกจากระบบ
           </button>
         )}
+        {renderStepTabs('mobile-tabbar')}
+        {projectOperationLabel && (
+          <div className="project-progress" role="progressbar" aria-label={projectOperationLabel}>
+            <span className="project-progress-beat" />
+            <span className="project-progress-beat" />
+            <span className="project-progress-beat" />
+          </div>
+        )}
       </header>
       <div className="body">
         <aside ref={asideRef}>
-          <div className="tabbar" role="tablist">
-            {(
-              [
-                ['design', 'ออกแบบ'],
-                ['artwork', 'ตกแต่ง'],
-                ['export', 'ส่งออก'],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                role="tab"
-                className={`tab${sideTab === id ? ' active' : ''}`}
-                aria-selected={sideTab === id}
-                onClick={() => setSideTab(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {renderStepTabs('aside-tabbar')}
 
           {sideTab === 'design' && (
           <>

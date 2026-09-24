@@ -149,6 +149,7 @@ h3,
 }
 
 header {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -160,6 +161,40 @@ header {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+}
+
+.project-progress {
+  position: absolute;
+  bottom: 0;
+  left: 18px;
+  right: 18px;
+  display: flex;
+  gap: 4px;
+  height: 3px;
+  pointer-events: none;
+}
+
+.project-progress-beat {
+  flex: 1;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  animation: project-progress-beat 1.2s ease-in-out infinite;
+}
+
+.project-progress-beat:nth-child(2) { animation-delay: 160ms; }
+.project-progress-beat:nth-child(3) { animation-delay: 320ms; }
+
+@keyframes project-progress-beat {
+  0%, 100% { opacity: .22; }
+  40% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-progress-beat {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 header h1 {
@@ -2234,12 +2269,30 @@ aside .art-actions .file-pick:only-child {
 
 /* --- แท็บแถบซ้าย (ออกแบบ/ตกแต่ง/ส่งออก) --- */
 .tabbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   gap: 4px;
-  background: var(--surface-2);
+  background: var(--surface-solid);
   border-radius: 9px;
   padding: 3px;
   margin-bottom: 4px;
+}
+.aside-tabbar {
+  isolation: isolate;
+}
+.aside-tabbar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% - 1px);
+  height: 17px;
+  background: var(--surface-solid);
+}
+.mobile-tabbar {
+  display: none;
 }
 .tabbar .tab {
   flex: 1;
@@ -2864,6 +2917,16 @@ aside .art-actions .file-pick:only-child {
   .projects {
     order: 3;
     flex-basis: 100%;
+  }
+  .mobile-tabbar {
+    display: flex;
+    order: 4;
+    flex-basis: 100%;
+    position: static;
+    margin-bottom: 0;
+  }
+  .aside-tabbar {
+    display: none;
   }
 
   .body {
