@@ -144,6 +144,16 @@ function useSheetTexture(
   return tex
 }
 
+// นามบัตรถูก gen เป็นแผ่นคลี่สองหน้า (card + card-back เรียงข้างกันสำหรับ blueprint)
+// แต่ใน 3D ต้องเป็นการ์ด "ใบเดียว" หมุนดูหน้า-หลังได้ จึงเรนเดอร์แยกเส้นทาง (CardModel)
+function isCardDieline(dieline: Dieline): boolean {
+  return (
+    dieline.panels.length === 2 &&
+    dieline.panels[0].id === 'card' &&
+    dieline.panels[1].id === 'card-back'
+  )
+}
+
 // เลื่อนกล้องให้เห็นแผ่นคลี่เต็มใบเมื่อขนาดแผ่นเปลี่ยนอย่างมีนัย
 // (ไม่ refit ทุกติ๊กของ slider เพื่อไม่แย่งมุมกล้องที่ผู้ใช้หมุนไว้)
 function FitCamera({ dieline }: { dieline: Dieline }) {
@@ -162,10 +172,13 @@ function FitCamera({ dieline }: { dieline: Dieline }) {
     const front = dieline.panels[0]
     const xs = front.outline.map((p) => p.x)
     const ys = front.outline.map((p) => p.y)
+    // นามบัตร: 3D เป็นการ์ดใบเดียวจัดกึ่งกลางที่ origin จึงเล็งจากครึ่งหนึ่งของขนาดหน้าเดียว
+    // (ไม่ใช่ทั้งแผ่นสองหน้า ไม่งั้นกล้องถอยไกลเกินไปเพราะแผ่นกว้างเป็นสองเท่า)
+    const card = isCardDieline(dieline)
     const cx = (Math.min(...xs) + Math.max(...xs)) / 2
     const cy = (Math.min(...ys) + Math.max(...ys)) / 2
-    const exX = Math.max(cx, dieline.width - cx)
-    const exY = Math.max(cy, dieline.height - cy)
+    const exX = card ? (Math.max(...xs) - Math.min(...xs)) / 2 : Math.max(cx, dieline.width - cx)
+    const exY = card ? (Math.max(...ys) - Math.min(...ys)) / 2 : Math.max(cy, dieline.height - cy)
 
     const persp = camera as THREE.PerspectiveCamera
     const tanV = Math.tan((persp.fov * Math.PI) / 360)
@@ -344,19 +357,85 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillIm
   )
 }
 
+// นามบัตรใน 3D = การ์ดใบเดียว (แผ่นบาง) พิมพ์ลายหน้าที่ +Z และลายหลังที่ -Z
+// ลายมาจาก texture แผ่นคลี่ผืนเดียวกับ blueprint (หน้าอยู่ช่วง x ซ้าย, หลังอยู่ช่วง x ขวา)
+// จึงคำนวณ UV ของแต่ละหน้าให้ชี้ไปช่วง x ของหน้านั้น ๆ — หลังกลับ (หมุนรอบแกน Y) ให้อ่านถูกด้าน
+function CardModel({ dieline, mat, decos, fillColor, fillImage }: ModelProps) {
+  const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage)
+  const front = dieline.panels[0]
+  const back = dieline.panels[1]
+  const fxs = front.outline.map((p) => p.x)
+  const ys = front.outline.map((p) => p.y)
+  const bxs = back.outline.map((p) => p.x)
+  const w = Math.max(...fxs) - Math.min(...fxs)
+  const h = Math.max(...ys) - Math.min(...ys)
+  const fx0 = Math.min(...fxs)
+  const bx0 = Math.min(...bxs)
+  const t = Math.max(mat.thickness, 0.3)
+  const W = dieline.width
+  const H = dieline.height
+
+  // สร้างระนาบสองหน้าพร้อม UV ที่ชี้ไปช่วง x ของหน้านั้นบน texture แผ่นคลี่
+  const { frontGeo, backGeo } = useMemo(() => {
+    const mk = (x0: number) => {
+      const g = new THREE.PlaneGeometry(w, h)
+      const pos = g.attributes.position
+      const uv = new Float32Array(pos.count * 2)
+      for (let i = 0; i < pos.count; i++) {
+        const sheetX = x0 + (pos.getX(i) + w / 2) // local x (-w/2..w/2) → x ของหน้าบนแผ่น
+        const sheetY = h / 2 - pos.getY(i) // local y → y ของแผ่น (y ชี้ลง)
+        uv[i * 2] = sheetX / W
+        uv[i * 2 + 1] = 1 - sheetY / H
+      }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+      return g
+    }
+    return { frontGeo: mk(fx0), backGeo: mk(bx0) }
+  }, [w, h, fx0, bx0, W, H])
+
+  useLayoutEffect(
+    () => () => {
+      frontGeo.dispose()
+      backGeo.dispose()
+    },
+    [frontGeo, backGeo],
+  )
+
+  const eps = 0.05
+  const rough = mat.roughness ?? 0.8
+  return (
+    <group>
+      {/* ตัวการ์ด: ความหนา + ขอบกระดาษ สีวัสดุล้วน */}
+      <mesh>
+        <boxGeometry args={[w, h, t]} />
+        <meshStandardMaterial color={mat.color} roughness={rough} metalness={0} />
+      </mesh>
+      {/* ด้านหน้า (+Z) */}
+      <mesh geometry={frontGeo} position={[0, 0, t / 2 + eps]}>
+        <meshStandardMaterial map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
+      </mesh>
+      {/* ด้านหลัง (-Z) — หมุน 180° รอบแกน Y ให้ลายอ่านถูกด้านเมื่อพลิกการ์ด */}
+      <mesh geometry={backGeo} position={[0, 0, -t / 2 - eps]} rotation={[0, Math.PI, 0]}>
+        <meshStandardMaterial map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
+      </mesh>
+    </group>
+  )
+}
+
 export function Viewer3D(props: ModelProps) {
+  const card = isCardDieline(props.dieline)
   return (
     <Canvas
       events={safeCanvasEvents}
       camera={{ position: [280, 220, 340], fov: 36, near: 1, far: 8000 }}
       role="img"
-      aria-label="มุมมอง 3 มิติของกล่องที่กำลังพับ"
+      aria-label={card ? 'มุมมอง 3 มิติของนามบัตร (หมุนดูหน้า-หลังได้)' : 'มุมมอง 3 มิติของกล่องที่กำลังพับ'}
     >
       <color attach="background" args={['#ffffff']} />
       <ambientLight intensity={0.9} />
       <directionalLight position={[250, 420, 300]} intensity={1.7} />
       <directionalLight position={[-220, 120, -260]} intensity={0.55} />
-      <FoldedModel {...props} />
+      {card ? <CardModel {...props} /> : <FoldedModel {...props} />}
       <OrbitControls makeDefault enableDamping />
       <FitCamera dieline={props.dieline} />
     </Canvas>
