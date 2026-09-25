@@ -2290,15 +2290,7 @@ aside .art-actions .file-pick:only-child {
 }
 .aside-tabbar {
   isolation: isolate;
-}
-.aside-tabbar::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(100% - 1px);
-  height: 17px;
-  background: var(--surface-solid);
+  top: -16px;
 }
 .mobile-tabbar {
   display: none;
