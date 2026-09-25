@@ -11,6 +11,8 @@ import {
   selectionBounds,
   faceBounds,
   decoLabel,
+  FRAMES,
+  framePath,
   FONTS,
   ensureThaiFont,
   imgPAR,
@@ -559,6 +561,37 @@ describe('มาสก์รูปตามทรง + ข้อความเ�
     expect(p.maskSides).toBe(12)
     const bad = parseDeco({ type: 'image', src: 'data:image/png;base64,A', aspect: 1, w: 20, h: 20, maskShape: 'blob', x: 0, y: 0, rot: 0 }) as { maskShape?: string }
     expect(bad.maskShape).toBeUndefined()
+  })
+
+  it('framePath: ทุกกรอบ (ยกเว้น none) คืน path ปิดวง เริ่ม M', () => {
+    for (const f of FRAMES) {
+      const d = framePath(f.id, 40, 30)
+      if (f.id === 'none') {
+        expect(d).toBe('')
+        continue
+      }
+      expect(d.startsWith('M')).toBe(true)
+      expect(d.trimEnd().endsWith('Z')).toBe(true)
+      // ตัวเลขทุกตัวใน path ต้อง finite (กัน NaN ทำ clip พัง)
+      expect(d.match(/-?\d+(\.\d+)?/g)!.every((n) => Number.isFinite(Number(n)))).toBe(true)
+    }
+  })
+
+  it('imageMaskSVG: frame ชนะ maskShape/circle/radius และใช้ <path> + translate', () => {
+    const svg = imageMaskSVG(imgMask({ frame: 'heart', maskShape: 'star', circle: true, radius: 5 }) as never)
+    expect(svg).toContain('<clipPath')
+    expect(svg).toContain('<path')
+    expect(svg).toContain('translate(10 10)') // x,y ของกรอบ
+    expect(svg).not.toContain('<polygon')
+  })
+
+  it('parseDeco: image รับ frame ที่รู้จัก, ปัด none/ค่ามั่วทิ้ง', () => {
+    const p = parseDeco({ type: 'image', src: 'data:image/png;base64,A', aspect: 1, w: 20, h: 20, frame: 'hexagon', x: 0, y: 0, rot: 0 }) as { frame?: string }
+    expect(p.frame).toBe('hexagon')
+    const none = parseDeco({ type: 'image', src: 'data:image/png;base64,A', aspect: 1, w: 20, h: 20, frame: 'none', x: 0, y: 0, rot: 0 }) as { frame?: string }
+    expect(none.frame).toBeUndefined()
+    const bad = parseDeco({ type: 'image', src: 'data:image/png;base64,A', aspect: 1, w: 20, h: 20, frame: 'zzz', x: 0, y: 0, rot: 0 }) as { frame?: string }
+    expect(bad.frame).toBeUndefined()
   })
 
   it('textFxAttrs/textShadowSVG: ขอบใช้ paint-order, เงาสร้าง filter + feDropShadow', () => {

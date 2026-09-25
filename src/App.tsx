@@ -39,6 +39,8 @@ import {
   fillImageSVGLayer,
   renderArtworkCanvas,
   makeNutritionEl,
+  FRAMES,
+  framePath,
   type Deco,
   type TextEl,
   type FillImage,
@@ -3741,50 +3743,50 @@ export default function App({
                           value={selected.radius ?? 0}
                           min={0}
                           max={Math.round(Math.min(selected.w, selected.h) / 2)}
-                          disabled={aiBusy || !!selected.circle || !!selected.maskShape}
-                          onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, radius: v || undefined, maskShape: undefined } : d))}
+                          disabled={aiBusy || !!selected.circle || !!selected.maskShape || (!!selected.frame && selected.frame !== 'none')}
+                          onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, radius: v || undefined, maskShape: undefined, circle: undefined, frame: undefined } : d))}
                         />
-                        <button
-                          className="tb-ic"
-                          title="มาสก์วงรี"
-                          aria-label="มาสก์วงรี"
-                          aria-pressed={!!selected.circle}
-                          disabled={aiBusy}
-                          onClick={() => patchSelected((d) => (d.type === 'image' ? { ...d, circle: !d.circle || undefined, maskShape: undefined, maskSides: undefined } : d))}
-                        >
-                          <IconEllipse />
-                        </button>
-                        <span className="hint">มาสก์ทรง:</span>
-                        {(['triangle', 'polygon', 'star'] as const).map((sh) => (
-                          <button
-                            key={sh}
-                            className="tb-ic"
-                            title={sh === 'triangle' ? 'มาสก์สามเหลี่ยม' : sh === 'polygon' ? 'มาสก์หลายเหลี่ยม' : 'มาสก์ดาว'}
-                            aria-label={sh === 'triangle' ? 'มาสก์สามเหลี่ยม' : sh === 'polygon' ? 'มาสก์หลายเหลี่ยม' : 'มาสก์ดาว'}
-                            disabled={aiBusy}
-                            aria-pressed={selected.maskShape === sh}
-                            onClick={() =>
-                              patchSelected((d) =>
-                                d.type === 'image'
-                                  ? { ...d, maskShape: d.maskShape === sh ? undefined : sh, circle: undefined, radius: undefined }
-                                  : d,
-                              )
-                            }
-                          >
-                            {sh === 'triangle' ? <IconTriangle /> : sh === 'polygon' ? <IconPolygon /> : <IconStar />}
-                          </button>
-                        ))}
-                        {(selected.maskShape === 'polygon' || selected.maskShape === 'star') && (
-                          <DimField
-                            label={selected.maskShape === 'star' ? 'จำนวนแฉก' : 'จำนวนด้าน'}
-                            icon={selected.maskShape === 'star' ? <IconStar /> : <IconPolygon />}
-                            value={selected.maskSides ?? (selected.maskShape === 'star' ? 5 : 6)}
-                            min={3}
-                            max={12}
-                            disabled={aiBusy}
-                            onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, maskSides: Math.round(v) } : d))}
-                          />
-                        )}
+                        <span className="hint">กรอบ:</span>
+                        <div className="frame-gallery">
+                          {FRAMES.map((f) => {
+                            const active = (selected.frame ?? 'none') === f.id
+                            return (
+                              <button
+                                key={f.id}
+                                className={`tb-ic frame-ic${active ? ' active' : ''}`}
+                                title={f.nameTh}
+                                aria-label={`กรอบ${f.nameTh}`}
+                                aria-pressed={active}
+                                disabled={aiBusy}
+                                onClick={() =>
+                                  patchSelected((d) =>
+                                    d.type === 'image'
+                                      ? {
+                                          ...d,
+                                          frame: f.id === 'none' ? undefined : f.id,
+                                          circle: undefined,
+                                          maskShape: undefined,
+                                          maskSides: undefined,
+                                          radius: undefined,
+                                        }
+                                      : d,
+                                  )
+                                }
+                              >
+                                {f.id === 'none' ? (
+                                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                                    <rect x="3" y="3" width="14" height="14" rx="2" strokeDasharray="2.5 2.5" />
+                                    <path d="M5 15 15 5" />
+                                  </svg>
+                                ) : (
+                                  <svg width="18" height="18" viewBox="-1 -1 22 22" aria-hidden="true">
+                                    <path d={framePath(f.id, 20, 20)} fill="currentColor" />
+                                  </svg>
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </>
                     )}
                     <DimField

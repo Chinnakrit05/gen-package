@@ -32,6 +32,7 @@ export interface ImageEl extends BaseEl {
   circle?: boolean // มาสก์เป็นวงรีตามกรอบ
   maskShape?: 'triangle' | 'polygon' | 'star' // มาสก์เป็นรูปทรง (ทับ circle/radius)
   maskSides?: number // จำนวนด้าน/แฉกของมาสก์ (polygon/star)
+  frame?: FrameId // กรอบสำเร็จรูปจากคลัง (ทับ circle/radius/maskShape เมื่อ ≠ 'none')
   preset?: string // ถ้ามาจากไลบรารีลาย = id พรีเซ็ต (เปลี่ยนสีแล้ว regen src ได้)
   presetColor?: string // สีที่ใช้สร้างลายพรีเซ็ตนี้
 }
@@ -484,8 +485,80 @@ export function makeImageEl(dieline: Dieline, src: string, aspect: number): Imag
 export const imgPAR = (fit?: string) =>
   fit === 'contain' ? 'xMidYMid meet' : fit === 'stretch' ? 'none' : 'xMidYMid slice'
 export const maskId = (id: string) => `mask-${id}`
-// clipPath (มุมโค้ง/วงรี) เป็นสตริงใส่ใน <defs> — พิกัดจริงบนแผ่น (userSpaceOnUse)
+
+// --- คลังกรอบสำเร็จรูป (frame library) — ลากรูปเข้ากรอบทรงต่าง ๆ แบบ Canva ---
+export type FrameId =
+  | 'none' | 'circle' | 'rounded' | 'squircle' | 'triangle' | 'diamond'
+  | 'pentagon' | 'hexagon' | 'star' | 'heart' | 'arch'
+export const FRAMES: { id: FrameId; nameTh: string }[] = [
+  { id: 'none', nameTh: 'ไม่มีกรอบ' },
+  { id: 'circle', nameTh: 'วงกลม' },
+  { id: 'rounded', nameTh: 'มุมมน' },
+  { id: 'squircle', nameTh: 'มุมมนมาก' },
+  { id: 'triangle', nameTh: 'สามเหลี่ยม' },
+  { id: 'diamond', nameTh: 'ข้าวหลามตัด' },
+  { id: 'pentagon', nameTh: 'ห้าเหลี่ยม' },
+  { id: 'hexagon', nameTh: 'หกเหลี่ยม' },
+  { id: 'star', nameTh: 'ดาว' },
+  { id: 'heart', nameTh: 'หัวใจ' },
+  { id: 'arch', nameTh: 'ซุ้มโค้ง' },
+]
+const FRAME_IDS = FRAMES.map((f) => f.id)
+export const isFrameId = (v: unknown): v is FrameId =>
+  typeof v === 'string' && (FRAME_IDS as string[]).includes(v)
+
+// เส้นรอบรูปกรอบในกล่องท้องถิ่น [0,0]-[w,h] (สตริง path 'd') — ใช้ทั้ง clipPath (SVG) และ Path2D (canvas)
+export function framePath(id: FrameId, w: number, h: number): string {
+  const fmt2 = (n: number) => Math.round(n * 100) / 100
+  const poly = (shape: ShapeKind, sides?: number) =>
+    shapeVertices(shape, w, h, sides)
+      .map((p, i) => `${i ? 'L' : 'M'} ${fmt2(w / 2 + p.x)} ${fmt2(h / 2 + p.y)}`)
+      .join(' ') + ' Z'
+  const round = (rr: number) => {
+    const r = Math.max(0, Math.min(rr, w / 2, h / 2))
+    return (
+      `M ${fmt2(r)} 0 L ${fmt2(w - r)} 0 A ${fmt2(r)} ${fmt2(r)} 0 0 1 ${fmt2(w)} ${fmt2(r)} ` +
+      `L ${fmt2(w)} ${fmt2(h - r)} A ${fmt2(r)} ${fmt2(r)} 0 0 1 ${fmt2(w - r)} ${fmt2(h)} ` +
+      `L ${fmt2(r)} ${fmt2(h)} A ${fmt2(r)} ${fmt2(r)} 0 0 1 0 ${fmt2(h - r)} ` +
+      `L 0 ${fmt2(r)} A ${fmt2(r)} ${fmt2(r)} 0 0 1 ${fmt2(r)} 0 Z`
+    )
+  }
+  switch (id) {
+    case 'circle':
+      return `M 0 ${fmt2(h / 2)} A ${fmt2(w / 2)} ${fmt2(h / 2)} 0 1 0 ${fmt2(w)} ${fmt2(h / 2)} A ${fmt2(w / 2)} ${fmt2(h / 2)} 0 1 0 0 ${fmt2(h / 2)} Z`
+    case 'rounded':
+      return round(Math.min(w, h) * 0.16)
+    case 'squircle':
+      return round(Math.min(w, h) * 0.42)
+    case 'triangle':
+      return poly('triangle')
+    case 'diamond':
+      return poly('polygon', 4)
+    case 'pentagon':
+      return poly('polygon', 5)
+    case 'hexagon':
+      return poly('polygon', 6)
+    case 'star':
+      return poly('star', 5)
+    case 'heart':
+      return (
+        `M ${fmt2(w * 0.5)} ${fmt2(h * 0.3)} C ${fmt2(w * 0.42)} ${fmt2(h * 0.1)} ${fmt2(w * 0.1)} ${fmt2(h * 0.13)} ${fmt2(w * 0.07)} ${fmt2(h * 0.37)} ` +
+        `C ${fmt2(w * 0.04)} ${fmt2(h * 0.58)} ${fmt2(w * 0.27)} ${fmt2(h * 0.73)} ${fmt2(w * 0.5)} ${fmt2(h * 0.93)} ` +
+        `C ${fmt2(w * 0.73)} ${fmt2(h * 0.73)} ${fmt2(w * 0.96)} ${fmt2(h * 0.58)} ${fmt2(w * 0.93)} ${fmt2(h * 0.37)} ` +
+        `C ${fmt2(w * 0.9)} ${fmt2(h * 0.13)} ${fmt2(w * 0.58)} ${fmt2(h * 0.1)} ${fmt2(w * 0.5)} ${fmt2(h * 0.3)} Z`
+      )
+    case 'arch':
+      return `M 0 ${fmt2(h)} L 0 ${fmt2(h * 0.45)} A ${fmt2(w / 2)} ${fmt2(h * 0.45)} 0 0 1 ${fmt2(w)} ${fmt2(h * 0.45)} L ${fmt2(w)} ${fmt2(h)} Z`
+    default:
+      return ''
+  }
+}
+
+// clipPath (มุมโค้ง/วงรี/กรอบ) เป็นสตริงใส่ใน <defs> — พิกัดจริงบนแผ่น (userSpaceOnUse)
 export function imageMaskSVG(e: ImageEl): string {
+  if (isFrameId(e.frame) && e.frame !== 'none') {
+    return `<clipPath id="${maskId(e.id)}"><path d="${framePath(e.frame, e.w, e.h)}" transform="translate(${e.x} ${e.y})"/></clipPath>`
+  }
   let inner: string
   if (e.maskShape) {
     const cx = e.x + e.w / 2
@@ -508,7 +581,12 @@ export function drawImageFit(ctx: CanvasRenderingContext2D, img: CanvasImageSour
   const hh = (e.h / 2) * s
   ctx.save()
   // มาสก์
-  if (e.maskShape) {
+  if (isFrameId(e.frame) && e.frame !== 'none' && typeof Path2D !== 'undefined') {
+    // กรอบสำเร็จรูป: path ในกล่อง [0,w]×[0,h] → แปลงเป็นพิกัดกึ่งกลาง×สเกล ด้วย DOMMatrix
+    const p = new Path2D()
+    p.addPath(new Path2D(framePath(e.frame, e.w, e.h)), new DOMMatrix([s, 0, 0, s, -hw, -hh]))
+    ctx.clip(p)
+  } else if (e.maskShape) {
     ctx.beginPath()
     shapeVertices(e.maskShape, e.w, e.h, e.maskSides).forEach((p, i) =>
       i ? ctx.lineTo(p.x * s, p.y * s) : ctx.moveTo(p.x * s, p.y * s),
@@ -1478,6 +1556,7 @@ export function parseDeco(v: unknown): Deco | null {
     const maskSides = Number.isFinite(Number(o.maskSides))
       ? Math.max(3, Math.min(12, Math.round(Number(o.maskSides))))
       : undefined
+    const frame = isFrameId(o.frame) && o.frame !== 'none' ? o.frame : undefined
     return {
       id, type: 'image', src, aspect, w, h,
       ...(fit ? { fit } : {}),
@@ -1485,6 +1564,7 @@ export function parseDeco(v: unknown): Deco | null {
       ...(o.circle === true ? { circle: true } : {}),
       ...(maskShape ? { maskShape } : {}),
       ...(maskShape && maskSides ? { maskSides } : {}),
+      ...(frame ? { frame } : {}),
       ...(preset ? { preset } : {}),
       ...(presetColor ? { presetColor } : {}),
       ...base,

@@ -656,6 +656,24 @@ select {
   height: 15px;
 }
 
+/* คลังกรอบรูป (frame library) — แถวไอคอนกรอบเลื่อนแนวนอน */
+.frame-gallery {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  max-width: 340px;
+  padding-bottom: 2px;
+}
+.frame-ic {
+  flex: 0 0 auto;
+  color: var(--text-soft, var(--text));
+}
+.frame-ic.active {
+  border-color: var(--accent);
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
 .vent-opts {
   margin: 2px 0 4px;
   padding-left: 4px;
