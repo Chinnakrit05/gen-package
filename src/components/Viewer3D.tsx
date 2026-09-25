@@ -120,9 +120,22 @@ function useSheetTexture(
     ctx.fillRect(0, 0, w, h)
     // รูปพื้นมาก่อน (ถ้ามี) ไม่งั้นใช้สีพื้นทึบ — แล้วค่อยลายทับ
     const fimg = fillImage ? imgCache.current.get(fillImage.src) : undefined
-    if (fillImage && fimg) drawFillImage(ctx, dieline, fimg, fillImage, s)
-    else if (fillColor) drawFill(ctx, dieline, fillColor, s)
-    for (const e of decos) if (!e.hidden) drawDeco(ctx, e, s, (src) => imgCache.current.get(src))
+    try {
+      if (fillImage && fimg) drawFillImage(ctx, dieline, fimg, fillImage, s)
+      else if (fillColor) drawFill(ctx, dieline, fillColor, s)
+    } catch (err) {
+      console.warn('วาดพื้นแพ็กเกจลง texture ไม่สำเร็จ', err)
+    }
+    // วาดทีละชิ้นแบบกันพลาด — ชิ้นที่วาดไม่ได้ (เช่นค่ารัศมี/ขนาดผิดปกติทำให้ canvas โยน error)
+    // ต้องไม่ทำให้ทั้ง texture หลุด (ไม่งั้น map เป็น null → กล่อง/การ์ดโชว์สีวัสดุล้วนไม่มีลาย)
+    for (const e of decos) {
+      if (e.hidden) continue
+      try {
+        drawDeco(ctx, e, s, (src) => imgCache.current.get(src))
+      } catch (err) {
+        console.warn('วาดองค์ประกอบลง texture ไม่สำเร็จ (ข้ามชิ้นนี้)', e.type, err)
+      }
+    }
 
     // ห้าม dispose ของเก่าตรงนี้ — StrictMode เรียกตัวอัปเดตซ้ำได้
     // ปล่อยให้ cleanup ของ effect ด้านล่างเป็นคนคืนหน่วยความจำแทน
@@ -403,6 +416,18 @@ function CardModel({ dieline, mat, decos, fillColor, fillImage }: ModelProps) {
 
   const eps = 0.05
   const rough = mat.roughness ?? 0.8
+
+  // three คอมไพล์ shader ตาม define ตอนสร้าง — ถ้า material ถูกสร้างตอน tex ยังเป็น null
+  // (การ์ดขึ้นจอก่อน texture วาดเสร็จ) แล้ว tex มาทีหลัง map จะไม่ขึ้นจนกว่าจะ needsUpdate
+  // (เหมือน PanelMesh) — ไม่งั้นการ์ดค้างเป็นสีวัสดุล้วนไม่มีลาย
+  const frontMat = useRef<THREE.MeshStandardMaterial>(null!)
+  const backMat = useRef<THREE.MeshStandardMaterial>(null!)
+  const hasTex = !!tex
+  useLayoutEffect(() => {
+    if (frontMat.current) frontMat.current.needsUpdate = true
+    if (backMat.current) backMat.current.needsUpdate = true
+  }, [hasTex])
+
   return (
     <group>
       {/* ตัวการ์ด: ความหนา + ขอบกระดาษ สีวัสดุล้วน */}
@@ -412,11 +437,11 @@ function CardModel({ dieline, mat, decos, fillColor, fillImage }: ModelProps) {
       </mesh>
       {/* ด้านหน้า (+Z) */}
       <mesh geometry={frontGeo} position={[0, 0, t / 2 + eps]}>
-        <meshStandardMaterial map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
+        <meshStandardMaterial ref={frontMat} map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
       </mesh>
       {/* ด้านหลัง (-Z) — หมุน 180° รอบแกน Y ให้ลายอ่านถูกด้านเมื่อพลิกการ์ด */}
       <mesh geometry={backGeo} position={[0, 0, -t / 2 - eps]} rotation={[0, Math.PI, 0]}>
-        <meshStandardMaterial map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
+        <meshStandardMaterial ref={backMat} map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
       </mesh>
     </group>
   )

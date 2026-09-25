@@ -971,7 +971,12 @@ export function drawShape2D(ctx: CanvasRenderingContext2D, e: ShapeEl, s: number
     pts.forEach((p, i) => (i ? ctx.lineTo(p.x * s, p.y * s) : ctx.moveTo(p.x * s, p.y * s)))
     ctx.closePath()
     ctx.lineJoin = 'round'
-  } else if (e.shape === 'ellipse') ctx.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2)
+  } else if (e.shape === 'ellipse') {
+    // canvas โยน error ถ้ารัศมีติดลบ/ไม่ใช่ตัวเลข — กันไว้ (ค่าเพี้ยนจะได้ไม่ล้มการวาดทั้งผืน)
+    const rx = Number.isFinite(hw) ? Math.abs(hw) : 0
+    const ry = Number.isFinite(hh) ? Math.abs(hh) : 0
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2)
+  }
   else ctx.rect(-hw, -hh, hw * 2, hh * 2)
   const grad = shapeGradient(ctx, e, hw, hh)
   if (grad || e.fill !== 'none') {
