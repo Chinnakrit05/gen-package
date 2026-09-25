@@ -1058,6 +1058,9 @@ export const DielineSVG = memo(function DielineSVG({
             }}
           >
             <DecoBody e={d} />
+            {/* รูปที่ถูกครอป/ใส่กรอบจะคลิกได้เฉพาะพื้นที่ที่เห็น — เพิ่มพื้นที่จับใส (โปร่งใสแต่รับคลิก)
+                คลุมทั้งกรอบ เพื่อให้เลือก/ลาก/ย่อได้จากทั้งกล่องเหมือนรูปปกติ */}
+            {d.type === 'image' && <rect x={d.x} y={d.y} width={w} height={h} fill="transparent" />}
             {sel && (
               <>
                 <rect
