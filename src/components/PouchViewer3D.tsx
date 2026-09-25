@@ -114,31 +114,59 @@ function usePouchGeometry(pouch: Pouch) {
     const uv: number[] = []
     const idx: number[] = []
 
+    const boxy = style === 'gusset' || style === 'box'
+    const gussetW = backRect.x - W // ความกว้างจีบข้าง (0 เมื่อไม่มี)
+
     const ringVert = (v: number, theta: number) => {
       const a = (W / 2) * pouchWidthFactor(v, style)
       const b = depth3D * pouchDepthFactor(v, style)
-      const sec = pouchSection(theta, style)
-      const x = a * sec.cx
-      const z = b * sec.cz
       const y = v * H
-      // UV: front (θ∈[0,π]) แม็พ frontRect ขวา→ซ้าย (ให้อ่านไม่กลับด้านเมื่อมองจาก +Z)
-      let dlx: number
-      if (backSeam) {
-        // หน้าอยู่กลางฟิล์ม (fx..fx+W), สันพับสองข้างที่ θ=0/π, รอยต่อกาวไปรวมกลางหลัง (θ=3π/2)
-        const fx = frontRect.x
-        if (theta <= Math.PI) {
-          dlx = fx + W * (1 - theta / Math.PI) // หน้า: ขวา(3W/2)→กลาง(W)→ซ้าย(W/2)
-        } else if (theta <= 1.5 * Math.PI) {
-          dlx = fx * (1 - (theta - Math.PI) / (Math.PI / 2)) // หลังซ้าย: สันพับซ้าย(W/2)→รอยต่อ(0)
-        } else {
-          dlx = 2 * W - (W / 2) * ((theta - 1.5 * Math.PI) / (Math.PI / 2)) // หลังขวา: รอยต่อ(2W)→สันพับขวา(3W/2)
-        }
-      } else {
-        // ซองแบน/ข้างจีบ: หน้า|หลัง ต่อเนื่องที่รอยพับข้าง (x=W) และรอยกาว (x=0/2W) — รอยต่ออยู่ข้าง
-        if (theta <= Math.PI) dlx = frontRect.x + W * (1 - theta / Math.PI)
-        else dlx = backRect.x + W * (1 - (theta - Math.PI) / Math.PI)
-      }
       const dly = frontRect.y + (1 - v) * H
+      let x: number
+      let z: number
+      let dlx: number
+
+      if (boxy) {
+        // หน้าตัดทรงกล่อง (brick): เดินตามเส้นรอบรูปสี่เหลี่ยม แม็พ filmX = ตำแหน่งรอบรูปตรง ๆ
+        // ครอบทุกแผงต่อเนื่อง [หน้า | จีบขวา | หลัง | จีบซ้าย] → ไม่ยืด (หน้าแบน) + ไม่ขาด (จีบถูกแม็พ)
+        const g = gussetW
+        const wp = 2 * W + 2 * g
+        const fX = (theta / (2 * Math.PI)) * wp
+        if (fX <= W) {
+          x = -a + 2 * a * (fX / W) // หน้า: ซ้าย(-a)→ขวา(+a)
+          z = b
+        } else if (fX <= W + g) {
+          x = a // จีบขวา: หน้า(+b)→หลัง(-b)
+          z = b - 2 * b * ((fX - W) / g)
+        } else if (fX <= 2 * W + g) {
+          x = a - 2 * a * ((fX - (W + g)) / W) // หลัง: ขวา(+a)→ซ้าย(-a)
+          z = -b
+        } else {
+          x = -a // จีบซ้าย: หลัง(-b)→หน้า(+b)
+          z = -b + 2 * b * ((fX - (2 * W + g)) / g)
+        }
+        dlx = fX // แผ่นฟิล์มเรียงแผงต่อเนื่อง [0..wp] อยู่แล้ว
+      } else {
+        const sec = pouchSection(theta, style)
+        x = a * sec.cx
+        z = b * sec.cz
+        // UV: front (θ∈[0,π]) แม็พ frontRect ขวา→ซ้าย (ให้อ่านไม่กลับด้านเมื่อมองจาก +Z)
+        if (backSeam) {
+          // หน้าอยู่กลางฟิล์ม (fx..fx+W), สันพับสองข้างที่ θ=0/π, รอยต่อกาวไปรวมกลางหลัง (θ=3π/2)
+          const fx = frontRect.x
+          if (theta <= Math.PI) {
+            dlx = fx + W * (1 - theta / Math.PI) // หน้า: ขวา(3W/2)→กลาง(W)→ซ้าย(W/2)
+          } else if (theta <= 1.5 * Math.PI) {
+            dlx = fx * (1 - (theta - Math.PI) / (Math.PI / 2)) // หลังซ้าย: สันพับซ้าย(W/2)→รอยต่อ(0)
+          } else {
+            dlx = 2 * W - (W / 2) * ((theta - 1.5 * Math.PI) / (Math.PI / 2)) // หลังขวา: รอยต่อ(2W)→สันพับขวา(3W/2)
+          }
+        } else {
+          // ซองแบน: หน้า|หลัง ต่อเนื่องที่รอยพับข้าง (x=W) และรอยกาว (x=0/2W) — รอยต่ออยู่ข้าง
+          if (theta <= Math.PI) dlx = frontRect.x + W * (1 - theta / Math.PI)
+          else dlx = backRect.x + W * (1 - (theta - Math.PI) / Math.PI)
+        }
+      }
       pos.push(x, y, z)
       uv.push(dlx / dw, dly / dh)
     }
