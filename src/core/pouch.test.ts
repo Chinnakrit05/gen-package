@@ -29,9 +29,11 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
     expect(p.label.width).toBe(2 * W + POUCH_SIDE_SEAL)
     expect(p.label.height).toBe(POUCH_TOP_SEAL + H + D)
     expect(p.gusset).toBe(D)
-    // พื้นที่พิมพ์หน้า/หลังอยู่ใต้ริมซีลบน กว้าง W สูง H
-    expect(p.frontRect).toEqual({ x: 0, y: POUCH_TOP_SEAL, w: W, h: H })
-    expect(p.backRect).toEqual({ x: W, y: POUCH_TOP_SEAL, w: W, h: H })
+    // ถุงตั้ง = รอยต่อกลางหลัง: หน้าอยู่กลางแผ่น [W/2, 3W/2], หลังแยกซ้าย [0,W/2] + ขวา [3W/2,2W]
+    expect(p.backSeam).toBe(true)
+    expect(p.frontRect).toEqual({ x: W / 2, y: POUCH_TOP_SEAL, w: W, h: H })
+    expect(p.backRect).toEqual({ x: 1.5 * W, y: POUCH_TOP_SEAL, w: W / 2, h: H })
+    expect(p.backRectL).toEqual({ x: 0, y: POUCH_TOP_SEAL, w: W / 2, h: H })
   })
 
   it('ก้น (D) ถูก clamp ไม่เกินความกว้างถุง และไม่ต่ำกว่า 10', () => {
@@ -39,10 +41,10 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
     expect(generatePouch({ W: 100, D: 3, H: 150 }, mat).gusset).toBe(10) // ต่ำกว่า 10 → 10
   })
 
-  it('มีเส้นตัดรอบนอก + รอยพับ/ซีล 5 เส้น (สันข้าง/กาว/ปาก/ก้น/กลางก้น)', () => {
+  it('มีเส้นตัดรอบนอก + รอยพับ/ซีล 6 เส้น (สันข้างสองด้าน/กาว/ปาก/ก้น/กลางก้น)', () => {
     const p = generatePouch({ W: 120, D: 70, H: 180 }, mat)
     expect(p.label.segments.filter((s) => s.kind === 'cut').length).toBe(1)
-    expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(5)
+    expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(6)
     expect(p.label.panels.map((pp) => pp.id)).toEqual(['film', 'glue'])
   })
 
@@ -50,7 +52,7 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
     const p = generatePouch({ W: 120, D: 70, H: 180 }, mat)
     expect(p.zipper).toBe(false)
     expect(p.zipY).toBeUndefined()
-    expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(5)
+    expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(6)
     expect(p.label.segments.filter((s) => s.kind === 'cut').length).toBe(1)
   })
 
@@ -58,7 +60,7 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
     const p = generatePouch({ W: 120, D: 70, H: 180 }, mat, { zipper: true })
     expect(p.zipper).toBe(true)
     expect(p.zipY).toBe(POUCH_TOP_SEAL + 18) // inset 18 (H สูงพอ)
-    expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(6) // +แนวซิป
+    expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(7) // +แนวซิป
     expect(p.label.segments.filter((s) => s.kind === 'cut').length).toBe(3) // +รอยฉีก 2 ข้าง
     expect(p.label.dims.some((d) => d.label.includes('ซิป'))).toBe(true)
   })

@@ -105,7 +105,7 @@ function usePouchTexture(
 // สร้าง BufferGeometry ถุง: วงแหวนวงรีตามความสูง + ฝาก้น/ปาก + UV แม็พหน้า/หลังตาม dieline
 function usePouchGeometry(pouch: Pouch) {
   return useMemo(() => {
-    const { W, H, depth3D, style, frontRect, backRect, label } = pouch
+    const { W, H, depth3D, style, frontRect, backRect, backSeam, label } = pouch
     const NU = 64 // รอบวง
     const NV = 48 // ตามความสูง
     const dw = label.width
@@ -121,11 +121,23 @@ function usePouchGeometry(pouch: Pouch) {
       const x = a * sec.cx
       const z = b * sec.cz
       const y = v * H
-      // UV: front (θ∈[0,π]) แม็พ frontRect ขวา→ซ้าย (ให้อ่านไม่กลับด้านเมื่อมองจาก +Z),
-      // back (θ∈[π,2π]) แม็พ backRect ต่อเนื่องที่รอยพับข้าง (x=W) และรอยกาว (x=0/2W)
+      // UV: front (θ∈[0,π]) แม็พ frontRect ขวา→ซ้าย (ให้อ่านไม่กลับด้านเมื่อมองจาก +Z)
       let dlx: number
-      if (theta <= Math.PI) dlx = frontRect.x + W * (1 - theta / Math.PI)
-      else dlx = backRect.x + W * (1 - (theta - Math.PI) / Math.PI)
+      if (backSeam) {
+        // หน้าอยู่กลางฟิล์ม (fx..fx+W), สันพับสองข้างที่ θ=0/π, รอยต่อกาวไปรวมกลางหลัง (θ=3π/2)
+        const fx = frontRect.x
+        if (theta <= Math.PI) {
+          dlx = fx + W * (1 - theta / Math.PI) // หน้า: ขวา(3W/2)→กลาง(W)→ซ้าย(W/2)
+        } else if (theta <= 1.5 * Math.PI) {
+          dlx = fx * (1 - (theta - Math.PI) / (Math.PI / 2)) // หลังซ้าย: สันพับซ้าย(W/2)→รอยต่อ(0)
+        } else {
+          dlx = 2 * W - (W / 2) * ((theta - 1.5 * Math.PI) / (Math.PI / 2)) // หลังขวา: รอยต่อ(2W)→สันพับขวา(3W/2)
+        }
+      } else {
+        // ซองแบน/ข้างจีบ: หน้า|หลัง ต่อเนื่องที่รอยพับข้าง (x=W) และรอยกาว (x=0/2W) — รอยต่ออยู่ข้าง
+        if (theta <= Math.PI) dlx = frontRect.x + W * (1 - theta / Math.PI)
+        else dlx = backRect.x + W * (1 - (theta - Math.PI) / Math.PI)
+      }
       const dly = frontRect.y + (1 - v) * H
       pos.push(x, y, z)
       uv.push(dlx / dw, dly / dh)

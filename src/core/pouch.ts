@@ -41,7 +41,11 @@ export interface Pouch {
   stands: boolean // ตั้งได้ (ก้นแบน) — 3D วางฐานลงพื้น
   spout: boolean // มีจุก+ฝาที่ปากบนไหม (spout pouch)
   frontRect: { x: number; y: number; w: number; h: number } // พื้นที่พิมพ์หน้าถุง (พิกัดแผ่นคลี่) สำหรับ map texture 3D
-  backRect: { x: number; y: number; w: number; h: number }
+  backRect: { x: number; y: number; w: number; h: number } // หลัง (back-seam: ครึ่งขวาของหลัง)
+  // back-seam (stand/pillow/spout): หน้าอยู่กลางแผ่น หลังแยกซ้าย/ขวา รอยต่อกาวไปรวมกลางหลัง
+  // → 3D ได้หน้าต่อเนื่องสะอาด ไม่มีรอยต่อที่ขอบข้าง; backRectL = ครึ่งซ้ายของหลัง
+  backSeam: boolean
+  backRectL?: { x: number; y: number; w: number; h: number }
   zipper: boolean // มีซิปล็อก + รอยฉีกไหม
   zipY?: number // พิกัดแผ่นคลี่ y ของแนวซิป (เมื่อ zipper=true) — ใช้วางแถบซิปใน 3D
   hangHole: boolean // รูแขวน (euro-hole) ที่ริมซีลบน
@@ -81,6 +85,11 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const sideGusset = gus || boxp ? gVal : 0 // จีบข้าง: ซองข้างจีบ + ถุงก้นแบน
   const bottomGusset = style === 'stand' || boxp || spout ? gVal : 0 // ก้น gusset: ถุงตั้ง/ก้นแบน/มีจุก
   const stands = bottomGusset > 0 // ตั้งได้เมื่อมีก้น
+  // ถุงรอยต่อกลางหลัง (back-seam): หน้าเป็นผืนต่อเนื่องกลางแผ่น หลังแยกไปสองข้าง (ขอบนอกมากาวกันกลางหลัง)
+  // → ใน 3D หน้าสะอาดไม่มีรอยต่อขอบข้าง; ใช้กับ stand/pillow/spout (ไม่ใช้กับซองแบน/ข้างจีบ)
+  const backSeam = style === 'stand' || pillow || spout
+  const fx = backSeam ? W / 2 : 0 // จุดเริ่มพื้นที่พิมพ์หน้าบนแผ่นฟิล์ม
+  const fcx = fx + W / 2 // จุดกึ่งกลางหน้า (ใช้วาง marker จุก/วาล์ว/รูแขวน)
   const ss = POUCH_SIDE_SEAL
   const st = POUCH_TOP_SEAL
   const sb = flat || gus || pillow ? POUCH_TOP_SEAL : 0 // ไม่มีก้น → ใช้ริมซีลล่างแทน
@@ -121,19 +130,19 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     // [หน้า W][จีบ g][หลัง W][จีบ g] — สันพับ + เส้นจีบกลางของแต่ละข้าง
     segments.push(vfold(W), vfold(W + sideGusset), vfold(2 * W + sideGusset))
     segments.push(vfold(W + sideGusset / 2), vfold(2 * W + sideGusset + sideGusset / 2)) // จีบกลาง
+  } else if (backSeam) {
+    // หน้าอยู่กลาง [W/2, 3W/2] → สันพับสองข้าง; รอยต่อ (กาว) ไปรวมกันกลางหลัง
+    segments.push(vfold(W / 2), vfold(1.5 * W))
   } else {
-    segments.push(vfold(W)) // สันข้างเดียว แบ่งหน้า/หลัง
+    segments.push(vfold(W)) // สันข้างเดียว แบ่งหน้า/หลัง (ซองแบน 3 ด้าน)
   }
   if (bottomGusset > 0) {
     segments.push(crease(`M 0 ${st + H + bottomGusset / 2} L ${Wp} ${st + H + bottomGusset / 2}`)) // พับกลางก้น
   }
-  if (pillow) {
-    segments.push(vfold(1.5 * W)) // ซีลหลังกลาง (fin seal) กลางแผงหลัง
-  }
 
   const wLabel = flat ? 'กว้างซอง' : gus || boxp ? 'กว้างหน้า' : pillow ? 'กว้าง' : 'กว้างถุง'
   const dims: DimMark[] = [
-    { a: P(0, filmH + 12), b: P(W, filmH + 12), label: `${wLabel} ${fmt(W)}` },
+    { a: P(fx, filmH + 12), b: P(fx + W, filmH + 12), label: `${wLabel} ${fmt(W)}` },
     { a: P(Wp, filmH + 12), b: P(width, filmH + 12), label: `ซีล ${fmt(ss)}` },
     { a: P(width + 12, st), b: P(width + 12, st + H), label: `สูง ${fmt(H)}` },
   ]
@@ -147,7 +156,7 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   if (spout) {
     // จุกที่กลางปากหน้า — วงกลม marker (ตำแหน่งเชื่อมจุก) + ป้าย
     const sr = Math.min(W, 90) * 0.09
-    const cx = W / 2
+    const cx = fcx
     const cy = st + sr + 3
     segments.push(crease(circlePath(cx, cy, sr)))
     dims.push({ a: P(cx - sr, cy - sr - 6), b: P(cx + sr, cy - sr - 6), label: `จุก ⌀${fmt(2 * sr)}` })
@@ -160,15 +169,15 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   if (hangHole) {
     // รูแขวน (euro-hole) กลางริมซีลบน — เจาะจริง (cut) ให้เครื่องปั๊มตัด
     const hr = 4
-    segments.push(cut(circlePath(W / 2, Math.min(st * 0.5, st - hr - 1), hr)))
-    dims.push({ a: P(W / 2 - hr, 0), b: P(W / 2 + hr, 0), label: `รูแขวน ⌀${fmt(2 * hr)}` })
+    segments.push(cut(circlePath(fcx, Math.min(st * 0.5, st - hr - 1), hr)))
+    dims.push({ a: P(fcx - hr, 0), b: P(fcx + hr, 0), label: `รูแขวน ⌀${fmt(2 * hr)}` })
   }
   if (valve) {
     // วาล์วระบายแก๊สกลางหน้าถุงส่วนบน — marker (welded ไม่ตัด) + ป้าย
     const vr = valveR(W)
     const vy = st + (1 - VALVE_V) * H
-    segments.push(crease(circlePath(W / 2, vy, vr)))
-    dims.push({ a: P(W / 2 - vr, vy - vr - 6), b: P(W / 2 + vr, vy - vr - 6), label: `วาล์ว ⌀${fmt(2 * vr)}` })
+    segments.push(crease(circlePath(fcx, vy, vr)))
+    dims.push({ a: P(fcx - vr, vy - vr - 6), b: P(fcx + vr, vy - vr - 6), label: `วาล์ว ⌀${fmt(2 * vr)}` })
   }
   if (tinTie) {
     // ที่รัดปาก (tin-tie) — แถบลวดพาดขวางหน้า+หลัง ใกล้ปากถุง
@@ -196,8 +205,13 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     depth3D,
     stands,
     spout,
-    frontRect: { x: 0, y: st, w: W, h: H },
-    backRect: { x: W + sideGusset, y: st, w: W, h: H },
+    frontRect: { x: fx, y: st, w: W, h: H },
+    // back-seam: หลังแยกซ้าย [0,W/2] + ขวา [3W/2,2W]; อื่น ๆ: หลังต่อเนื่องถัดจากหน้า(+จีบ)
+    backRect: backSeam
+      ? { x: 1.5 * W, y: st, w: W / 2, h: H }
+      : { x: W + sideGusset, y: st, w: W, h: H },
+    backSeam,
+    ...(backSeam ? { backRectL: { x: 0, y: st, w: W / 2, h: H } } : {}),
     zipper,
     zipY,
     hangHole,
