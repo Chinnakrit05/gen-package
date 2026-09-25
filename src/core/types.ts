@@ -34,6 +34,8 @@ export interface Dieline {
   segments: Segment[]
   panels: Panel[]
   dims: DimMark[]
+  // ป้ายกำกับหน้าบน blueprint (เช่น หน้า/หลัง ของนามบัตร) — โชว์ในพรีวิวเท่านั้น ไม่เข้าไฟล์ผลิต
+  captions?: { x: number; y: number; text: string }[]
 }
 
 export interface Material {

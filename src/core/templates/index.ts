@@ -111,7 +111,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'card',
     nameTh: 'นามบัตร (business card)',
-    detail: 'การ์ดแบนพิมพ์ ขนาดมาตรฐาน 90×54 มม. — ออกแบบด้านหน้าแล้วส่งพิมพ์ ไม่มีรอยพับ',
+    detail: 'การ์ดแบนพิมพ์ ขนาดมาตรฐาน 90×54 มม. — ออกแบบได้ทั้งด้านหน้าและด้านหลัง ไม่มีรอยพับ',
     defaults: { W: 90, D: 54, H: 54 },
     tilt: 0,
     supportsHandle: false,

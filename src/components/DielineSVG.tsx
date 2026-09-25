@@ -1346,6 +1346,23 @@ export const DielineSVG = memo(function DielineSVG({
       )}
 
       {showDims && dieline.dims.map((d, i) => <Dim key={i} d={d} />)}
+
+      {/* ป้ายกำกับหน้า (เช่น หน้า/หลัง ของนามบัตร) — โชว์เสมอในพรีวิว ไม่เข้าไฟล์ผลิต */}
+      {dieline.captions?.map((c, i) => (
+        <text
+          key={`cap${i}`}
+          x={c.x}
+          y={c.y}
+          textAnchor="middle"
+          fontSize={6}
+          fontWeight={600}
+          fill="#8a8474"
+          stroke="none"
+          pointerEvents="none"
+        >
+          {c.text}
+        </text>
+      ))}
     </svg>
     {/* ถังขยะลบเส้นไกด์ที่ขอบ canvas — โผล่ตามแกนของเส้นที่ชี้/ลากอยู่ (ขวา=เส้นตั้ง, ล่าง=เส้นนอน) */}
     {editable && activeGuide && (
