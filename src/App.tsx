@@ -1,5 +1,6 @@
 import { Suspense, createContext, lazy, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { LogOut } from 'lucide-react'
 
 // true เมื่อ DimField อยู่ในแถบปรับแต่งด้านบน (Canva-style) → เปลี่ยนสไลเดอร์เป็นปุ่ม+dropdown อัตโนมัติ
 const TopBarCtx = createContext(false)
@@ -100,6 +101,7 @@ const PouchViewer3D = lazy(() =>
 import { DielineSVG } from './components/DielineSVG'
 import { PromptBar } from './components/PromptBar'
 import { ColorField } from './components/ColorField'
+import { ProjectGallery } from './components/ProjectGallery'
 import {
   IconImage,
   IconText,
@@ -2157,49 +2159,18 @@ export default function App({
     <div className="app">
       <header ref={headerRef}>
         <h1>PackIt</h1>
-        <nav className="projects" aria-label="งานที่บันทึกไว้">
-          <button
-            className="proj-new"
-            disabled={aiBusy || projectBusy || (cloud !== undefined && !cloud.online)}
-            aria-disabled={aiBusy || projectBusy || (cloud !== undefined && !cloud.online)}
-            onClick={newProject}
-          >
-            + งานใหม่
-          </button>
-          {(cloud?.items ?? projects).map((p) => (
-            <div key={p.id} className={`proj-tab${p.id === activeId ? ' active' : ''}`}>
-              <button
-                className="proj-name"
-                title={`${p.name} · แก้ล่าสุด ${new Date(p.updatedAt).toLocaleString('th-TH')}`}
-                aria-current={p.id === activeId ? 'true' : undefined}
-                aria-disabled={aiBusy || projectBusy}
-                disabled={projectBusy}
-                onClick={() => void switchProject(p.id)}
-              >
-                {p.name}
-              </button>
-              {p.id === activeId && (
-                <button
-                  className="proj-act"
-                  aria-label="ตั้งชื่องานนี้"
-                  title="ตั้งชื่องาน"
-                  onClick={renameProject}
-                >
-                  ✎
-                </button>
-              )}
-              <button
-                className="proj-act"
-                aria-label={`ลบงาน ${p.name}`}
-                title="ลบงานนี้"
-                disabled={projectBusy || (cloud !== undefined && !cloud.online)}
-                onClick={() => deleteProject(p.id)}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </nav>
+        <ProjectGallery
+          items={cloud?.items ?? projects}
+          activeId={activeId}
+          activeProject={projects.find((project) => project.id === activeId)}
+          busy={aiBusy || projectBusy}
+          createDisabled={aiBusy || projectBusy || (cloud !== undefined && !cloud.online)}
+          deleteDisabled={aiBusy || projectBusy || (cloud !== undefined && !cloud.online)}
+          onCreate={newProject}
+          onSwitch={(id) => void switchProject(id)}
+          onRename={renameProject}
+          onDelete={deleteProject}
+        />
         {cloud && (
           <div className="cloud-save-wrap">
             <span
@@ -2274,6 +2245,7 @@ export default function App({
           <button
             className="logout-btn"
             title="ออกจากระบบ"
+            aria-label="ออกจากระบบ"
             disabled={projectBusy}
             onClick={() => {
               const current = flushInto(projects).find((project) => project.id === activeId)
@@ -2286,7 +2258,8 @@ export default function App({
               }).finally(() => setProjectOperation(null))
             }}
           >
-            ออกจากระบบ
+            <LogOut size={16} aria-hidden="true" />
+            <span>ออกจากระบบ</span>
           </button>
         )}
         {renderStepTabs('mobile-tabbar')}
