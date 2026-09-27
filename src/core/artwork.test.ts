@@ -13,6 +13,7 @@ import {
   decoLabel,
   FRAMES,
   framePath,
+  frameLocal,
   FONTS,
   ensureThaiFont,
   imgPAR,
@@ -575,6 +576,19 @@ describe('มาสก์รูปตามทรง + ข้อความเ�
       // ตัวเลขทุกตัวใน path ต้อง finite (กัน NaN ทำ clip พัง)
       expect(d.match(/-?\d+(\.\d+)?/g)!.every((n) => Number.isFinite(Number(n)))).toBe(true)
     }
+  })
+
+  it('frameLocal: ทรงเรขาคณิตคงสัดส่วน (จัตุรัสกลางกรอบ) + เยื้องกึ่งกลาง; ทรงสี่เหลี่ยมเต็มกรอบ', () => {
+    // วงกลมในกรอบ 40×20 → จัตุรัส 20×20 เยื้องเข้ากลางแนวนอน 10
+    const c = frameLocal('circle', 40, 20)
+    expect(c.ox).toBe(10)
+    expect(c.oy).toBe(0)
+    // ไม่มี W/H ที่ทำให้เป็นวงรี (path ใช้ระยะเท่ากันทั้งสองแกน)
+    expect(c.d).toContain('A 10 10') // rx=ry=10 → วงกลมจริง
+    // สี่เหลี่ยมมุมมนเต็มกรอบ (ไม่เยื้อง)
+    const r = frameLocal('rounded', 40, 20)
+    expect(r.ox).toBe(0)
+    expect(r.oy).toBe(0)
   })
 
   it('imageMaskSVG: frame ชนะ maskShape/circle/radius และใช้ <path> + translate', () => {

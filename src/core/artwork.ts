@@ -554,10 +554,23 @@ export function framePath(id: FrameId, w: number, h: number): string {
   }
 }
 
+// กรอบทรง "เรขาคณิต" (วงกลม/ดาว/หลายเหลี่ยม/หัวใจ) ต้องคงสัดส่วน — วาดในสี่เหลี่ยมจัตุรัสกลางกรอบ
+// (ไม่งั้นวงกลมจะกลายเป็นวงรีเมื่อกรอบไม่เป็นจัตุรัส); กรอบสี่เหลี่ยม (rounded/squircle/arch) เต็มกรอบตามเดิม
+const SQUARE_FRAMES = new Set<FrameId>(['circle', 'triangle', 'diamond', 'pentagon', 'hexagon', 'star', 'heart'])
+// path ของกรอบในพิกัดท้องถิ่น + ระยะเยื้อง (ox,oy) ให้อยู่กึ่งกลางกรอบ
+export function frameLocal(id: FrameId, w: number, h: number): { d: string; ox: number; oy: number } {
+  if (SQUARE_FRAMES.has(id)) {
+    const s = Math.min(w, h)
+    return { d: framePath(id, s, s), ox: (w - s) / 2, oy: (h - s) / 2 }
+  }
+  return { d: framePath(id, w, h), ox: 0, oy: 0 }
+}
+
 // clipPath (มุมโค้ง/วงรี/กรอบ) เป็นสตริงใส่ใน <defs> — พิกัดจริงบนแผ่น (userSpaceOnUse)
 export function imageMaskSVG(e: ImageEl): string {
   if (isFrameId(e.frame) && e.frame !== 'none') {
-    return `<clipPath id="${maskId(e.id)}"><path d="${framePath(e.frame, e.w, e.h)}" transform="translate(${e.x} ${e.y})"/></clipPath>`
+    const { d, ox, oy } = frameLocal(e.frame, e.w, e.h)
+    return `<clipPath id="${maskId(e.id)}"><path d="${d}" transform="translate(${e.x + ox} ${e.y + oy})"/></clipPath>`
   }
   let inner: string
   if (e.maskShape) {
@@ -582,9 +595,10 @@ export function drawImageFit(ctx: CanvasRenderingContext2D, img: CanvasImageSour
   ctx.save()
   // มาสก์
   if (isFrameId(e.frame) && e.frame !== 'none' && typeof Path2D !== 'undefined') {
-    // กรอบสำเร็จรูป: path ในกล่อง [0,w]×[0,h] → แปลงเป็นพิกัดกึ่งกลาง×สเกล ด้วย DOMMatrix
+    // กรอบสำเร็จรูป: path ท้องถิ่น (เยื้อง ox,oy ให้อยู่กึ่งกลาง) → พิกัดกึ่งกลาง×สเกล ด้วย DOMMatrix
+    const { d, ox, oy } = frameLocal(e.frame, e.w, e.h)
     const p = new Path2D()
-    p.addPath(new Path2D(framePath(e.frame, e.w, e.h)), new DOMMatrix([s, 0, 0, s, -hw, -hh]))
+    p.addPath(new Path2D(d), new DOMMatrix([s, 0, 0, s, (ox - e.w / 2) * s, (oy - e.h / 2) * s]))
     ctx.clip(p)
   } else if (e.maskShape) {
     ctx.beginPath()
