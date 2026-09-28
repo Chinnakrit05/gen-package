@@ -2169,6 +2169,55 @@ button[aria-disabled='true'] {
   border-radius: 9px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
+
+/* แถบซูมครอปบนจอ — กลางล่าง ใช้ได้ทุกอุปกรณ์ */
+.crop-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #2a2440;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  z-index: 5;
+}
+.crop-bar-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent, #17677a);
+}
+.crop-bar button {
+  width: auto;
+  min-width: 30px;
+  padding: 4px 8px;
+  font-size: 15px;
+  line-height: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.crop-bar button:hover {
+  border-color: var(--accent);
+  background: var(--accent-weak);
+}
+.crop-bar input[type='range'] {
+  width: 120px;
+  accent-color: var(--accent);
+}
+.crop-bar .crop-done {
+  font-size: 12px;
+  font-weight: 600;
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .zoom-toolbar button {
   width: auto;
   min-width: 34px;

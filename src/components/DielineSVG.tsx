@@ -960,6 +960,14 @@ export const DielineSVG = memo(function DielineSVG({
 
   // เส้นไกด์ที่กำลังโฟกัส (ลากอยู่ก่อน ไม่งั้นตัวที่ชี้) → ใช้เลือกว่าจะโชว์ถังขยะขอบไหน
   const activeGuide = guideLines.find((g) => g.id === (guideDrag.current?.id ?? hoverGuide)) ?? null
+  // รูปที่กำลังครอป (สำหรับแถบควบคุมซูมบนจอ — ใช้ได้ทุกอุปกรณ์ ไม่ต้องมีล้อเมาส์)
+  const cropDeco = cropId ? (decos.find((d) => d.id === cropId && d.type === 'image') as ImageEl | undefined) : undefined
+  const setCropZoom = (nz: number) => {
+    if (!cropDeco) return
+    const z = Math.max(1, Math.min(6, nz))
+    cropZoomRef.current = z
+    onCrop?.(cropDeco.id, cropDeco.cropX ?? 0, cropDeco.cropY ?? 0, z)
+  }
 
   // กล่องพิมพ์แก้ข้อความในที่ — วางทับตำแหน่งข้อความบน blueprint (พิกัดจอเทียบ .bp-canvas)
   const editSrc = editing != null ? decos.find((d) => d.id === editing) : undefined
@@ -1567,6 +1575,30 @@ export const DielineSVG = memo(function DielineSVG({
         </button>
         <button type="button" title="ซูมเข้า" aria-label="ซูมเข้า" disabled={zoom >= MAXZOOM} onClick={() => zoomAt(1.3, viewCx, viewCy)}>
           ＋
+        </button>
+      </div>
+    )}
+    {editable && cropDeco && (
+      // แถบซูมครอปบนจอ — ใช้ได้ทุกอุปกรณ์ (เมาส์ไม่มีล้อ/แท็บเล็ต): ปุ่ม − + และสไลเดอร์
+      <div className="crop-bar" onPointerDown={(e) => e.stopPropagation()}>
+        <span className="crop-bar-label">ซูมรูป</span>
+        <button type="button" title="ซูมออก" aria-label="ซูมรูปออก" onClick={() => setCropZoom((cropDeco.cropZoom ?? 1) / 1.15)}>
+          −
+        </button>
+        <input
+          type="range"
+          min={1}
+          max={6}
+          step={0.02}
+          value={cropDeco.cropZoom ?? 1}
+          aria-label="ซูมรูปในกรอบ"
+          onChange={(e) => setCropZoom(Number(e.target.value))}
+        />
+        <button type="button" title="ซูมเข้า" aria-label="ซูมรูปเข้า" onClick={() => setCropZoom((cropDeco.cropZoom ?? 1) * 1.15)}>
+          ＋
+        </button>
+        <button type="button" className="crop-done" onClick={() => setCropId(null)}>
+          เสร็จ
         </button>
       </div>
     )}
