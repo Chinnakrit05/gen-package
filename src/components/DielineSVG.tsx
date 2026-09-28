@@ -25,6 +25,18 @@ const SNAP_PX = 6 // ระยะดูดบนจอ (พิกเซล) — 
 const MIN_SIZE = 3 // ขนาดต่ำสุดตอนย่อ (มม.) — App คุมต่ำสุดตามชนิดอีกชั้น
 const HANDLE_HS = 2.6 // ครึ่งขนาดมือจับมุม (มม.)
 
+// ชื่อด้านของแต่ละแผง (สำหรับป้ายกำกับจาง ๆ) — คืน '' เมื่อไม่รู้จัก/ไม่ควรกำกับ
+function faceLabel(id: string): string {
+  if (id === 'front' || id === 'card') return 'หน้า'
+  if (id === 'back' || id === 'card-back') return 'หลัง'
+  if (['side-left', 'side-right', 'left', 'right', 'side-a', 'side-b'].includes(id)) return 'ด้านข้าง'
+  if (id === 'lid') return 'ฝา'
+  if (['base', 'base-a', 'base-b'].includes(id)) return 'ฐาน'
+  if (id === 'glue') return 'ลิ้นกาว'
+  if (id.startsWith('flap')) return 'ลิ้น'
+  return ''
+}
+
 function Dim({ d }: { d: DimMark }) {
   const vert = Math.abs(d.a.x - d.b.x) < 0.001
   const mx = (d.a.x + d.b.x) / 2
@@ -295,6 +307,8 @@ export const DielineSVG = memo(function DielineSVG({
   const [zoom, setZoom] = useState(1)
   const [center, setCenter] = useState<{ x: number; y: number } | null>(null)
   const [showGrid, setShowGrid] = useState(false)
+  const [rot, setRot] = useState(0) // หมุนมุมมอง blueprint (0/90/180/270) — เฉพาะการแสดงผล
+  const [showFaces, setShowFaces] = useState(false) // ป้ายกำกับด้าน (หน้า/ข้าง/หลัง) จาง ๆ
   // เส้นไกด์ที่ผู้ใช้ลากวางเอง — axis 'x' = เส้นตั้ง (คงค่า x), 'y' = เส้นนอน (คงค่า y)
   const [guideLines, setGuideLines] = useState<{ id: string; axis: 'x' | 'y'; pos: number }[]>([])
   const [hoverGuide, setHoverGuide] = useState<string | null>(null) // เส้นไกด์ที่กำลังโฟกัส (โชว์ถังขยะที่ขอบ)
@@ -329,7 +343,15 @@ export const DielineSVG = memo(function DielineSVG({
     const pt = svg.createSVGPoint()
     pt.x = clientX
     pt.y = clientY
-    return pt.matrixTransform(ctm.inverse())
+    const p = pt.matrixTransform(ctm.inverse())
+    if (!rot) return p
+    // มุมมองถูกหมุนด้วย <g> ชั้นนอก → ถอดหมุนกลับรอบจุดกึ่งกลางแผ่น ให้ได้พิกัดแผ่นคลี่จริง
+    const r = (-rot * Math.PI) / 180
+    const cx = dieline.width / 2
+    const cy = dieline.height / 2
+    const dx = p.x - cx
+    const dy = p.y - cy
+    return { x: cx + Math.cos(r) * dx - Math.sin(r) * dy, y: cy + Math.sin(r) * dx + Math.cos(r) * dy }
   }
 
   const capture = (e: React.PointerEvent) => {
@@ -783,8 +805,10 @@ export const DielineSVG = memo(function DielineSVG({
 
   // --- viewBox ตามซูม/แพน ---
   const MAXZOOM = 8
-  const baseW = dieline.width + pad * 2
-  const baseH = dieline.height + pad * 2
+  // หมุน 90/270 → สลับกว้าง/สูงของกรอบมองให้พอดีเนื้อหาที่หมุนแล้ว (หมุนรอบจุดกึ่งกลางแผ่น)
+  const rotSwap = rot % 180 !== 0
+  const baseW = (rotSwap ? dieline.height : dieline.width) + pad * 2
+  const baseH = (rotSwap ? dieline.width : dieline.height) + pad * 2
   const vw = baseW / zoom
   const vh = baseH / zoom
   const viewCx = center?.x ?? dieline.width / 2
@@ -915,6 +939,25 @@ export const DielineSVG = memo(function DielineSVG({
         >
           📏
         </button>
+        <button
+          type="button"
+          className="bp-tool"
+          title="หมุนมุมมอง 90°"
+          aria-label="หมุนมุมมองบลูพรินต์ 90 องศา"
+          onClick={() => setRot((r) => (r + 90) % 360)}
+        >
+          ⟳
+        </button>
+        <button
+          type="button"
+          className="bp-tool"
+          title={showFaces ? 'ซ่อนป้ายด้าน' : 'แสดงป้ายด้าน (หน้า/ข้าง/หลัง)'}
+          aria-label="เปิด-ปิดป้ายกำกับด้าน"
+          aria-pressed={showFaces}
+          onClick={() => setShowFaces((s) => !s)}
+        >
+          🏷
+        </button>
         <button type="button" className="bp-tool" title="เพิ่มเส้นไกด์ตั้ง" aria-label="เพิ่มเส้นไกด์ตั้ง" onClick={() => addGuide('x')}>
           ￨＋
         </button>
@@ -950,6 +993,8 @@ export const DielineSVG = memo(function DielineSVG({
       onPointerUpCapture={pinchUp}
       onPointerCancelCapture={pinchUp}
     >
+      {/* rotor: หมุนเนื้อหาทั้งหมดรอบจุดกึ่งกลางแผ่น (พิกัดแผ่นคลี่ไม่เปลี่ยน — toSheet ถอดหมุนให้) */}
+      <g transform={rot ? `rotate(${rot} ${dieline.width / 2} ${dieline.height / 2})` : undefined}>
       {fillImage ? (
         <g className="fill" pointerEvents="none" opacity={fillImage.opacity ?? 1}>
           <defs>
@@ -1366,6 +1411,38 @@ export const DielineSVG = memo(function DielineSVG({
           {c.text}
         </text>
       ))}
+
+      {/* ป้ายกำกับด้าน (หน้า/ข้าง/หลัง/ฝา ...) จาง ๆ เปิด-ปิดได้ — ช่วยผู้ใช้อ่านแผ่นคลี่ ไม่เข้าไฟล์ผลิต */}
+      {showFaces &&
+        dieline.panels.map((p) => {
+          const label = faceLabel(p.id)
+          if (!label) return null
+          const xs = p.outline.map((q) => q.x)
+          const ys = p.outline.map((q) => q.y)
+          const cx = (Math.min(...xs) + Math.max(...xs)) / 2
+          const cy = (Math.min(...ys) + Math.max(...ys)) / 2
+          const fs = Math.max(4, Math.min(11, (Math.max(...xs) - Math.min(...xs)) * 0.16))
+          return (
+            <text
+              key={`face-${p.id}`}
+              x={cx}
+              y={cy}
+              // ตั้งข้อความให้ตรงเสมอแม้หมุนมุมมอง (ถอดการหมุนของ rotor เฉพาะป้าย)
+              transform={rot ? `rotate(${-rot} ${cx} ${cy})` : undefined}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={fs}
+              fontWeight={700}
+              fill="var(--accent, #17677a)"
+              opacity={0.28}
+              stroke="none"
+              pointerEvents="none"
+            >
+              {label}
+            </text>
+          )
+        })}
+      </g>
     </svg>
     {/* ถังขยะลบเส้นไกด์ที่ขอบ canvas — โผล่ตามแกนของเส้นที่ชี้/ลากอยู่ (ขวา=เส้นตั้ง, ล่าง=เส้นนอน) */}
     {editable && activeGuide && (
