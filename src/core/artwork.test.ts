@@ -14,6 +14,8 @@ import {
   FRAMES,
   framePath,
   frameLocal,
+  imageCoverRect,
+  imageDrawAttrs,
   FONTS,
   ensureThaiFont,
   imgPAR,
@@ -589,6 +591,26 @@ describe('มาสก์รูปตามทรง + ข้อความเ�
     const r = frameLocal('rounded', 40, 20)
     expect(r.ox).toBe(0)
     expect(r.oy).toBe(0)
+  })
+
+  it('imageCoverRect/imageDrawAttrs: cover ล้นกรอบ + เลื่อนตาม cropX (พาน)', () => {
+    const base = { id: 'im2', type: 'image' as const, src: 'data:image/png;base64,A', aspect: 2, w: 40, h: 40, x: 0, y: 0, rot: 0 }
+    const c0 = imageCoverRect(base)
+    expect(c0.w).toBe(80) // รูปกว้างกว่ากรอบ → คลุมกว้าง 80
+    expect(c0.ovw).toBe(40) // ล้นแนวนอน 40
+    expect(c0.x).toBe(-20) // cropX=0 → กึ่งกลาง
+    const c1 = imageCoverRect({ ...base, cropX: 1 })
+    expect(c1.x).toBe(0) // cropX=1 → เลื่อนไปสุดข้าง
+    // cover ใช้ preserveAspectRatio="none" (กรอบวาด aspect ถูกแล้ว)
+    expect(imageDrawAttrs(base).par).toBe('none')
+    // contain ไม่พาน (ใช้ e.x/e.y เดิม)
+    expect(imageDrawAttrs({ ...base, fit: 'contain' }).x).toBe(0)
+  })
+
+  it('parseDeco: image รับ cropX/cropY clamp −1..1', () => {
+    const p = parseDeco({ type: 'image', src: 'data:image/png;base64,A', aspect: 1, w: 20, h: 20, cropX: 5, cropY: -3, x: 0, y: 0, rot: 0 }) as { cropX?: number; cropY?: number }
+    expect(p.cropX).toBe(1)
+    expect(p.cropY).toBe(-1)
   })
 
   it('imageMaskSVG: frame ชนะ maskShape/circle/radius และใช้ <path> + translate', () => {

@@ -33,6 +33,8 @@ export interface ImageEl extends BaseEl {
   maskShape?: 'triangle' | 'polygon' | 'star' // มาสก์เป็นรูปทรง (ทับ circle/radius)
   maskSides?: number // จำนวนด้าน/แฉกของมาสก์ (polygon/star)
   frame?: FrameId // กรอบสำเร็จรูปจากคลัง (ทับ circle/radius/maskShape เมื่อ ≠ 'none')
+  cropX?: number // เลื่อนรูปในกรอบครอปแนวนอน (−1..1) — ดับเบิลคลิกแล้วลากปรับ (fit=cover เท่านั้น)
+  cropY?: number // เลื่อนรูปในกรอบครอปแนวตั้ง (−1..1)
   preset?: string // ถ้ามาจากไลบรารีลาย = id พรีเซ็ต (เปลี่ยนสีแล้ว regen src ได้)
   presetColor?: string // สีที่ใช้สร้างลายพรีเซ็ตนี้
 }
@@ -481,6 +483,30 @@ export function makeImageEl(dieline: Dieline, src: string, aspect: number): Imag
   return { id: newId(), type: 'image', src, aspect, w, h, x, y, rot: 0 }
 }
 
+// กรอบวาด <image> เมื่อ fit='cover' (ค่าเริ่มต้น): รูปคลุมกรอบ แล้วเลื่อนตาม cropX/cropY (−1..1)
+// คืน {x,y,w,h} ที่ aspect ถูกต้อง (วาดด้วย preserveAspectRatio="none" ได้โดยไม่เพี้ยน)
+// overflowW/overflowH = ระยะที่รูปล้นกรอบ (ใช้แปลง cropX/cropY ↔ พิกัด)
+export function imageCoverRect(e: ImageEl): { x: number; y: number; w: number; h: number; ovw: number; ovh: number } {
+  const frameAspect = e.w / e.h
+  const wide = e.aspect > frameAspect // รูปกว้างกว่ากรอบ → ล้นแนวนอน
+  const dw = wide ? e.h * e.aspect : e.w
+  const dh = wide ? e.h : e.w / e.aspect
+  const ovw = dw - e.w
+  const ovh = dh - e.h
+  const x = e.x + (e.w - dw) / 2 + ((e.cropX ?? 0) * ovw) / 2
+  const y = e.y + (e.h - dh) / 2 + ((e.cropY ?? 0) * ovh) / 2
+  return { x, y, w: dw, h: dh, ovw, ovh }
+}
+
+// แอตทริบิวต์ <image> (x/y/w/h/preserveAspectRatio) รวม crop offset — ใช้ร่วมทั้ง blueprint และ export
+export function imageDrawAttrs(e: ImageEl): { x: number; y: number; w: number; h: number; par: string } {
+  if ((e.fit ?? 'cover') === 'cover') {
+    const r = imageCoverRect(e)
+    return { x: r.x, y: r.y, w: r.w, h: r.h, par: 'none' }
+  }
+  return { x: e.x, y: e.y, w: e.w, h: e.h, par: imgPAR(e.fit) }
+}
+
 // preserveAspectRatio (SVG) ตามโหมด fit
 export const imgPAR = (fit?: string) =>
   fit === 'contain' ? 'xMidYMid meet' : fit === 'stretch' ? 'none' : 'xMidYMid slice'
@@ -624,7 +650,10 @@ export function drawImageFit(ctx: CanvasRenderingContext2D, img: CanvasImageSour
     const wide = fit === 'cover' ? e.aspect > frameAspect : e.aspect < frameAspect
     const dw = wide ? hh * 2 * e.aspect : hw * 2
     const dh = wide ? hh * 2 : (hw * 2) / e.aspect
-    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh)
+    // เลื่อนรูปในกรอบครอป (เฉพาะ cover ที่มีส่วนล้น) ตาม cropX/cropY
+    const cdx = fit === 'cover' ? ((e.cropX ?? 0) * (dw - hw * 2)) / 2 : 0
+    const cdy = fit === 'cover' ? ((e.cropY ?? 0) * (dh - hh * 2)) / 2 : 0
+    ctx.drawImage(img, -dw / 2 + cdx, -dh / 2 + cdy, dw, dh)
   }
   ctx.restore()
 }
@@ -1401,8 +1430,6 @@ export function svgArtworkLayer(decos: Deco[]): string {
   if (!visible.length) return ''
   const body = visible
     .map((e) => {
-      const w = elW(e)
-      const h = elH(e)
       const c = elCenter(e)
       const ft = flipTransform(e)
       const rot = e.rot || ft ? ` transform="rotate(${e.rot} ${c.x} ${c.y})${ft}"` : ''
@@ -1410,9 +1437,10 @@ export function svgArtworkLayer(decos: Deco[]): string {
       if (e.type === 'image') {
         const mask = imageMaskSVG(e)
         const clip = mask ? ` clip-path="url(#${maskId(e.id)})"` : ''
+        const a = imageDrawAttrs(e)
         el =
           (mask ? `<defs>${mask}</defs>` : '') +
-          `<image href="${e.src}" x="${e.x}" y="${e.y}" width="${w}" height="${h}" preserveAspectRatio="${imgPAR(e.fit)}"${clip}${rot}/>`
+          `<image href="${e.src}" x="${a.x}" y="${a.y}" width="${a.w}" height="${a.h}" preserveAspectRatio="${a.par}"${clip}${rot}/>`
       } else if (e.type === 'shape') {
         el = shapeSVG(e, rot)
       } else if (e.type === 'path') {
@@ -1571,6 +1599,8 @@ export function parseDeco(v: unknown): Deco | null {
       ? Math.max(3, Math.min(12, Math.round(Number(o.maskSides))))
       : undefined
     const frame = isFrameId(o.frame) && o.frame !== 'none' ? o.frame : undefined
+    const cropX = Number.isFinite(Number(o.cropX)) ? clampNum(Number(o.cropX), -1, 1) : undefined
+    const cropY = Number.isFinite(Number(o.cropY)) ? clampNum(Number(o.cropY), -1, 1) : undefined
     return {
       id, type: 'image', src, aspect, w, h,
       ...(fit ? { fit } : {}),
@@ -1579,6 +1609,8 @@ export function parseDeco(v: unknown): Deco | null {
       ...(maskShape ? { maskShape } : {}),
       ...(maskShape && maskSides ? { maskSides } : {}),
       ...(frame ? { frame } : {}),
+      ...(cropX ? { cropX } : {}),
+      ...(cropY ? { cropY } : {}),
       ...(preset ? { preset } : {}),
       ...(presetColor ? { presetColor } : {}),
       ...base,

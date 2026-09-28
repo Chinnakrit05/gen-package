@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imgPAR, imageMaskSVG, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, TEXT_STROKE_MUL, textShadowSVG, textShadowId, isCurvedText, curvedGlyphs, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imageMaskSVG, imageDrawAttrs, imageCoverRect, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, TEXT_STROKE_MUL, textShadowSVG, textShadowId, isCurvedText, curvedGlyphs, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type ImageEl, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 
@@ -81,14 +81,15 @@ function decoInner(e: Deco) {
   const h = elH(e)
   if (e.type === 'image') {
     const mask = imageMaskSVG(e)
+    const a = imageDrawAttrs(e)
     const img = (
       <image
         href={e.src}
-        x={e.x}
-        y={e.y}
-        width={w}
-        height={h}
-        preserveAspectRatio={imgPAR(e.fit)}
+        x={a.x}
+        y={a.y}
+        width={a.w}
+        height={a.h}
+        preserveAspectRatio={a.par}
         clipPath={mask ? `url(#${maskId(e.id)})` : undefined}
       />
     )
@@ -243,6 +244,7 @@ type Grab =
     }
   | { mode: 'anchor'; id: string; idx: number } // ลากจุด anchor ของ path
   | { mode: 'handle'; id: string; idx: number; which: 'o' | 'i'; alt: boolean } // ลากแขน bezier
+  | { mode: 'crop'; id: string; sx: number; sy: number; cx0: number; cy0: number; ovx: number; ovy: number; rot: number } // เลื่อนรูปในกรอบครอป
 
 export const DielineSVG = memo(function DielineSVG({
   dieline,
@@ -263,6 +265,7 @@ export const DielineSVG = memo(function DielineSVG({
   onAddPath,
   onPenExit,
   onEditPath,
+  onCrop,
   onUndo,
   onRedo,
   canUndo,
@@ -286,6 +289,7 @@ export const DielineSVG = memo(function DielineSVG({
   onAddPath?: (raw: RawAnchor[], closed: boolean) => void
   onPenExit?: () => void // วาดเสร็จ/ยกเลิก → ออกจากโหมดปากกา
   onEditPath?: (id: string, anchors: PathAnchor[]) => void // แก้จุดทีละจุด
+  onCrop?: (id: string, cropX: number, cropY: number) => void // เลื่อนรูปในกรอบครอป
   onUndo?: () => void
   onRedo?: () => void
   canUndo?: boolean
@@ -309,6 +313,7 @@ export const DielineSVG = memo(function DielineSVG({
   const [showGrid, setShowGrid] = useState(false)
   const [rot, setRot] = useState(0) // หมุนมุมมอง blueprint (0/90/180/270) — เฉพาะการแสดงผล
   const [showFaces, setShowFaces] = useState(false) // ป้ายกำกับด้าน (หน้า/ข้าง/หลัง) จาง ๆ
+  const [cropId, setCropId] = useState<string | null>(null) // รูปที่กำลังอยู่โหมดครอป (ลากเลื่อนในกรอบ)
   // เส้นไกด์ที่ผู้ใช้ลากวางเอง — axis 'x' = เส้นตั้ง (คงค่า x), 'y' = เส้นนอน (คงค่า y)
   const [guideLines, setGuideLines] = useState<{ id: string; axis: 'x' | 'y'; pos: number }[]>([])
   const [hoverGuide, setHoverGuide] = useState<string | null>(null) // เส้นไกด์ที่กำลังโฟกัส (โชว์ถังขยะที่ขอบ)
@@ -362,11 +367,32 @@ export const DielineSVG = memo(function DielineSVG({
     }
   }
 
+  // Esc/Enter = ออกจากโหมดครอป
+  useEffect(() => {
+    if (!cropId) return
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape' || ev.key === 'Enter') setCropId(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [cropId])
+
   const startMove = (e: React.PointerEvent, d: Deco) => {
     if (penMode) return penDown(e) // โหมดปากกา: คลิกทับชิ้นอื่น = วางจุดแทนการเลือก
     if (!editable) return
     // กัน pointerdown ลอยไปโดน handler พื้นหลังของ svg (ยกเลิกการเลือก) — ต้องทำก่อน return กรณีล็อก
     e.stopPropagation()
+    // โหมดครอป: กดค้างแล้วลากรูปนี้ = เลื่อนรูปในกรอบ (ไม่ใช่ย้ายกรอบ)
+    if (cropId === d.id && d.type === 'image' && onCrop && !d.locked) {
+      const p = toSheet(e.clientX, e.clientY)
+      if (!p) return
+      const r = imageCoverRect(d)
+      grab.current = { mode: 'crop', id: d.id, sx: p.x, sy: p.y, cx0: d.cropX ?? 0, cy0: d.cropY ?? 0, ovx: r.ovw, ovy: r.ovh, rot: d.rot }
+      setActive(true)
+      capture(e)
+      return
+    }
+    if (cropId && cropId !== d.id) setCropId(null) // คลิกชิ้นอื่น = ออกจากโหมดครอป
     // ถ้ากดข้อความที่ "เลือกอยู่ชิ้นเดียว" อยู่แล้ว และไม่ลาก → เข้าโหมดพิมพ์แก้ (จำไว้ ตัดสินตอนปล่อย)
     dragMoved.current = false
     editCandidate.current =
@@ -653,6 +679,19 @@ export const DielineSVG = memo(function DielineSVG({
     if (!p) return
     const d = decos.find((x) => x.id === g.id)
     if (!d) return
+    if (g.mode === 'crop') {
+      // เลื่อนรูปในกรอบ: แปลง delta พิกัดแผ่น → local (ถอดหมุนรูป) → cropX/cropY (−1..1)
+      const dx = p.x - g.sx
+      const dy = p.y - g.sy
+      const rr = (-g.rot * Math.PI) / 180
+      const ldx = Math.cos(rr) * dx - Math.sin(rr) * dy
+      const ldy = Math.sin(rr) * dx + Math.cos(rr) * dy
+      const ncx = g.ovx > 0 ? Math.max(-1, Math.min(1, g.cx0 + (2 * ldx) / g.ovx)) : 0
+      const ncy = g.ovy > 0 ? Math.max(-1, Math.min(1, g.cy0 + (2 * ldy) / g.ovy)) : 0
+      dragMoved.current = true
+      onCrop?.(g.id, ncx, ncy)
+      return
+    }
     if (g.mode === 'anchor' || g.mode === 'handle') {
       if (d.type !== 'path') return
       const { nx, ny } = sheetToNorm(d, p.x, p.y)
@@ -775,6 +814,7 @@ export const DielineSVG = memo(function DielineSVG({
     if (penMode) return penDown(e)
     if (!editable || grab.current || pinch.current) return
     if (editing) setEditing(null) // คลิกพื้นที่ว่าง = ออกจากโหมดแก้ข้อความ
+    if (cropId) setCropId(null) // คลิกพื้นที่ว่าง = ออกจากโหมดครอป
     pan.current = { sx: e.clientX, sy: e.clientY, cx: viewCx, cy: viewCy, moved: false, over: spacePan }
     capture(e)
   }
@@ -1094,6 +1134,11 @@ export const DielineSVG = memo(function DielineSVG({
                 e.stopPropagation()
                 onSelect?.(d.id, false)
                 setEditing(d.id)
+              } else if (d.type === 'image' && editable && !d.locked && onCrop) {
+                // ดับเบิลคลิกรูป = เข้าโหมดครอป (ลากเลื่อนรูปในกรอบ)
+                e.stopPropagation()
+                onSelect?.(d.id, false)
+                setCropId(d.id)
               } else if (d.type === 'path' && editable && !d.locked && !penMode) {
                 // ดับเบิลคลิกบนเส้น = เพิ่มจุด
                 e.stopPropagation()
@@ -1102,11 +1147,25 @@ export const DielineSVG = memo(function DielineSVG({
               }
             }}
           >
-            <DecoBody e={d} />
+            {cropId === d.id && d.type === 'image' ? (
+              // โหมดครอป: โชว์รูปเต็ม (ส่วนล้น) จาง ๆ + รูปในกรอบชัด + ขอบกรอบ; ลากเพื่อเลื่อนรูป
+              (() => {
+                const cover = imageCoverRect(d as ImageEl)
+                return (
+                  <>
+                    <image href={d.src} x={cover.x} y={cover.y} width={cover.w} height={cover.h} preserveAspectRatio="none" opacity={0.3} />
+                    <DecoBody e={d} />
+                    <rect x={d.x} y={d.y} width={w} height={h} fill="transparent" stroke={SEL_COLOR} strokeWidth={1.3} strokeDasharray="5 3" vectorEffect="non-scaling-stroke" />
+                  </>
+                )
+              })()
+            ) : (
+              <DecoBody e={d} />
+            )}
             {/* รูปที่ถูกครอป/ใส่กรอบจะคลิกได้เฉพาะพื้นที่ที่เห็น — เพิ่มพื้นที่จับใส (โปร่งใสแต่รับคลิก)
                 คลุมทั้งกรอบ เพื่อให้เลือก/ลาก/ย่อได้จากทั้งกล่องเหมือนรูปปกติ */}
-            {d.type === 'image' && <rect x={d.x} y={d.y} width={w} height={h} fill="transparent" />}
-            {sel && (
+            {d.type === 'image' && cropId !== d.id && <rect x={d.x} y={d.y} width={w} height={h} fill="transparent" />}
+            {sel && cropId !== d.id && (
               <>
                 <rect
                   x={d.x}

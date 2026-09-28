@@ -1835,6 +1835,10 @@ export default function App({
   const editPath = (id: string, anchors: PathAnchor[]) =>
     setDecos((ds) => ds.map((d) => (d.id === id && d.type === 'path' ? { ...d, anchors } : d)))
 
+  // เลื่อนรูปในกรอบครอป (double-click แล้วลาก) — เก็บ cropX/cropY (−1..1)
+  const cropDeco = (id: string, cropX: number, cropY: number) =>
+    setDecos((ds) => ds.map((d) => (d.id === id && d.type === 'image' ? { ...d, cropX, cropY } : d)))
+
   const addNutrition = () => {
     if (!dieline) return
     const el = makeNutritionEl(dieline)
@@ -2807,7 +2811,7 @@ export default function App({
                         e.target.value = ''
                       }}
                     />
-                    <span className="ico-btn"><IconImage /> โลโก้</span>
+                    <span className="ico-btn"><IconImage /> รูปภาพ</span>
                   </label>
                   <button className="ico-btn" disabled={aiBusy} onClick={addText}>
                     <IconText /> ข้อความ
@@ -4220,6 +4224,7 @@ export default function App({
                 onAddPath={addPath}
                 onPenExit={() => setPenMode(false)}
                 onEditPath={editPath}
+                onCrop={cropDeco}
                 onRemove={removeDeco}
                 onText={(id, text) =>
                   setDecos((ds) =>
