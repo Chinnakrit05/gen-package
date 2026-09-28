@@ -613,6 +613,15 @@ describe('มาสก์รูปตามทรง + ข้อความเ�
     expect(p.cropY).toBe(-1)
   })
 
+  it('imageCoverRect: cropZoom ทำให้รูปพอดีกรอบเกิดส่วนล้น (พานได้)', () => {
+    const sq = { id: 'z', type: 'image' as const, src: 'data:image/png;base64,A', aspect: 1, w: 40, h: 40, x: 0, y: 0, rot: 0 }
+    expect(imageCoverRect(sq).ovw).toBe(0) // จัตุรัสในกรอบจัตุรัส zoom1 → ไม่มีส่วนล้น
+    const z = imageCoverRect({ ...sq, cropZoom: 2 })
+    expect(z.w).toBe(80) // ซูม 2 เท่า
+    expect(z.ovw).toBe(40) // มีส่วนล้น → เลื่อนได้
+    expect(z.ovh).toBe(40)
+  })
+
   it('imageMaskSVG: frame ชนะ maskShape/circle/radius และใช้ <path> + translate', () => {
     const svg = imageMaskSVG(imgMask({ frame: 'heart', maskShape: 'star', circle: true, radius: 5 }) as never)
     expect(svg).toContain('<clipPath')

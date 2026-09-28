@@ -1835,9 +1835,15 @@ export default function App({
   const editPath = (id: string, anchors: PathAnchor[]) =>
     setDecos((ds) => ds.map((d) => (d.id === id && d.type === 'path' ? { ...d, anchors } : d)))
 
-  // เลื่อนรูปในกรอบครอป (double-click แล้วลาก) — เก็บ cropX/cropY (−1..1)
-  const cropDeco = (id: string, cropX: number, cropY: number) =>
-    setDecos((ds) => ds.map((d) => (d.id === id && d.type === 'image' ? { ...d, cropX, cropY } : d)))
+  // เลื่อน/ซูมรูปในกรอบครอป (double-click แล้วลาก/สกอลล์) — เก็บ cropX/cropY (−1..1) + cropZoom (≥1)
+  const cropDeco = (id: string, cropX: number, cropY: number, cropZoom: number) =>
+    setDecos((ds) =>
+      ds.map((d) =>
+        d.id === id && d.type === 'image'
+          ? { ...d, cropX, cropY, cropZoom: cropZoom > 1 ? cropZoom : undefined }
+          : d,
+      ),
+    )
 
   const addNutrition = () => {
     if (!dieline) return

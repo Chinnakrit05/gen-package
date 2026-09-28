@@ -244,7 +244,7 @@ type Grab =
     }
   | { mode: 'anchor'; id: string; idx: number } // ลากจุด anchor ของ path
   | { mode: 'handle'; id: string; idx: number; which: 'o' | 'i'; alt: boolean } // ลากแขน bezier
-  | { mode: 'crop'; id: string; sx: number; sy: number; cx0: number; cy0: number; ovx: number; ovy: number; rot: number } // เลื่อนรูปในกรอบครอป
+  | { mode: 'crop'; id: string; sx: number; sy: number; cx0: number; cy0: number; cz0: number; ovx: number; ovy: number; rot: number } // เลื่อนรูปในกรอบครอป
 
 export const DielineSVG = memo(function DielineSVG({
   dieline,
@@ -289,7 +289,7 @@ export const DielineSVG = memo(function DielineSVG({
   onAddPath?: (raw: RawAnchor[], closed: boolean) => void
   onPenExit?: () => void // วาดเสร็จ/ยกเลิก → ออกจากโหมดปากกา
   onEditPath?: (id: string, anchors: PathAnchor[]) => void // แก้จุดทีละจุด
-  onCrop?: (id: string, cropX: number, cropY: number) => void // เลื่อนรูปในกรอบครอป
+  onCrop?: (id: string, cropX: number, cropY: number, cropZoom: number) => void // เลื่อน/ซูมรูปในกรอบครอป
   onUndo?: () => void
   onRedo?: () => void
   canUndo?: boolean
@@ -314,6 +314,7 @@ export const DielineSVG = memo(function DielineSVG({
   const [rot, setRot] = useState(0) // หมุนมุมมอง blueprint (0/90/180/270) — เฉพาะการแสดงผล
   const [showFaces, setShowFaces] = useState(false) // ป้ายกำกับด้าน (หน้า/ข้าง/หลัง) จาง ๆ
   const [cropId, setCropId] = useState<string | null>(null) // รูปที่กำลังอยู่โหมดครอป (ลากเลื่อนในกรอบ)
+  const cropZoomRef = useRef(1) // ซูมครอปปัจจุบัน (กัน stale ตอนสกอลล์/พินช์รัว ๆ ก่อน re-render)
   // เส้นไกด์ที่ผู้ใช้ลากวางเอง — axis 'x' = เส้นตั้ง (คงค่า x), 'y' = เส้นนอน (คงค่า y)
   const [guideLines, setGuideLines] = useState<{ id: string; axis: 'x' | 'y'; pos: number }[]>([])
   const [hoverGuide, setHoverGuide] = useState<string | null>(null) // เส้นไกด์ที่กำลังโฟกัส (โชว์ถังขยะที่ขอบ)
@@ -387,7 +388,7 @@ export const DielineSVG = memo(function DielineSVG({
       const p = toSheet(e.clientX, e.clientY)
       if (!p) return
       const r = imageCoverRect(d)
-      grab.current = { mode: 'crop', id: d.id, sx: p.x, sy: p.y, cx0: d.cropX ?? 0, cy0: d.cropY ?? 0, ovx: r.ovw, ovy: r.ovh, rot: d.rot }
+      grab.current = { mode: 'crop', id: d.id, sx: p.x, sy: p.y, cx0: d.cropX ?? 0, cy0: d.cropY ?? 0, cz0: d.cropZoom ?? 1, ovx: r.ovw, ovy: r.ovh, rot: d.rot }
       setActive(true)
       capture(e)
       return
@@ -689,7 +690,7 @@ export const DielineSVG = memo(function DielineSVG({
       const ncx = g.ovx > 0 ? Math.max(-1, Math.min(1, g.cx0 + (2 * ldx) / g.ovx)) : 0
       const ncy = g.ovy > 0 ? Math.max(-1, Math.min(1, g.cy0 + (2 * ldy) / g.ovy)) : 0
       dragMoved.current = true
-      onCrop?.(g.id, ncx, ncy)
+      onCrop?.(g.id, ncx, ncy, g.cz0)
       return
     }
     if (g.mode === 'anchor' || g.mode === 'handle') {
@@ -904,8 +905,19 @@ export const DielineSVG = memo(function DielineSVG({
     e.preventDefault()
     const [a, b] = [...pointers.current.values()]
     const dist = Math.hypot(a.x - b.x, a.y - b.y)
-    const mid = toSheet((a.x + b.x) / 2, (a.y + b.y) / 2)
-    if (mid && dist > 0) zoomAt(dist / pinch.current.dist, mid.x, mid.y)
+    const factor = dist / pinch.current.dist
+    // โหมดครอป: พินช์ = ซูมรูปในกรอบ (ไม่ใช่ซูม blueprint)
+    if (cropId) {
+      const d = decos.find((x) => x.id === cropId)
+      if (d && d.type === 'image' && dist > 0) {
+        const nz = Math.max(1, Math.min(6, cropZoomRef.current * factor))
+        cropZoomRef.current = nz
+        onCrop?.(cropId, d.cropX ?? 0, d.cropY ?? 0, nz)
+      }
+    } else {
+      const mid = toSheet((a.x + b.x) / 2, (a.y + b.y) / 2)
+      if (mid && dist > 0) zoomAt(factor, mid.x, mid.y)
+    }
     if (dist > 0) pinch.current.dist = dist
   }
   const pinchUp = (e: React.PointerEvent) => {
@@ -925,6 +937,17 @@ export const DielineSVG = memo(function DielineSVG({
     const svg = svgRef.current
     if (!svg || !editable) return
     const onWheel = (e: WheelEvent) => {
+      // โหมดครอป: สกอลล์ = ซูมรูปในกรอบ (ไม่ต้องกด Ctrl)
+      if (cropId) {
+        const d = decos.find((x) => x.id === cropId)
+        if (d && d.type === 'image') {
+          e.preventDefault()
+          const nz = Math.max(1, Math.min(6, cropZoomRef.current * (e.deltaY < 0 ? 1.12 : 1 / 1.12)))
+          cropZoomRef.current = nz
+          onCrop?.(cropId, d.cropX ?? 0, d.cropY ?? 0, nz)
+          return
+        }
+      }
       if (!e.ctrlKey && !e.metaKey) return // สกอลล์เฉยๆ ไม่ซูม
       e.preventDefault()
       const f = toSheet(e.clientX, e.clientY)
@@ -933,7 +956,7 @@ export const DielineSVG = memo(function DielineSVG({
     svg.addEventListener('wheel', onWheel, { passive: false })
     return () => svg.removeEventListener('wheel', onWheel)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoom, center, pad, dieline.width, dieline.height])
+  }, [zoom, center, pad, dieline.width, dieline.height, cropId, decos, onCrop])
 
   // เส้นไกด์ที่กำลังโฟกัส (ลากอยู่ก่อน ไม่งั้นตัวที่ชี้) → ใช้เลือกว่าจะโชว์ถังขยะขอบไหน
   const activeGuide = guideLines.find((g) => g.id === (guideDrag.current?.id ?? hoverGuide)) ?? null
@@ -1135,9 +1158,10 @@ export const DielineSVG = memo(function DielineSVG({
                 onSelect?.(d.id, false)
                 setEditing(d.id)
               } else if (d.type === 'image' && editable && !d.locked && onCrop) {
-                // ดับเบิลคลิกรูป = เข้าโหมดครอป (ลากเลื่อนรูปในกรอบ)
+                // ดับเบิลคลิกรูป = เข้าโหมดครอป (ลากเลื่อน/สกอลล์ซูมรูปในกรอบ)
                 e.stopPropagation()
                 onSelect?.(d.id, false)
+                cropZoomRef.current = (d as ImageEl).cropZoom ?? 1
                 setCropId(d.id)
               } else if (d.type === 'path' && editable && !d.locked && !penMode) {
                 // ดับเบิลคลิกบนเส้น = เพิ่มจุด
@@ -1156,6 +1180,9 @@ export const DielineSVG = memo(function DielineSVG({
                     <image href={d.src} x={cover.x} y={cover.y} width={cover.w} height={cover.h} preserveAspectRatio="none" opacity={0.3} />
                     <DecoBody e={d} />
                     <rect x={d.x} y={d.y} width={w} height={h} fill="transparent" stroke={SEL_COLOR} strokeWidth={1.3} strokeDasharray="5 3" vectorEffect="non-scaling-stroke" />
+                    <text x={d.x + w / 2} y={d.y - 2.5} textAnchor="middle" fontSize={5} fontWeight={600} fill={SEL_COLOR} stroke="none" pointerEvents="none">
+                      ลากเลื่อน · สกอลล์ซูม
+                    </text>
                   </>
                 )
               })()
