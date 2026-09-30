@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LABEL_OVERLAP, generateVessel, isVessel } from './vessel'
+import { LABEL_OVERLAP, TUBE_SEAL_FRAC, generateVessel, isVessel } from './vessel'
 import { MATERIALS, getMaterial } from './materials'
 import { computeGuides } from './guides'
 import { dielineDXFString } from './dxf'
@@ -120,11 +120,12 @@ describe('vessel: หลอดครีม (tube-laminate)', () => {
   const tbox = { W: 40, D: 16, H: 150, handle: false }
   const v = generateVessel(tbox, getMaterial('tube-laminate'))
 
-  it('ฝาที่ก้น (เริ่มแกนกลาง) + ปลายซีลแบนที่ยอด (จบแกนกลาง)', () => {
+  it('ฝาที่ก้น (เริ่มแกนกลาง) + ลำตัวจบที่ระดับซีล ปิดยอดแบน', () => {
     expect(v.profile[0].x).toBe(0)
     expect(v.profile[0].y).toBe(0)
-    expect(v.profile[v.profile.length - 1].x).toBe(0) // ปลายซีลพับเข้าหาแกนกลางที่ยอด
-    expect(Math.max(...v.profile.map((p) => p.y))).toBeCloseTo(tbox.H)
+    expect(v.profile[v.profile.length - 1].x).toBe(0) // ปิดยอดแบนที่แกนกลาง (ส่วนบีบซีลเป็น geometry แยก)
+    // ลำตัวทรงหมุนจบที่ระดับซีล (TUBE_SEAL_FRAC×H) — ส่วนบีบซีลปลายบนเรนเดอร์แยกใน viewer
+    expect(Math.max(...v.profile.map((p) => p.y))).toBeCloseTo(tbox.H * TUBE_SEAL_FRAC)
   })
 
   it('รัศมีกว้างสุด = ⌀ตัว/2 ทุกจุด finite ไม่ติดลบ + ความสูงไม่ย้อนกลับ', () => {

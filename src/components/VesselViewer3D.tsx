@@ -5,6 +5,7 @@ import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
 import type { Vessel } from '../core/vessel'
+import { TUBE_SEAL_FRAC } from '../core/vessel'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 
 // พรีวิวภาชนะขึ้นรูป: โปรไฟล์หมุนรอบแกน (LatheGeometry) + ฉลากพันรอบตัว
@@ -132,19 +133,60 @@ function VesselModel({
     () => new THREE.CylinderGeometry(vessel.labelR + 0.3, vessel.labelR + 0.3, labelH, 64, 1, true),
     [vessel, labelH],
   )
+
+  const metal = mat.id === 'aluminum'
+  const isTube = mat.form === 'tube'
+  // หลอดบีบ: "ตะเข็บซีลปลายบน (crimp)" — หน้าตัดค่อย ๆ บีบจากวงกลม (ลำตัว) เป็นเส้นแบนที่ยอด
+  // (a คงที่ = เต็มความกว้าง, b ลดจาก R → ครึ่งความหนาซีล) จึงได้ตะเข็บแบนจริง ไม่ใช่โดม+ครีบ
+  const crimpGeo = useMemo(() => {
+    if (!isTube) return null
+    const R = vessel.labelR
+    const sealBottom = vessel.H * TUBE_SEAL_FRAC
+    const top = vessel.H
+    const crimpThick = Math.max(1.2, (mat.thickness ?? 0.3) * 4)
+    const NV = 14
+    const NU = 48
+    const stride = NU + 1
+    const pos: number[] = []
+    const idx: number[] = []
+    for (let iv = 0; iv <= NV; iv++) {
+      const v = iv / NV
+      const y = sealBottom + v * (top - sealBottom)
+      const a = R // ความกว้างคงที่ = ซีลเต็มความกว้างหลอด
+      const b = R * (1 - v) + (crimpThick / 2) * v // ความลึกบีบจากวงกลม → เกือบแบน
+      for (let i = 0; i <= NU; i++) {
+        const th = (i / NU) * Math.PI * 2
+        pos.push(a * Math.cos(th), y, b * Math.sin(th))
+      }
+    }
+    for (let iv = 0; iv < NV; iv++) {
+      for (let i = 0; i < NU; i++) {
+        const a0 = iv * stride + i
+        const b0 = (iv + 1) * stride + i
+        idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1)
+      }
+    }
+    // ปิดหน้าซีลบนสุด (เส้นแบน) ด้วยพัดจากจุดกึ่งกลาง
+    const center = pos.length / 3
+    pos.push(0, top, 0)
+    const topStart = NV * stride
+    for (let i = 0; i < NU; i++) idx.push(topStart + i, center, topStart + i + 1)
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    g.setIndex(idx)
+    g.computeVertexNormals()
+    return g
+  }, [isTube, vessel, mat.thickness])
+
   useEffect(
     () => () => {
       body.dispose()
       labelGeo.dispose()
+      crimpGeo?.dispose()
     },
-    [body, labelGeo],
+    [body, labelGeo, crimpGeo],
   )
 
-  const metal = mat.id === 'aluminum'
-  // หลอดบีบ: ปลายบน "ซีลแบน (crimp)" — แผ่นครีบแบนคร่อมเส้นผ่านศูนย์กลางที่ยอดหลอด
-  const isTube = mat.form === 'tube'
-  const finH = vessel.H * 0.12
-  const finThick = Math.max(1.2, mat.thickness * 4)
   return (
     // จัดกึ่งกลางแนวตั้งให้หมุนรอบกลางลำตัว
     <group position={[0, -vessel.H / 2, 0]}>
@@ -162,10 +204,9 @@ function VesselModel({
       <mesh geometry={labelGeo} position={[0, (vessel.labelY0 + vessel.labelY1) / 2, 0]} rotation={[0, Math.PI, 0]}>
         <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} roughness={0.8} metalness={0} />
       </mesh>
-      {isTube && (
-        <mesh position={[0, vessel.H - finH / 2, 0]}>
-          <boxGeometry args={[vessel.labelR * 2, finH, finThick]} />
-          <meshStandardMaterial color={mat.color} roughness={mat.roughness ?? 0.3} metalness={0} />
+      {isTube && crimpGeo && (
+        <mesh geometry={crimpGeo}>
+          <meshStandardMaterial color={mat.color} roughness={mat.roughness ?? 0.28} metalness={0} side={THREE.DoubleSide} />
         </mesh>
       )}
     </group>

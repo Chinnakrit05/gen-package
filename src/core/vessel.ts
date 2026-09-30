@@ -23,6 +23,10 @@ export const isVessel = (m: Material) => !m.foldable && m.form !== 'pouch'
 
 export const LABEL_OVERLAP = 8 // ระยะทับซ้อนปลายฉลากสำหรับทากาว (มม.)
 
+// หลอดครีม: สัดส่วนความสูงที่ลำตัว (ทรงหมุน) จบและเริ่มส่วนบีบซีลปลายบน (crimp loft)
+// ใช้ร่วมกันระหว่างโปรไฟล์ (vessel.ts) กับ geometry ซีล (VesselViewer3D) ให้ต่อกันพอดี
+export const TUBE_SEAL_FRAC = 0.9
+
 // รูปแบบฉลาก = ฉลากพันรอบตัวคลุมช่วงความสูงแค่ไหน (คำนวณจากช่วงลำตัวตรงของภาชนะ)
 export type LabelStyle = 'body' | 'full' | 'band' | 'neck'
 export const LABEL_STYLES: { id: LabelStyle; nameTh: string; detail: string }[] = [
@@ -63,24 +67,22 @@ function profileFor(matId: string, R: number, rn: number, H: number): { pts: Vec
   }
   if (matId === 'tube-laminate') {
     // หลอดบีบคลาสสิก: ตั้งบน "ฝา" ที่ก้น → ไหล่โค้งออก → ลำตัวตรง → ปลายบน "ซีลแบน (crimp)"
-    // ตะเข็บซีลปลายบนเป็นแผ่นแบนเต็มความกว้าง (ไม่ใช่ทรงหมุน) จึงเรนเดอร์เป็นครีบเพิ่มใน VesselViewer3D
-    const rcap = Math.min(Math.max(rn, R * 0.5), R * 0.62) // รัศมีฝา (แคบกว่าลำตัว)
+    // ตัวหลอด (ก้น→ระดับซีล TUBE_SEAL_FRAC) เป็นทรงหมุน; ส่วนซีลปลายบนหน้าตัดบีบจากวงกลม
+    // เป็นเส้นแบน (loft) ไม่ใช่ทรงหมุน จึงสร้างเป็น geometry แยกใน VesselViewer3D
+    const rcap = Math.min(Math.max(rn, R * 0.54), R * 0.62) // รัศมีฝา (แคบกว่าลำตัว)
     const capH = H * 0.15 // ความสูงฝาที่ก้น
     const shoulderTop = capH + H * 0.13 // จบไหล่ = เริ่มลำตัวตรง
-    const bodyTop = H * 0.9 // ลำตัวตรงถึงระดับนี้ แล้วลบมุมเข้าปลายซีล
+    const bodyTop = H * TUBE_SEAL_FRAC // ลำตัวตรงถึงระดับซีล แล้วปิดยอดแบน (ส่วนบีบซีลต่อจากนี้)
     return {
       pts: [
         P(0, 0),
         P(rcap, 0), // ก้นฝา (ตั้งบนฝา)
         P(rcap, capH), // ฝาเกลียว
         ...shoulder(P(rcap, capH), P(rcap, capH + H * 0.05), P(R, shoulderTop)), // ไหล่โค้งออก
-        P(R, bodyTop), // ลำตัวตรง
-        // ไหล่ซีลเกือบเหลี่ยม: คงความกว้างเกือบเต็มแล้วลบมุมเล็กน้อยก่อนปิดที่ยอด
-        P(R * 0.96, H * 0.95),
-        P(R * 0.5, H * 0.99),
-        P(0, H), // ปลายซีลแบน (ครีบเต็มความกว้างเสริมใน 3D)
+        P(R, bodyTop), // ลำตัวตรง จบที่ระดับซีล
+        P(0, bodyTop), // ปิดยอดแบน (ส่วนบีบซีลเป็น geometry แยก)
       ],
-      band: [shoulderTop + H * 0.02, bodyTop - H * 0.02],
+      band: [shoulderTop + H * 0.03, bodyTop - H * 0.03],
     }
   }
   if (matId === 'glass') {
