@@ -4,13 +4,14 @@ import { MATERIALS, getMaterial } from './materials'
 import { computeGuides } from './guides'
 import { dielineDXFString } from './dxf'
 
+// โปรไฟล์ภาชนะปากเปิด/กระป๋อง (ตรวจแบบทั่วไป) — หลอดครีมมีเงื่อนไขก้นซีล/ฝาปิด จึงแยกเทสต์
 const VESSEL_IDS = ['pet-bottle', 'glass', 'aluminum'] as const
 const box = { W: 66, D: 28, H: 210, handle: false }
 
 describe('vessel: การจัดกลุ่มวัสดุ', () => {
-  it('วัสดุพับไม่ได้ทั้งหมดคือภาชนะ และมีครบ 3 ชนิด', () => {
+  it('วัสดุ revolve ทั้งหมด (ภาชนะ + หลอดครีม) ถูกจัดเป็น vessel', () => {
     const vessels = MATERIALS.filter((m) => isVessel(m)).map((m) => m.id)
-    expect(vessels.sort()).toEqual([...VESSEL_IDS].sort())
+    expect(vessels.sort()).toEqual([...VESSEL_IDS, 'tube-laminate'].sort())
   })
 })
 
@@ -112,6 +113,36 @@ describe('vessel: รูปแบบฉลาก (label style)', () => {
     const def = generateVessel(box, g)
     expect(def.labelY0).toBeCloseTo(bodyV.labelY0)
     expect(def.labelY1).toBeCloseTo(bodyV.labelY1)
+  })
+})
+
+describe('vessel: หลอดครีม (tube-laminate)', () => {
+  const tbox = { W: 40, D: 16, H: 150, handle: false }
+  const v = generateVessel(tbox, getMaterial('tube-laminate'))
+
+  it('ก้นซีลแบน (เริ่มแกนกลาง) + ฝาปิดบน (จบแกนกลาง)', () => {
+    expect(v.profile[0].x).toBe(0)
+    expect(v.profile[0].y).toBe(0)
+    expect(v.profile[v.profile.length - 1].x).toBe(0) // ฝาปิด จบที่แกนกลาง
+    expect(Math.max(...v.profile.map((p) => p.y))).toBeCloseTo(tbox.H)
+  })
+
+  it('รัศมีกว้างสุด = ⌀ตัว/2 ทุกจุด finite ไม่ติดลบ + ความสูงไม่ย้อนกลับ', () => {
+    expect(Math.max(...v.profile.map((p) => p.x))).toBeCloseTo(tbox.W / 2)
+    expect(v.profile.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0)).toBe(true)
+    for (let i = 1; i < v.profile.length; i++) {
+      expect(v.profile[i].y).toBeGreaterThanOrEqual(v.profile[i - 1].y - 1e-9)
+    }
+  })
+
+  it('ฉลากพันรอบตัวหลอด + dieline ไหลผ่าน export เดิม (DXF ไม่มี NaN)', () => {
+    expect(v.labelR).toBeCloseTo(tbox.W / 2)
+    expect(v.labelY0).toBeGreaterThan(0)
+    expect(v.labelY1).toBeLessThan(tbox.H)
+    expect(v.label.width).toBeCloseTo(Math.PI * tbox.W + LABEL_OVERLAP)
+    const dxf = dielineDXFString(v.label)
+    expect(dxf).toContain('EOF')
+    expect(dxf).not.toContain('NaN')
   })
 })
 

@@ -119,6 +119,8 @@ import {
   IconBottle,
   IconPouch,
   IconCard,
+  IconTube,
+  IconSticker,
   IconTrash,
   IconFontSize,
   IconStroke,
@@ -1143,6 +1145,10 @@ export default function App({
   const kind = packKind(mat) // 'box' | 'vessel' | 'pouch' — เลือก path dieline/3D
   // นามบัตรใช้กลไก box (การ์ดแบน) แต่นำเสนอเป็น "ประเภทงาน" แยกใน UI
   const isCard = kind === 'box' && templateId === 'card'
+  // สติกเกอร์ไดคัท = box (แผ่นแบนชิ้นเดียว) นำเสนอเป็นประเภทงานแยก
+  const isSticker = kind === 'box' && templateId === 'sticker'
+  // หลอดครีม = vessel (revolve) วัสดุ tube นำเสนอเป็นประเภทงานแยก
+  const isTube = kind === 'vessel' && mat.form === 'tube'
   // วัสดุพับไม่ได้แยกเป็น 2 เส้นทาง: ภาชนะ (revolve + ฉลากพันรอบ) กับ ถุงฟิล์ม (doypack)
   // ทั้งคู่ผลิต Dieline ธรรมดา ระบบเดิม (artwork/export/guides/ใบสเปก/CMYK) จึงใช้ต่อได้เลย
   const vessel = useMemo(
@@ -2310,12 +2316,12 @@ export default function App({
           <Group title={t('ประเภทงาน', 'Job type')} open={groups.mode} onToggle={() => toggleGroup('mode')}>
             <div className="pick-list">
               <button
-                className={`pick-item mode${kind === 'box' && !isCard ? ' active' : ''}`}
+                className={`pick-item mode${kind === 'box' && !isCard && !isSticker ? ' active' : ''}`}
                 disabled={aiBusy}
-                aria-pressed={kind === 'box' && !isCard}
+                aria-pressed={kind === 'box' && !isCard && !isSticker}
                 onClick={() => {
-                  if (kind !== 'box') changeMaterial('carton-300')
-                  else if (isCard) changeTemplate('tuck-end')
+                  if (kind !== 'box' || isSticker) changeMaterial('carton-300')
+                  if (templateId === 'card' || templateId === 'sticker') changeTemplate('tuck-end')
                 }}
               >
                 <span className="mode-ic">
@@ -2327,11 +2333,11 @@ export default function App({
                 </span>
               </button>
               <button
-                className={`pick-item mode${kind === 'vessel' ? ' active' : ''}`}
+                className={`pick-item mode${kind === 'vessel' && !isTube ? ' active' : ''}`}
                 disabled={aiBusy}
-                aria-pressed={kind === 'vessel'}
+                aria-pressed={kind === 'vessel' && !isTube}
                 onClick={() => {
-                  if (kind !== 'vessel') changeMaterial('pet-bottle')
+                  if (kind !== 'vessel' || isTube) changeMaterial('pet-bottle')
                 }}
               >
                 <span className="mode-ic">
@@ -2359,11 +2365,33 @@ export default function App({
                 </span>
               </button>
               <button
+                className={`pick-item mode${isTube ? ' active' : ''}`}
+                disabled={aiBusy}
+                aria-pressed={isTube}
+                onClick={() => {
+                  if (!isTube) {
+                    changeMaterial('tube-laminate')
+                    // หลอดครีมทรงชะลูด — ตั้งสัดส่วนเริ่มต้นให้ดูเป็นหลอด ไม่ใช่กระปุก
+                    setW(40)
+                    setD(20)
+                    setH(150)
+                  }
+                }}
+              >
+                <span className="mode-ic">
+                  <IconTube size={20} />
+                </span>
+                <span className="pick-body">
+                  <span className="pick-name">{t('หลอดครีม (tube)', 'Cosmetic tube')}</span>
+                  <span className="pick-detail">{t('หลอดบีบครีม/เจล — ฝาเกลียว ก้นซีล + งานพิมพ์พันรอบ', 'Squeeze tube — screw cap, sealed end + wrap print')}</span>
+                </span>
+              </button>
+              <button
                 className={`pick-item mode${isCard ? ' active' : ''}`}
                 disabled={aiBusy}
                 aria-pressed={isCard}
                 onClick={() => {
-                  if (kind !== 'box') changeMaterial('carton-300')
+                  if (kind !== 'box' || materialId.startsWith('sticker-')) changeMaterial('carton-300')
                   changeTemplate('card')
                 }}
               >
@@ -2375,13 +2403,30 @@ export default function App({
                   <span className="pick-detail">{t('การ์ดแบนพิมพ์ ขนาดมาตรฐาน 90×54 มม.', 'Flat printed card, standard 90×54 mm')}</span>
                 </span>
               </button>
+              <button
+                className={`pick-item mode${isSticker ? ' active' : ''}`}
+                disabled={aiBusy}
+                aria-pressed={isSticker}
+                onClick={() => {
+                  if (!materialId.startsWith('sticker-')) changeMaterial('sticker-vinyl')
+                  changeTemplate('sticker')
+                }}
+              >
+                <span className="mode-ic">
+                  <IconSticker size={20} />
+                </span>
+                <span className="pick-body">
+                  <span className="pick-name">{t('สติกเกอร์', 'Sticker')}</span>
+                  <span className="pick-detail">{t('สติกเกอร์พิมพ์ไดคัทตามรูป — ฉลากสินค้า/โลโก้', 'Die-cut printed sticker — product label/logo')}</span>
+                </span>
+              </button>
             </div>
           </Group>
 
-          {mat.foldable && !isCard && (
+          {mat.foldable && !isCard && !isSticker && (
             <Group title={t('รูปแบบบรรจุภัณฑ์', 'Package style')} open={groups.tpl} onToggle={() => toggleGroup('tpl')}>
               <div className="pick-list">
-                {TEMPLATES.filter((tp) => tp.id !== 'card').map((tp) => (
+                {TEMPLATES.filter((tp) => tp.id !== 'card' && tp.id !== 'sticker').map((tp) => (
                   <button
                     key={tp.id}
                     className={`pick-item${templateId === tp.id ? ' active' : ''}`}
@@ -2430,17 +2475,34 @@ export default function App({
           )}
 
           <Group
-            title={isCard ? 'กระดาษนามบัตร' : kind === 'box' ? 'วัสดุกล่อง' : kind === 'pouch' ? 'ชนิดถุง' : 'ชนิดภาชนะ'}
+            title={
+              isCard
+                ? t('กระดาษนามบัตร', 'Card stock')
+                : isSticker
+                  ? t('วัสดุสติกเกอร์', 'Sticker material')
+                  : isTube
+                    ? t('วัสดุหลอด', 'Tube material')
+                    : kind === 'box'
+                      ? t('วัสดุกล่อง', 'Box material')
+                      : kind === 'pouch'
+                        ? t('ชนิดถุง', 'Pouch type')
+                        : t('ชนิดภาชนะ', 'Vessel type')
+            }
             open={groups.mat}
             onToggle={() => toggleGroup('mat')}
           >
             <div className="pick-list">
-              {MATERIALS.filter(
-                (m) =>
-                  packKind(m) === kind &&
-                  // นามบัตรใช้กระดาษการ์ดเท่านั้น (ไม่ใช่ลูกฟูก/พลาสติกใส)
-                  (!isCard || m.id === 'carton-300' || m.id === 'carton-400' || m.id === 'kraft-350'),
-              ).map((m) => (
+              {MATERIALS.filter((m) => {
+                if (packKind(m) !== kind) return false
+                const sticker = m.id.startsWith('sticker-')
+                const tube = m.form === 'tube'
+                // นามบัตรใช้กระดาษการ์ดเท่านั้น (ไม่ใช่ลูกฟูก/พลาสติกใส/สติกเกอร์)
+                if (isCard) return m.id === 'carton-300' || m.id === 'carton-400' || m.id === 'kraft-350'
+                if (isSticker) return sticker // สติกเกอร์โชว์เฉพาะวัสดุสติกเกอร์
+                if (isTube) return tube // หลอดครีมโชว์เฉพาะวัสดุหลอด
+                // กล่อง/ภาชนะทั่วไปไม่ปนวัสดุสติกเกอร์/หลอด
+                return !sticker && !tube
+              }).map((m) => (
                 <button
                   key={m.id}
                   className={`pick-item mat${materialId === m.id ? ' active' : ''}`}
@@ -2496,10 +2558,14 @@ export default function App({
               kind === 'box'
                 ? templateId === 'card'
                   ? t('ขนาดนามบัตร', 'Card size')
-                  : t('ขนาดกล่อง (ด้านใน)', 'Box size (inside)')
+                  : templateId === 'sticker'
+                    ? t('ขนาดสติกเกอร์', 'Sticker size')
+                    : t('ขนาดกล่อง (ด้านใน)', 'Box size (inside)')
                 : kind === 'pouch'
                   ? t('ขนาดถุง', 'Pouch size')
-                  : t('ขนาดภาชนะ', 'Vessel size')
+                  : isTube
+                    ? t('ขนาดหลอด', 'Tube size')
+                    : t('ขนาดภาชนะ', 'Vessel size')
             }
             open={groups.size}
             onToggle={() => toggleGroup('size')}
@@ -2524,9 +2590,9 @@ export default function App({
               disabled={aiBusy}
               onChange={setW}
             />
-            {/* ซองแบน/หลังกลางไม่มีก้น-จีบ, นามบัตรเป็นการ์ดแบน → ซ่อนช่อง D */}
+            {/* ซองแบน/หลังกลางไม่มีก้น-จีบ, นามบัตร/สติกเกอร์เป็นแผ่นแบน → ซ่อนช่อง D */}
             {!(kind === 'pouch' && (pouchStyle === 'flat' || pouchStyle === 'pillow')) &&
-              !(kind === 'box' && templateId === 'card') && (
+              !(kind === 'box' && (templateId === 'card' || templateId === 'sticker')) && (
               <DimField
                 label={
                   kind === 'box'

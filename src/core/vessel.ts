@@ -61,6 +61,25 @@ function profileFor(matId: string, R: number, rn: number, H: number): { pts: Vec
       band: [H * 0.06, H * 0.82],
     }
   }
+  if (matId === 'tube-laminate') {
+    // หลอดครีม: ก้นซีลแบน (crimp) ตัวทรงกระบอก ไหล่โค้งเข้าคอ ฝาเกลียว
+    // ครีบซีลก้นเป็นแผ่นแบน (ไม่ใช่ทรงหมุน) จึงเรนเดอร์เพิ่มใน VesselViewer3D
+    const rc = Math.min(rn * 1.35, R * 0.72) // รัศมีฝาเกลียว
+    return {
+      pts: [
+        P(0, 0),
+        P(R, 0), // ก้นแบน (ซีล crimp)
+        P(R, H * 0.6),
+        ...shoulder(P(R, H * 0.6), P(R, H * 0.74), P(rn, H * 0.8)),
+        P(rn, H * 0.82), // คอ
+        P(rc, H * 0.82), // ขอบล่างฝา
+        P(rc, H * 0.97),
+        ...shoulder(P(rc, H * 0.97), P(rc, H), P(rc * 0.5, H)),
+        P(0, H), // ยอดฝา
+      ],
+      band: [H * 0.06, H * 0.55],
+    }
+  }
   if (matId === 'glass') {
     // โหล/ขวดแก้วปากกว้าง: ตัวอวบ บ่าสั้น ปากกว้าง
     return {

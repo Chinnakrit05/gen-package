@@ -350,6 +350,28 @@ export function IconPouch({ size = 16 }: IconProps) {
   )
 }
 
+export function IconTube({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      {/* ฝาเกลียวบน + ไหล่ + ตัวหลอด + ก้นซีลแบน */}
+      <path d="M9.5 3h5v2h-5z" />
+      <path d="M9.5 5c-.3 1-1 1.8-1 3v11.5h7V8c0-1.2-.7-2-1-3" />
+      <path d="M8.5 20.5h7" />
+      <path d="M10.5 9.5h3" />
+    </svg>
+  )
+}
+
+export function IconSticker({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      {/* สติกเกอร์มุมมน + มุมลอกพับ */}
+      <path d="M5 4h11a3 3 0 0 1 3 3v7l-5 5H7a2 2 0 0 1-2-2z" />
+      <path d="M19 14h-3a2 2 0 0 0-2 2v3" />
+    </svg>
+  )
+}
+
 export function IconUndo({ size = 16 }: IconProps) {
   return (
     <svg {...base(size)}>

@@ -8,6 +8,7 @@ import { generateTrayBox } from './tray'
 import { generateGableBox } from './gable'
 import { generateRSCBox } from './rsc'
 import { generateCard } from './card'
+import { generateSticker } from './sticker'
 
 export interface BoxTemplate {
   id: string
@@ -117,6 +118,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: false,
     foldDepth: () => 0,
     generate: generateCard,
+  },
+  {
+    id: 'sticker',
+    nameTh: 'สติกเกอร์ไดคัท (die-cut sticker)',
+    detail: 'สติกเกอร์พิมพ์แบนชิ้นเดียว ไดคัทตามรูป มุมมน — ฉลากสินค้า/โลโก้ ไม่มีรอยพับ',
+    defaults: { W: 60, D: 60, H: 60 },
+    tilt: 0,
+    supportsHandle: false,
+    foldDepth: () => 0,
+    generate: generateSticker,
   },
 ]
 

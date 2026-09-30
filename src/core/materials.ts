@@ -122,6 +122,40 @@ export const MATERIALS: Material[] = [
     note: 'ถุงฟิล์มซีลขอบ — blueprint ที่เห็นคือแผ่นฟิล์มแบน (หน้า+หลัง+ก้น) พร้อมส่งพิมพ์',
   },
   {
+    id: 'tube-laminate',
+    nameTh: 'หลอดครีม (laminate tube)',
+    detail: 'หลอดบีบครีม/เจล/โลชั่น — ตัวหลอดพิมพ์/ฉลากพันรอบ ฝาเกลียว ปลายซีลแบน',
+    thickness: 0.3,
+    foldable: false,
+    form: 'tube',
+    process: 'ขึ้นรูปหลอด + พิมพ์ตัวหลอด + ปิดท้ายซีล',
+    color: '#ece7de',
+    roughness: 0.28,
+    note: 'หลอดบีบขึ้นรูป — blueprint ที่เห็นคือ dieline ของงานพิมพ์พันรอบตัวหลอด พร้อมส่งพิมพ์',
+  },
+  {
+    id: 'sticker-vinyl',
+    nameTh: 'สติกเกอร์ไวนิล',
+    detail: 'สติกเกอร์กันน้ำ พิมพ์ + ไดคัทตามรูป — ฉลากสินค้า/โลโก้',
+    thickness: 0.1,
+    foldable: true,
+    process: 'พิมพ์ + เคลือบ + ไดคัท',
+    color: '#ffffff',
+    roughness: 0.35,
+    note: 'งานพิมพ์แบน + ไดคัทตามรูป — blueprint ที่เห็นคือเส้นตัดของสติกเกอร์ พร้อมส่งพิมพ์',
+  },
+  {
+    id: 'sticker-paper',
+    nameTh: 'สติกเกอร์กระดาษ',
+    detail: 'สติกเกอร์กระดาษเคลือบ ราคาประหยัด — ฉลากทั่วไป',
+    thickness: 0.12,
+    foldable: true,
+    process: 'พิมพ์ + ไดคัท',
+    color: '#faf7ef',
+    roughness: 0.6,
+    note: 'งานพิมพ์แบน + ไดคัทตามรูป — blueprint ที่เห็นคือเส้นตัดของสติกเกอร์ พร้อมส่งพิมพ์',
+  },
+  {
     id: 'pouch-clear',
     nameTh: 'ถุงใสตั้งได้',
     detail: 'ฟิล์มใสโชว์สินค้า ก้นตั้งได้ — ลูกอม/ขนม/ของแห้ง',
@@ -146,3 +180,8 @@ export function getMaterial(id: string): Material {
 export type PackKind = 'box' | 'vessel' | 'pouch'
 export const packKind = (m: Material): PackKind =>
   m.foldable ? 'box' : m.form === 'pouch' ? 'pouch' : 'vessel'
+
+// หลอดครีม = ภาชนะ revolve แบบพิเศษ (ฝาเกลียว + ปลายซีลแบน) — นำเสนอเป็นประเภทงานแยกใน UI
+export const isTubeMat = (m: Material) => m.form === 'tube'
+// สติกเกอร์ไดคัท = งานพิมพ์แบน — วัสดุ sticker-*
+export const isStickerMat = (m: Material) => m.id.startsWith('sticker-')

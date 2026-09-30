@@ -141,6 +141,10 @@ function VesselModel({
   )
 
   const metal = mat.id === 'aluminum'
+  // หลอดครีม: ก้นซีลแบน (crimp) — แผ่นครีบบาง ๆ คร่อมเส้นผ่านศูนย์กลางใต้ตัวหลอด
+  const isTube = mat.form === 'tube'
+  const finH = vessel.H * 0.08
+  const finThick = Math.max(1, mat.thickness * 3)
   return (
     // จัดกึ่งกลางแนวตั้งให้หมุนรอบกลางลำตัว
     <group position={[0, -vessel.H / 2, 0]}>
@@ -158,6 +162,12 @@ function VesselModel({
       <mesh geometry={labelGeo} position={[0, (vessel.labelY0 + vessel.labelY1) / 2, 0]} rotation={[0, Math.PI, 0]}>
         <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} roughness={0.8} metalness={0} />
       </mesh>
+      {isTube && (
+        <mesh position={[0, -finH / 2, 0]}>
+          <boxGeometry args={[vessel.labelR * 2, finH, finThick]} />
+          <meshStandardMaterial color={mat.color} roughness={mat.roughness ?? 0.3} metalness={0} />
+        </mesh>
+      )}
     </group>
   )
 }
