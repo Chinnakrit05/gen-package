@@ -117,12 +117,11 @@ function usePouchGeometry(pouch: Pouch) {
     const boxy = style === 'gusset' || style === 'box'
     const gussetW = backRect.x - W // ความกว้างจีบข้าง (0 เมื่อไม่มี)
 
-    const ringVert = (v: number, theta: number) => {
+    const ringVert = (v: number, theta: number, dly: number) => {
       // ทรงกล่อง (box/gusset): ผนังตั้งตรงเต็มความสูง (ไม่ taper) → ก้น/ปากเป็นหน้าแบน ไม่มีรอยพับให้ลายยืด
       const a = boxy ? W / 2 : (W / 2) * pouchWidthFactor(v, style)
       const b = boxy ? depth3D : depth3D * pouchDepthFactor(v, style)
       const y = v * H
-      const dly = frontRect.y + (1 - v) * H
       let x: number
       let z: number
       let dlx: number
@@ -172,10 +171,27 @@ function usePouchGeometry(pouch: Pouch) {
       uv.push(dlx / dw, dly / dh)
     }
 
+    // UV แนวตั้งตามความยาวส่วนโค้ง (arc length) ของโปรไฟล์หน้า (y, z=ลึก) แทนเชิงเส้น
+    // → ลายกระจายตามผิวจริง ไม่ยืดตรงก้น/ปากที่ผนังคอด/พับ (pillow/flat/stand)
+    const bOf = (v: number) => (boxy ? depth3D : depth3D * pouchDepthFactor(v, style))
+    const cum: number[] = [0]
+    let py = 0
+    let pz = bOf(0)
+    for (let iv = 1; iv <= NV; iv++) {
+      const v = iv / NV
+      const yy = v * H
+      const zz = bOf(v)
+      cum[iv] = cum[iv - 1] + Math.hypot(yy - py, zz - pz)
+      py = yy
+      pz = zz
+    }
+    const total = cum[NV] || 1
+    const dlyOf = cum.map((c) => frontRect.y + (1 - c / total) * H)
+
     // กริดผิวข้าง (NV+1 แถว × NU+1 คอลัมน์ ให้มี seam ซ้ำจุดสำหรับ UV)
     for (let iv = 0; iv <= NV; iv++) {
       const v = iv / NV
-      for (let iu = 0; iu <= NU; iu++) ringVert(v, (iu / NU) * Math.PI * 2)
+      for (let iu = 0; iu <= NU; iu++) ringVert(v, (iu / NU) * Math.PI * 2, dlyOf[iv])
     }
     const cols = NU + 1
     for (let iv = 0; iv < NV; iv++) {
