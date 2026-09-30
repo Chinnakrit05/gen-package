@@ -187,7 +187,10 @@ function usePouchGeometry(pouch: Pouch) {
       }
     }
 
+    const sideIdxCount = idx.length // ดัชนีของผิวข้าง (มีลาย) จบตรงนี้ — ฝาอยู่กลุ่มถัดไป (สีวัสดุล้วน)
+
     // ฝาก้น (v=0) พัดไปจุดกลาง และฝาปาก (v=1) พัดไปจุดกลาง — ปิดผิวให้ทึบ/ตั้งได้
+    // UV ฝาชี้จุดเดียว (ไม่มีผล เพราะฝาใช้ material สีวัสดุล้วน) — เลี่ยงลายยืด/สเมียร์ที่ก้น-ปาก
     const cap = (v: number, flip: boolean) => {
       const center = pos.length / 3
       pos.push(0, v * H, 0)
@@ -207,6 +210,9 @@ function usePouchGeometry(pouch: Pouch) {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
     geo.setIndex(idx)
+    // แยกกลุ่ม: ผิวข้าง = material 0 (พิมพ์ลาย), ฝาก้น/ปาก = material 1 (สีวัสดุล้วน/ซีล)
+    geo.addGroup(0, sideIdxCount, 0)
+    geo.addGroup(sideIdxCount, idx.length - sideIdxCount, 1)
     geo.computeVertexNormals()
     return geo
   }, [pouch])
@@ -263,10 +269,22 @@ function PouchModel({
   return (
     <group position={[0, -pouch.H / 2, 0]}>
       <mesh geometry={geo}>
+        {/* material 0 = ผิวข้าง (พิมพ์ลาย) */}
         <meshStandardMaterial
+          attach="material-0"
           ref={matRef}
           map={tex}
           color={tex ? '#ffffff' : mat.color}
+          roughness={mat.roughness ?? 0.6}
+          metalness={0}
+          transparent={mat.opacity !== undefined}
+          opacity={mat.opacity ?? 1}
+          side={THREE.DoubleSide}
+        />
+        {/* material 1 = ฝาก้น/ปาก (ซีล/ฐาน) สีวัสดุล้วน — ไม่เอาลายไปยืดที่ปลาย */}
+        <meshStandardMaterial
+          attach="material-1"
+          color={mat.color}
           roughness={mat.roughness ?? 0.6}
           metalness={0}
           transparent={mat.opacity !== undefined}
