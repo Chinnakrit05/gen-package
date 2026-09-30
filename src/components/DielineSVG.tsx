@@ -3,6 +3,7 @@ import type { Dieline, DimMark } from '../core/types'
 import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imageMaskSVG, imageDrawAttrs, imageCoverRect, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, TEXT_STROKE_MUL, textShadowSVG, textShadowId, isCurvedText, curvedGlyphs, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type ImageEl, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
+import { useT } from '../i18n'
 
 const DIM_COLOR = '#1b6ea8'
 const SEL_COLOR = '#1b6ea8'
@@ -25,16 +26,16 @@ const SNAP_PX = 6 // ระยะดูดบนจอ (พิกเซล) — 
 const MIN_SIZE = 3 // ขนาดต่ำสุดตอนย่อ (มม.) — App คุมต่ำสุดตามชนิดอีกชั้น
 const HANDLE_HS = 2.6 // ครึ่งขนาดมือจับมุม (มม.)
 
-// ชื่อด้านของแต่ละแผง (สำหรับป้ายกำกับจาง ๆ) — คืน '' เมื่อไม่รู้จัก/ไม่ควรกำกับ
-function faceLabel(id: string): string {
-  if (id === 'front' || id === 'card') return 'หน้า'
-  if (id === 'back' || id === 'card-back') return 'หลัง'
-  if (['side-left', 'side-right', 'left', 'right', 'side-a', 'side-b'].includes(id)) return 'ด้านข้าง'
-  if (id === 'lid') return 'ฝา'
-  if (['base', 'base-a', 'base-b'].includes(id)) return 'ฐาน'
-  if (id === 'glue') return 'ลิ้นกาว'
-  if (id.startsWith('flap')) return 'ลิ้น'
-  return ''
+// ชื่อด้านของแต่ละแผง (สำหรับป้ายกำกับจาง ๆ) — คืน null เมื่อไม่รู้จัก/ไม่ควรกำกับ
+function faceLabel(id: string): { th: string; en: string } | null {
+  if (id === 'front' || id === 'card') return { th: 'หน้า', en: 'Front' }
+  if (id === 'back' || id === 'card-back') return { th: 'หลัง', en: 'Back' }
+  if (['side-left', 'side-right', 'left', 'right', 'side-a', 'side-b'].includes(id)) return { th: 'ด้านข้าง', en: 'Side' }
+  if (id === 'lid') return { th: 'ฝา', en: 'Lid' }
+  if (['base', 'base-a', 'base-b'].includes(id)) return { th: 'ฐาน', en: 'Base' }
+  if (id === 'glue') return { th: 'ลิ้นกาว', en: 'Glue tab' }
+  if (id.startsWith('flap')) return { th: 'ลิ้น', en: 'Flap' }
+  return null
 }
 
 function Dim({ d }: { d: DimMark }) {
@@ -296,6 +297,7 @@ export const DielineSVG = memo(function DielineSVG({
   canRedo?: boolean
 }) {
   const [showRuler, setShowRuler] = useState(false)
+  const t = useT()
   const pad = showDims || showRuler ? 26 : 12
   const svgRef = useRef<SVGSVGElement>(null)
   const grab = useRef<Grab | null>(null)
@@ -1003,8 +1005,8 @@ export const DielineSVG = memo(function DielineSVG({
         <button
           type="button"
           className="bp-tool"
-          title={showRuler ? 'ซ่อนไม้บรรทัด' : 'แสดงไม้บรรทัด'}
-          aria-label="เปิด-ปิดไม้บรรทัด"
+          title={showRuler ? t('ซ่อนไม้บรรทัด','Hide ruler') : t('แสดงไม้บรรทัด','Show ruler')}
+          aria-label={t('เปิด-ปิดไม้บรรทัด','Toggle ruler')}
           aria-pressed={showRuler}
           onClick={() => setShowRuler((r) => !r)}
         >
@@ -1013,8 +1015,8 @@ export const DielineSVG = memo(function DielineSVG({
         <button
           type="button"
           className="bp-tool"
-          title="หมุนมุมมอง 90°"
-          aria-label="หมุนมุมมองบลูพรินต์ 90 องศา"
+          title={t('หมุนมุมมอง 90°','Rotate view 90°')}
+          aria-label={t('หมุนมุมมองบลูพรินต์ 90 องศา','Rotate blueprint 90 degrees')}
           onClick={() => setRot((r) => (r + 90) % 360)}
         >
           ⟳
@@ -1022,27 +1024,27 @@ export const DielineSVG = memo(function DielineSVG({
         <button
           type="button"
           className="bp-tool"
-          title={showFaces ? 'ซ่อนป้ายด้าน' : 'แสดงป้ายด้าน (หน้า/ข้าง/หลัง)'}
-          aria-label="เปิด-ปิดป้ายกำกับด้าน"
+          title={showFaces ? t('ซ่อนป้ายด้าน','Hide face labels') : t('แสดงป้ายด้าน (หน้า/ข้าง/หลัง)','Show face labels (front/side/back)')}
+          aria-label={t('เปิด-ปิดป้ายกำกับด้าน','Toggle face labels')}
           aria-pressed={showFaces}
           onClick={() => setShowFaces((s) => !s)}
         >
           🏷
         </button>
-        <button type="button" className="bp-tool" title="เพิ่มเส้นไกด์ตั้ง" aria-label="เพิ่มเส้นไกด์ตั้ง" onClick={() => addGuide('x')}>
+        <button type="button" className="bp-tool" title={t('เพิ่มเส้นไกด์ตั้ง','Add vertical guide')} aria-label={t('เพิ่มเส้นไกด์ตั้ง','Add vertical guide')} onClick={() => addGuide('x')}>
           ￨＋
         </button>
-        <button type="button" className="bp-tool" title="เพิ่มเส้นไกด์นอน" aria-label="เพิ่มเส้นไกด์นอน" onClick={() => addGuide('y')}>
+        <button type="button" className="bp-tool" title={t('เพิ่มเส้นไกด์นอน','Add horizontal guide')} aria-label={t('เพิ่มเส้นไกด์นอน','Add horizontal guide')} onClick={() => addGuide('y')}>
           －＋
         </button>
         {(onUndo || onRedo) && <span className="bp-tools-sep" />}
         {onUndo && (
-          <button type="button" className="bp-tool" title="เลิกทำ (Ctrl+Z)" aria-label="เลิกทำ" aria-disabled={!canUndo} onClick={onUndo}>
+          <button type="button" className="bp-tool" title={t('เลิกทำ (Ctrl+Z)','Undo (Ctrl+Z)')} aria-label={t('เลิกทำ','Undo')} aria-disabled={!canUndo} onClick={onUndo}>
             ↶
           </button>
         )}
         {onRedo && (
-          <button type="button" className="bp-tool" title="ทำซ้ำ (Ctrl+Shift+Z)" aria-label="ทำซ้ำ" aria-disabled={!canRedo} onClick={onRedo}>
+          <button type="button" className="bp-tool" title={t('ทำซ้ำ (Ctrl+Shift+Z)','Redo (Ctrl+Shift+Z)')} aria-label={t('ทำซ้ำ','Redo')} aria-disabled={!canRedo} onClick={onRedo}>
             ↷
           </button>
         )}
@@ -1189,7 +1191,7 @@ export const DielineSVG = memo(function DielineSVG({
                     <DecoBody e={d} />
                     <rect x={d.x} y={d.y} width={w} height={h} fill="transparent" stroke={SEL_COLOR} strokeWidth={1.3} strokeDasharray="5 3" vectorEffect="non-scaling-stroke" />
                     <text x={d.x + w / 2} y={d.y - 2.5} textAnchor="middle" fontSize={5} fontWeight={600} fill={SEL_COLOR} stroke="none" pointerEvents="none">
-                      ลากเลื่อน · สกอลล์ซูม
+                      {t('ลากเลื่อน · สกอลล์ซูม','Drag to move · scroll to zoom')}
                     </text>
                   </>
                 )
@@ -1532,7 +1534,7 @@ export const DielineSVG = memo(function DielineSVG({
               stroke="none"
               pointerEvents="none"
             >
-              {label}
+              {t(label.th, label.en)}
             </text>
           )
         })}
@@ -1559,21 +1561,21 @@ export const DielineSVG = memo(function DielineSVG({
         <button
           type="button"
           className="grid-toggle"
-          title={showGrid ? 'ซ่อนกริด' : 'แสดงกริด'}
-          aria-label="เปิด-ปิดกริด"
+          title={showGrid ? t('ซ่อนกริด','Hide grid') : t('แสดงกริด','Show grid')}
+          aria-label={t('เปิด-ปิดกริด','Toggle grid')}
           aria-pressed={showGrid}
           onClick={() => setShowGrid((g) => !g)}
         >
           ▦
         </button>
         <span className="zoom-sep" />
-        <button type="button" title="ซูมออก" aria-label="ซูมออก" disabled={zoom <= 1} onClick={() => zoomAt(1 / 1.3, viewCx, viewCy)}>
+        <button type="button" title={t('ซูมออก','Zoom out')} aria-label={t('ซูมออก','Zoom out')} disabled={zoom <= 1} onClick={() => zoomAt(1 / 1.3, viewCx, viewCy)}>
           −
         </button>
-        <button type="button" title="พอดีจอ (ซูม: Ctrl/⌘ + ล้อเมาส์)" aria-label="พอดีจอ" onClick={fit}>
+        <button type="button" title={t('พอดีจอ (ซูม: Ctrl/⌘ + ล้อเมาส์)','Fit to screen (zoom: Ctrl/⌘ + wheel)')} aria-label={t('พอดีจอ','Fit to screen')} onClick={fit}>
           {Math.round(zoom * 100)}%
         </button>
-        <button type="button" title="ซูมเข้า" aria-label="ซูมเข้า" disabled={zoom >= MAXZOOM} onClick={() => zoomAt(1.3, viewCx, viewCy)}>
+        <button type="button" title={t('ซูมเข้า','Zoom in')} aria-label={t('ซูมเข้า','Zoom in')} disabled={zoom >= MAXZOOM} onClick={() => zoomAt(1.3, viewCx, viewCy)}>
           ＋
         </button>
       </div>
@@ -1581,8 +1583,8 @@ export const DielineSVG = memo(function DielineSVG({
     {editable && cropDeco && (
       // แถบซูมครอปบนจอ — ใช้ได้ทุกอุปกรณ์ (เมาส์ไม่มีล้อ/แท็บเล็ต): ปุ่ม − + และสไลเดอร์
       <div className="crop-bar" onPointerDown={(e) => e.stopPropagation()}>
-        <span className="crop-bar-label">ซูมรูป</span>
-        <button type="button" title="ซูมออก" aria-label="ซูมรูปออก" onClick={() => setCropZoom((cropDeco.cropZoom ?? 1) / 1.15)}>
+        <span className="crop-bar-label">{t('ซูมรูป','Zoom')}</span>
+        <button type="button" title={t('ซูมออก','Zoom out')} aria-label={t('ซูมรูปออก','Zoom image out')} onClick={() => setCropZoom((cropDeco.cropZoom ?? 1) / 1.15)}>
           −
         </button>
         <input
@@ -1591,14 +1593,14 @@ export const DielineSVG = memo(function DielineSVG({
           max={6}
           step={0.02}
           value={cropDeco.cropZoom ?? 1}
-          aria-label="ซูมรูปในกรอบ"
+          aria-label={t('ซูมรูปในกรอบ','Zoom image in frame')}
           onChange={(e) => setCropZoom(Number(e.target.value))}
         />
-        <button type="button" title="ซูมเข้า" aria-label="ซูมรูปเข้า" onClick={() => setCropZoom((cropDeco.cropZoom ?? 1) * 1.15)}>
+        <button type="button" title={t('ซูมเข้า','Zoom in')} aria-label={t('ซูมรูปเข้า','Zoom image in')} onClick={() => setCropZoom((cropDeco.cropZoom ?? 1) * 1.15)}>
           ＋
         </button>
         <button type="button" className="crop-done" onClick={() => setCropId(null)}>
-          เสร็จ
+          {t('เสร็จ','Done')}
         </button>
       </div>
     )}
@@ -1607,7 +1609,7 @@ export const DielineSVG = memo(function DielineSVG({
         className="deco-inline-edit"
         autoFocus
         value={editText.text}
-        aria-label="แก้ข้อความ (Esc = เสร็จ)"
+        aria-label={t('แก้ข้อความ (Esc = เสร็จ)','Edit text (Esc = done)')}
         onChange={(e) => onText?.(editText.id, e.target.value)}
         onFocus={(e) => e.currentTarget.select()}
         onPointerDown={(e) => e.stopPropagation()}

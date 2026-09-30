@@ -3668,6 +3668,23 @@ aside .art-actions .file-pick:only-child {
   color: var(--accent-ink);
 }
 
+/* ปุ่มสลับภาษา (ไทย/EN) — อยู่ซ้ายปุ่มธีม */
+.lang-btn {
+  flex-shrink: 0;
+  width: auto;
+  align-self: center;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+}
+.lang-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
 /* ปุ่มออกจากระบบในหัวแอป */
 .logout-btn {
   flex-shrink: 0;

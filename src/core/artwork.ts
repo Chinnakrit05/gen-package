@@ -518,18 +518,18 @@ export const maskId = (id: string) => `mask-${id}`
 export type FrameId =
   | 'none' | 'circle' | 'rounded' | 'squircle' | 'triangle' | 'diamond'
   | 'pentagon' | 'hexagon' | 'star' | 'heart' | 'arch'
-export const FRAMES: { id: FrameId; nameTh: string }[] = [
-  { id: 'none', nameTh: 'ไม่มีกรอบ' },
-  { id: 'circle', nameTh: 'วงกลม' },
-  { id: 'rounded', nameTh: 'มุมมน' },
-  { id: 'squircle', nameTh: 'มุมมนมาก' },
-  { id: 'triangle', nameTh: 'สามเหลี่ยม' },
-  { id: 'diamond', nameTh: 'ข้าวหลามตัด' },
-  { id: 'pentagon', nameTh: 'ห้าเหลี่ยม' },
-  { id: 'hexagon', nameTh: 'หกเหลี่ยม' },
-  { id: 'star', nameTh: 'ดาว' },
-  { id: 'heart', nameTh: 'หัวใจ' },
-  { id: 'arch', nameTh: 'ซุ้มโค้ง' },
+export const FRAMES: { id: FrameId; nameTh: string; nameEn: string }[] = [
+  { id: 'none', nameTh: 'ไม่มีกรอบ', nameEn: 'No frame' },
+  { id: 'circle', nameTh: 'วงกลม', nameEn: 'Circle' },
+  { id: 'rounded', nameTh: 'มุมมน', nameEn: 'Rounded' },
+  { id: 'squircle', nameTh: 'มุมมนมาก', nameEn: 'Squircle' },
+  { id: 'triangle', nameTh: 'สามเหลี่ยม', nameEn: 'Triangle' },
+  { id: 'diamond', nameTh: 'ข้าวหลามตัด', nameEn: 'Diamond' },
+  { id: 'pentagon', nameTh: 'ห้าเหลี่ยม', nameEn: 'Pentagon' },
+  { id: 'hexagon', nameTh: 'หกเหลี่ยม', nameEn: 'Hexagon' },
+  { id: 'star', nameTh: 'ดาว', nameEn: 'Star' },
+  { id: 'heart', nameTh: 'หัวใจ', nameEn: 'Heart' },
+  { id: 'arch', nameTh: 'ซุ้มโค้ง', nameEn: 'Arch' },
 ]
 const FRAME_IDS = FRAMES.map((f) => f.id)
 export const isFrameId = (v: unknown): v is FrameId =>

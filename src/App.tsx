@@ -4,6 +4,7 @@ import { LogOut } from 'lucide-react'
 
 // true เมื่อ DimField อยู่ในแถบปรับแต่งด้านบน (Canva-style) → เปลี่ยนสไลเดอร์เป็นปุ่ม+dropdown อัตโนมัติ
 const TopBarCtx = createContext(false)
+import { LangCtx, loadLang, LANG_KEY, type Lang } from './i18n'
 import { MATERIALS, getMaterial, packKind } from './core/materials'
 import { TEMPLATES, getTemplate } from './core/templates'
 import type { Dieline } from './core/types'
@@ -915,6 +916,16 @@ export default function App({
     else delete document.documentElement.dataset.theme
     localStorage.setItem('packit-theme', dark ? 'dark' : 'light')
   }, [dark])
+  // ภาษา (ไทย/อังกฤษ) — เก็บใน localStorage; t(ไทย, อังกฤษ) เลือกตามภาษาปัจจุบัน
+  const [lang, setLang] = useState<Lang>(loadLang)
+  useEffect(() => {
+    try {
+      localStorage.setItem(LANG_KEY, lang)
+    } catch {
+      /* ปิด storage — ข้าม */
+    }
+  }, [lang])
+  const t = (th: string, en: string) => (lang === 'en' ? en : th)
   const [decos, setDecos] = useState<Deco[]>(initialActive.decos)
   const textFontKey = decos
     .filter((d): d is TextEl => d.type === 'text' && !d.hidden)
@@ -2133,12 +2144,12 @@ export default function App({
   // แท็บ "ออกแบบ" = โชว์ 3D ของแพ็กเกจเป็นจอหลัก (แทน blueprint)
   const design3D = sideTab === 'design'
   const renderStepTabs = (className: string) => (
-    <div className={`tabbar ${className}`} role="tablist" aria-label="ขั้นตอนงาน">
+    <div className={`tabbar ${className}`} role="tablist" aria-label={t('ขั้นตอนงาน', 'Workflow steps')}>
       {(
         [
-          ['design', 'ออกแบบ'],
-          ['artwork', 'ตกแต่ง'],
-          ['export', 'ส่งออก'],
+          ['design', t('ออกแบบ', 'Design')],
+          ['artwork', t('ตกแต่ง', 'Decorate')],
+          ['export', t('ส่งออก', 'Export')],
         ] as const
       ).map(([id, label]) => (
         <button
@@ -2166,6 +2177,7 @@ export default function App({
   )
 
   return (
+    <LangCtx.Provider value={lang}>
     <div className="app">
       <header ref={headerRef}>
         <h1>PackIt</h1>
@@ -2243,9 +2255,17 @@ export default function App({
           requestSpec={cloud?.requestAiSpec}
         />
         <button
+          className="lang-btn"
+          title={lang === 'en' ? 'เปลี่ยนเป็นภาษาไทย' : 'Switch to English'}
+          aria-label="Toggle language / สลับภาษา"
+          onClick={() => setLang((l) => (l === 'en' ? 'th' : 'en'))}
+        >
+          {lang === 'en' ? 'ไทย' : 'EN'}
+        </button>
+        <button
           className="theme-btn"
-          title={dark ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
-          aria-label="สลับธีมสว่าง/มืด"
+          title={t('สลับเป็นโหมดมืด', 'Switch to dark mode')}
+          aria-label={t('สลับธีมสว่าง/มืด', 'Toggle light/dark theme')}
           aria-pressed={dark}
           onClick={() => setDark((d) => !d)}
         >
@@ -2254,8 +2274,8 @@ export default function App({
         {onLogout && (
           <button
             className="logout-btn"
-            title="ออกจากระบบ"
-            aria-label="ออกจากระบบ"
+            title={t('ออกจากระบบ','Sign out')}
+            aria-label={t('ออกจากระบบ','Sign out')}
             disabled={projectBusy}
             onClick={() => {
               const current = flushInto(projects).find((project) => project.id === activeId)
@@ -2269,7 +2289,7 @@ export default function App({
             }}
           >
             <LogOut size={16} aria-hidden="true" />
-            <span>ออกจากระบบ</span>
+            <span>{t('ออกจากระบบ','Sign out')}</span>
           </button>
         )}
         {renderStepTabs('mobile-tabbar')}
@@ -2287,7 +2307,7 @@ export default function App({
 
           {sideTab === 'design' && (
           <>
-          <Group title="ประเภทงาน" open={groups.mode} onToggle={() => toggleGroup('mode')}>
+          <Group title={t('ประเภทงาน', 'Job type')} open={groups.mode} onToggle={() => toggleGroup('mode')}>
             <div className="pick-list">
               <button
                 className={`pick-item mode${kind === 'box' && !isCard ? ' active' : ''}`}
@@ -2302,8 +2322,8 @@ export default function App({
                   <IconBox size={20} />
                 </span>
                 <span className="pick-body">
-                  <span className="pick-name">กล่องพับ</span>
-                  <span className="pick-detail">กล่องกระดาษพับขึ้นรูป — เลือกทรง + วัสดุ</span>
+                  <span className="pick-name">{t('กล่องพับ', 'Folding box')}</span>
+                  <span className="pick-detail">{t('กล่องกระดาษพับขึ้นรูป — เลือกทรง + วัสดุ', 'Folded paperboard box — pick shape + material')}</span>
                 </span>
               </button>
               <button
@@ -2318,8 +2338,8 @@ export default function App({
                   <IconBottle size={20} />
                 </span>
                 <span className="pick-body">
-                  <span className="pick-name">ภาชนะ + ฉลาก</span>
-                  <span className="pick-detail">ผลิตตัวขวด/โหล/กระป๋อง + ฉลากพันรอบ</span>
+                  <span className="pick-name">{t('ภาชนะ + ฉลาก', 'Vessel + label')}</span>
+                  <span className="pick-detail">{t('ผลิตตัวขวด/โหล/กระป๋อง + ฉลากพันรอบ', 'Make a bottle/jar/can + wrap-around label')}</span>
                 </span>
               </button>
               <button
@@ -2334,8 +2354,8 @@ export default function App({
                   <IconPouch size={20} />
                 </span>
                 <span className="pick-body">
-                  <span className="pick-name">ถุงฟิล์ม (ตั้งได้)</span>
-                  <span className="pick-detail">ถุง doypack ก้นตั้ง — พิมพ์ฟิล์มซีลขอบ</span>
+                  <span className="pick-name">{t('ถุงฟิล์ม (ตั้งได้)', 'Film pouch (stand-up)')}</span>
+                  <span className="pick-detail">{t('ถุง doypack ก้นตั้ง — พิมพ์ฟิล์มซีลขอบ', 'Stand-up doypack — printed edge-sealed film')}</span>
                 </span>
               </button>
               <button
@@ -2351,15 +2371,15 @@ export default function App({
                   <IconCard size={20} />
                 </span>
                 <span className="pick-body">
-                  <span className="pick-name">นามบัตร</span>
-                  <span className="pick-detail">การ์ดแบนพิมพ์ ขนาดมาตรฐาน 90×54 มม.</span>
+                  <span className="pick-name">{t('นามบัตร', 'Business card')}</span>
+                  <span className="pick-detail">{t('การ์ดแบนพิมพ์ ขนาดมาตรฐาน 90×54 มม.', 'Flat printed card, standard 90×54 mm')}</span>
                 </span>
               </button>
             </div>
           </Group>
 
           {mat.foldable && !isCard && (
-            <Group title="รูปแบบบรรจุภัณฑ์" open={groups.tpl} onToggle={() => toggleGroup('tpl')}>
+            <Group title={t('รูปแบบบรรจุภัณฑ์', 'Package style')} open={groups.tpl} onToggle={() => toggleGroup('tpl')}>
               <div className="pick-list">
                 {TEMPLATES.filter((tp) => tp.id !== 'card').map((tp) => (
                   <button
@@ -2378,7 +2398,7 @@ export default function App({
           )}
 
           {kind === 'pouch' && (
-            <Group title="รูปแบบถุง" open={groups.label} onToggle={() => toggleGroup('label')}>
+            <Group title={t('รูปแบบถุง', 'Pouch style')} open={groups.label} onToggle={() => toggleGroup('label')}>
               <div className="pick-list">
                 {POUCH_STYLES.map((s) => (
                   <button
@@ -2449,7 +2469,7 @@ export default function App({
           </Group>
 
           {kind === 'vessel' && (
-            <Group title="รูปแบบฉลาก" open={groups.label} onToggle={() => toggleGroup('label')}>
+            <Group title={t('รูปแบบฉลาก', 'Label style')} open={groups.label} onToggle={() => toggleGroup('label')}>
               <div className="pick-list">
                 {LABEL_STYLES.map((s) => (
                   <button
@@ -2475,11 +2495,11 @@ export default function App({
             title={
               kind === 'box'
                 ? templateId === 'card'
-                  ? 'ขนาดนามบัตร'
-                  : 'ขนาดกล่อง (ด้านใน)'
+                  ? t('ขนาดนามบัตร', 'Card size')
+                  : t('ขนาดกล่อง (ด้านใน)', 'Box size (inside)')
                 : kind === 'pouch'
-                  ? 'ขนาดถุง'
-                  : 'ขนาดภาชนะ'
+                  ? t('ขนาดถุง', 'Pouch size')
+                  : t('ขนาดภาชนะ', 'Vessel size')
             }
             open={groups.size}
             onToggle={() => toggleGroup('size')}
@@ -2487,16 +2507,16 @@ export default function App({
             <DimField
               label={
                 kind === 'box'
-                  ? 'กว้าง W'
+                  ? t('กว้าง W', 'Width W')
                   : kind === 'pouch'
                     ? pouchStyle === 'flat'
-                      ? 'กว้างซอง W'
+                      ? t('กว้างซอง W', 'Sachet width W')
                       : pouchStyle === 'gusset' || pouchStyle === 'box'
-                        ? 'กว้างหน้า W'
+                        ? t('กว้างหน้า W', 'Front width W')
                         : pouchStyle === 'pillow'
-                          ? 'กว้าง W'
-                          : 'กว้างถุง W'
-                    : '⌀ ตัว W'
+                          ? t('กว้าง W', 'Width W')
+                          : t('กว้างถุง W', 'Pouch width W')
+                    : t('⌀ ตัว W', '⌀ body W')
               }
               value={W}
               min={30}
@@ -2510,12 +2530,12 @@ export default function App({
               <DimField
                 label={
                   kind === 'box'
-                    ? 'ลึก D'
+                    ? t('ลึก D', 'Depth D')
                     : kind === 'pouch'
                       ? pouchStyle === 'gusset' || pouchStyle === 'box'
-                        ? 'จีบข้าง D'
-                        : 'ลึกก้น D'
-                      : '⌀ ปาก/คอ D'
+                        ? t('จีบข้าง D', 'Side gusset D')
+                        : t('ลึกก้น D', 'Bottom depth D')
+                      : t('⌀ ปาก/คอ D', '⌀ mouth/neck D')
                 }
                 value={D}
                 min={20}
@@ -2525,7 +2545,7 @@ export default function App({
               />
             )}
             <DimField
-              label={kind === 'pouch' ? 'สูงลำตัว H' : 'สูง H'}
+              label={kind === 'pouch' ? t('สูงลำตัว H', 'Body height H') : t('สูง H', 'Height H')}
               value={H}
               min={30}
               max={300}
@@ -2540,7 +2560,7 @@ export default function App({
                   disabled={aiBusy}
                   onChange={(e) => setHandle(e.target.checked)}
                 />
-                เจาะรูหิ้ว (die-cut handle)
+                {t('เจาะรูหิ้ว (die-cut handle)', 'Die-cut handle')}
               </label>
             )}
             {mat.foldable && kind === 'box' && template.supportsVents && (
@@ -2552,16 +2572,16 @@ export default function App({
                     disabled={aiBusy}
                     onChange={(e) => setVents((v) => ({ ...v, on: e.target.checked }))}
                   />
-                  รูระบายอากาศ (ผลไม้/ผัก)
+                  {t('รูระบายอากาศ (ผลไม้/ผัก)', 'Vent holes (produce)')}
                 </label>
                 {vents.on && (
                   <div className="vent-opts">
-                    <div className="vent-walls" role="group" aria-label="ผนังที่เจาะรู">
+                    <div className="vent-walls" role="group" aria-label={t('ผนังที่เจาะรู', 'Walls to vent')}>
                       {(
                         [
-                          ['sides', 'ด้านกว้าง'],
-                          ['ends', 'หัวท้าย'],
-                          ['all', 'ทุกด้าน'],
+                          ['sides', t('ด้านกว้าง', 'Wide sides')],
+                          ['ends', t('หัวท้าย', 'Ends')],
+                          ['all', t('ทุกด้าน', 'All sides')],
                         ] as [VentWalls, string][]
                       ).map(([id, label]) => (
                         <button
@@ -2577,7 +2597,7 @@ export default function App({
                       ))}
                     </div>
                     <DimField
-                      label="⌀ ขนาดรู (mm)"
+                      label={t('⌀ ขนาดรู (mm)', '⌀ hole size (mm)')}
                       value={vents.dia}
                       min={VENT_DIA_MIN}
                       max={VENT_DIA_MAX}
@@ -2585,7 +2605,7 @@ export default function App({
                       onChange={(n) => setVents((v) => ({ ...v, dia: n }))}
                     />
                     <DimField
-                      label="แถว"
+                      label={t('แถว', 'Rows')}
                       value={vents.rows}
                       min={1}
                       max={VENT_ROWS_MAX}
@@ -2593,14 +2613,14 @@ export default function App({
                       onChange={(n) => setVents((v) => ({ ...v, rows: n }))}
                     />
                     <DimField
-                      label="คอลัมน์"
+                      label={t('คอลัมน์', 'Columns')}
                       value={vents.cols}
                       min={1}
                       max={VENT_COLS_MAX}
                       disabled={aiBusy}
                       onChange={(n) => setVents((v) => ({ ...v, cols: n }))}
                     />
-                    <p className="hint">เจาะเป็นกริดกลางผนัง — โชว์ในภาพ 3D และไฟล์ตัด (DXF/PDF)</p>
+                    <p className="hint">{t('เจาะเป็นกริดกลางผนัง — โชว์ในภาพ 3D และไฟล์ตัด (DXF/PDF)', 'Punched as a centered grid — shown in 3D and the cut files (DXF/PDF)')}</p>
                   </div>
                 )}
               </div>
@@ -2614,7 +2634,7 @@ export default function App({
                     disabled={aiBusy}
                     onChange={(e) => setZipper(e.target.checked)}
                   />
-                  ซิปล็อก + รอยฉีก (เปิด-ปิดซ้ำได้)
+                  {t('ซิปล็อก + รอยฉีก (เปิด-ปิดซ้ำได้)', 'Zip-lock + tear notch (reclosable)')}
                 </label>
                 <label className="check" style={{ marginTop: 8 }}>
                   <input
@@ -2623,7 +2643,7 @@ export default function App({
                     disabled={aiBusy}
                     onChange={(e) => setPouchAddons((a) => ({ ...a, hangHole: e.target.checked }))}
                   />
-                  รูแขวน (euro-hole)
+                  {t('รูแขวน (euro-hole)', 'Hang hole (euro-hole)')}
                 </label>
                 <label className="check" style={{ marginTop: 8 }}>
                   <input
@@ -2632,7 +2652,7 @@ export default function App({
                     disabled={aiBusy}
                     onChange={(e) => setPouchAddons((a) => ({ ...a, valve: e.target.checked }))}
                   />
-                  วาล์วกาแฟ (degassing valve)
+                  {t('วาล์วกาแฟ (degassing valve)', 'Coffee degassing valve')}
                 </label>
                 <label className="check" style={{ marginTop: 8 }}>
                   <input
@@ -2641,11 +2661,13 @@ export default function App({
                     disabled={aiBusy}
                     onChange={(e) => setPouchAddons((a) => ({ ...a, tinTie: e.target.checked }))}
                   />
-                  ที่รัดปาก (tin-tie)
+                  {t('ที่รัดปาก (tin-tie)', 'Tin-tie')}
                 </label>
                 <p className="hint">
-                  แนะนำการจับคู่: วาล์ว/ที่รัดปาก → ถุงกาแฟ (ข้างจีบ · ก้นแบน) · ซิปล็อก → ถุงตั้ง/ก้นแบน ·
-                  รูแขวน → ได้ทุกแบบ (ผู้ใช้เลือกเองได้ตามต้องการ)
+                  {t(
+                    'แนะนำการจับคู่: วาล์ว/ที่รัดปาก → ถุงกาแฟ (ข้างจีบ · ก้นแบน) · ซิปล็อก → ถุงตั้ง/ก้นแบน · รูแขวน → ได้ทุกแบบ (ผู้ใช้เลือกเองได้ตามต้องการ)',
+                    'Pairing tips: valve/tin-tie → coffee bags (gusset · flat-bottom) · zip-lock → stand-up/flat-bottom · hang hole → any style (your choice)',
+                  )}
                 </p>
               </>
             )}
@@ -2654,10 +2676,10 @@ export default function App({
           )}
 
           <div className="step-nav">
-            <span className="step-saved">✓ บันทึกงานอัตโนมัติ</span>
+            <span className="step-saved">{t('✓ บันทึกงานอัตโนมัติ', '✓ Auto-saved')}</span>
             <div className="step-btns">
               <button className="step-next" onClick={() => goStep('artwork')}>
-                ไปต่อ: ตกแต่ง →
+                {t('ไปต่อ: ตกแต่ง →', 'Next: Decorate →')}
               </button>
             </div>
           </div>
@@ -2667,7 +2689,7 @@ export default function App({
           {sideTab === 'artwork' && (
           <>
               {bgFloatEl && createPortal(
-              <Group title="พื้นหลังแพ็กเกจ" open={groups.bg} onToggle={() => toggleGroup('bg')}>
+              <Group title={t('พื้นหลังแพ็กเกจ', 'Package background')} open={groups.bg} onToggle={() => toggleGroup('bg')}>
                 <div className="fill-color-row">
                   <ColorField
                     value={fillColor ?? '#2f8a99'}
@@ -2675,7 +2697,7 @@ export default function App({
                     palette={palette}
                     onSave={saveSwatch}
                     disabled={aiBusy}
-                    label="สีพื้นแพ็กเกจ"
+                    label={t('สีพื้นแพ็กเกจ', 'Package base color')}
                   />
                   <button className="fill-none-btn" disabled={aiBusy || !fillColor} onClick={() => setFillColor(null)}>
                     ไม่มีสี
@@ -2805,7 +2827,7 @@ export default function App({
                 bgFloatEl,
               )}
 
-              <Group title="เพิ่มองค์ประกอบ" open={groups.add} onToggle={() => toggleGroup('add')}>
+              <Group title={t('เพิ่มองค์ประกอบ', 'Add element')} open={groups.add} onToggle={() => toggleGroup('add')}>
                 <div className="art-actions">
                   <label className="file-pick inline">
                     <input
@@ -2817,30 +2839,30 @@ export default function App({
                         e.target.value = ''
                       }}
                     />
-                    <span className="ico-btn"><IconImage /> รูปภาพ</span>
+                    <span className="ico-btn"><IconImage /> {t('รูปภาพ', 'Image')}</span>
                   </label>
                   <button className="ico-btn" disabled={aiBusy} onClick={addText}>
-                    <IconText /> ข้อความ
+                    <IconText /> {t('ข้อความ', 'Text')}
                   </button>
                 </div>
                 <div className="art-actions" style={{ marginTop: 8 }}>
-                  <button className="ico-btn" disabled={aiBusy} title="สี่เหลี่ยม" onClick={() => addShape('rect')}>
-                    <IconRect /> สี่เหลี่ยม
+                  <button className="ico-btn" disabled={aiBusy} title={t('สี่เหลี่ยม', 'Rectangle')} onClick={() => addShape('rect')}>
+                    <IconRect /> {t('สี่เหลี่ยม', 'Rectangle')}
                   </button>
-                  <button className="ico-btn" disabled={aiBusy} title="วงกลม/วงรี" onClick={() => addShape('ellipse')}>
-                    <IconEllipse /> วงกลม
+                  <button className="ico-btn" disabled={aiBusy} title={t('วงกลม/วงรี', 'Circle / ellipse')} onClick={() => addShape('ellipse')}>
+                    <IconEllipse /> {t('วงกลม', 'Circle')}
                   </button>
-                  <button className="ico-btn" disabled={aiBusy} title="เส้น" onClick={() => addShape('line')}>
-                    <IconLine /> เส้น
+                  <button className="ico-btn" disabled={aiBusy} title={t('เส้น', 'Line')} onClick={() => addShape('line')}>
+                    <IconLine /> {t('เส้น', 'Line')}
                   </button>
-                  <button className="ico-btn" disabled={aiBusy} title="สามเหลี่ยม" onClick={() => addShape('triangle')}>
-                    <IconTriangle /> สามเหลี่ยม
+                  <button className="ico-btn" disabled={aiBusy} title={t('สามเหลี่ยม', 'Triangle')} onClick={() => addShape('triangle')}>
+                    <IconTriangle /> {t('สามเหลี่ยม', 'Triangle')}
                   </button>
-                  <button className="ico-btn" disabled={aiBusy} title="หลายเหลี่ยม" onClick={() => addShape('polygon')}>
-                    <IconPolygon /> หลายเหลี่ยม
+                  <button className="ico-btn" disabled={aiBusy} title={t('หลายเหลี่ยม', 'Polygon')} onClick={() => addShape('polygon')}>
+                    <IconPolygon /> {t('หลายเหลี่ยม', 'Polygon')}
                   </button>
-                  <button className="ico-btn" disabled={aiBusy} title="ดาว" onClick={() => addShape('star')}>
-                    <IconStar /> ดาว
+                  <button className="ico-btn" disabled={aiBusy} title={t('ดาว', 'Star')} onClick={() => addShape('star')}>
+                    <IconStar /> {t('ดาว', 'Star')}
                   </button>
                   {SHOW_PEN_TOOL && (
                     <button
@@ -2855,13 +2877,13 @@ export default function App({
                   )}
                 </div>
                 <div className="art-actions" style={{ marginTop: 8 }}>
-                  <button className="ico-btn" disabled={aiBusy} title="ตารางข้อมูลโภชนาการ (อย.)" onClick={addNutrition}>
-                    <IconNutrition /> ตารางโภชนาการ (อย.)
+                  <button className="ico-btn" disabled={aiBusy} title={t('ตารางข้อมูลโภชนาการ (อย.)', 'Nutrition facts table')} onClick={addNutrition}>
+                    <IconNutrition /> {t('ตารางโภชนาการ (อย.)', 'Nutrition facts')}
                   </button>
                 </div>
               </Group>
 
-              <Group title="ไลบรารีลาย" open={groups.lib} onToggle={() => toggleGroup('lib')}>
+              <Group title={t('ไลบรารีลาย', 'Pattern library')} open={groups.lib} onToggle={() => toggleGroup('lib')}>
                 <div className="preset-lib">
                   <div className="preset-head">
                     <span className="preset-title">สีลาย</span>
@@ -2896,7 +2918,7 @@ export default function App({
                 </div>
               </Group>
 
-              <Group title="เลเยอร์" open={groups.layers} onToggle={() => toggleGroup('layers')} badge={decos.length}>
+              <Group title={t('เลเยอร์', 'Layers')} open={groups.layers} onToggle={() => toggleGroup('layers')} badge={decos.length}>
                 {decos.length === 0 && <p className="hint">ยังไม่มีองค์ประกอบ — เพิ่มได้จากกลุ่มด้านบน</p>}
                 {decos.length > 0 && (
                   <ul className="deco-list">
@@ -2987,8 +3009,8 @@ export default function App({
                         </button>
                         <button
                           className="deco-toggle deco-del"
-                          title="ลบชิ้นนี้"
-                          aria-label="ลบชิ้นนี้"
+                          title={t('ลบชิ้นนี้','Delete this item')}
+                          aria-label={t('ลบชิ้นนี้','Delete this item')}
                           onClick={() => removeDeco(d.id)}
                         >
                           <IconTrash size={15} />
@@ -3057,7 +3079,7 @@ export default function App({
               </Group>
 
               {!selected && !multi && (
-                <Group title="ปรับแต่งที่เลือก" open={groups.props} onToggle={() => toggleGroup('props')}>
+                <Group title={t('ปรับแต่งที่เลือก', 'Selection')} open={groups.props} onToggle={() => toggleGroup('props')}>
                   <p className="hint">เลือกชิ้นบนเลเยอร์หรือ blueprint เพื่อปรับแต่ง (แถบปรับแต่งจะโผล่ด้านบน)</p>
                 </Group>
               )}
@@ -3105,7 +3127,7 @@ export default function App({
                     </div>
                     <span className="tb-sep" />
                     <div className="art-actions">
-                      <button className="tb-ic" title="ทำสำเนา" aria-label="ทำสำเนา" onClick={duplicateSelected}>⧉</button>
+                      <button className="tb-ic" title={t('ทำสำเนา','Duplicate')} aria-label={t('ทำสำเนา','Duplicate')} onClick={duplicateSelected}>⧉</button>
                       <button className="tb-ic" title="ซ่อน/แสดง" aria-label="ซ่อน/แสดง" onClick={toggleHiddenSelected}>👁</button>
                       <button className="tb-ic" title="ล็อก/ปลดล็อก" aria-label="ล็อก/ปลดล็อก" onClick={toggleLockedSelected}>🔒</button>
                       <button className="tb-ic" title="ลบที่เลือก" aria-label="ลบที่เลือก" onClick={removeSelected}>🗑</button>
@@ -3158,7 +3180,7 @@ export default function App({
                           <select
                             value={selected.font ?? 'noto'}
                             disabled={aiBusy}
-                            aria-label="ฟอนต์"
+                            aria-label={t('ฟอนต์', 'Font')}
                             style={{ fontFamily: `${fontCss(selected.font)}, sans-serif` }}
                             onChange={(e) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, font: e.target.value }) : d))}
                           >
@@ -3730,7 +3752,7 @@ export default function App({
                           onChange={(v) => patchSelected((d) => (d.type === 'image' ? { ...d, radius: v || undefined, maskShape: undefined, circle: undefined, frame: undefined } : d))}
                         />
                         <ToolPopover
-                          title="กรอบรูป (crop)"
+                          title={t('กรอบรูป (crop)', 'Image frame (crop)')}
                           icon={
                             selected.frame && selected.frame !== 'none' ? (
                               <svg width="18" height="18" viewBox="-1 -1 22 22" aria-hidden="true">
@@ -3743,7 +3765,7 @@ export default function App({
                             )
                           }
                         >
-                          <div className="pop-title">กรอบครอปรูป</div>
+                          <div className="pop-title">{t('กรอบครอปรูป', 'Crop frame')}</div>
                           <div className="frame-grid">
                             {FRAMES.map((f) => {
                               const active = (selected.frame ?? 'none') === f.id
@@ -3752,7 +3774,7 @@ export default function App({
                                   key={f.id}
                                   type="button"
                                   className={`frame-opt${active ? ' active' : ''}`}
-                                  aria-label={`กรอบ${f.nameTh}`}
+                                  aria-label={`${t('กรอบ','Frame')} ${t(f.nameTh, f.nameEn)}`}
                                   aria-pressed={active}
                                   disabled={aiBusy}
                                   onClick={() =>
@@ -3780,7 +3802,7 @@ export default function App({
                                       <path d={framePath(f.id, 20, 20)} fill="currentColor" />
                                     </svg>
                                   )}
-                                  <span>{f.nameTh}</span>
+                                  <span>{t(f.nameTh, f.nameEn)}</span>
                                 </button>
                               )
                             })}
@@ -3922,13 +3944,13 @@ export default function App({
               </p>
 
               <div className="step-nav">
-                <span className="step-saved">✓ บันทึกงานอัตโนมัติ</span>
+                <span className="step-saved">{t('✓ บันทึกงานอัตโนมัติ', '✓ Auto-saved')}</span>
                 <div className="step-btns">
                   <button className="step-back" onClick={() => goStep('design')}>
-                    ← ออกแบบ
+                    {t('← ออกแบบ','← Design')}
                   </button>
                   <button className="step-next" onClick={() => goStep('export')}>
-                    ไปต่อ: ส่งออก →
+                    {t('ไปต่อ: ส่งออก →','Next: Export →')}
                   </button>
                 </div>
               </div>
@@ -3937,7 +3959,7 @@ export default function App({
 
           {sideTab === 'export' && (
           <>
-              <Group title="ดาวน์โหลดไฟล์" open={groups.exp} onToggle={() => toggleGroup('exp')}>
+              <Group title={t('ดาวน์โหลดไฟล์', 'Download files')} open={groups.exp} onToggle={() => toggleGroup('exp')}>
                 <div className="export-opts">
                   <span className="grp-sub">ใส่ในแบบ</span>
                   <label className="check">
@@ -3985,7 +4007,7 @@ export default function App({
                 </p>
               </Group>
 
-              <Group title="จำนวน & จำนวนต่อแผ่น" open={groups.qty} onToggle={() => toggleGroup('qty')}>
+              <Group title={t('จำนวน & จำนวนต่อแผ่น', 'Quantity & yield')} open={groups.qty} onToggle={() => toggleGroup('qty')}>
                 <div className="field">
                   <span className="field-head">
                     จำนวนที่จะสั่ง
@@ -4101,7 +4123,7 @@ export default function App({
                 </p>
               </Group>
 
-              <Group title="สำรอง / ย้ายงาน" open={groups.backup} onToggle={() => toggleGroup('backup')}>
+              <Group title={t('สำรอง / ย้ายงาน', 'Backup / transfer')} open={groups.backup} onToggle={() => toggleGroup('backup')}>
                 <div className="art-actions">
                   <button disabled={aiBusy} onClick={exportProject}>
                     ⬇ ส่งออกงานนี้
@@ -4127,10 +4149,10 @@ export default function App({
               </Group>
 
               <div className="step-nav">
-                <span className="step-saved">✓ บันทึกงานอัตโนมัติ · ครบทุกขั้นตอนแล้ว</span>
+                <span className="step-saved">{t('✓ บันทึกงานอัตโนมัติ', '✓ Auto-saved')} · ครบทุกขั้นตอนแล้ว</span>
                 <div className="step-btns">
                   <button className="step-back" onClick={() => goStep('artwork')}>
-                    ← ตกแต่ง
+                    {t('← ตกแต่ง','← Decorate')}
                   </button>
                 </div>
               </div>
@@ -4299,5 +4321,6 @@ export default function App({
         />
       )}
     </div>
+    </LangCtx.Provider>
   )
 }
