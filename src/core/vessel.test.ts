@@ -120,10 +120,10 @@ describe('vessel: หลอดครีม (tube-laminate)', () => {
   const tbox = { W: 40, D: 16, H: 150, handle: false }
   const v = generateVessel(tbox, getMaterial('tube-laminate'))
 
-  it('ก้นซีลแบน (เริ่มแกนกลาง) + ฝาปิดบน (จบแกนกลาง)', () => {
+  it('ฝาที่ก้น (เริ่มแกนกลาง) + ปลายซีลแบนที่ยอด (จบแกนกลาง)', () => {
     expect(v.profile[0].x).toBe(0)
     expect(v.profile[0].y).toBe(0)
-    expect(v.profile[v.profile.length - 1].x).toBe(0) // ฝาปิด จบที่แกนกลาง
+    expect(v.profile[v.profile.length - 1].x).toBe(0) // ปลายซีลพับเข้าหาแกนกลางที่ยอด
     expect(Math.max(...v.profile.map((p) => p.y))).toBeCloseTo(tbox.H)
   })
 
