@@ -118,8 +118,9 @@ function usePouchGeometry(pouch: Pouch) {
     const gussetW = backRect.x - W // ความกว้างจีบข้าง (0 เมื่อไม่มี)
 
     const ringVert = (v: number, theta: number) => {
-      const a = (W / 2) * pouchWidthFactor(v, style)
-      const b = depth3D * pouchDepthFactor(v, style)
+      // ทรงกล่อง (box/gusset): ผนังตั้งตรงเต็มความสูง (ไม่ taper) → ก้น/ปากเป็นหน้าแบน ไม่มีรอยพับให้ลายยืด
+      const a = boxy ? W / 2 : (W / 2) * pouchWidthFactor(v, style)
+      const b = boxy ? depth3D : depth3D * pouchDepthFactor(v, style)
       const y = v * H
       const dly = frontRect.y + (1 - v) * H
       let x: number
