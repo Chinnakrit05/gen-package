@@ -116,11 +116,17 @@ function usePouchGeometry(pouch: Pouch) {
 
     const boxy = style === 'gusset' || style === 'box'
     const gussetW = backRect.x - W // ความกว้างจีบข้าง (0 เมื่อไม่มี)
+    // ครึ่งความหนาตะเข็บซีลขั้นต่ำ (ปาก/ก้นบีบแบนเหลือเท่านี้) + ระยะพับจีบกลางผนังข้าง (ลึกเข้า)
+    const halfSeal = Math.max(1, depth3D * 0.12)
+    const gInMax = Math.min((W / 2) * 0.32, depth3D * 0.6)
 
     const ringVert = (v: number, theta: number, dly: number) => {
-      // ทรงกล่อง (box/gusset): ผนังตั้งตรงเต็มความสูง (ไม่ taper) → ก้น/ปากเป็นหน้าแบน ไม่มีรอยพับให้ลายยืด
-      const a = boxy ? W / 2 : (W / 2) * pouchWidthFactor(v, style)
-      const b = boxy ? depth3D : depth3D * pouchDepthFactor(v, style)
+      // brick/box: ลำตัวทรงอิฐ (หน้า-หลังแบน) + ปากบน(และก้น brick) บีบเป็น "ตะเข็บซีลแบน (fin)"
+      // ความลึกยุบตาม pouchDepthFactor → ได้ครีบซีล; กว้างคอดเล็กน้อยที่ปลายซีลตาม pouchWidthFactor
+      const a = (W / 2) * pouchWidthFactor(v, style)
+      const b = boxy
+        ? Math.max(depth3D * pouchDepthFactor(v, style), halfSeal)
+        : depth3D * pouchDepthFactor(v, style)
       const y = v * H
       let x: number
       let z: number
@@ -128,22 +134,26 @@ function usePouchGeometry(pouch: Pouch) {
 
       if (boxy) {
         // หน้าตัดทรงกล่อง (brick): เดินตามเส้นรอบรูปสี่เหลี่ยม แม็พ filmX = ตำแหน่งรอบรูปตรง ๆ
-        // ครอบทุกแผงต่อเนื่อง [หน้า | จีบขวา | หลัง | จีบซ้าย] → ไม่ยืด (หน้าแบน) + ไม่ขาด (จีบถูกแม็พ)
+        // ครอบทุกแผงต่อเนื่อง [หน้า | จีบขวา | หลัง | จีบซ้าย]; จีบข้างมีรอยพับกลางเข้า (gusset crease)
+        // ระยะพับจางลงตามความลึก (ที่ตะเข็บซีลยุบแบน → ขอบครีบตรง ไม่มีรอยหยัก)
         const g = gussetW
         const wp = 2 * W + 2 * g
         const fX = (theta / (2 * Math.PI)) * wp
+        const cr = gInMax * pouchDepthFactor(v, style)
         if (fX <= W) {
           x = -a + 2 * a * (fX / W) // หน้า: ซ้าย(-a)→ขวา(+a)
           z = b
         } else if (fX <= W + g) {
-          x = a // จีบขวา: หน้า(+b)→หลัง(-b)
-          z = b - 2 * b * ((fX - W) / g)
+          const t = (fX - W) / g // จีบขวา: หน้า(+b)→หลัง(-b) พับกลางเข้า
+          z = b * (1 - 2 * t)
+          x = a - cr * (1 - Math.abs(1 - 2 * t))
         } else if (fX <= 2 * W + g) {
           x = a - 2 * a * ((fX - (W + g)) / W) // หลัง: ขวา(+a)→ซ้าย(-a)
           z = -b
         } else {
-          x = -a // จีบซ้าย: หลัง(-b)→หน้า(+b)
-          z = -b + 2 * b * ((fX - (2 * W + g)) / g)
+          const t = (fX - (2 * W + g)) / g // จีบซ้าย: หลัง(-b)→หน้า(+b) พับกลางเข้า
+          z = -b + 2 * b * t
+          x = -a + cr * (1 - Math.abs(1 - 2 * t))
         }
         dlx = fX // แผ่นฟิล์มเรียงแผงต่อเนื่อง [0..wp] อยู่แล้ว
       } else {
@@ -173,7 +183,8 @@ function usePouchGeometry(pouch: Pouch) {
 
     // UV แนวตั้งตามความยาวส่วนโค้ง (arc length) ของโปรไฟล์หน้า (y, z=ลึก) แทนเชิงเส้น
     // → ลายกระจายตามผิวจริง ไม่ยืดตรงก้น/ปากที่ผนังคอด/พับ (pillow/flat/stand)
-    const bOf = (v: number) => (boxy ? depth3D : depth3D * pouchDepthFactor(v, style))
+    const bOf = (v: number) =>
+      boxy ? Math.max(depth3D * pouchDepthFactor(v, style), halfSeal) : depth3D * pouchDepthFactor(v, style)
     const cum: number[] = [0]
     let py = 0
     let pz = bOf(0)
