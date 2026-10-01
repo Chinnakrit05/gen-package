@@ -120,6 +120,103 @@ function usePouchGeometry(pouch: Pouch) {
     const halfSeal = Math.max(1, depth3D * 0.12)
     const gInMax = Math.min((W / 2) * 0.14, depth3D * 0.28) // รอยพับจีบกลาง (ตื้น ไม่บีบลำตัวเข้ามาก)
 
+    // ───────── brick/box: ลำตัว + ครีบซีลปาก(และก้น brick) เป็น loft เดียว ลายต่อเนื่อง ─────────
+    // ครีบยื่นเหนือ/ใต้ลำตัว แต่เป็นเนื้อเดียวกัน (material 0 มีลาย) ไม่ใช่ชิ้นแยก
+    // UV ครีบแม็พไปที่ "แถบซีล" บน/ล่างของ dieline (y∈[0,st] และ [st+H,filmH]) → ตกแต่งส่วนบน/ล่างได้
+    if (boxy) {
+      const lerp = (p: number, q: number, t: number) => p + (q - p) * Math.max(0, Math.min(1, t))
+      const finH = Math.min(H * 0.13, 18) // ความยาวครีบที่ยื่นออก
+      const hasBotFin = style === 'gusset' // brick ซีลก้น; box ก้นแบนตั้ง
+      const yBot = hasBotFin ? -finH : 0
+      const yTop = H + finH
+      const shB = H * 0.08
+      const shT = H * 0.08
+      const st = frontRect.y // ความสูงแถบซีลบนบน dieline
+      const g = gussetW
+      const wp = 2 * W + 2 * g
+      // ครึ่งความลึกตามความสูง: ลำตัวเต็ม, ไหล่ลู่, ครีบบาง (halfSeal)
+      const bAtY = (y: number) => {
+        if (y >= H) return halfSeal
+        if (hasBotFin && y <= 0) return halfSeal
+        if (y > H - shT) return lerp(halfSeal, depth3D, (H - y) / shT)
+        if (hasBotFin && y < shB) return lerp(halfSeal, depth3D, y / shB)
+        return depth3D
+      }
+      // ครึ่งความกว้าง: ลำตัวเต็ม, ครีบแคบลงเล็กน้อยไปทางปลาย
+      const wAtY = (y: number) => {
+        const base = W / 2
+        if (y >= H) return base * (0.85 - 0.13 * Math.min(1, (y - H) / finH))
+        if (hasBotFin && y <= 0) return base * (0.85 - 0.13 * Math.min(1, -y / finH))
+        return base
+      }
+      // UV แนวตั้ง: ลำตัว→แผงหน้า [st..st+H], ครีบบน→แถบซีลบน [0..st], ครีบล่าง→แถบซีลล่าง [st+H..filmH]
+      const dlyAtY = (y: number) => {
+        if (y >= H) return st * (1 - Math.min(1, (y - H) / finH))
+        if (hasBotFin && y <= 0) return st + H + Math.min(1, -y / finH) * (dh - (st + H))
+        return st + (1 - y / H) * H
+      }
+      const NV = 72
+      const cols = NU + 1
+      for (let iv = 0; iv <= NV; iv++) {
+        const y = yBot + (iv / NV) * (yTop - yBot)
+        const a = wAtY(y)
+        const b = bAtY(y)
+        const cr = gInMax * (b / depth3D) // รอยพับจีบจางลงที่ครีบ (ขอบครีบตรง)
+        const dly = dlyAtY(y)
+        for (let iu = 0; iu <= NU; iu++) {
+          const fX = (iu / NU) * wp
+          let x: number
+          let z: number
+          if (fX <= W) {
+            x = -a + 2 * a * (fX / W)
+            z = b
+          } else if (fX <= W + g) {
+            const t = (fX - W) / g
+            z = b * (1 - 2 * t)
+            x = a - cr * (1 - Math.abs(1 - 2 * t))
+          } else if (fX <= 2 * W + g) {
+            x = a - 2 * a * ((fX - (W + g)) / W)
+            z = -b
+          } else {
+            const t = (fX - (2 * W + g)) / g
+            z = -b + 2 * b * t
+            x = -a + cr * (1 - Math.abs(1 - 2 * t))
+          }
+          pos.push(x, y, z)
+          uv.push(fX / dw, dly / dh)
+        }
+      }
+      for (let iv = 0; iv < NV; iv++) {
+        for (let iu = 0; iu < NU; iu++) {
+          const p = iv * cols + iu
+          idx.push(p, p + cols, p + 1, p + 1, p + cols, p + cols + 1)
+        }
+      }
+      const sideIdxCount = idx.length
+      // ปิดปลายครีบ/ก้น (fan) = material 1 สีพื้น (เลี่ยงลายยืดที่ปลายเรียว/ก้นแบน)
+      const capRow = (rowY: number, rowBase: number, flip: boolean) => {
+        const center = pos.length / 3
+        pos.push(0, rowY, 0)
+        uv.push((frontRect.x + W / 2) / dw, 0)
+        for (let iu = 0; iu < NU; iu++) {
+          const p0 = rowBase + iu
+          const p1 = rowBase + iu + 1
+          if (flip) idx.push(center, p1, p0)
+          else idx.push(center, p0, p1)
+        }
+      }
+      capRow(yBot, 0, false)
+      capRow(yTop, NV * cols, true)
+      const geoB = new THREE.BufferGeometry()
+      geoB.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+      geoB.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+      geoB.setIndex(idx)
+      geoB.addGroup(0, sideIdxCount, 0)
+      geoB.addGroup(sideIdxCount, idx.length - sideIdxCount, 1)
+      geoB.computeVertexNormals()
+      return geoB
+    }
+
     const ringVert = (v: number, theta: number, dly: number) => {
       // brick/box: ลำตัวทรงอิฐ (หน้า-หลังแบน) + ปากบน(และก้น brick) บีบเป็น "ตะเข็บซีลแบน (fin)"
       // ความลึกยุบตาม pouchDepthFactor → ได้ครีบซีล; กว้างคอดเล็กน้อยที่ปลายซีลตาม pouchWidthFactor
@@ -263,57 +360,6 @@ function PouchModel({
   const geo = usePouchGeometry(pouch)
   useEffect(() => () => geo.dispose(), [geo])
 
-  // ครีบซีลปากบนของซองข้างจีบ/ก้นแบน — แผ่นแบนยื่นตั้งเหนือลำตัว + หูพับมุม (ฐานกว้างกว่ายอด)
-  const boxyTop = pouch.style === 'gusset' || pouch.style === 'box'
-  const topFinGeo = useMemo(() => {
-    if (!boxyTop) return null
-    const W = pouch.W
-    const H = pouch.H
-    const Wf = W * 0.8 // ครีบกว้างพอ ๆ กับยอดลำตัว (ไม่บานออก)
-    const finH = Math.min(H * 0.11, 16) // ความสูงครีบที่ยื่นตั้งขึ้น
-    const ht = Math.max(pouch.depth3D * 0.12, 1) // ครึ่งความหนาครีบ = ตะเข็บซีลลำตัว
-    const earW = W * 0.13 // หูพับยื่นออกข้าง
-    const earH = finH * 0.55
-    const earDrop = finH * 0.4 // หูพับทบลงต่ำกว่าฐานครีบ (ลงไปบนไหล่)
-    const earFwd = pouch.depth3D * 0.6 // พับทบมาด้านหน้า
-    const pos: number[] = []
-    const idx: number[] = []
-    const V = (x: number, y: number, z: number) => {
-      pos.push(x, y, z)
-      return pos.length / 3 - 1
-    }
-    const quad = (a: number, b: number, c: number, d: number) => idx.push(a, b, c, a, c, d)
-    // ครีบ = แผ่นบางตั้งตรง (หน้า z=+ht, หลัง z=-ht) จากฐาน y=0 → y=finH
-    const f0 = V(-Wf / 2, 0, ht)
-    const f1 = V(Wf / 2, 0, ht)
-    const f2 = V(Wf / 2, finH, ht)
-    const f3 = V(-Wf / 2, finH, ht)
-    const b0 = V(-Wf / 2, 0, -ht)
-    const b1 = V(Wf / 2, 0, -ht)
-    const b2 = V(Wf / 2, finH, -ht)
-    const b3 = V(-Wf / 2, finH, -ht)
-    quad(f0, f1, f2, f3) // หน้า
-    quad(b1, b0, b3, b2) // หลัง
-    quad(f3, f2, b2, b3) // ขอบบน
-    quad(f0, f3, b3, b0) // ขอบซ้าย
-    quad(f1, b1, b2, f2) // ขอบขวา
-    // หูพับมุม = สามเหลี่ยมเล็กที่มุมฐาน พับทบลง-ออกข้าง-มาด้านหน้า (DoubleSide เห็นสองด้าน)
-    const erA = V(Wf / 2, 0, 0)
-    const erB = V(Wf / 2, earH, 0)
-    const erC = V(Wf / 2 + earW, -earDrop, earFwd)
-    idx.push(erA, erB, erC)
-    const elA = V(-Wf / 2, 0, 0)
-    const elB = V(-Wf / 2, earH, 0)
-    const elC = V(-Wf / 2 - earW, -earDrop, earFwd)
-    idx.push(elA, elC, elB)
-    const g = new THREE.BufferGeometry()
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
-    g.setIndex(idx)
-    g.computeVertexNormals()
-    return g
-  }, [pouch, boxyTop])
-  useEffect(() => () => topFinGeo?.dispose(), [topFinGeo])
-
   // three คอมไพล์ shader ตาม define ตอนสร้าง — map เปลี่ยน null → texture ต้อง needsUpdate ให้ recompile
   const matRef = useRef<THREE.MeshStandardMaterial>(null!)
   const hasTex = !!tex
@@ -371,32 +417,6 @@ function PouchModel({
           side={THREE.DoubleSide}
         />
       </mesh>
-      {topFinGeo && (
-        // ครีบซีลปากบนยื่นตั้งขึ้น + หูพับมุม (วางฐานที่ยอดลำตัว y=H)
-        <mesh geometry={topFinGeo} position={[0, pouch.H, 0]}>
-          <meshStandardMaterial
-            color={mat.color}
-            roughness={mat.roughness ?? 0.6}
-            metalness={0}
-            transparent={mat.opacity !== undefined}
-            opacity={mat.opacity ?? 1}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
-      )}
-      {topFinGeo && pouch.style === 'gusset' && (
-        // brick: ครีบซีลก้นยื่นลงล่าง (สะท้อนครีบบนกลับหัว) — box ก้นแบนตั้งจึงไม่มี
-        <mesh geometry={topFinGeo} position={[0, 0, 0]} scale={[1, -1, 1]}>
-          <meshStandardMaterial
-            color={mat.color}
-            roughness={mat.roughness ?? 0.6}
-            metalness={0}
-            transparent={mat.opacity !== undefined}
-            opacity={mat.opacity ?? 1}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
-      )}
       {zip && (
         <mesh position={[0, zip.y, 0]} scale={[zip.ax, 1, zip.bz]}>
           <cylinderGeometry args={[1, 1, 5, 48, 1, true]} />
