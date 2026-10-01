@@ -269,19 +269,47 @@ function PouchModel({
     if (!boxyTop) return null
     const W = pouch.W
     const H = pouch.H
-    const finTopW = W * 0.8 // ยอดครีบแคบกว่าลำตัวเล็กน้อย
-    const finBaseW = W * 0.92
-    const earW = W * 0.1 // หูพับยื่นออกข้างที่ฐาน
-    const finH = Math.min(H * 0.12, 18) // ความสูงครีบที่ยื่นขึ้น
-    const sealThick = 2 * Math.max(pouch.depth3D * 0.12, 1) // ความหนาเท่าตะเข็บซีลลำตัว
-    const shape = new THREE.Shape()
-    shape.moveTo(-finTopW / 2, finH)
-    shape.lineTo(finTopW / 2, finH)
-    shape.lineTo(finBaseW / 2 + earW, 0) // หูพับขวา (ฐานกว้าง)
-    shape.lineTo(-finBaseW / 2 - earW, 0) // หูพับซ้าย
-    shape.closePath()
-    const g = new THREE.ExtrudeGeometry(shape, { depth: sealThick, bevelEnabled: false })
-    g.translate(0, 0, -sealThick / 2) // จัดกึ่งกลางความหนา
+    const Wf = W * 0.8 // ครีบกว้างพอ ๆ กับยอดลำตัว (ไม่บานออก)
+    const finH = Math.min(H * 0.11, 16) // ความสูงครีบที่ยื่นตั้งขึ้น
+    const ht = Math.max(pouch.depth3D * 0.12, 1) // ครึ่งความหนาครีบ = ตะเข็บซีลลำตัว
+    const earW = W * 0.13 // หูพับยื่นออกข้าง
+    const earH = finH * 0.55
+    const earDrop = finH * 0.4 // หูพับทบลงต่ำกว่าฐานครีบ (ลงไปบนไหล่)
+    const earFwd = pouch.depth3D * 0.6 // พับทบมาด้านหน้า
+    const pos: number[] = []
+    const idx: number[] = []
+    const V = (x: number, y: number, z: number) => {
+      pos.push(x, y, z)
+      return pos.length / 3 - 1
+    }
+    const quad = (a: number, b: number, c: number, d: number) => idx.push(a, b, c, a, c, d)
+    // ครีบ = แผ่นบางตั้งตรง (หน้า z=+ht, หลัง z=-ht) จากฐาน y=0 → y=finH
+    const f0 = V(-Wf / 2, 0, ht)
+    const f1 = V(Wf / 2, 0, ht)
+    const f2 = V(Wf / 2, finH, ht)
+    const f3 = V(-Wf / 2, finH, ht)
+    const b0 = V(-Wf / 2, 0, -ht)
+    const b1 = V(Wf / 2, 0, -ht)
+    const b2 = V(Wf / 2, finH, -ht)
+    const b3 = V(-Wf / 2, finH, -ht)
+    quad(f0, f1, f2, f3) // หน้า
+    quad(b1, b0, b3, b2) // หลัง
+    quad(f3, f2, b2, b3) // ขอบบน
+    quad(f0, f3, b3, b0) // ขอบซ้าย
+    quad(f1, b1, b2, f2) // ขอบขวา
+    // หูพับมุม = สามเหลี่ยมเล็กที่มุมฐาน พับทบลง-ออกข้าง-มาด้านหน้า (DoubleSide เห็นสองด้าน)
+    const erA = V(Wf / 2, 0, 0)
+    const erB = V(Wf / 2, earH, 0)
+    const erC = V(Wf / 2 + earW, -earDrop, earFwd)
+    idx.push(erA, erB, erC)
+    const elA = V(-Wf / 2, 0, 0)
+    const elB = V(-Wf / 2, earH, 0)
+    const elC = V(-Wf / 2 - earW, -earDrop, earFwd)
+    idx.push(elA, elC, elB)
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    g.setIndex(idx)
+    g.computeVertexNormals()
     return g
   }, [pouch, boxyTop])
   useEffect(() => () => topFinGeo?.dispose(), [topFinGeo])
