@@ -176,6 +176,51 @@ function VesselModel({
     return g
   }, [tube, vessel.H])
 
+  // หลอดครีม: ฝาเกลียว (ชิ้นแยก สีต่างจากตัวหลอด) — ทรงกระบอกที่ก้น มีร่องเกลียวตั้งรอบฝา
+  // (รัศมีกระเพื่อมตาม θ) ร่องจางหายไปช่วงบนที่ชนกับไหล่/ลำตัว ให้รอยต่อเนียน
+  const tubeCapGeo = useMemo(() => {
+    if (!tube) return null
+    const { rcap, capTop } = tube
+    const capR = rcap
+    const nRibs = 34 // จำนวนร่องเกลียวรอบฝา
+    const ribAmp = Math.min(0.6, capR * 0.09)
+    const NU = 136
+    const NV = 10
+    const stride = NU + 1
+    const pos: number[] = []
+    const idx: number[] = []
+    // ร่องเกลียว: รัศมีกระเพื่อมตามมุม; คงร่องเกือบทั้งฝา แล้วจางช่วงบนสุด (v>0.78) ให้ชนลำตัวเนียน
+    const rAt = (th: number, v: number) => {
+      const fade = v < 0.78 ? 1 : (1 - v) / 0.22
+      return capR + ribAmp * fade * 0.5 * (1 + Math.cos(th * nRibs))
+    }
+    for (let iv = 0; iv <= NV; iv++) {
+      const v = iv / NV
+      const y = v * capTop
+      for (let i = 0; i <= NU; i++) {
+        const th = (i / NU) * Math.PI * 2
+        const r = rAt(th, v)
+        pos.push(r * Math.cos(th), y, r * Math.sin(th))
+      }
+    }
+    for (let iv = 0; iv < NV; iv++) {
+      for (let i = 0; i < NU; i++) {
+        const a0 = iv * stride + i
+        const b0 = (iv + 1) * stride + i
+        idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1)
+      }
+    }
+    // ปิดก้นฝา (พัดจากจุดกึ่งกลางที่ y=0)
+    const cBot = pos.length / 3
+    pos.push(0, 0, 0)
+    for (let i = 0; i < NU; i++) idx.push(i, cBot, i + 1)
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    g.setIndex(idx)
+    g.computeVertexNormals()
+    return g
+  }, [tube])
+
   // ฉลาก: หลอดครีมใช้เปลือก loft หุ้มตามผิวลำตัวในช่วง band; ภาชนะอื่นใช้ทรงกระบอก
   const labelH = vessel.labelY1 - vessel.labelY0
   const labelGeo = useMemo(() => {
@@ -225,26 +270,38 @@ function VesselModel({
       body.dispose()
       labelGeo.dispose()
       tubeBodyGeo?.dispose()
+      tubeCapGeo?.dispose()
     },
-    [body, labelGeo, tubeBodyGeo],
+    [body, labelGeo, tubeBodyGeo, tubeCapGeo],
   )
+
+  // สีฝาหลอด — แยกจากตัวหลอดให้เห็นว่าเป็นคนละชิ้น (พลาสติกเงากว่า)
+  const CAP_COLOR = '#b9b5ac'
 
   return (
     // จัดกึ่งกลางแนวตั้งให้หมุนรอบกลางลำตัว
     <group position={[0, -vessel.H / 2, 0]}>
-      <mesh geometry={body}>
-        <meshStandardMaterial
-          color={mat.color}
-          roughness={mat.roughness ?? (metal ? 0.3 : 0.12)}
-          metalness={metal ? 0.85 : 0}
-          transparent={mat.opacity !== undefined}
-          opacity={mat.opacity ?? 1}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
+      {/* ตัวภาชนะทรงหมุน — หลอดครีมไม่ใช้ (ฝา+ลำตัวเป็นชิ้นแยก) */}
+      {!isTube && (
+        <mesh geometry={body}>
+          <meshStandardMaterial
+            color={mat.color}
+            roughness={mat.roughness ?? (metal ? 0.3 : 0.12)}
+            metalness={metal ? 0.85 : 0}
+            transparent={mat.opacity !== undefined}
+            opacity={mat.opacity ?? 1}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      )}
       {isTube && tubeBodyGeo && (
         <mesh geometry={tubeBodyGeo}>
           <meshStandardMaterial color={mat.color} roughness={mat.roughness ?? 0.28} metalness={0} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      {isTube && tubeCapGeo && (
+        <mesh geometry={tubeCapGeo}>
+          <meshStandardMaterial color={CAP_COLOR} roughness={0.32} metalness={0.05} side={THREE.DoubleSide} />
         </mesh>
       )}
       {/* ฉลาก: หลอด = เปลือก loft ตามผิว (วาง y จริง); ภาชนะอื่น = ทรงกระบอกจัดกึ่งกลาง band หมุนรอยต่อไปหลัง */}
