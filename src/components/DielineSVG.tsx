@@ -989,12 +989,23 @@ export const DielineSVG = memo(function DielineSVG({
     const a = toScr(editText.x, editText.y)
     const b = toScr(editText.x + elW(editText), editText.y + elH(editText))
     const hr = host.getBoundingClientRect()
+    // ฟอนต์ในกล่องมีขั้นต่ำ 11px (ซูมออกแล้วยังอ่านออก) → ขนาดกล่องคิดจากฟอนต์ที่แสดงจริง
+    // ไม่ใช่กรอบบน blueprint ไม่งั้นกล่องแคบกว่าข้อความ ตัวท้ายตกบรรทัดแล้วกล่องเลื่อนไปโชว์แค่บรรทัดนั้น
+    const fontSize = Math.max(11, editText.size * ctm.a)
+    const k = fontSize / editText.size
+    // เผื่อที่ให้ caret + ความต่างเล็กน้อยระหว่าง measureText (canvas) กับการวาดใน textarea
+    const width = Math.max(80, editText.w * k + fontSize * 0.5)
+    // ยึดตามการจัดชิด: ซ้าย = ขอบซ้ายนิ่ง, กลาง = กึ่งกลางนิ่ง, ขวา = ขอบขวานิ่ง → ตัวอักษรทับที่เดิม
+    const align = editText.align ?? 'left'
+    const x0 = Math.min(a.x, b.x)
+    const x1 = Math.max(a.x, b.x)
+    const left = align === 'left' ? x0 : align === 'right' ? x1 - width : (x0 + x1 - width) / 2
     return {
-      left: Math.min(a.x, b.x) - hr.left,
+      left: left - hr.left,
       top: Math.min(a.y, b.y) - hr.top,
-      width: Math.abs(b.x - a.x),
-      height: Math.abs(b.y - a.y),
-      scale: ctm.a,
+      width,
+      height: elH(editText) * k,
+      fontSize,
     }
   })()
 
@@ -1621,10 +1632,10 @@ export const DielineSVG = memo(function DielineSVG({
         style={{
           left: editBox.left,
           top: editBox.top,
-          width: Math.max(80, editBox.width),
-          height: Math.max(30, editBox.height),
+          width: editBox.width,
+          height: editBox.height,
           fontFamily: `${fontCss(editText.font)}, sans-serif`,
-          fontSize: Math.max(11, editText.size * editBox.scale),
+          fontSize: editBox.fontSize,
           lineHeight: String(editText.lh ?? 1.25),
           color: editText.color,
           textAlign: editText.align ?? 'left',

@@ -1513,9 +1513,15 @@ main {
   position: absolute;
   z-index: 5;
   margin: 0;
+  /* width/height จาก JS = พื้นที่ตัวอักษรพอดี; padding+border ดันออกนอก แล้วเลื่อนกลับให้ตัวอักษรทับที่เดิม */
+  box-sizing: content-box;
+  transform: translate(-5.5px, -3.5px);
   border: 1.5px solid var(--accent);
   border-radius: 4px;
   padding: 2px 4px;
+  /* ข้อความบน blueprint ขึ้นบรรทัดใหม่เฉพาะเมื่อกด Enter — กล่องแก้ต้องไม่ตัดบรรทัดเอง */
+  white-space: pre;
+  overflow-wrap: normal;
   background: rgba(255, 255, 255, 0.94);
   resize: none;
   overflow: hidden;
