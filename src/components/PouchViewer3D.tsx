@@ -135,7 +135,6 @@ function usePouchGeometry(pouch: Pouch) {
       const g = gussetW
       const wp = 2 * W + 2 * g
       const finHalf = Math.max(0.35, depth3D * 0.025) // ครึ่งความหนาครีบ = ฟิล์มบางมาก (~0.7 มม.)
-      const earMax = Math.min(g * 0.6, W * 0.14) // ระยะหูพับจีบยื่นออกข้างที่แนวไหล่
       // ครึ่งความลึกตามความสูง: ลำตัวเต็ม, ไหล่ลู่, ครีบบางเฉียบ (finHalf)
       const bAtY = (y: number) => {
         if (y >= H) return finHalf
@@ -143,14 +142,6 @@ function usePouchGeometry(pouch: Pouch) {
         if (y > H - shT) return lerp(finHalf, depth3D, (H - y) / shT)
         if (hasBotFin && y < shB) return lerp(finHalf, depth3D, y / shB)
         return depth3D
-      }
-      // หูพับมุม: จีบข้างพับออกข้าง (ช่วงไหล่→ครีบ) สูงสุดที่แนวไหล่ แล้วเรียวเป็นจุดที่ปลายครีบ
-      const earOutAtY = (y: number) => {
-        if (y >= H - shT && y <= H) return earMax * ((y - (H - shT)) / shT) // ไหล่บน: ลู่เข้าหาแนวพับ
-        if (y > H && y <= H + finH) return earMax * (1 - (y - H) / finH) // ครีบบน: เรียวขึ้นปลาย
-        if (hasBotFin && y >= 0 && y <= shB) return earMax * ((shB - y) / shB)
-        if (hasBotFin && y < 0 && y >= -finH) return earMax * (1 - -y / finH)
-        return 0
       }
       // ครึ่งความกว้าง: ลำตัวเต็ม, ครีบแคบลงเล็กน้อยไปทางปลาย
       const wAtY = (y: number) => {
@@ -171,9 +162,7 @@ function usePouchGeometry(pouch: Pouch) {
         const y = yBot + (iv / NV) * (yTop - yBot)
         const a = wAtY(y)
         const b = bAtY(y)
-        const cr = gInMax * (b / depth3D) // รอยพับจีบลำตัว (ลึกเข้า) จางลงที่ครีบ
-        const ear = earOutAtY(y) // หูพับมุม (ยื่นออกข้าง) ที่ช่วงไหล่/ครีบ
-        const d = cr - ear // >0 = พับเข้า (ลำตัว), <0 = พับออกเป็นหู (ครีบ)
+        const d = gInMax * (b / depth3D) // รอยพับจีบลำตัว (ลึกเข้าเล็กน้อย) จางลงที่ครีบ
         const dly = dlyAtY(y)
         for (let iu = 0; iu <= NU; iu++) {
           const fX = (iu / NU) * wp
