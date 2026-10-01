@@ -52,6 +52,7 @@ import {
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
 import { generatePouch, POUCH_STYLES, type PouchStyle, type PouchAddons } from './core/pouch'
+import { boxVolumeMl, pouchVolumeMl, vesselVolumeMl, tubeVolumeMl, formatCapacity } from './core/capacity'
 import {
   applyVents,
   DEFAULT_VENTS,
@@ -1178,6 +1179,18 @@ export default function App({
     () => (showGuides && dieline ? computeGuides(dieline.panels) : null),
     [showGuides, dieline],
   )
+
+  // ความจุโดยประมาณ (มล.) ตามชนิดบรรจุภัณฑ์ — การ์ด/สติกเกอร์เป็นแผ่นแบน ไม่มีความจุ
+  const capacityMl = useMemo(() => {
+    if (isCard || isSticker) return null
+    if (kind === 'pouch' && pouch) return pouchVolumeMl(W, H, pouch.depth3D, pouchStyle)
+    if (kind === 'vessel' && vessel)
+      return isTube && vessel.tube
+        ? tubeVolumeMl(W, H, vessel.tube.rcap, vessel.tube.capTop)
+        : vesselVolumeMl(vessel.profile)
+    if (kind === 'box') return boxVolumeMl(W, D, H)
+    return null
+  }, [kind, W, D, H, pouch, vessel, pouchStyle, isTube, isCard, isSticker])
 
   // imposition: กล่องแผ่นคลี่วางบนแผ่นใหญ่ได้กี่ชิ้น (ประเมินต้นทุน/สั่งวัสดุ)
   const sheet: Sheet =
@@ -2618,6 +2631,12 @@ export default function App({
               disabled={aiBusy}
               onChange={setH}
             />
+            {capacityMl != null && (
+              <div className="capacity">
+                <span className="capacity-label">{t('ความจุโดยประมาณ', 'Est. capacity')}</span>
+                <span className="capacity-value">{formatCapacity(capacityMl)}</span>
+              </div>
+            )}
             {mat.foldable && template.supportsHandle && (
               <label className="check" style={{ marginTop: 12 }}>
                 <input

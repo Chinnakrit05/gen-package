@@ -943,6 +943,30 @@ select {
   margin-top: 6px;
 }
 
+.capacity {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--accent-weak);
+  border: 1px solid var(--accent-border);
+}
+.capacity-label {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.capacity-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-ink);
+}
+:root[data-theme='dark'] .capacity-value {
+  color: var(--accent);
+}
+
 .mat-info {
   margin-top: 8px;
   padding: 10px 12px;
