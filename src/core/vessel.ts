@@ -9,6 +9,18 @@ import { P, fmt, rect } from './templates/shared'
 //
 // ความหมายขนาดสำหรับภาชนะ: W = ⌀ตัว, D = ⌀ปาก/คอ, H = ความสูงรวม
 
+// หลอดครีม: พารามิเตอร์ทรง loft ของลำตัว — หน้าตัดเป็นวงรีที่ "กว้างคงที่ ลึกเรียว"
+// profile เก็บแค่ฝา/คอกลม (ทรงหมุน); ลำตัว capTop→H สร้างเป็น loft ใน VesselViewer3D
+// ผล: front view กว้างแบน, side view เป็นลิ่ม/สามเหลี่ยม, ยอดเป็นตะเข็บซีลแบน (เหมือนหลอดจริง)
+export interface TubeShape {
+  R: number // ครึ่งความกว้างลำตัวเต็ม (= W/2)
+  rcap: number // รัศมีฝา/คอ (จุดเริ่ม loft ยังเป็นวงกลม)
+  capTop: number // ความสูงยอดฝา = ลำตัว loft เริ่ม
+  sealThick: number // ความหนาตะเข็บซีลแบนที่ยอด
+  widthTaperTop: number // สัดส่วนความกว้างที่ยอดเทียบลำตัว (<1 = สอบเข้าเล็กน้อย)
+  shoulderV: number // ช่วง v (0..1) ที่ไหล่ flare ความกว้างจนเต็มลำตัว
+}
+
 export interface Vessel {
   profile: Vec2[] // (x = รัศมี, y = ความสูงจากก้น 0..H, แกน y ขึ้น) เรียงล่าง→บน
   label: Dieline
@@ -16,6 +28,7 @@ export interface Vessel {
   labelY0: number // ช่วงความสูงของฉลากบนตัวภาชนะ
   labelY1: number
   H: number
+  tube?: TubeShape // มีเฉพาะหลอดครีม — บอก viewer ให้สร้างลำตัว loft บีบแบน
 }
 
 // ภาชนะ = พับไม่ได้ และไม่ใช่ถุงฟิล์ม (doypack) — ถุงเป็น path แยก
@@ -23,9 +36,8 @@ export const isVessel = (m: Material) => !m.foldable && m.form !== 'pouch'
 
 export const LABEL_OVERLAP = 8 // ระยะทับซ้อนปลายฉลากสำหรับทากาว (มม.)
 
-// หลอดครีม: สัดส่วนความสูงที่ลำตัว (ทรงหมุน) จบและเริ่มส่วนบีบซีลปลายบน (crimp loft)
-// ใช้ร่วมกันระหว่างโปรไฟล์ (vessel.ts) กับ geometry ซีล (VesselViewer3D) ให้ต่อกันพอดี
-export const TUBE_SEAL_FRAC = 0.9
+// หลอดครีม: สัดส่วนความสูง (×H) ของฝา/คอกลมที่ก้น (ลำตัว loft เริ่มเหนือจุดนี้)
+export const TUBE_CAP_FRAC = 0.12
 
 // รูปแบบฉลาก = ฉลากพันรอบตัวคลุมช่วงความสูงแค่ไหน (คำนวณจากช่วงลำตัวตรงของภาชนะ)
 export type LabelStyle = 'body' | 'full' | 'band' | 'neck'
@@ -66,23 +78,17 @@ function profileFor(matId: string, R: number, rn: number, H: number): { pts: Vec
     }
   }
   if (matId === 'tube-laminate') {
-    // หลอดบีบคลาสสิก: ตั้งบน "ฝา" ที่ก้น → ไหล่โค้งออก → ลำตัวตรง → ปลายบน "ซีลแบน (crimp)"
-    // ตัวหลอด (ก้น→ระดับซีล TUBE_SEAL_FRAC) เป็นทรงหมุน; ส่วนซีลปลายบนหน้าตัดบีบจากวงกลม
-    // เป็นเส้นแบน (loft) ไม่ใช่ทรงหมุน จึงสร้างเป็น geometry แยกใน VesselViewer3D
-    const rcap = Math.min(Math.max(rn, R * 0.54), R * 0.62) // รัศมีฝา (แคบกว่าลำตัว)
-    const capH = H * 0.15 // ความสูงฝาที่ก้น
-    const shoulderTop = capH + H * 0.13 // จบไหล่ = เริ่มลำตัวตรง
-    const bodyTop = H * TUBE_SEAL_FRAC // ลำตัวตรงถึงระดับซีล แล้วปิดยอดแบน (ส่วนบีบซีลต่อจากนี้)
+    // หลอดบีบคลาสสิก: ตั้งบน "ฝา/คอกลม" ที่ก้น → ลำตัวเป็น loft วงรี (กว้างคงที่ ลึกเรียว→ซีลแบน)
+    // profile นี้เก็บแค่ฝา/คอ (ทรงหมุน กลม) จบแบบ "เปิด" ที่ (rcap, capH) ให้ลำตัว loft รับต่อ
+    const rcap = Math.min(Math.max(rn, R * 0.5), R * 0.58) // รัศมีฝา/คอ (แคบกว่าลำตัว)
+    const capH = H * TUBE_CAP_FRAC
     return {
       pts: [
         P(0, 0),
         P(rcap, 0), // ก้นฝา (ตั้งบนฝา)
-        P(rcap, capH), // ฝาเกลียว
-        ...shoulder(P(rcap, capH), P(rcap, capH + H * 0.05), P(R, shoulderTop)), // ไหล่โค้งออก
-        P(R, bodyTop), // ลำตัวตรง จบที่ระดับซีล
-        P(0, bodyTop), // ปิดยอดแบน (ส่วนบีบซีลเป็น geometry แยก)
+        P(rcap, capH), // ยอดฝา/คอ (จบเปิด — ลำตัว loft รับต่อ)
       ],
-      band: [shoulderTop + H * 0.03, bodyTop - H * 0.03],
+      band: [capH + H * 0.12, H * 0.72], // ฉลากบนช่วงลำตัว
     }
   }
   if (matId === 'glass') {
@@ -168,7 +174,7 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
     { a: P(w + 10, 0), b: P(w + 10, h), label: `สูงฉลาก ${fmt(h)}` },
   ]
 
-  return {
+  const vessel: Vessel = {
     profile: pts,
     label: { width: w, height: h, segments, panels, dims },
     labelR: R,
@@ -176,4 +182,17 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
     labelY1,
     H,
   }
+  if (mat.id === 'tube-laminate') {
+    // ลำตัวหลอดเป็น loft วงรีบีบแบน (viewer สร้างจากพารามิเตอร์นี้ ต่อจากฝา/คอที่ capTop)
+    const rcap = Math.min(Math.max(rn, R * 0.5), R * 0.58)
+    vessel.tube = {
+      R,
+      rcap,
+      capTop: TUBE_CAP_FRAC * H,
+      sealThick: Math.max(1.2, mat.thickness * 4),
+      widthTaperTop: 0.9,
+      shoulderV: 0.22,
+    }
+  }
+  return vessel
 }

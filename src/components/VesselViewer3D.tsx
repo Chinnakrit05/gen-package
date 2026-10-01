@@ -5,7 +5,6 @@ import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
 import type { Vessel } from '../core/vessel'
-import { TUBE_SEAL_FRAC } from '../core/vessel'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 
 // พรีวิวภาชนะขึ้นรูป: โปรไฟล์หมุนรอบแกน (LatheGeometry) + ฉลากพันรอบตัว
@@ -123,37 +122,40 @@ function VesselModel({
     if (labelMatRef.current) labelMatRef.current.needsUpdate = true
   }, [hasTex])
 
+  const metal = mat.id === 'aluminum'
+  const isTube = mat.form === 'tube'
+  const tube = vessel.tube
+
+  // ฝา+ไหล่ (ทรงหมุน) — หลอดครีม profile เก็บแค่ส่วนนี้ (เปิดปลายบนให้ลำตัว loft รับต่อ)
   const body = useMemo(
     () => new THREE.LatheGeometry(vessel.profile.map((p) => new THREE.Vector2(p.x, p.y)), 64),
     [vessel],
   )
-  const labelH = vessel.labelY1 - vessel.labelY0
-  const labelGeo = useMemo(
-    // ลอยเหนือผิว 0.3 มม. กัน z-fighting กับตัวภาชนะ
-    () => new THREE.CylinderGeometry(vessel.labelR + 0.3, vessel.labelR + 0.3, labelH, 64, 1, true),
-    [vessel, labelH],
-  )
 
-  const metal = mat.id === 'aluminum'
-  const isTube = mat.form === 'tube'
-  // หลอดบีบ: "ตะเข็บซีลปลายบน (crimp)" — หน้าตัดค่อย ๆ บีบจากวงกลม (ลำตัว) เป็นเส้นแบนที่ยอด
-  // (a คงที่ = เต็มความกว้าง, b ลดจาก R → ครึ่งความหนาซีล) จึงได้ตะเข็บแบนจริง ไม่ใช่โดม+ครีบ
-  const crimpGeo = useMemo(() => {
-    if (!isTube) return null
-    const R = vessel.labelR
-    const sealBottom = vessel.H * TUBE_SEAL_FRAC
+  // หลอดครีม: ลำตัว loft หน้าตัดค่อย ๆ บีบ — width (x) คงเกือบเต็ม, depth (z) ยุบจาก R → ครึ่งความหนาซีล
+  // ได้ front กว้างแบน + side เป็นลิ่ม (สามเหลี่ยม) + ยอดเป็นตะเข็บซีลแบน เหมือนหลอดครีมจริง
+  const tubeBodyGeo = useMemo(() => {
+    if (!tube) return null
+    const { R, rcap, capTop, sealThick, widthTaperTop, shoulderV } = tube
     const top = vessel.H
-    const crimpThick = Math.max(1.2, (mat.thickness ?? 0.3) * 4)
-    const NV = 14
-    const NU = 48
+    // width (แกน x): flare จากคอ rcap → เต็มลำตัว R ช่วงไหล่ (smoothstep) แล้วสอบยอดเล็กน้อย
+    const aOf = (v: number) => {
+      const t = Math.min(1, v / shoulderV)
+      const s = t * t * (3 - 2 * t)
+      return (rcap + (R - rcap) * s) * (1 - (1 - widthTaperTop) * v)
+    }
+    // depth (แกน z): เรียวเป็นลิ่มจากคอ rcap → ครึ่งความหนาซีลที่ยอด (side view = สามเหลี่ยม)
+    const bOf = (v: number) => rcap * (1 - v) + (sealThick / 2) * v
+    const NV = 28
+    const NU = 64
     const stride = NU + 1
     const pos: number[] = []
     const idx: number[] = []
     for (let iv = 0; iv <= NV; iv++) {
       const v = iv / NV
-      const y = sealBottom + v * (top - sealBottom)
-      const a = R // ความกว้างคงที่ = ซีลเต็มความกว้างหลอด
-      const b = R * (1 - v) + (crimpThick / 2) * v // ความลึกบีบจากวงกลม → เกือบแบน
+      const y = capTop + v * (top - capTop)
+      const a = aOf(v)
+      const b = bOf(v)
       for (let i = 0; i <= NU; i++) {
         const th = (i / NU) * Math.PI * 2
         pos.push(a * Math.cos(th), y, b * Math.sin(th))
@@ -166,7 +168,7 @@ function VesselModel({
         idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1)
       }
     }
-    // ปิดหน้าซีลบนสุด (เส้นแบน) ด้วยพัดจากจุดกึ่งกลาง
+    // ปิดตะเข็บซีลบนสุด (เส้นแบน) ด้วยพัดจากจุดกึ่งกลาง
     const center = pos.length / 3
     pos.push(0, top, 0)
     const topStart = NV * stride
@@ -176,15 +178,63 @@ function VesselModel({
     g.setIndex(idx)
     g.computeVertexNormals()
     return g
-  }, [isTube, vessel, mat.thickness])
+  }, [tube, vessel.H])
+
+  // ฉลาก: หลอดครีมใช้เปลือก loft หุ้มตามผิวลำตัวในช่วง band; ภาชนะอื่นใช้ทรงกระบอก
+  const labelH = vessel.labelY1 - vessel.labelY0
+  const labelGeo = useMemo(() => {
+    if (tube) {
+      const { R, rcap, capTop, sealThick, widthTaperTop, shoulderV } = tube
+      const top = vessel.H
+      const aOf = (v: number) => {
+        const t = Math.min(1, v / shoulderV)
+        const s = t * t * (3 - 2 * t)
+        return (rcap + (R - rcap) * s) * (1 - (1 - widthTaperTop) * v) + 0.3
+      }
+      const bOf = (v: number) => rcap * (1 - v) + (sealThick / 2) * v + 0.3
+      const NV = 20
+      const NU = 64
+      const stride = NU + 1
+      const pos: number[] = []
+      const uv: number[] = []
+      const idx: number[] = []
+      for (let iv = 0; iv <= NV; iv++) {
+        const f = iv / NV
+        const y = vessel.labelY0 + f * (vessel.labelY1 - vessel.labelY0)
+        const v = (y - capTop) / (top - capTop)
+        const a = aOf(v)
+        const b = bOf(v)
+        for (let i = 0; i <= NU; i++) {
+          const th = (i / NU) * Math.PI * 2
+          pos.push(a * Math.cos(th), y, b * Math.sin(th))
+          uv.push(i / NU, f)
+        }
+      }
+      for (let iv = 0; iv < NV; iv++) {
+        for (let i = 0; i < NU; i++) {
+          const a0 = iv * stride + i
+          const b0 = (iv + 1) * stride + i
+          idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1)
+        }
+      }
+      const g = new THREE.BufferGeometry()
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+      g.setIndex(idx)
+      g.computeVertexNormals()
+      return g
+    }
+    // ลอยเหนือผิว 0.3 มม. กัน z-fighting กับตัวภาชนะ
+    return new THREE.CylinderGeometry(vessel.labelR + 0.3, vessel.labelR + 0.3, labelH, 64, 1, true)
+  }, [tube, vessel, labelH])
 
   useEffect(
     () => () => {
       body.dispose()
       labelGeo.dispose()
-      crimpGeo?.dispose()
+      tubeBodyGeo?.dispose()
     },
-    [body, labelGeo, crimpGeo],
+    [body, labelGeo, tubeBodyGeo],
   )
 
   return (
@@ -200,13 +250,19 @@ function VesselModel({
           side={THREE.DoubleSide}
         />
       </mesh>
-      {/* หมุนรอยต่อฉลากไปด้านหลัง ไม่ให้บังหน้าลาย */}
-      <mesh geometry={labelGeo} position={[0, (vessel.labelY0 + vessel.labelY1) / 2, 0]} rotation={[0, Math.PI, 0]}>
-        <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} roughness={0.8} metalness={0} />
-      </mesh>
-      {isTube && crimpGeo && (
-        <mesh geometry={crimpGeo}>
+      {isTube && tubeBodyGeo && (
+        <mesh geometry={tubeBodyGeo}>
           <meshStandardMaterial color={mat.color} roughness={mat.roughness ?? 0.28} metalness={0} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      {/* ฉลาก: หลอด = เปลือก loft ตามผิว (วาง y จริง); ภาชนะอื่น = ทรงกระบอกจัดกึ่งกลาง band หมุนรอยต่อไปหลัง */}
+      {tube ? (
+        <mesh geometry={labelGeo}>
+          <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} roughness={0.8} metalness={0} side={THREE.DoubleSide} />
+        </mesh>
+      ) : (
+        <mesh geometry={labelGeo} position={[0, (vessel.labelY0 + vessel.labelY1) / 2, 0]} rotation={[0, Math.PI, 0]}>
+          <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} roughness={0.8} metalness={0} />
         </mesh>
       )}
     </group>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LABEL_OVERLAP, TUBE_SEAL_FRAC, generateVessel, isVessel } from './vessel'
+import { LABEL_OVERLAP, TUBE_CAP_FRAC, generateVessel, isVessel } from './vessel'
 import { MATERIALS, getMaterial } from './materials'
 import { computeGuides } from './guides'
 import { dielineDXFString } from './dxf'
@@ -120,16 +120,29 @@ describe('vessel: หลอดครีม (tube-laminate)', () => {
   const tbox = { W: 40, D: 16, H: 150, handle: false }
   const v = generateVessel(tbox, getMaterial('tube-laminate'))
 
-  it('ฝาที่ก้น (เริ่มแกนกลาง) + ลำตัวจบที่ระดับซีล ปิดยอดแบน', () => {
+  it('profile = ฝา/คอกลม (ทรงหมุน) เริ่มแกนกลางก้น จบเปิดที่ยอดฝา (rcap, capTop)', () => {
     expect(v.profile[0].x).toBe(0)
     expect(v.profile[0].y).toBe(0)
-    expect(v.profile[v.profile.length - 1].x).toBe(0) // ปิดยอดแบนที่แกนกลาง (ส่วนบีบซีลเป็น geometry แยก)
-    // ลำตัวทรงหมุนจบที่ระดับซีล (TUBE_SEAL_FRAC×H) — ส่วนบีบซีลปลายบนเรนเดอร์แยกใน viewer
-    expect(Math.max(...v.profile.map((p) => p.y))).toBeCloseTo(tbox.H * TUBE_SEAL_FRAC)
+    const last = v.profile[v.profile.length - 1]
+    // จบ "เปิด" ที่ยอดฝา/คอ — ลำตัว loft วงรีรับต่อใน viewer จากจุดนี้
+    expect(last.x).toBeCloseTo(v.tube!.rcap)
+    expect(last.y).toBeCloseTo(TUBE_CAP_FRAC * tbox.H)
   })
 
-  it('รัศมีกว้างสุด = ⌀ตัว/2 ทุกจุด finite ไม่ติดลบ + ความสูงไม่ย้อนกลับ', () => {
-    expect(Math.max(...v.profile.map((p) => p.x))).toBeCloseTo(tbox.W / 2)
+  it('tube params ส่งให้ viewer: R, rcap<R, capTop, ความหนาซีล, สัดส่วนสอบยอด, ช่วงไหล่', () => {
+    expect(v.tube).toBeDefined()
+    expect(v.tube!.R).toBeCloseTo(tbox.W / 2)
+    expect(v.tube!.rcap).toBeGreaterThan(0)
+    expect(v.tube!.rcap).toBeLessThan(v.tube!.R) // คอแคบกว่าลำตัว
+    expect(v.tube!.capTop).toBeCloseTo(TUBE_CAP_FRAC * tbox.H)
+    expect(v.tube!.sealThick).toBeGreaterThan(0)
+    expect(v.tube!.widthTaperTop).toBeGreaterThan(0)
+    expect(v.tube!.widthTaperTop).toBeLessThanOrEqual(1)
+    expect(v.tube!.shoulderV).toBeGreaterThan(0)
+  })
+
+  it('profile (ฝา/คอ) finite ไม่ติดลบ + ความสูงไม่ย้อนกลับ (รัศมีลำตัวเต็มอยู่ใน tube.R)', () => {
+    expect(Math.max(...v.profile.map((p) => p.x))).toBeCloseTo(v.tube!.rcap)
     expect(v.profile.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0)).toBe(true)
     for (let i = 1; i < v.profile.length; i++) {
       expect(v.profile[i].y).toBeGreaterThanOrEqual(v.profile[i - 1].y - 1e-9)
