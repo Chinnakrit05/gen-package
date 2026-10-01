@@ -384,6 +384,19 @@ function PouchModel({
           />
         </mesh>
       )}
+      {topFinGeo && pouch.style === 'gusset' && (
+        // brick: ครีบซีลก้นยื่นลงล่าง (สะท้อนครีบบนกลับหัว) — box ก้นแบนตั้งจึงไม่มี
+        <mesh geometry={topFinGeo} position={[0, 0, 0]} scale={[1, -1, 1]}>
+          <meshStandardMaterial
+            color={mat.color}
+            roughness={mat.roughness ?? 0.6}
+            metalness={0}
+            transparent={mat.opacity !== undefined}
+            opacity={mat.opacity ?? 1}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      )}
       {zip && (
         <mesh position={[0, zip.y, 0]} scale={[zip.ax, 1, zip.bz]}>
           <cylinderGeometry args={[1, 1, 5, 48, 1, true]} />
