@@ -136,16 +136,12 @@ function VesselModel({
   // ได้ front กว้างแบน + side เป็นลิ่ม (สามเหลี่ยม) + ยอดเป็นตะเข็บซีลแบน เหมือนหลอดครีมจริง
   const tubeBodyGeo = useMemo(() => {
     if (!tube) return null
-    const { R, rcap, capTop, sealThick, widthTaperTop, shoulderV } = tube
+    const { R, rcap, capTop, sealThick } = tube
     const top = vessel.H
-    // width (แกน x): flare จากคอ rcap → เต็มลำตัว R ช่วงไหล่ (smoothstep) แล้วสอบยอดเล็กน้อย
-    const aOf = (v: number) => {
-      const t = Math.min(1, v / shoulderV)
-      const s = t * t * (3 - 2 * t)
-      return (rcap + (R - rcap) * s) * (1 - (1 - widthTaperTop) * v)
-    }
-    // depth (แกน z): เรียวเป็นลิ่มจากคอ rcap → ครึ่งความหนาซีลที่ยอด (side view = สามเหลี่ยม)
-    const bOf = (v: number) => rcap * (1 - v) + (sealThick / 2) * v
+    // width (แกน x): บานจากคอ rcap (ก้น) → กว้างสุด R ที่ยอด (ตะเข็บซีล) = ทรง trapezoid กว้างบน
+    const aOf = (v: number) => rcap + (R - rcap) * Math.pow(v, 0.6)
+    // depth (แกน z): เรียวเป็นลิ่มคมจากคอ rcap → เกือบเป็นจุดที่ยอด (side view = สามเหลี่ยมคม)
+    const bOf = (v: number) => (rcap - sealThick / 2) * Math.pow(1 - v, 1.4) + sealThick / 2
     const NV = 28
     const NU = 64
     const stride = NU + 1
@@ -184,14 +180,10 @@ function VesselModel({
   const labelH = vessel.labelY1 - vessel.labelY0
   const labelGeo = useMemo(() => {
     if (tube) {
-      const { R, rcap, capTop, sealThick, widthTaperTop, shoulderV } = tube
+      const { R, rcap, capTop, sealThick } = tube
       const top = vessel.H
-      const aOf = (v: number) => {
-        const t = Math.min(1, v / shoulderV)
-        const s = t * t * (3 - 2 * t)
-        return (rcap + (R - rcap) * s) * (1 - (1 - widthTaperTop) * v) + 0.3
-      }
-      const bOf = (v: number) => rcap * (1 - v) + (sealThick / 2) * v + 0.3
+      const aOf = (v: number) => rcap + (R - rcap) * Math.pow(v, 0.6) + 0.3
+      const bOf = (v: number) => (rcap - sealThick / 2) * Math.pow(1 - v, 1.4) + sealThick / 2 + 0.3
       const NV = 20
       const NU = 64
       const stride = NU + 1

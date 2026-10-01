@@ -129,16 +129,21 @@ describe('vessel: หลอดครีม (tube-laminate)', () => {
     expect(last.y).toBeCloseTo(TUBE_CAP_FRAC * tbox.H)
   })
 
-  it('tube params ส่งให้ viewer: R, rcap<R, capTop, ความหนาซีล, สัดส่วนสอบยอด, ช่วงไหล่', () => {
+  it('tube params ส่งให้ viewer: R, rcap<R (คอแคบกว่าลำตัว), capTop, ความหนาซีล', () => {
     expect(v.tube).toBeDefined()
     expect(v.tube!.R).toBeCloseTo(tbox.W / 2)
     expect(v.tube!.rcap).toBeGreaterThan(0)
-    expect(v.tube!.rcap).toBeLessThan(v.tube!.R) // คอแคบกว่าลำตัว
+    expect(v.tube!.rcap).toBeLessThan(v.tube!.R) // คอ/ก้นแคบกว่าลำตัว (ยอดกว้างสุด)
     expect(v.tube!.capTop).toBeCloseTo(TUBE_CAP_FRAC * tbox.H)
     expect(v.tube!.sealThick).toBeGreaterThan(0)
-    expect(v.tube!.widthTaperTop).toBeGreaterThan(0)
-    expect(v.tube!.widthTaperTop).toBeLessThanOrEqual(1)
-    expect(v.tube!.shoulderV).toBeGreaterThan(0)
+  })
+
+  it('รูปแบบฉลาก "สูงเต็มตัว" ขึ้นถึงส่วนบนใกล้ตะเข็บซีล (สูงกว่าแบบมาตรฐาน)', () => {
+    const full = generateVessel(tbox, getMaterial('tube-laminate'), 'full')
+    const body = generateVessel(tbox, getMaterial('tube-laminate'), 'body')
+    expect(full.labelY1).toBeGreaterThan(body.labelY1)
+    expect(full.labelY1).toBeGreaterThanOrEqual(tbox.H * 0.88) // ขึ้นถึงใกล้ยอด (~0.9H)
+    expect(full.labelY1).toBeLessThan(tbox.H)
   })
 
   it('profile (ฝา/คอ) finite ไม่ติดลบ + ความสูงไม่ย้อนกลับ (รัศมีลำตัวเต็มอยู่ใน tube.R)', () => {

@@ -13,12 +13,10 @@ import { P, fmt, rect } from './templates/shared'
 // profile เก็บแค่ฝา/คอกลม (ทรงหมุน); ลำตัว capTop→H สร้างเป็น loft ใน VesselViewer3D
 // ผล: front view กว้างแบน, side view เป็นลิ่ม/สามเหลี่ยม, ยอดเป็นตะเข็บซีลแบน (เหมือนหลอดจริง)
 export interface TubeShape {
-  R: number // ครึ่งความกว้างลำตัวเต็ม (= W/2)
-  rcap: number // รัศมีฝา/คอ (จุดเริ่ม loft ยังเป็นวงกลม)
+  R: number // ครึ่งความกว้างลำตัวเต็ม (= W/2) — กว้างสุดที่ยอด (ตะเข็บซีล)
+  rcap: number // รัศมีฝา/คอ (จุดเริ่ม loft ยังเป็นวงกลม — ก้นแคบสุด)
   capTop: number // ความสูงยอดฝา = ลำตัว loft เริ่ม
-  sealThick: number // ความหนาตะเข็บซีลแบนที่ยอด
-  widthTaperTop: number // สัดส่วนความกว้างที่ยอดเทียบลำตัว (<1 = สอบเข้าเล็กน้อย)
-  shoulderV: number // ช่วง v (0..1) ที่ไหล่ flare ความกว้างจนเต็มลำตัว
+  sealThick: number // ความหนาตะเข็บซีลแบนที่ยอด (เล็ก → ปลายเรียวแหลม)
 }
 
 export interface Vessel {
@@ -80,7 +78,7 @@ function profileFor(matId: string, R: number, rn: number, H: number): { pts: Vec
   if (matId === 'tube-laminate') {
     // หลอดบีบคลาสสิก: ตั้งบน "ฝา/คอกลม" ที่ก้น → ลำตัวเป็น loft วงรี (กว้างคงที่ ลึกเรียว→ซีลแบน)
     // profile นี้เก็บแค่ฝา/คอ (ทรงหมุน กลม) จบแบบ "เปิด" ที่ (rcap, capH) ให้ลำตัว loft รับต่อ
-    const rcap = Math.min(Math.max(rn, R * 0.5), R * 0.58) // รัศมีฝา/คอ (แคบกว่าลำตัว)
+    const rcap = Math.min(Math.max(rn, R * 0.42), R * 0.5) // รัศมีฝา/คอ (แคบกว่าลำตัว) — ต้องตรงกับ vessel.tube.rcap
     const capH = H * TUBE_CAP_FRAC
     return {
       pts: [
@@ -88,7 +86,7 @@ function profileFor(matId: string, R: number, rn: number, H: number): { pts: Vec
         P(rcap, 0), // ก้นฝา (ตั้งบนฝา)
         P(rcap, capH), // ยอดฝา/คอ (จบเปิด — ลำตัว loft รับต่อ)
       ],
-      band: [capH + H * 0.12, H * 0.72], // ฉลากบนช่วงลำตัว
+      band: [capH + H * 0.08, H * 0.82], // ฉลากบนช่วงลำตัว (แบบ "สูงเต็มตัว" จะขึ้นถึง ~0.9H)
     }
   }
   if (matId === 'glass') {
@@ -130,8 +128,13 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
   const { pts, band } = profileFor(mat.id, R, rn, H)
   // ช่วงลำตัวตรง (รัศมี ~R) = ขอบเขตที่ฉลากติดได้จริง ใช้คำนวณรูปแบบฉลากแต่ละแบบ
   const straightYs = pts.filter((p) => p.x >= R * 0.98).map((p) => p.y)
-  const b0 = straightYs.length ? Math.min(...straightYs) : band[0]
-  const b1 = straightYs.length ? Math.max(...straightYs) : band[1]
+  let b0 = straightYs.length ? Math.min(...straightYs) : band[0]
+  let b1 = straightYs.length ? Math.max(...straightYs) : band[1]
+  // หลอดครีม: ลำตัวพิมพ์ได้ทั้งตัว (profile เป็นแค่ฝา) — กำหนดขอบพิมพ์เองให้ "สูงเต็มตัว" ขึ้นถึงใกล้ซีล
+  if (mat.id === 'tube-laminate') {
+    b0 = TUBE_CAP_FRAC * H + H * 0.03
+    b1 = H * 0.9
+  }
   const span = Math.max(1, b1 - b0)
   let labelY0: number
   let labelY1: number
@@ -184,14 +187,12 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
   }
   if (mat.id === 'tube-laminate') {
     // ลำตัวหลอดเป็น loft วงรีบีบแบน (viewer สร้างจากพารามิเตอร์นี้ ต่อจากฝา/คอที่ capTop)
-    const rcap = Math.min(Math.max(rn, R * 0.5), R * 0.58)
+    const rcap = Math.min(Math.max(rn, R * 0.42), R * 0.5)
     vessel.tube = {
       R,
       rcap,
       capTop: TUBE_CAP_FRAC * H,
-      sealThick: Math.max(1.2, mat.thickness * 4),
-      widthTaperTop: 0.9,
-      shoulderV: 0.22,
+      sealThick: Math.max(0.8, mat.thickness * 2.5), // บางลง → ปลายซีลเรียวแหลมขึ้น
     }
   }
   return vessel
