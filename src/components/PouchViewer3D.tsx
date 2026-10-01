@@ -118,7 +118,7 @@ function usePouchGeometry(pouch: Pouch) {
     const gussetW = backRect.x - W // ความกว้างจีบข้าง (0 เมื่อไม่มี)
     // ครึ่งความหนาตะเข็บซีลขั้นต่ำ (ปาก/ก้นบีบแบนเหลือเท่านี้) + ระยะพับจีบกลางผนังข้าง (ลึกเข้า)
     const halfSeal = Math.max(1, depth3D * 0.12)
-    const gInMax = Math.min((W / 2) * 0.32, depth3D * 0.6)
+    const gInMax = Math.min((W / 2) * 0.14, depth3D * 0.28) // รอยพับจีบกลาง (ตื้น ไม่บีบลำตัวเข้ามาก)
 
     const ringVert = (v: number, theta: number, dly: number) => {
       // brick/box: ลำตัวทรงอิฐ (หน้า-หลังแบน) + ปากบน(และก้น brick) บีบเป็น "ตะเข็บซีลแบน (fin)"
@@ -263,6 +263,29 @@ function PouchModel({
   const geo = usePouchGeometry(pouch)
   useEffect(() => () => geo.dispose(), [geo])
 
+  // ครีบซีลปากบนของซองข้างจีบ/ก้นแบน — แผ่นแบนยื่นตั้งเหนือลำตัว + หูพับมุม (ฐานกว้างกว่ายอด)
+  const boxyTop = pouch.style === 'gusset' || pouch.style === 'box'
+  const topFinGeo = useMemo(() => {
+    if (!boxyTop) return null
+    const W = pouch.W
+    const H = pouch.H
+    const finTopW = W * 0.8 // ยอดครีบแคบกว่าลำตัวเล็กน้อย
+    const finBaseW = W * 0.92
+    const earW = W * 0.1 // หูพับยื่นออกข้างที่ฐาน
+    const finH = Math.min(H * 0.12, 18) // ความสูงครีบที่ยื่นขึ้น
+    const sealThick = 2 * Math.max(pouch.depth3D * 0.12, 1) // ความหนาเท่าตะเข็บซีลลำตัว
+    const shape = new THREE.Shape()
+    shape.moveTo(-finTopW / 2, finH)
+    shape.lineTo(finTopW / 2, finH)
+    shape.lineTo(finBaseW / 2 + earW, 0) // หูพับขวา (ฐานกว้าง)
+    shape.lineTo(-finBaseW / 2 - earW, 0) // หูพับซ้าย
+    shape.closePath()
+    const g = new THREE.ExtrudeGeometry(shape, { depth: sealThick, bevelEnabled: false })
+    g.translate(0, 0, -sealThick / 2) // จัดกึ่งกลางความหนา
+    return g
+  }, [pouch, boxyTop])
+  useEffect(() => () => topFinGeo?.dispose(), [topFinGeo])
+
   // three คอมไพล์ shader ตาม define ตอนสร้าง — map เปลี่ยน null → texture ต้อง needsUpdate ให้ recompile
   const matRef = useRef<THREE.MeshStandardMaterial>(null!)
   const hasTex = !!tex
@@ -320,6 +343,19 @@ function PouchModel({
           side={THREE.DoubleSide}
         />
       </mesh>
+      {topFinGeo && (
+        // ครีบซีลปากบนยื่นตั้งขึ้น + หูพับมุม (วางฐานที่ยอดลำตัว y=H)
+        <mesh geometry={topFinGeo} position={[0, pouch.H, 0]}>
+          <meshStandardMaterial
+            color={mat.color}
+            roughness={mat.roughness ?? 0.6}
+            metalness={0}
+            transparent={mat.opacity !== undefined}
+            opacity={mat.opacity ?? 1}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      )}
       {zip && (
         <mesh position={[0, zip.y, 0]} scale={[zip.ax, 1, zip.bz]}>
           <cylinderGeometry args={[1, 1, 5, 48, 1, true]} />
