@@ -129,25 +129,21 @@ function usePouchGeometry(pouch: Pouch) {
       const hasBotFin = style === 'gusset' // brick ซีลก้น; box ก้นแบนตั้ง
       const yBot = hasBotFin ? -finH : 0
       const yTop = H + finH
-      const shB = H * 0.08
-      const shT = H * 0.08
       const st = frontRect.y // ความสูงแถบซีลบนบน dieline
       const g = gussetW
       const wp = 2 * W + 2 * g
       const finHalf = Math.max(0.35, depth3D * 0.025) // ครึ่งความหนาครีบ = ฟิล์มบางมาก (~0.7 มม.)
-      // ครึ่งความลึกตามความสูง: ลำตัวเต็ม, ไหล่ลู่, ครีบบางเฉียบ (finHalf)
+      // ครึ่งความลึก: "ลำตัวแบนเต็มทั้งความสูง" (ไม่มีไหล่กินหน้าถุง) — การบีบซีลเกิดเฉพาะในส่วนครีบ
       const bAtY = (y: number) => {
-        if (y >= H) return finHalf
-        if (hasBotFin && y <= 0) return finHalf
-        if (y > H - shT) return lerp(finHalf, depth3D, (H - y) / shT)
-        if (hasBotFin && y < shB) return lerp(finHalf, depth3D, y / shB)
-        return depth3D
+        if (y >= H) return lerp(depth3D, finHalf, (y - H) / finH) // ครีบบน: ลู่จากลำตัวเต็ม→บาง
+        if (hasBotFin && y <= 0) return lerp(depth3D, finHalf, -y / finH) // ครีบล่าง
+        return depth3D // ลำตัว: เต็ม แบน ตลอด
       }
-      // ครึ่งความกว้าง: ลำตัวเต็ม, ครีบแคบลงเล็กน้อยไปทางปลาย
+      // ครึ่งความกว้าง: ลำตัวเต็มตลอด, แคบลงเฉพาะปลายครีบ
       const wAtY = (y: number) => {
         const base = W / 2
-        if (y >= H) return base * (0.85 - 0.13 * Math.min(1, (y - H) / finH))
-        if (hasBotFin && y <= 0) return base * (0.85 - 0.13 * Math.min(1, -y / finH))
+        if (y >= H) return base * lerp(1, 0.8, (y - H) / finH)
+        if (hasBotFin && y <= 0) return base * lerp(1, 0.8, -y / finH)
         return base
       }
       // UV แนวตั้ง: ลำตัว→แผงหน้า [st..st+H], ครีบบน→แถบซีลบน [0..st], ครีบล่าง→แถบซีลล่าง [st+H..filmH]
