@@ -56938,12 +56938,14 @@ function generateFefco0217(box, mat) {
   const taper = 4;
   const fin = Math.max(1.5, t + 0.5);
   const layer = t + 0.05;
-  const handleH = Math.max(55, Math.min(140, Dp));
+  const handleH = Math.max(55, Math.min(150, Dp));
   const lean = Math.asin(Math.min(0.98, Dp / 2 / handleH)) * 180 / Math.PI;
-  const closeLen = Math.max(6, Wp / 2 - fin);
-  const baseLR = Dp * 0.5;
-  const baseFB = Dp * 0.62;
-  const lrSlant = Math.min(6, baseLR * 0.4);
+  const sideH = handleH * 0.72;
+  const peakInset = Dp * 0.22;
+  const baseFB = Dp * 0.6;
+  const baseLR = Dp * 0.46;
+  const angFB = Math.min(14, Wp * 0.1);
+  const angLR = Math.min(14, Dp * 0.18);
   const x1 = glueW;
   const x2 = x1 + Dp;
   const x3 = x2 + Wp;
@@ -56953,22 +56955,41 @@ function generateFefco0217(box, mat) {
   const bot = top + Hp;
   const width = x5;
   const height = bot + baseFB + 4;
-  const holeLen = Math.min(90, Wp * 0.55);
-  const holeThick = Math.min(24, handleH * 0.32);
-  const holeCyF = top - handleH * 0.5;
-  const holeF = obroundPts((x2 + x3) / 2, holeCyF, holeLen, holeThick);
-  const holeB = obroundPts((x4 + x5) / 2, holeCyF, holeLen, holeThick);
+  const holeLen = Math.min(100, Wp * 0.5);
+  const holeThick = Math.min(26, handleH * 0.3);
+  const holeCy = top - handleH * 0.55;
+  const holeF = obroundPts((x2 + x3) / 2, holeCy, holeLen, holeThick);
+  const holeB = obroundPts((x4 + x5) / 2, holeCy, holeLen, holeThick);
+  const slotW = Math.max(1.6, Dp * 0.035);
+  const slot = (cx) => {
+    const yTop = top - sideH + 2;
+    const yBot = top - sideH * 0.42;
+    return [P(cx - slotW, yTop), P(cx + slotW, yTop), P(cx + slotW, yBot), P(cx - slotW, yBot)];
+  };
   const rect2 = (xa, ya, xb, yb) => [
     P(xa, ya),
     P(xb, ya),
     P(xb, yb),
     P(xa, yb)
   ];
-  const closeFlap = (xa, xb) => rect2(xa + fin, top - closeLen, xb - fin, top);
-  const baseFlap = (xa, xb, depth) => [
+  const gableFlap = (xa, xb) => [
+    P(xa + fin, top),
+    P(xa + fin, top - sideH * 0.5),
+    P(xa + peakInset, top - sideH),
+    P(xb - peakInset, top - sideH),
+    P(xb - fin, top - sideH * 0.5),
+    P(xb - fin, top)
+  ];
+  const baseFBFlap = (xa, xb) => [
     P(xa + fin, bot),
-    P(xa + fin + lrSlant, bot + depth),
-    P(xb - fin - lrSlant, bot + depth),
+    P(xa + fin + angFB, bot + baseFB),
+    P(xb - fin - angFB, bot + baseFB),
+    P(xb - fin, bot)
+  ];
+  const baseLRFlap = (xa, xb) => [
+    P(xa + fin, bot),
+    P(xa + fin, bot + baseLR),
+    P(xb - fin - angLR, bot + baseLR),
     P(xb - fin, bot)
   ];
   const panels = [
@@ -57010,11 +57031,12 @@ function generateFefco0217(box, mat) {
       foldAngle: 90,
       stage: 0
     },
-    // ฝาข้างปิดบน (พับเข้าชนกลาง)
+    // ลิ้นข้างทรงจั่ว+ร่องล็อก (พับเข้าก่อน)
     {
-      id: "close-l",
+      id: "gable-l",
       parentId: "side-left",
-      outline: closeFlap(x1, x2),
+      outline: gableFlap(x1, x2),
+      holes: [slot((x1 + x2) / 2)],
       hingeA: P(x1, top),
       hingeB: P(x2, top),
       foldAngle: 90,
@@ -57022,16 +57044,17 @@ function generateFefco0217(box, mat) {
       zOffset: layer
     },
     {
-      id: "close-r",
+      id: "gable-r",
       parentId: "side-right",
-      outline: closeFlap(x3, x4),
+      outline: gableFlap(x3, x4),
+      holes: [slot((x3 + x4) / 2)],
       hingeA: P(x3, top),
       hingeB: P(x4, top),
       foldAngle: 90,
       stage: 1,
       zOffset: layer
     },
-    // หูหิ้ว: ลิ้นหน้า-หลังพับขึ้นเอียงมาชนกลาง เจาะรูจับ
+    // หูหิ้วหน้า-หลัง เจาะรูจับ พับขึ้นชนกลาง
     {
       id: "handle-front",
       parentId: "front",
@@ -57052,11 +57075,11 @@ function generateFefco0217(box, mat) {
       foldAngle: lean,
       stage: 2
     },
-    // ก้น auto-lock
+    // ก้น crash-lock
     {
       id: "base-left",
       parentId: "side-left",
-      outline: baseFlap(x1, x2, baseLR),
+      outline: baseLRFlap(x1, x2),
       hingeA: P(x1, bot),
       hingeB: P(x2, bot),
       foldAngle: -90,
@@ -57066,7 +57089,7 @@ function generateFefco0217(box, mat) {
     {
       id: "base-right",
       parentId: "side-right",
-      outline: baseFlap(x3, x4, baseLR),
+      outline: baseLRFlap(x3, x4),
       hingeA: P(x3, bot),
       hingeB: P(x4, bot),
       foldAngle: -90,
@@ -57076,7 +57099,7 @@ function generateFefco0217(box, mat) {
     {
       id: "base-front",
       parentId: "front",
-      outline: baseFlap(x2, x3, baseFB),
+      outline: baseFBFlap(x2, x3),
       hingeA: P(x2, bot),
       hingeB: P(x3, bot),
       foldAngle: -90,
@@ -57086,7 +57109,7 @@ function generateFefco0217(box, mat) {
     {
       id: "base-back",
       parentId: "back",
-      outline: baseFlap(x4, x5, baseFB),
+      outline: baseFBFlap(x4, x5),
       hingeA: P(x4, bot),
       hingeB: P(x5, bot),
       foldAngle: -90,
@@ -57096,30 +57119,36 @@ function generateFefco0217(box, mat) {
   ];
   const cut = (d) => ({ kind: "cut", d });
   const crease = (d) => ({ kind: "crease", d });
-  const closeCut = (xa, xb) => `M ${xa} ${top} L ${xa + fin} ${top} L ${xa + fin} ${top - closeLen} L ${xb - fin} ${top - closeLen} L ${xb - fin} ${top} L ${xb} ${top}`;
+  const gableCut = (xa, xb) => `M ${xa} ${top} L ${xa + fin} ${top} L ${xa + fin} ${top - sideH * 0.5} L ${xa + peakInset} ${top - sideH} L ${xb - peakInset} ${top - sideH} L ${xb - fin} ${top - sideH * 0.5} L ${xb - fin} ${top} L ${xb} ${top}`;
   const handleCut = (xa, xb) => `M ${xa} ${top} L ${xa} 0 L ${xb} 0 L ${xb} ${top}`;
-  const baseCut = (xa, xb, depth) => `M ${xa} ${bot} L ${xa + fin} ${bot} L ${xa + fin + lrSlant} ${bot + depth} L ${xb - fin - lrSlant} ${bot + depth} L ${xb - fin} ${bot} L ${xb} ${bot}`;
+  const slotCut = (cx) => {
+    const yTop = top - sideH + 2;
+    const yBot = top - sideH * 0.42;
+    return `M ${cx - slotW} ${yTop} L ${cx + slotW} ${yTop} L ${cx + slotW} ${yBot} L ${cx - slotW} ${yBot} Z`;
+  };
+  const baseFBCut = (xa, xb) => `M ${xa} ${bot} L ${xa + fin} ${bot} L ${xa + fin + angFB} ${bot + baseFB} L ${xb - fin - angFB} ${bot + baseFB} L ${xb - fin} ${bot} L ${xb} ${bot}`;
+  const baseLRCut = (xa, xb) => `M ${xa} ${bot} L ${xa + fin} ${bot} L ${xa + fin} ${bot + baseLR} L ${xb - fin - angLR} ${bot + baseLR} L ${xb - fin} ${bot} L ${xb} ${bot}`;
   const segments = [
     cut(`M ${x1} ${top} L 0 ${top + taper} L 0 ${bot - taper} L ${x1} ${bot}`),
-    cut(closeCut(x1, x2)),
+    cut(gableCut(x1, x2)),
     cut(handleCut(x2, x3)),
-    cut(closeCut(x3, x4)),
+    cut(gableCut(x3, x4)),
     cut(handleCut(x4, x5)),
     cut(`M ${x5} ${top} L ${x5} ${bot}`),
-    cut(baseCut(x1, x2, baseLR)),
-    cut(baseCut(x2, x3, baseFB)),
-    cut(baseCut(x3, x4, baseLR)),
-    cut(baseCut(x4, x5, baseFB)),
-    cut(obroundPath((x2 + x3) / 2, holeCyF, holeLen, holeThick)),
-    cut(obroundPath((x4 + x5) / 2, holeCyF, holeLen, holeThick)),
+    cut(slotCut((x1 + x2) / 2)),
+    cut(slotCut((x3 + x4) / 2)),
+    cut(baseLRCut(x1, x2)),
+    cut(baseFBCut(x2, x3)),
+    cut(baseLRCut(x3, x4)),
+    cut(baseFBCut(x4, x5)),
+    cut(obroundPath((x2 + x3) / 2, holeCy, holeLen, holeThick)),
+    cut(obroundPath((x4 + x5) / 2, holeCy, holeLen, holeThick)),
     crease(`M ${x1} ${top} L ${x1} ${bot}`),
     crease(`M ${x2} ${top} L ${x2} ${bot}`),
     crease(`M ${x3} ${top} L ${x3} ${bot}`),
     crease(`M ${x4} ${top} L ${x4} ${bot}`),
     crease(`M ${x2} ${top} L ${x3} ${top}`),
-    // ฐานหูหิ้วหน้า
     crease(`M ${x4} ${top} L ${x5} ${top}`),
-    // ฐานหูหิ้วหลัง
     crease(`M ${x1 + fin} ${top} L ${x2 - fin} ${top}`),
     crease(`M ${x3 + fin} ${top} L ${x4 - fin} ${top}`),
     crease(`M ${x1 + fin} ${bot} L ${x2 - fin} ${bot}`),
@@ -57205,8 +57234,8 @@ var TEMPLATES = [
   {
     id: "fefco-0217",
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E1A\u0E19\u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01 (FEFCO 0217)",
-    detail: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E17\u0E25\u0E21\u0E35\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E14\u0E49\u0E32\u0E19\u0E1A\u0E19 (\u0E25\u0E34\u0E49\u0E19\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E0A\u0E19\u0E40\u0E1B\u0E47\u0E19\u0E2B\u0E39\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E08\u0E31\u0E1A) + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 \u2014 \u0E40\u0E04\u0E49\u0E01/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E16\u0E37\u0E2D\u0E2A\u0E30\u0E14\u0E27\u0E01",
-    defaults: { W: 160, D: 100, H: 120 },
+    detail: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E17\u0E25\u0E21\u0E35\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E14\u0E49\u0E32\u0E19\u0E1A\u0E19 (\u0E1C\u0E19\u0E31\u0E07\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E0A\u0E19\u0E40\u0E1B\u0E47\u0E19\u0E2B\u0E39\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E08\u0E31\u0E1A + \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27\u0E23\u0E48\u0E2D\u0E07\u0E25\u0E47\u0E2D\u0E01) + \u0E01\u0E49\u0E19 crash-lock \u2014 \u0E40\u0E04\u0E49\u0E01/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E16\u0E37\u0E2D\u0E2A\u0E30\u0E14\u0E27\u0E01",
+    defaults: { W: 300, D: 150, H: 180 },
     tilt: 0,
     supportsHandle: false,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
