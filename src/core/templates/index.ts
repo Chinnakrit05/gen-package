@@ -14,6 +14,7 @@ import { generateSlideBox } from './slideBox'
 import { generateDisplayBox } from './displayBox'
 import { generateFefco0215 } from './fefco0215'
 import { generateFefco0202 } from './fefco0202'
+import { generateFefco0217 } from './fefco0217'
 // import { generateWedgeBox } from './wedge' // กล่องแซนวิช — ซ่อนไว้ก่อน (re-add เมื่อเปิดใช้)
 
 export interface BoxTemplate {
@@ -93,6 +94,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsVents: true,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateRSCBox,
+  },
+  {
+    id: 'fefco-0217',
+    nameTh: 'กล่องหูหิ้วบนก้นล็อก (FEFCO 0217)',
+    detail: 'กล่องรีเทลมีหูหิ้วด้านบน (ลิ้นหน้า-หลังชนเป็นหูเจาะรูจับ) + ก้นล็อกอัตโนมัติ — เค้ก/เบเกอรี่/ของฝากถือสะดวก',
+    defaults: { W: 160, D: 100, H: 120 },
+    tilt: 0,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
+    generate: generateFefco0217,
   },
   {
     id: 'bottle-carrier',
