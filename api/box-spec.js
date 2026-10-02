@@ -14132,6 +14132,185 @@ function generateLidBox(box, mat) {
   return { width, height, segments, panels, dims };
 }
 
+// src/core/templates/slideBox.ts
+function buildSleevePiece(prefix, ox, oy, Wc, Dc, len, t) {
+  const Wp = Wc + 2 * t;
+  const Dp = Dc + 2 * t;
+  const glueW = Math.max(12, 10 + 2 * t);
+  const taper = 4;
+  const layer = t + 0.05;
+  const x1 = glueW;
+  const x2 = x1 + Dp;
+  const x3 = x2 + Wp;
+  const x4 = x3 + Dp;
+  const x5 = x4 + Wp;
+  const top = 0;
+  const bot = len;
+  const a = (x, y) => P(ox + x, oy + y);
+  const r = (xa, ya, xb, yb) => rect(ox + xa, oy + ya, ox + xb, oy + yb);
+  const panels = [
+    { id: `${prefix}front`, parentId: null, outline: r(x2, top, x3, bot), stage: 0 },
+    {
+      id: `${prefix}side-left`,
+      parentId: `${prefix}front`,
+      outline: r(x1, top, x2, bot),
+      hingeA: a(x2, top),
+      hingeB: a(x2, bot),
+      foldAngle: -90,
+      stage: 0
+    },
+    {
+      id: `${prefix}glue`,
+      parentId: `${prefix}side-left`,
+      outline: [a(x1, top), a(0, top + taper), a(0, bot - taper), a(x1, bot)],
+      hingeA: a(x1, top),
+      hingeB: a(x1, bot),
+      foldAngle: -90,
+      stage: 0,
+      zOffset: layer
+    },
+    {
+      id: `${prefix}side-right`,
+      parentId: `${prefix}front`,
+      outline: r(x3, top, x4, bot),
+      hingeA: a(x3, top),
+      hingeB: a(x3, bot),
+      foldAngle: 90,
+      stage: 0
+    },
+    {
+      id: `${prefix}back`,
+      parentId: `${prefix}side-right`,
+      outline: r(x4, top, x5, bot),
+      hingeA: a(x4, top),
+      hingeB: a(x4, bot),
+      foldAngle: 90,
+      stage: 0
+    }
+  ];
+  const cut = (d) => ({ kind: "cut", d });
+  const crease = (d) => ({ kind: "crease", d });
+  const L = (x, y) => `${ox + x} ${oy + y}`;
+  const segments = [
+    cut(`M ${L(x1, top)} L ${L(0, top + taper)} L ${L(0, bot - taper)} L ${L(x1, bot)}`),
+    cut(`M ${L(x1, top)} L ${L(x5, top)}`),
+    cut(`M ${L(x1, bot)} L ${L(x5, bot)}`),
+    cut(`M ${L(x5, top)} L ${L(x5, bot)}`),
+    crease(`M ${L(x1, top)} L ${L(x1, bot)}`),
+    crease(`M ${L(x2, top)} L ${L(x2, bot)}`),
+    crease(`M ${L(x3, top)} L ${L(x3, bot)}`),
+    crease(`M ${L(x4, top)} L ${L(x4, bot)}`)
+  ];
+  return { panels, segments, bbox: { x0: ox, y0: oy, x1: ox + x5, y1: oy + bot } };
+}
+function generateSlideBox(box, mat) {
+  const { W, D, H } = box;
+  const t = mat.thickness;
+  const clear = 0.7;
+  const drawer = buildTrayPiece("d-", 0, 0, W, D, H, t, 1);
+  const drawerSize = trayPieceSize(W, D, H, t);
+  const sleeveWc = W + 2 * t + clear;
+  const sleeveDc = H + t + clear;
+  const sleeveLen = D + 2 * t;
+  const GAP2 = 14;
+  const bx = drawerSize.w + GAP2;
+  const sleeve = buildSleevePiece("s-", bx, 0, sleeveWc, sleeveDc, sleeveLen, t);
+  const panels = [...drawer.panels, ...sleeve.panels];
+  const segments = [...drawer.segments, ...sleeve.segments];
+  const width = sleeve.bbox.x1;
+  const height = Math.max(drawer.bbox.y1, sleeve.bbox.y1);
+  const dims = [
+    { a: P(drawer.bbox.x0, height + 12), b: P(drawer.bbox.x1, height + 12), label: `\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 ${fmt(W)}\xD7${fmt(D)}\xD7${fmt(H)}` },
+    { a: P(sleeve.bbox.x0, height + 12), b: P(sleeve.bbox.x1, height + 12), label: `\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21` }
+  ];
+  return { width, height, segments, panels, dims };
+}
+
+// src/core/templates/wedge.ts
+function generateWedgeBox(box, _mat) {
+  const { W, D, H } = box;
+  const slant = Math.hypot(D, H);
+  const topFold = 90 + Math.atan2(D, H) * 180 / Math.PI;
+  const PAD = 7;
+  const cx0 = H + PAD;
+  const cx1 = cx0 + W;
+  const ty = PAD;
+  const fy = ty + slant;
+  const by0 = fy + H;
+  const by1 = by0 + D;
+  const width = cx1 + H + PAD;
+  const height = by1 + PAD;
+  const panels = [
+    { id: "base", parentId: null, outline: rect(cx0, by0, cx1, by1), stage: 0 },
+    {
+      id: "back",
+      parentId: "base",
+      outline: rect(cx0, fy, cx1, by0),
+      hingeA: P(cx0, by0),
+      hingeB: P(cx1, by0),
+      foldAngle: 90,
+      stage: 0
+    },
+    {
+      id: "top",
+      parentId: "back",
+      outline: rect(cx0, ty, cx1, fy),
+      hingeA: P(cx0, fy),
+      hingeB: P(cx1, fy),
+      foldAngle: topFold,
+      stage: 1
+    },
+    {
+      id: "side-left",
+      parentId: "base",
+      outline: [P(cx0, by0), P(cx0, by1), P(cx0 - H, by0)],
+      hingeA: P(cx0, by0),
+      hingeB: P(cx0, by1),
+      foldAngle: 90,
+      stage: 0
+    },
+    {
+      id: "side-right",
+      parentId: "base",
+      outline: [P(cx1, by0), P(cx1, by1), P(cx1 + H, by0)],
+      hingeA: P(cx1, by0),
+      hingeB: P(cx1, by1),
+      foldAngle: -90,
+      stage: 0
+    }
+  ];
+  const cut = (d) => ({ kind: "cut", d });
+  const crease = (d) => ({ kind: "crease", d });
+  const segments = [
+    cut(`M ${cx0} ${ty} L ${cx1} ${ty}`),
+    // ขอบบนฝา
+    cut(`M ${cx1} ${ty} L ${cx1} ${fy}`),
+    // ขอบขวาฝา
+    cut(`M ${cx1} ${fy} L ${cx1 + H} ${by0} L ${cx1} ${by1}`),
+    // สามเหลี่ยมขวา (ผ่านยอด)
+    cut(`M ${cx1} ${by1} L ${cx0} ${by1}`),
+    // ขอบล่างฐาน
+    cut(`M ${cx0} ${by1} L ${cx0 - H} ${by0} L ${cx0} ${fy}`),
+    // สามเหลี่ยมซ้าย
+    cut(`M ${cx0} ${fy} L ${cx0} ${ty}`),
+    // ขอบซ้ายฝา
+    crease(`M ${cx0} ${fy} L ${cx1} ${fy}`),
+    // ผนังหลัง|ฝา
+    crease(`M ${cx0} ${by0} L ${cx1} ${by0}`),
+    // ฐาน|ผนังหลัง
+    crease(`M ${cx0} ${by0} L ${cx0} ${by1}`),
+    // ฐาน|สามเหลี่ยมซ้าย
+    crease(`M ${cx1} ${by0} L ${cx1} ${by1}`)
+    // ฐาน|สามเหลี่ยมขวา
+  ];
+  const dims = [
+    { a: P(cx0, by1 + 4), b: P(cx1, by1 + 4), label: `W ${fmt(W)}` },
+    { a: P(width - 2, by0), b: P(width - 2, by1), label: `D ${fmt(D)}` },
+    { a: P(cx0 - H - 2, fy), b: P(cx0 - H - 2, by0), label: `H ${fmt(H)}` }
+  ];
+  return { width, height, segments, panels, dims };
+}
+
 // src/core/templates/index.ts
 var TEMPLATES = [
   {
@@ -14209,6 +14388,26 @@ var TEMPLATES = [
     generate: generateLidBox
   },
   {
+    id: "slide-box",
+    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E2A\u0E44\u0E25\u0E14\u0E4C (matchbox)",
+    detail: "\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (\u0E16\u0E32\u0E14) \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E40\u0E02\u0E49\u0E32-\u0E2D\u0E2D\u0E01\u0E43\u0E19\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E20\u0E32\u0E22\u0E19\u0E2D\u0E01 2 \u0E0A\u0E34\u0E49\u0E19 \u2014 \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E1B\u0E23\u0E30\u0E14\u0E31\u0E1A/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E25\u0E47\u0E01/\u0E44\u0E21\u0E49\u0E02\u0E35\u0E14",
+    defaults: { W: 90, D: 120, H: 35 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.H + m.thickness,
+    generate: generateSlideBox
+  },
+  {
+    id: "wedge",
+    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E41\u0E0B\u0E19\u0E27\u0E34\u0E0A (wedge)",
+    detail: "\u0E1B\u0E23\u0E34\u0E0B\u0E36\u0E21\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21 \u0E10\u0E32\u0E19+\u0E1C\u0E19\u0E31\u0E07\u0E2B\u0E25\u0E31\u0E07+\u0E1D\u0E32\u0E40\u0E09\u0E35\u0E22\u0E07+\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21 \u2014 \u0E43\u0E2A\u0E48\u0E41\u0E0B\u0E19\u0E27\u0E34\u0E0A/\u0E02\u0E19\u0E21\u0E0A\u0E34\u0E49\u0E19\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21",
+    defaults: { W: 120, D: 110, H: 80 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.H + m.thickness,
+    generate: generateWedgeBox
+  },
+  {
     id: "tray",
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E16\u0E32\u0E14 (open tray)",
     detail: "\u0E16\u0E32\u0E14\u0E40\u0E1B\u0E34\u0E14\u0E1A\u0E19 \u0E1C\u0E19\u0E31\u0E07 4 \u0E14\u0E49\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19 \u0E21\u0E38\u0E21\u0E21\u0E35\u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u2014 \u0E16\u0E32\u0E14\u0E2D\u0E32\u0E2B\u0E32\u0E23/\u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C \u0E2B\u0E23\u0E37\u0E2D\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01\u0E04\u0E39\u0E48\u0E01\u0E31\u0E1A sleeve",
@@ -14276,6 +14475,8 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
 ## \u0E04\u0E27\u0E32\u0E21\u0E2B\u0E21\u0E32\u0E22\u0E02\u0E2D\u0E07 W/D/H \u0E15\u0E48\u0E2D template (\u0E2A\u0E33\u0E04\u0E31\u0E0D)
 - tuck-end / mailer / fefco-0427 / tray / gable / lid-box: W\xD7D = footprint \u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19
 - lid-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A): \u0E10\u0E32\u0E19\u0E16\u0E32\u0E14\u0E25\u0E36\u0E01 + \u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E16\u0E32\u0E14\u0E15\u0E37\u0E49\u0E19\u0E2A\u0E27\u0E21\u0E17\u0E31\u0E1A (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E10\u0E32\u0E19; \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1D\u0E32\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 (\u0E01\u0E27\u0E49\u0E32\u0E07/\u0E25\u0E36\u0E01\u0E01\u0E27\u0E48\u0E32\u0E40\u0E25\u0E47\u0E01\u0E19\u0E49\u0E2D\u0E22 \u0E2A\u0E39\u0E07 ~40%), handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E23\u0E2D\u0E07\u0E40\u0E17\u0E49\u0E32/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E41\u0E22\u0E01\u0E0A\u0E34\u0E49\u0E19
+- slide-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E2A\u0E44\u0E25\u0E14\u0E4C/matchbox): \u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (\u0E16\u0E32\u0E14) \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E40\u0E02\u0E49\u0E32-\u0E2D\u0E2D\u0E01\u0E43\u0E19\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E20\u0E32\u0E22\u0E19\u0E2D\u0E01 (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (D = \u0E17\u0E34\u0E28\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19), \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E1B\u0E23\u0E30\u0E14\u0E31\u0E1A/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E25\u0E47\u0E01/\u0E44\u0E21\u0E49\u0E02\u0E35\u0E14
+- wedge (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E41\u0E0B\u0E19\u0E27\u0E34\u0E0A): \u0E1B\u0E23\u0E34\u0E0B\u0E36\u0E21\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21\u0E21\u0E38\u0E21\u0E09\u0E32\u0E01 (\u0E10\u0E32\u0E19+\u0E1C\u0E19\u0E31\u0E07\u0E2B\u0E25\u0E31\u0E07+\u0E1D\u0E32\u0E40\u0E09\u0E35\u0E22\u0E07+\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21) \u2014 W = \u0E01\u0E27\u0E49\u0E32\u0E07, D = \u0E25\u0E36\u0E01\u0E10\u0E32\u0E19, H = \u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07\u0E2B\u0E25\u0E31\u0E07, handle=false; \u0E43\u0E0A\u0E49\u0E43\u0E2A\u0E48\u0E41\u0E0B\u0E19\u0E27\u0E34\u0E0A/\u0E02\u0E19\u0E21/\u0E02\u0E2D\u0E07\u0E17\u0E23\u0E07\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21
 - gable: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E04\u0E32\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27 \u0E10\u0E32\u0E19\u0E15\u0E31\u0E19 \u0E1C\u0E19\u0E31\u0E07 4 \u0E14\u0E49\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19 \u0E41\u0E1C\u0E07\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E40\u0E2D\u0E35\u0E22\u0E07\u0E21\u0E32\u0E0A\u0E19\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E31\u0E19 \u0E21\u0E35\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E17\u0E35\u0E48\u0E22\u0E2D\u0E14 = \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E43\u0E19\u0E15\u0E31\u0E27 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false \u2014 \u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E40\u0E08\u0E32\u0E30\u0E40\u0E1E\u0E34\u0E48\u0E21); H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 \u0E23\u0E30\u0E1A\u0E1A\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E04\u0E32\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21
 - tray: \u0E16\u0E32\u0E14\u0E40\u0E1B\u0E34\u0E14\u0E1A\u0E19 (\u0E44\u0E21\u0E48\u0E21\u0E35\u0E1D\u0E32) \u0E1C\u0E19\u0E31\u0E07 4 \u0E14\u0E49\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19 \u0E21\u0E38\u0E21\u0E21\u0E35\u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u2014 H \u0E04\u0E37\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 (\u0E16\u0E32\u0E14\u0E21\u0E31\u0E01\u0E15\u0E37\u0E49\u0E19); \u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (handle=false); \u0E43\u0E0A\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E16\u0E32\u0E14/\u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C \u0E2B\u0E23\u0E37\u0E2D\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01\u0E04\u0E39\u0E48\u0E01\u0E31\u0E1A sleeve
 - fefco-0427: \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 (roll end) + \u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E10\u0E32\u0E19 \u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49\u0E01\u0E32\u0E27 \u2014 \u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48\u0E01\u0E27\u0E49\u0E32\u0E07\u0E01\u0E27\u0E48\u0E32 mailer \u0E18\u0E23\u0E23\u0E21\u0E14\u0E32 (\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E02\u0E49\u0E32\u0E07\u0E25\u0E30 ~H) \u0E41\u0E25\u0E30\u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false)

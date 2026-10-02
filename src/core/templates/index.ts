@@ -10,6 +10,8 @@ import { generateRSCBox } from './rsc'
 import { generateCard } from './card'
 import { generateSticker } from './sticker'
 import { generateLidBox } from './lidBox'
+import { generateSlideBox } from './slideBox'
+import { generateWedgeBox } from './wedge'
 
 export interface BoxTemplate {
   id: string
@@ -97,6 +99,26 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: false,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateLidBox,
+  },
+  {
+    id: 'slide-box',
+    nameTh: 'กล่องฝาสไลด์ (matchbox)',
+    detail: 'ลิ้นชัก (ถาด) เลื่อนเข้า-ออกในปลอกสวมภายนอก 2 ชิ้น — กล่องเครื่องประดับ/ของขวัญชิ้นเล็ก/ไม้ขีด',
+    defaults: { W: 90, D: 120, H: 35 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.H + m.thickness,
+    generate: generateSlideBox,
+  },
+  {
+    id: 'wedge',
+    nameTh: 'กล่องแซนวิช (wedge)',
+    detail: 'ปริซึมสามเหลี่ยม ฐาน+ผนังหลัง+ฝาเฉียง+ผนังข้างสามเหลี่ยม — ใส่แซนวิช/ขนมชิ้นสามเหลี่ยม',
+    defaults: { W: 120, D: 110, H: 80 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.H + m.thickness,
+    generate: generateWedgeBox,
   },
   {
     id: 'tray',
