@@ -56531,6 +56531,222 @@ function generateDisplayBox(box, _mat) {
   return { width, height, segments, panels, dims };
 }
 
+// src/core/templates/fefco0215.ts
+function generateFefco0215(box, mat) {
+  const { W, D, H } = box;
+  const t = mat.thickness;
+  const Wp = W + 2 * t;
+  const Dp = D + 2 * t;
+  const Hp = H + 2 * t;
+  const glueW = Math.max(12, 10 + 2 * t);
+  const taper = 4;
+  const cover = Math.max(6, Dp - t);
+  const tongue = Math.min(22, Math.max(10, 0.6 * Dp));
+  const dustIn = Math.max(1.5, 2 * t + 0.5);
+  const tuckIn = Math.max(1, t + 0.5);
+  const dustH = Math.max(8, Math.min(0.75 * Dp, Wp / 2 - dustIn - 2) - t);
+  const slant = Math.min(5, dustH * 0.45);
+  const layer = t + 0.05;
+  const x1 = glueW;
+  const x2 = x1 + Dp;
+  const x3 = x2 + Wp;
+  const x4 = x3 + Dp;
+  const x5 = x4 + Wp;
+  const baseLR = Dp * 0.5;
+  const baseFB = Dp * 0.62;
+  const lrSlant = Math.min(6, baseLR * 0.4);
+  const top = cover + tongue;
+  const bot = top + Hp;
+  const width = x5;
+  const height = bot + baseFB + 4;
+  const tiTop = top - cover;
+  const r = Math.min(7, tongue * 0.45, (Wp - 2 * tuckIn) / 2);
+  const rect2 = (xa, ya, xb, yb) => [
+    P(xa, ya),
+    P(xb, ya),
+    P(xb, yb),
+    P(xa, yb)
+  ];
+  const dust = (xa, xb, y, dir) => [
+    P(xa + dustIn, y),
+    P(xa + dustIn + slant, y + dir * dustH),
+    P(xb - dustIn - slant, y + dir * dustH),
+    P(xb - dustIn, y)
+  ];
+  const baseFlap = (xa, xb, depth) => [
+    P(xa + dustIn, bot),
+    P(xa + dustIn + lrSlant, bot + depth),
+    P(xb - dustIn - lrSlant, bot + depth),
+    P(xb - dustIn, bot)
+  ];
+  const tongueTopOutline = [
+    P(x4 + tuckIn, tiTop),
+    ...arcPts(x4 + tuckIn + r, tiTop - tongue + r, r, Math.PI, Math.PI * 1.5),
+    ...arcPts(x5 - tuckIn - r, tiTop - tongue + r, r, Math.PI * 1.5, Math.PI * 2),
+    P(x5 - tuckIn, tiTop)
+  ];
+  const panels = [
+    { id: "front", parentId: null, outline: rect2(x2, top, x3, bot), stage: 0 },
+    {
+      id: "side-left",
+      parentId: "front",
+      outline: rect2(x1, top, x2, bot),
+      hingeA: P(x2, top),
+      hingeB: P(x2, bot),
+      foldAngle: -90,
+      stage: 0
+    },
+    {
+      id: "glue",
+      parentId: "side-left",
+      outline: [P(x1, top), P(0, top + taper), P(0, bot - taper), P(x1, bot)],
+      hingeA: P(x1, top),
+      hingeB: P(x1, bot),
+      foldAngle: -90,
+      stage: 0,
+      zOffset: layer
+    },
+    {
+      id: "side-right",
+      parentId: "front",
+      outline: rect2(x3, top, x4, bot),
+      hingeA: P(x3, top),
+      hingeB: P(x3, bot),
+      foldAngle: 90,
+      stage: 0
+    },
+    {
+      id: "back",
+      parentId: "side-right",
+      outline: rect2(x4, top, x5, bot),
+      hingeA: P(x4, top),
+      hingeB: P(x4, bot),
+      foldAngle: 90,
+      stage: 0
+    },
+    // --- ฝาเสียบบน ---
+    {
+      id: "dust-tl",
+      parentId: "side-left",
+      outline: dust(x1, x2, top, -1),
+      hingeA: P(x1, top),
+      hingeB: P(x2, top),
+      foldAngle: 90,
+      stage: 1,
+      zOffset: layer
+    },
+    {
+      id: "dust-tr",
+      parentId: "side-right",
+      outline: dust(x3, x4, top, -1),
+      hingeA: P(x3, top),
+      hingeB: P(x4, top),
+      foldAngle: 90,
+      stage: 1,
+      zOffset: layer
+    },
+    {
+      id: "tuck-top",
+      parentId: "back",
+      outline: rect2(x4 + tuckIn, tiTop, x5 - tuckIn, top),
+      hingeA: P(x4, top),
+      hingeB: P(x5, top),
+      foldAngle: 90,
+      stage: 2
+    },
+    {
+      id: "tongue-top",
+      parentId: "tuck-top",
+      outline: tongueTopOutline,
+      hingeA: P(x4 + tuckIn, tiTop),
+      hingeB: P(x5 - tuckIn, tiTop),
+      foldAngle: 90,
+      stage: 3,
+      zOffset: 0.15
+    },
+    // --- ก้น auto-lock: ลิ้นข้างก่อน (stage 1) แล้วลิ้นหน้า-หลังทับ (stage 2) ---
+    {
+      id: "base-left",
+      parentId: "side-left",
+      outline: baseFlap(x1, x2, baseLR),
+      hingeA: P(x1, bot),
+      hingeB: P(x2, bot),
+      foldAngle: -90,
+      stage: 1,
+      zOffset: layer
+    },
+    {
+      id: "base-right",
+      parentId: "side-right",
+      outline: baseFlap(x3, x4, baseLR),
+      hingeA: P(x3, bot),
+      hingeB: P(x4, bot),
+      foldAngle: -90,
+      stage: 1,
+      zOffset: layer
+    },
+    {
+      id: "base-front",
+      parentId: "front",
+      outline: baseFlap(x2, x3, baseFB),
+      hingeA: P(x2, bot),
+      hingeB: P(x3, bot),
+      foldAngle: -90,
+      stage: 2,
+      zOffset: 2 * layer
+    },
+    {
+      id: "base-back",
+      parentId: "back",
+      outline: baseFlap(x4, x5, baseFB),
+      hingeA: P(x4, bot),
+      hingeB: P(x5, bot),
+      foldAngle: -90,
+      stage: 2,
+      zOffset: 2 * layer
+    }
+  ];
+  const cut = (d) => ({ kind: "cut", d });
+  const crease = (d) => ({ kind: "crease", d });
+  const dustCut = (xa, xb, y, dir) => `M ${xa} ${y} L ${xa + dustIn} ${y} L ${xa + dustIn + slant} ${y + dir * dustH} L ${xb - dustIn - slant} ${y + dir * dustH} L ${xb - dustIn} ${y} L ${xb} ${y}`;
+  const baseCut = (xa, xb, depth) => `M ${xa} ${bot} L ${xa + dustIn} ${bot} L ${xa + dustIn + lrSlant} ${bot + depth} L ${xb - dustIn - lrSlant} ${bot + depth} L ${xb - dustIn} ${bot} L ${xb} ${bot}`;
+  const tuckCut = (y) => {
+    const yi = y - cover;
+    const yt = yi - tongue;
+    return `M ${x4} ${y} L ${x4 + tuckIn} ${y} L ${x4 + tuckIn} ${yi} L ${x4 + tuckIn} ${yt + r} Q ${x4 + tuckIn} ${yt} ${x4 + tuckIn + r} ${yt} L ${x5 - tuckIn - r} ${yt} Q ${x5 - tuckIn} ${yt} ${x5 - tuckIn} ${yt + r} L ${x5 - tuckIn} ${yi} L ${x5 - tuckIn} ${y} L ${x5} ${y}`;
+  };
+  const segments = [
+    cut(`M ${x1} ${top} L 0 ${top + taper} L 0 ${bot - taper} L ${x1} ${bot}`),
+    cut(`M ${x2} ${top} L ${x3} ${top}`),
+    cut(`M ${x5} ${top} L ${x5} ${bot}`),
+    cut(dustCut(x1, x2, top, -1)),
+    cut(dustCut(x3, x4, top, -1)),
+    cut(tuckCut(top)),
+    cut(baseCut(x1, x2, baseLR)),
+    cut(baseCut(x2, x3, baseFB)),
+    cut(baseCut(x3, x4, baseLR)),
+    cut(baseCut(x4, x5, baseFB)),
+    crease(`M ${x1} ${top} L ${x1} ${bot}`),
+    crease(`M ${x2} ${top} L ${x2} ${bot}`),
+    crease(`M ${x3} ${top} L ${x3} ${bot}`),
+    crease(`M ${x4} ${top} L ${x4} ${bot}`),
+    crease(`M ${x1 + dustIn} ${top} L ${x2 - dustIn} ${top}`),
+    crease(`M ${x3 + dustIn} ${top} L ${x4 - dustIn} ${top}`),
+    crease(`M ${x4 + tuckIn} ${top} L ${x5 - tuckIn} ${top}`),
+    crease(`M ${x4 + tuckIn} ${tiTop} L ${x5 - tuckIn} ${tiTop}`),
+    crease(`M ${x1 + dustIn} ${bot} L ${x2 - dustIn} ${bot}`),
+    crease(`M ${x2 + dustIn} ${bot} L ${x3 - dustIn} ${bot}`),
+    crease(`M ${x3 + dustIn} ${bot} L ${x4 - dustIn} ${bot}`),
+    crease(`M ${x4 + dustIn} ${bot} L ${x5 - dustIn} ${bot}`)
+  ];
+  const dims = [
+    { a: P(x2, bot + baseFB + 2), b: P(x3, bot + baseFB + 2), label: `W ${fmt(Wp)}` },
+    { a: P(x1, top - dustH - 8), b: P(x2, top - dustH - 8), label: `D ${fmt(Dp)}` },
+    { a: P(-8, top), b: P(-8, bot), label: `H ${fmt(Hp)}` }
+  ];
+  return { width, height, segments, panels, dims };
+}
+
 // src/core/templates/index.ts
 var TEMPLATES = [
   {
@@ -56565,6 +56781,16 @@ var TEMPLATES = [
     supportsVents: true,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateFefco0427
+  },
+  {
+    id: "fefco-0215",
+    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E1A\u0E19\u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01 (FEFCO 0215)",
+    detail: "\u0E1D\u0E32\u0E1A\u0E19\u0E40\u0E2A\u0E35\u0E22\u0E1A + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 (snap-lock) \u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E40\u0E23\u0E47\u0E27\u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E17\u0E32\u0E01\u0E32\u0E27\u0E01\u0E49\u0E19 \u2014 \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E17\u0E25\u0E22\u0E2D\u0E14\u0E19\u0E34\u0E22\u0E21",
+    defaults: { W: 90, D: 60, H: 150 },
+    tilt: 0,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
+    generate: generateFefco0215
   },
   {
     id: "rsc",
@@ -57267,7 +57493,8 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
 \u0E41\u0E19\u0E27\u0E01\u0E32\u0E23\u0E40\u0E25\u0E37\u0E2D\u0E01: \u0E02\u0E2D\u0E07\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E14\u0E35\u0E22\u0E27/\u0E41\u0E19\u0E27\u0E15\u0E31\u0E49\u0E07/\u0E23\u0E35\u0E40\u0E17\u0E25 \u2192 tuck-end; \u0E2A\u0E48\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C/\u0E02\u0E2D\u0E07\u0E2B\u0E25\u0E32\u0E22\u0E0A\u0E34\u0E49\u0E19/\u0E02\u0E2D\u0E07\u0E41\u0E1A\u0E19/\u0E40\u0E1B\u0E34\u0E14\u0E07\u0E48\u0E32\u0E22 \u2192 mailer; \u0E07\u0E32\u0E19\u0E2A\u0E48\u0E07\u0E17\u0E35\u0E48\u0E40\u0E19\u0E49\u0E19\u0E41\u0E02\u0E47\u0E07\u0E41\u0E23\u0E07/\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21/\u0E1C\u0E25\u0E34\u0E15\u0E08\u0E33\u0E19\u0E27\u0E19\u0E21\u0E32\u0E01\u0E41\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49\u0E01\u0E32\u0E27 (subscription box, \u0E02\u0E2D\u0E07\u0E41\u0E15\u0E01\u0E07\u0E48\u0E32\u0E22) \u2192 fefco-0427; \u0E0A\u0E38\u0E14\u0E02\u0E27\u0E14/\u0E01\u0E23\u0E30\u0E1B\u0E4B\u0E2D\u0E07\u0E2B\u0E25\u0E32\u0E22\u0E43\u0E1A\u0E41\u0E1A\u0E1A\u0E22\u0E01\u0E2B\u0E34\u0E49\u0E27 (4-pack, 6-pack, \u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E42\u0E0A\u0E27\u0E4C\u0E02\u0E27\u0E14) \u2192 bottle-carrier; \u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E04\u0E38\u0E01\u0E01\u0E35\u0E49/\u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E32\u0E01\u0E44\u0E14\u0E49\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27 (\u0E16\u0E37\u0E2D\u0E2A\u0E27\u0E22) \u2192 gable; \u0E16\u0E32\u0E14\u0E2D\u0E32\u0E2B\u0E32\u0E23/\u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C/\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 \u2192 tray; \u0E41\u0E04\u0E48\u0E1B\u0E25\u0E2D\u0E01\u0E23\u0E31\u0E14\u0E23\u0E2D\u0E1A\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E17\u0E35\u0E48\u0E21\u0E35\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2D\u0E22\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27 \u2192 sleeve. \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A mailer/fefco-0427: H \u0E04\u0E37\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07 (\u0E21\u0E31\u0E01\u0E40\u0E15\u0E35\u0E49\u0E22 \u0E40\u0E0A\u0E48\u0E19 40-80) \u0E2A\u0E48\u0E27\u0E19 W\xD7D \u0E04\u0E37\u0E2D footprint; \u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23/business card \u2192 card
 
 ## \u0E04\u0E27\u0E32\u0E21\u0E2B\u0E21\u0E32\u0E22\u0E02\u0E2D\u0E07 W/D/H \u0E15\u0E48\u0E2D template (\u0E2A\u0E33\u0E04\u0E31\u0E0D)
-- tuck-end / mailer / fefco-0427 / tray / gable / lid-box: W\xD7D = footprint \u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19
+- tuck-end / fefco-0215 / mailer / fefco-0427 / tray / gable / lid-box: W\xD7D = footprint \u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19
+- fefco-0215: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E1A\u0E19\u0E40\u0E2A\u0E35\u0E22\u0E1A + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 (snap/crash-lock bottom) \u2014 \u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E40\u0E23\u0E47\u0E27 \u0E01\u0E49\u0E19\u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E17\u0E32\u0E01\u0E32\u0E27\u0E17\u0E35\u0E25\u0E30\u0E43\u0E1A; \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E17\u0E25\u0E22\u0E2D\u0E14\u0E19\u0E34\u0E22\u0E21 (\u0E02\u0E2D\u0E07\u0E0A\u0E33/\u0E02\u0E19\u0E21/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07); handle=false
 - lid-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A): \u0E10\u0E32\u0E19\u0E16\u0E32\u0E14\u0E25\u0E36\u0E01 + \u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E16\u0E32\u0E14\u0E15\u0E37\u0E49\u0E19\u0E2A\u0E27\u0E21\u0E17\u0E31\u0E1A (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E10\u0E32\u0E19; \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1D\u0E32\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 (\u0E01\u0E27\u0E49\u0E32\u0E07/\u0E25\u0E36\u0E01\u0E01\u0E27\u0E48\u0E32\u0E40\u0E25\u0E47\u0E01\u0E19\u0E49\u0E2D\u0E22 \u0E2A\u0E39\u0E07 ~40%), handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E23\u0E2D\u0E07\u0E40\u0E17\u0E49\u0E32/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E41\u0E22\u0E01\u0E0A\u0E34\u0E49\u0E19
 - slide-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E2A\u0E44\u0E25\u0E14\u0E4C/matchbox): \u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (\u0E16\u0E32\u0E14) \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E40\u0E02\u0E49\u0E32-\u0E2D\u0E2D\u0E01\u0E43\u0E19\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E20\u0E32\u0E22\u0E19\u0E2D\u0E01 (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (D = \u0E17\u0E34\u0E28\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19), \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E1B\u0E23\u0E30\u0E14\u0E31\u0E1A/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E25\u0E47\u0E01/\u0E44\u0E21\u0E49\u0E02\u0E35\u0E14
 - display-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E02\u0E49\u0E32\u0E07/\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07): \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1B\u0E34\u0E14 5 \u0E14\u0E49\u0E32\u0E19 + \u0E1D\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E44\u0E14\u0E49 \u0E40\u0E08\u0E32\u0E30\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32 \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E02\u0E2D\u0E07\u0E2A\u0E30\u0E2A\u0E21\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E40\u0E2B\u0E47\u0E19\u0E02\u0E49\u0E32\u0E07\u0E43\u0E19

@@ -12,6 +12,7 @@ import { generateSticker } from './sticker'
 import { generateLidBox } from './lidBox'
 import { generateSlideBox } from './slideBox'
 import { generateDisplayBox } from './displayBox'
+import { generateFefco0215 } from './fefco0215'
 // import { generateWedgeBox } from './wedge' // กล่องแซนวิช — ซ่อนไว้ก่อน (re-add เมื่อเปิดใช้)
 
 export interface BoxTemplate {
@@ -59,6 +60,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsVents: true,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateFefco0427,
+  },
+  {
+    id: 'fefco-0215',
+    nameTh: 'กล่องฝาบนก้นล็อก (FEFCO 0215)',
+    detail: 'ฝาบนเสียบ + ก้นล็อกอัตโนมัติ (snap-lock) ประกอบเร็วไม่ต้องทากาวก้น — กล่องรีเทลยอดนิยม',
+    defaults: { W: 90, D: 60, H: 150 },
+    tilt: 0,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
+    generate: generateFefco0215,
   },
   {
     id: 'rsc',
