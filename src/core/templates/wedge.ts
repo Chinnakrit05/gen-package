@@ -9,7 +9,9 @@ import { P, fmt, rect } from './shared'
 export function generateWedgeBox(box: BoxParams, _mat: Material): Dieline {
   const { W, D, H } = box
   const slant = Math.hypot(D, H) // ความยาวฝาเฉียง
-  const topFold = 90 + (Math.atan2(D, H) * 180) / Math.PI // มุมพับฝาเฉียง (จากผนังหลังมาชนหน้า)
+  // มุมพับฝาเฉียง: หลังพับผนังหลังตั้งขึ้น ฝาชี้ขึ้นตรง ต้องหมุนมาชนขอบหน้าพอดี
+  // ปลายฝาต้องลงที่ (ลึก D, สูง 0) → หมุน φ โดย sinφ=D/slant, cosφ=-H/slant → φ = 180° − atan(D/H)
+  const topFold = 180 - (Math.atan2(D, H) * 180) / Math.PI
 
   const PAD = 7 // เผื่อขอบทุกด้าน กันมุมแหลมสามเหลี่ยมข้างทำ bleed miter ล้นขอบแผ่น
   const cx0 = H + PAD // เว้นซ้ายให้สามเหลี่ยมข้าง
