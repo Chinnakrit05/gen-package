@@ -20,6 +20,7 @@ import {
 } from '../core/artwork'
 import { computeMatrices, rollBeads } from '../core/fold'
 import { assignOuterFaceGroups } from '../core/panelFaces'
+import { DimBadge3D, type Dim3D } from './DimBadge3D'
 
 // วาดองค์ประกอบ (รูป/ข้อความ) ลง ctx ในพิกัดแผ่นคลี่ (สเกล s) พร้อมหมุนรอบจุดกึ่งกลาง
 // ใช้พิกัดชุดเดียวกับ blueprint (y ชี้ลง, มุมหมุนตามเข็ม) เพื่อให้จอสองฝั่งตรงกัน
@@ -290,9 +291,11 @@ interface ModelProps {
   decos?: Deco[]
   fillColor?: string | null
   fillImage?: FillImage | null
+  dims?: Dim3D[]
+  imperial?: boolean
 }
 
-function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillImage }: ModelProps) {
+function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillImage, dims, imperial }: ModelProps) {
   const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage)
 
   const geoms = useMemo(
@@ -347,33 +350,38 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillIm
   const cx = (Math.min(...xs) + Math.max(...xs)) / 2
   const cy = (Math.min(...ys) + Math.max(...ys)) / 2
 
+  const modelRef = useRef<THREE.Group>(null)
+
   // เอียงโมเดลตามจังหวะพับ (เช่น mailer พับเสร็จแล้วฐานควรอยู่ล่าง)
   // scale x=-1: พลิกให้กล้องมอง "ฝั่งพิมพ์/ด้านนอก" ตำแหน่งลาย ซ้าย-ขวา จึงตรงกับ blueprint
   return (
-    <group scale={[-1, 1, 1]} rotation={[tilt * fold, 0, 0]}>
-      <group position={[-cx, cy, -depth / 2]}>
-        {dieline.panels.map((p, i) => (
-          <PanelMesh
-            key={p.id}
-            geometry={geoms[i].geo}
-            edges={geoms[i].edges}
-            matrix={matrices.get(p.id)!}
-            mat={mat}
-            tex={tex}
-          />
-        ))}
-        {beads.map((bd) => (
-          <Bead key={bd.id} a={bd.a} b={bd.b} r={bd.r} mat={mat} />
-        ))}
+    <>
+      <group ref={modelRef} scale={[-1, 1, 1]} rotation={[tilt * fold, 0, 0]}>
+        <group position={[-cx, cy, -depth / 2]}>
+          {dieline.panels.map((p, i) => (
+            <PanelMesh
+              key={p.id}
+              geometry={geoms[i].geo}
+              edges={geoms[i].edges}
+              matrix={matrices.get(p.id)!}
+              mat={mat}
+              tex={tex}
+            />
+          ))}
+          {beads.map((bd) => (
+            <Bead key={bd.id} a={bd.a} b={bd.b} r={bd.r} mat={mat} />
+          ))}
+        </group>
       </group>
-    </group>
+      {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} />}
+    </>
   )
 }
 
 // นามบัตรใน 3D = การ์ดใบเดียว (แผ่นบาง) พิมพ์ลายหน้าที่ +Z และลายหลังที่ -Z
 // ลายมาจาก texture แผ่นคลี่ผืนเดียวกับ blueprint (หน้าอยู่ช่วง x ซ้าย, หลังอยู่ช่วง x ขวา)
 // จึงคำนวณ UV ของแต่ละหน้าให้ชี้ไปช่วง x ของหน้านั้น ๆ — หลังกลับ (หมุนรอบแกน Y) ให้อ่านถูกด้าน
-function CardModel({ dieline, mat, decos, fillColor, fillImage }: ModelProps) {
+function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial }: ModelProps) {
   const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage)
   const front = dieline.panels[0]
   const back = dieline.panels[1]
@@ -428,22 +436,27 @@ function CardModel({ dieline, mat, decos, fillColor, fillImage }: ModelProps) {
     if (backMat.current) backMat.current.needsUpdate = true
   }, [hasTex])
 
+  const modelRef = useRef<THREE.Group>(null)
+
   return (
-    <group>
-      {/* ตัวการ์ด: ความหนา + ขอบกระดาษ สีวัสดุล้วน */}
-      <mesh>
-        <boxGeometry args={[w, h, t]} />
-        <meshStandardMaterial color={mat.color} roughness={rough} metalness={0} />
-      </mesh>
-      {/* ด้านหน้า (+Z) */}
-      <mesh geometry={frontGeo} position={[0, 0, t / 2 + eps]}>
-        <meshStandardMaterial ref={frontMat} map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
-      </mesh>
-      {/* ด้านหลัง (-Z) — หมุน 180° รอบแกน Y ให้ลายอ่านถูกด้านเมื่อพลิกการ์ด */}
-      <mesh geometry={backGeo} position={[0, 0, -t / 2 - eps]} rotation={[0, Math.PI, 0]}>
-        <meshStandardMaterial ref={backMat} map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
-      </mesh>
-    </group>
+    <>
+      <group ref={modelRef}>
+        {/* ตัวการ์ด: ความหนา + ขอบกระดาษ สีวัสดุล้วน */}
+        <mesh>
+          <boxGeometry args={[w, h, t]} />
+          <meshStandardMaterial color={mat.color} roughness={rough} metalness={0} />
+        </mesh>
+        {/* ด้านหน้า (+Z) */}
+        <mesh geometry={frontGeo} position={[0, 0, t / 2 + eps]}>
+          <meshStandardMaterial ref={frontMat} map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
+        </mesh>
+        {/* ด้านหลัง (-Z) — หมุน 180° รอบแกน Y ให้ลายอ่านถูกด้านเมื่อพลิกการ์ด */}
+        <mesh geometry={backGeo} position={[0, 0, -t / 2 - eps]} rotation={[0, Math.PI, 0]}>
+          <meshStandardMaterial ref={backMat} map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
+        </mesh>
+      </group>
+      {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} />}
+    </>
   )
 }
 

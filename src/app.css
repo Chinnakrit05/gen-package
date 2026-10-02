@@ -2682,6 +2682,37 @@ aside .art-actions .file-pick:only-child {
   font-size: 13px;
 }
 
+/* ป้ายขนาด กว้าง/ลึก/สูง ที่ลอยเหนือโมเดล 3D (drei <Html>) */
+.dim3d-badge {
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 9px;
+  border-radius: 9px;
+  background: var(--surface-solid, #fff);
+  border: 1px solid var(--accent-border);
+  box-shadow: 0 3px 10px rgba(20, 18, 14, 0.18);
+  font-size: 11.5px;
+  line-height: 1.25;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+.dim3d-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dim3d-k {
+  color: var(--text-3);
+}
+.dim3d-v {
+  font-weight: 700;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- modal ตั้งชื่องาน --- */
 .modal-overlay {
   position: fixed;

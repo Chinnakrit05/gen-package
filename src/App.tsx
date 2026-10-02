@@ -101,6 +101,7 @@ const PouchViewer3D = lazy(() =>
   import('./components/PouchViewer3D').then((m) => ({ default: m.PouchViewer3D })),
 )
 import { DielineSVG } from './components/DielineSVG'
+import type { Dim3D } from './components/DimBadge3D'
 import { PromptBar } from './components/PromptBar'
 import { ColorField } from './components/ColorField'
 import { ProjectGallery } from './components/ProjectGallery'
@@ -2167,6 +2168,19 @@ export default function App({
   ) : null
 
   // มุมมอง 3D (ใช้ซ้ำได้ทั้งจอเล็ก PiP และจอหลักในแท็บออกแบบ)
+  // ป้ายขนาดบนมุมมอง 3D — ป้ายชื่อตามชนิดงาน (ภาชนะ W/D = เส้นผ่านศูนย์กลางตัว/ปาก)
+  const dims3d: Dim3D[] =
+    kind === 'vessel'
+      ? [
+          { label: '⌀ ตัว', mm: W },
+          { label: '⌀ ปาก', mm: D },
+          { label: 'สูง', mm: H },
+        ]
+      : [
+          { label: 'กว้าง', mm: W },
+          { label: 'ลึก', mm: D },
+          { label: 'สูง', mm: H },
+        ]
   const viewer3D = (
     <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
       {kind === 'box' ? (
@@ -2179,11 +2193,13 @@ export default function App({
           decos={decos}
           fillColor={fillColor}
           fillImage={fillImage}
+          dims={dims3d}
+          imperial={imperial}
         />
       ) : kind === 'vessel' ? (
-        <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} />
+        <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3d} imperial={imperial} />
       ) : (
-        <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} />
+        <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3d} imperial={imperial} />
       )}
     </Suspense>
   )

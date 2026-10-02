@@ -14,6 +14,7 @@ import {
   TINTIE_INSET,
 } from '../core/pouch'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
+import { DimBadge3D, type Dim3D } from './DimBadge3D'
 
 // พรีวิวถุงฟิล์มตั้งได้ (doypack): พื้นผิว loft หน้าตัดวงรีเปลี่ยนตามความสูง
 // ก้นแบนตั้งได้ พุงกลางป่อง ปากบนซีลแบน — ลาย (หน้า/หลัง) map ลงผิวถุงตรงกับ dieline
@@ -346,12 +347,16 @@ function PouchModel({
   decos,
   fillColor,
   fillImage,
+  dims,
+  imperial,
 }: {
   pouch: Pouch
   mat: Material
   decos: Deco[]
   fillColor: string | null | undefined
   fillImage: FillImage | null | undefined
+  dims?: Dim3D[]
+  imperial?: boolean
 }) {
   const tex = usePouchTexture(pouch, decos, fillColor, fillImage)
   const geo = usePouchGeometry(pouch)
@@ -388,8 +393,11 @@ function PouchModel({
   const ttZ = pouch.depth3D * pouchDepthFactor(ttV, pouch.style)
   const ttW = pouch.W * pouchWidthFactor(ttV, pouch.style) * 0.9
 
+  const modelRef = useRef<THREE.Group>(null)
+
   return (
-    <group position={[0, -pouch.H / 2, 0]}>
+    <>
+    <group ref={modelRef} position={[0, -pouch.H / 2, 0]}>
       <mesh geometry={geo}>
         {/* material 0 = ผิวข้าง (พิมพ์ลาย) */}
         <meshStandardMaterial
@@ -449,6 +457,8 @@ function PouchModel({
         </mesh>
       )}
     </group>
+    {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} />}
+    </>
   )
 }
 
@@ -458,12 +468,16 @@ export function PouchViewer3D({
   decos,
   fillColor,
   fillImage,
+  dims,
+  imperial,
 }: {
   pouch: Pouch
   mat: Material
   decos: Deco[]
   fillColor?: string | null
   fillImage?: FillImage | null
+  dims?: Dim3D[]
+  imperial?: boolean
 }) {
   const dist = Math.max(pouch.H, pouch.W) * 2.6
   return (
@@ -477,7 +491,7 @@ export function PouchViewer3D({
       <ambientLight intensity={0.85} />
       <directionalLight position={[250, 420, 300]} intensity={1.6} />
       <directionalLight position={[-220, 120, -260]} intensity={0.6} />
-      <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} />
+      <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} />
       <OrbitControls makeDefault enableDamping />
     </Canvas>
   )

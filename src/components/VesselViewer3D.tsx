@@ -6,6 +6,7 @@ import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
 import type { Vessel } from '../core/vessel'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
+import { DimBadge3D, type Dim3D } from './DimBadge3D'
 
 // พรีวิวภาชนะขึ้นรูป: โปรไฟล์หมุนรอบแกน (LatheGeometry) + ฉลากพันรอบตัว
 // ฉลากเป็นทรงกระบอกบาง ๆ ลอยเหนือผิว เท็กซ์เจอร์วาดจาก dieline ฉลาก (สีขาว = กระดาษฉลาก)
@@ -105,12 +106,16 @@ function VesselModel({
   decos,
   fillColor,
   fillImage,
+  dims,
+  imperial,
 }: {
   vessel: Vessel
   mat: Material
   decos: Deco[]
   fillColor: string | null | undefined
   fillImage: FillImage | null | undefined
+  dims?: Dim3D[]
+  imperial?: boolean
 }) {
   const tex = useLabelTexture(vessel, decos, fillColor, fillImage)
 
@@ -278,9 +283,12 @@ function VesselModel({
   // สีฝาหลอด — แยกจากตัวหลอดให้เห็นว่าเป็นคนละชิ้น (พลาสติกเงากว่า)
   const CAP_COLOR = '#b9b5ac'
 
+  const modelRef = useRef<THREE.Group>(null)
+
   return (
-    // จัดกึ่งกลางแนวตั้งให้หมุนรอบกลางลำตัว
-    <group position={[0, -vessel.H / 2, 0]}>
+    <>
+    {/* จัดกึ่งกลางแนวตั้งให้หมุนรอบกลางลำตัว */}
+    <group ref={modelRef} position={[0, -vessel.H / 2, 0]}>
       {/* ตัวภาชนะทรงหมุน — หลอดครีมไม่ใช้ (ฝา+ลำตัวเป็นชิ้นแยก) */}
       {!isTube && (
         <mesh geometry={body}>
@@ -315,6 +323,8 @@ function VesselModel({
         </mesh>
       )}
     </group>
+    {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} />}
+    </>
   )
 }
 
@@ -324,12 +334,16 @@ export function VesselViewer3D({
   decos,
   fillColor,
   fillImage,
+  dims,
+  imperial,
 }: {
   vessel: Vessel
   mat: Material
   decos: Deco[]
   fillColor?: string | null
   fillImage?: FillImage | null
+  dims?: Dim3D[]
+  imperial?: boolean
 }) {
   const dist = Math.max(vessel.H, vessel.labelR * 4) * 2.2
   return (
@@ -343,7 +357,7 @@ export function VesselViewer3D({
       <ambientLight intensity={0.85} />
       <directionalLight position={[250, 420, 300]} intensity={1.7} />
       <directionalLight position={[-220, 120, -260]} intensity={0.6} />
-      <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} />
+      <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} />
       <OrbitControls makeDefault enableDamping />
     </Canvas>
   )
