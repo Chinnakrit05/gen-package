@@ -14538,6 +14538,186 @@ function generateFefco0215(box, mat) {
   return { width, height, segments, panels, dims };
 }
 
+// src/core/templates/fefco0202.ts
+function generateFefco0202(box, mat) {
+  const { W, D, H } = box;
+  const t = mat.thickness;
+  const Wp = W + 2 * t;
+  const Dp = D + 2 * t;
+  const Hp = H + 2 * t;
+  const glueW = Math.max(12, 10 + 2 * t);
+  const taper = 4;
+  const fin = Math.max(1.5, t + 0.5);
+  const layer = t + 0.05;
+  const outerLen = Dp;
+  const innerLen = Math.max(6, Math.min(Dp / 2, Wp / 2 - fin));
+  const x1 = glueW;
+  const x2 = x1 + Dp;
+  const x3 = x2 + Wp;
+  const x4 = x3 + Dp;
+  const x5 = x4 + Wp;
+  const top = outerLen;
+  const bot = top + Hp;
+  const width = x5;
+  const height = bot + outerLen;
+  const panels = [
+    { id: "front", parentId: null, outline: rect(x2, top, x3, bot), stage: 0 },
+    {
+      id: "side-left",
+      parentId: "front",
+      outline: rect(x1, top, x2, bot),
+      hingeA: P(x2, top),
+      hingeB: P(x2, bot),
+      foldAngle: -90,
+      stage: 0
+    },
+    {
+      id: "glue",
+      parentId: "side-left",
+      outline: [P(x1, top), P(0, top + taper), P(0, bot - taper), P(x1, bot)],
+      hingeA: P(x1, top),
+      hingeB: P(x1, bot),
+      foldAngle: -90,
+      stage: 0,
+      zOffset: layer
+    },
+    {
+      id: "side-right",
+      parentId: "front",
+      outline: rect(x3, top, x4, bot),
+      hingeA: P(x3, top),
+      hingeB: P(x3, bot),
+      foldAngle: 90,
+      stage: 0
+    },
+    {
+      id: "back",
+      parentId: "side-right",
+      outline: rect(x4, top, x5, bot),
+      hingeA: P(x4, top),
+      hingeB: P(x4, bot),
+      foldAngle: 90,
+      stage: 0
+    },
+    // ลิ้นข้าง (inner) พับก่อน
+    {
+      id: "flap-t-sl",
+      parentId: "side-left",
+      outline: rect(x1 + fin, top - innerLen, x2 - fin, top),
+      hingeA: P(x1, top),
+      hingeB: P(x2, top),
+      foldAngle: 90,
+      stage: 1,
+      zOffset: layer
+    },
+    {
+      id: "flap-t-sr",
+      parentId: "side-right",
+      outline: rect(x3 + fin, top - innerLen, x4 - fin, top),
+      hingeA: P(x3, top),
+      hingeB: P(x4, top),
+      foldAngle: 90,
+      stage: 1,
+      zOffset: layer
+    },
+    {
+      id: "flap-b-sl",
+      parentId: "side-left",
+      outline: rect(x1 + fin, bot, x2 - fin, bot + innerLen),
+      hingeA: P(x1, bot),
+      hingeB: P(x2, bot),
+      foldAngle: -90,
+      stage: 1,
+      zOffset: layer
+    },
+    {
+      id: "flap-b-sr",
+      parentId: "side-right",
+      outline: rect(x3 + fin, bot, x4 - fin, bot + innerLen),
+      hingeA: P(x3, bot),
+      hingeB: P(x4, bot),
+      foldAngle: -90,
+      stage: 1,
+      zOffset: layer
+    },
+    // ลิ้นหน้า (outer เต็มลึก) พับก่อน แล้วลิ้นหลังพับทับบนสุด (เกยเต็ม)
+    {
+      id: "flap-t-front",
+      parentId: "front",
+      outline: rect(x2 + fin, top - outerLen, x3 - fin, top),
+      hingeA: P(x2, top),
+      hingeB: P(x3, top),
+      foldAngle: 90,
+      stage: 2,
+      zOffset: 2 * layer
+    },
+    {
+      id: "flap-t-back",
+      parentId: "back",
+      outline: rect(x4 + fin, top - outerLen, x5 - fin, top),
+      hingeA: P(x4, top),
+      hingeB: P(x5, top),
+      foldAngle: 90,
+      stage: 3,
+      zOffset: 3 * layer
+    },
+    {
+      id: "flap-b-front",
+      parentId: "front",
+      outline: rect(x2 + fin, bot, x3 - fin, bot + outerLen),
+      hingeA: P(x2, bot),
+      hingeB: P(x3, bot),
+      foldAngle: -90,
+      stage: 2,
+      zOffset: 2 * layer
+    },
+    {
+      id: "flap-b-back",
+      parentId: "back",
+      outline: rect(x4 + fin, bot, x5 - fin, bot + outerLen),
+      hingeA: P(x4, bot),
+      hingeB: P(x5, bot),
+      foldAngle: -90,
+      stage: 3,
+      zOffset: 3 * layer
+    }
+  ];
+  const cut = (d) => ({ kind: "cut", d });
+  const crease = (d) => ({ kind: "crease", d });
+  const topFlapCut = (xa, xb, len) => `M ${xa} ${top} L ${xa + fin} ${top} L ${xa + fin} ${top - len} L ${xb - fin} ${top - len} L ${xb - fin} ${top} L ${xb} ${top}`;
+  const botFlapCut = (xa, xb, len) => `M ${xa} ${bot} L ${xa + fin} ${bot} L ${xa + fin} ${bot + len} L ${xb - fin} ${bot + len} L ${xb - fin} ${bot} L ${xb} ${bot}`;
+  const segments = [
+    cut(`M ${x1} ${top} L 0 ${top + taper} L 0 ${bot - taper} L ${x1} ${bot}`),
+    cut(topFlapCut(x1, x2, innerLen)),
+    cut(topFlapCut(x2, x3, outerLen)),
+    cut(topFlapCut(x3, x4, innerLen)),
+    cut(topFlapCut(x4, x5, outerLen)),
+    cut(botFlapCut(x1, x2, innerLen)),
+    cut(botFlapCut(x2, x3, outerLen)),
+    cut(botFlapCut(x3, x4, innerLen)),
+    cut(botFlapCut(x4, x5, outerLen)),
+    cut(`M ${x5} ${top} L ${x5} ${bot}`),
+    crease(`M ${x1} ${top} L ${x1} ${bot}`),
+    crease(`M ${x2} ${top} L ${x2} ${bot}`),
+    crease(`M ${x3} ${top} L ${x3} ${bot}`),
+    crease(`M ${x4} ${top} L ${x4} ${bot}`),
+    crease(`M ${x1 + fin} ${top} L ${x2 - fin} ${top}`),
+    crease(`M ${x2 + fin} ${top} L ${x3 - fin} ${top}`),
+    crease(`M ${x3 + fin} ${top} L ${x4 - fin} ${top}`),
+    crease(`M ${x4 + fin} ${top} L ${x5 - fin} ${top}`),
+    crease(`M ${x1 + fin} ${bot} L ${x2 - fin} ${bot}`),
+    crease(`M ${x2 + fin} ${bot} L ${x3 - fin} ${bot}`),
+    crease(`M ${x3 + fin} ${bot} L ${x4 - fin} ${bot}`),
+    crease(`M ${x4 + fin} ${bot} L ${x5 - fin} ${bot}`)
+  ];
+  const dims = [
+    { a: P(x2, height + 12), b: P(x3, height + 12), label: `W ${fmt(Wp)}` },
+    { a: P(x1, height + 12), b: P(x2, height + 12), label: `D ${fmt(Dp)}` },
+    { a: P(-10, top), b: P(-10, bot), label: `H ${fmt(Hp)}` }
+  ];
+  return { width, height, segments, panels, dims };
+}
+
 // src/core/templates/index.ts
 var TEMPLATES = [
   {
@@ -14582,6 +14762,17 @@ var TEMPLATES = [
     supportsHandle: false,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateFefco0215
+  },
+  {
+    id: "fefco-0202",
+    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E25\u0E39\u0E01\u0E1F\u0E39\u0E01\u0E25\u0E34\u0E49\u0E19\u0E40\u0E01\u0E22 OSC (FEFCO 0202)",
+    detail: "\u0E0A\u0E34\u0E1B\u0E1B\u0E34\u0E49\u0E07\u0E41\u0E1A\u0E1A RSC \u0E41\u0E15\u0E48\u0E25\u0E34\u0E49\u0E19\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E22\u0E32\u0E27\u0E40\u0E15\u0E47\u0E21\u0E40\u0E01\u0E22\u0E17\u0E31\u0E1A\u0E01\u0E31\u0E19\u0E40\u0E15\u0E47\u0E21\u0E41\u0E1C\u0E48\u0E19 \u2014 \u0E01\u0E49\u0E19/\u0E1D\u0E32\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 \u0E41\u0E02\u0E47\u0E07\u0E41\u0E23\u0E07\u0E01\u0E27\u0E48\u0E32 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E02\u0E2D\u0E07\u0E2B\u0E19\u0E31\u0E01/\u0E02\u0E2D\u0E07\u0E41\u0E04\u0E1A",
+    defaults: { W: 120, D: 90, H: 180 },
+    tilt: 0,
+    supportsHandle: false,
+    supportsVents: true,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
+    generate: generateFefco0202
   },
   {
     id: "rsc",
@@ -14723,6 +14914,7 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
 ## \u0E04\u0E27\u0E32\u0E21\u0E2B\u0E21\u0E32\u0E22\u0E02\u0E2D\u0E07 W/D/H \u0E15\u0E48\u0E2D template (\u0E2A\u0E33\u0E04\u0E31\u0E0D)
 - tuck-end / fefco-0215 / mailer / fefco-0427 / tray / gable / lid-box: W\xD7D = footprint \u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19
 - fefco-0215: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E1A\u0E19\u0E40\u0E2A\u0E35\u0E22\u0E1A + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 (snap/crash-lock bottom) \u2014 \u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E40\u0E23\u0E47\u0E27 \u0E01\u0E49\u0E19\u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E17\u0E32\u0E01\u0E32\u0E27\u0E17\u0E35\u0E25\u0E30\u0E43\u0E1A; \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E17\u0E25\u0E22\u0E2D\u0E14\u0E19\u0E34\u0E22\u0E21 (\u0E02\u0E2D\u0E07\u0E0A\u0E33/\u0E02\u0E19\u0E21/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07); handle=false
+- fefco-0202 (OSC): \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E25\u0E39\u0E01\u0E1F\u0E39\u0E01\u0E0A\u0E34\u0E1B\u0E1B\u0E34\u0E49\u0E07\u0E41\u0E1A\u0E1A RSC \u0E41\u0E15\u0E48\u0E25\u0E34\u0E49\u0E19\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E22\u0E32\u0E27\u0E40\u0E15\u0E47\u0E21\u0E40\u0E01\u0E22\u0E17\u0E31\u0E1A\u0E01\u0E31\u0E19\u0E40\u0E15\u0E47\u0E21\u0E41\u0E1C\u0E48\u0E19 (\u0E01\u0E49\u0E19/\u0E1D\u0E32\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19) \u0E41\u0E02\u0E47\u0E07\u0E41\u0E23\u0E07\u0E01\u0E27\u0E48\u0E32 RSC \u2014 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E02\u0E2D\u0E07\u0E2B\u0E19\u0E31\u0E01/\u0E02\u0E2D\u0E07\u0E41\u0E04\u0E1A\u0E17\u0E35\u0E48\u0E25\u0E34\u0E49\u0E19 RSC \u0E0A\u0E19\u0E44\u0E21\u0E48\u0E16\u0E36\u0E07\u0E01\u0E25\u0E32\u0E07; W\xD7D = footprint, H = \u0E2A\u0E39\u0E07, handle=false
 - lid-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A): \u0E10\u0E32\u0E19\u0E16\u0E32\u0E14\u0E25\u0E36\u0E01 + \u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E16\u0E32\u0E14\u0E15\u0E37\u0E49\u0E19\u0E2A\u0E27\u0E21\u0E17\u0E31\u0E1A (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E10\u0E32\u0E19; \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1D\u0E32\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 (\u0E01\u0E27\u0E49\u0E32\u0E07/\u0E25\u0E36\u0E01\u0E01\u0E27\u0E48\u0E32\u0E40\u0E25\u0E47\u0E01\u0E19\u0E49\u0E2D\u0E22 \u0E2A\u0E39\u0E07 ~40%), handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E23\u0E2D\u0E07\u0E40\u0E17\u0E49\u0E32/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E41\u0E22\u0E01\u0E0A\u0E34\u0E49\u0E19
 - slide-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E2A\u0E44\u0E25\u0E14\u0E4C/matchbox): \u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (\u0E16\u0E32\u0E14) \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E40\u0E02\u0E49\u0E32-\u0E2D\u0E2D\u0E01\u0E43\u0E19\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E20\u0E32\u0E22\u0E19\u0E2D\u0E01 (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (D = \u0E17\u0E34\u0E28\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19), \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E1B\u0E23\u0E30\u0E14\u0E31\u0E1A/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E25\u0E47\u0E01/\u0E44\u0E21\u0E49\u0E02\u0E35\u0E14
 - display-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E02\u0E49\u0E32\u0E07/\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07): \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1B\u0E34\u0E14 5 \u0E14\u0E49\u0E32\u0E19 + \u0E1D\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E44\u0E14\u0E49 \u0E40\u0E08\u0E32\u0E30\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32 \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E02\u0E2D\u0E07\u0E2A\u0E30\u0E2A\u0E21\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E40\u0E2B\u0E47\u0E19\u0E02\u0E49\u0E32\u0E07\u0E43\u0E19

@@ -13,6 +13,7 @@ import { generateLidBox } from './lidBox'
 import { generateSlideBox } from './slideBox'
 import { generateDisplayBox } from './displayBox'
 import { generateFefco0215 } from './fefco0215'
+import { generateFefco0202 } from './fefco0202'
 // import { generateWedgeBox } from './wedge' // กล่องแซนวิช — ซ่อนไว้ก่อน (re-add เมื่อเปิดใช้)
 
 export interface BoxTemplate {
@@ -70,6 +71,17 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: false,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateFefco0215,
+  },
+  {
+    id: 'fefco-0202',
+    nameTh: 'กล่องลูกฟูกลิ้นเกย OSC (FEFCO 0202)',
+    detail: 'ชิปปิ้งแบบ RSC แต่ลิ้นหน้า-หลังยาวเต็มเกยทับกันเต็มแผ่น — ก้น/ฝาสองชั้น แข็งแรงกว่า เหมาะของหนัก/ของแคบ',
+    defaults: { W: 120, D: 90, H: 180 },
+    tilt: 0,
+    supportsHandle: false,
+    supportsVents: true,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
+    generate: generateFefco0202,
   },
   {
     id: 'rsc',
