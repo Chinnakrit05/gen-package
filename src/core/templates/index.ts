@@ -40,8 +40,8 @@ export const TEMPLATES: BoxTemplate[] = [
   },
   {
     id: 'mailer',
-    nameTh: 'กล่องไปรษณีย์ (mailer)',
-    detail: 'กล่องฝาเปิดด้านบนแบบ e-commerce แข็งแรง เหมาะส่งของ/ของฝากหลายชิ้น',
+    nameTh: 'กล่องไปรษณีย์ฝาพับ (≈FEFCO 0426)',
+    detail: 'กล่องฝาเปิดด้านบนแบบ e-commerce ถาด+ฝาพับในตัว (ตระกูล FEFCO 0426) แข็งแรง เหมาะส่งของ/ของฝากหลายชิ้น',
     defaults: { W: 200, D: 140, H: 60 },
     tilt: -Math.PI / 2,
     supportsHandle: true,
@@ -93,8 +93,8 @@ export const TEMPLATES: BoxTemplate[] = [
   },
   {
     id: 'lid-box',
-    nameTh: 'กล่องฝาครอบ (telescoping lid)',
-    detail: 'ฐานถาดลึก + ฝาครอบถาดตื้นสวมทับ 2 ชิ้น — กล่องของขวัญ/รองเท้า/เครื่องสำอางพรีเมียม',
+    nameTh: 'กล่องฝาครอบ (FEFCO 0300 telescope)',
+    detail: 'ฐานถาดลึก + ฝาครอบถาดตื้นสวมทับ 2 ชิ้น (FEFCO 0300 FTSSC) — กล่องของขวัญ/รองเท้า/เครื่องสำอางพรีเมียม',
     defaults: { W: 160, D: 110, H: 70 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
