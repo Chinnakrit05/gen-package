@@ -56179,6 +56179,168 @@ function generateSticker(box) {
   return { width: w, height: h, segments, panels, dims };
 }
 
+// src/core/templates/trayPiece.ts
+function buildTrayPiece(prefix, ox, oy, W, D, H, t, wallDir = 1) {
+  const Wp = W + 2 * t;
+  const Dp = D + 2 * t;
+  const Hp = H + t;
+  const layer = t + 0.05;
+  const cx0 = Hp;
+  const cx1 = cx0 + Wp;
+  const by0 = Hp;
+  const by1 = by0 + Dp;
+  const w = cx1 + Hp;
+  const h = by1 + Hp;
+  const dir = wallDir;
+  const a = (x, y) => P(ox + x, oy + y);
+  const tabIn = Math.max(1.5, 2 * t + 0.5);
+  const tabW = Math.max(8, Math.min(0.72 * Hp, Dp / 2 - 2));
+  const tabSlant = Math.min(5, tabW * 0.45);
+  const tab = (xa, xb, y, d) => [
+    a(xa + tabIn, y),
+    a(xa + tabIn + tabSlant, y + d * tabW),
+    a(xb - tabIn - tabSlant, y + d * tabW),
+    a(xb - tabIn, y)
+  ];
+  const r = (xa, ya, xb, yb) => rect(ox + xa, oy + ya, ox + xb, oy + yb);
+  const panels = [
+    { id: `${prefix}base`, parentId: null, outline: r(cx0, by0, cx1, by1), stage: 0 },
+    {
+      id: `${prefix}back`,
+      parentId: `${prefix}base`,
+      outline: r(cx0, 0, cx1, by0),
+      hingeA: a(cx0, by0),
+      hingeB: a(cx1, by0),
+      foldAngle: 90 * dir,
+      stage: 0
+    },
+    {
+      id: `${prefix}front`,
+      parentId: `${prefix}base`,
+      outline: r(cx0, by1, cx1, h),
+      hingeA: a(cx0, by1),
+      hingeB: a(cx1, by1),
+      foldAngle: -90 * dir,
+      stage: 0
+    },
+    {
+      id: `${prefix}left`,
+      parentId: `${prefix}base`,
+      outline: r(0, by0, cx0, by1),
+      hingeA: a(cx0, by0),
+      hingeB: a(cx0, by1),
+      foldAngle: -90 * dir,
+      stage: 0
+    },
+    {
+      id: `${prefix}right`,
+      parentId: `${prefix}base`,
+      outline: r(cx1, by0, w, by1),
+      hingeA: a(cx1, by0),
+      hingeB: a(cx1, by1),
+      foldAngle: 90 * dir,
+      stage: 0
+    },
+    {
+      id: `${prefix}tab-lb`,
+      parentId: `${prefix}left`,
+      outline: tab(0, cx0, by0, -1),
+      hingeA: a(0, by0),
+      hingeB: a(cx0, by0),
+      foldAngle: 90 * dir,
+      stage: 1,
+      zOffset: layer
+    },
+    {
+      id: `${prefix}tab-lf`,
+      parentId: `${prefix}left`,
+      outline: tab(0, cx0, by1, 1),
+      hingeA: a(0, by1),
+      hingeB: a(cx0, by1),
+      foldAngle: -90 * dir,
+      stage: 1,
+      zOffset: layer
+    },
+    {
+      id: `${prefix}tab-rb`,
+      parentId: `${prefix}right`,
+      outline: tab(cx1, w, by0, -1),
+      hingeA: a(cx1, by0),
+      hingeB: a(w, by0),
+      foldAngle: 90 * dir,
+      stage: 1,
+      zOffset: layer
+    },
+    {
+      id: `${prefix}tab-rf`,
+      parentId: `${prefix}right`,
+      outline: tab(cx1, w, by1, 1),
+      hingeA: a(cx1, by1),
+      hingeB: a(w, by1),
+      foldAngle: -90 * dir,
+      stage: 1,
+      zOffset: layer
+    }
+  ];
+  const cut = (d) => ({ kind: "cut", d });
+  const crease = (d) => ({ kind: "crease", d });
+  const L = (x, y) => `${ox + x} ${oy + y}`;
+  const tabCut = (xa, xb, y, d) => `M ${L(xa, y)} L ${L(xa + tabIn, y)} L ${L(xa + tabIn + tabSlant, y + d * tabW)} L ${L(xb - tabIn - tabSlant, y + d * tabW)} L ${L(xb - tabIn, y)} L ${L(xb, y)}`;
+  const segments = [
+    cut(`M ${L(cx0, 0)} L ${L(cx1, 0)}`),
+    cut(`M ${L(cx1, 0)} L ${L(cx1, by0)}`),
+    cut(tabCut(cx1, w, by0, -1)),
+    cut(`M ${L(w, by0)} L ${L(w, by1)}`),
+    cut(tabCut(cx1, w, by1, 1)),
+    cut(`M ${L(cx1, by1)} L ${L(cx1, h)}`),
+    cut(`M ${L(cx1, h)} L ${L(cx0, h)}`),
+    cut(`M ${L(cx0, by1)} L ${L(cx0, h)}`),
+    cut(tabCut(0, cx0, by1, 1)),
+    cut(`M ${L(0, by0)} L ${L(0, by1)}`),
+    cut(tabCut(0, cx0, by0, -1)),
+    cut(`M ${L(cx0, 0)} L ${L(cx0, by0)}`),
+    crease(`M ${L(cx0, by0)} L ${L(cx1, by0)}`),
+    crease(`M ${L(cx0, by1)} L ${L(cx1, by1)}`),
+    crease(`M ${L(cx0, by0)} L ${L(cx0, by1)}`),
+    crease(`M ${L(cx1, by0)} L ${L(cx1, by1)}`),
+    crease(`M ${L(tabIn, by0)} L ${L(cx0 - tabIn, by0)}`),
+    crease(`M ${L(tabIn, by1)} L ${L(cx0 - tabIn, by1)}`),
+    crease(`M ${L(cx1 + tabIn, by0)} L ${L(w - tabIn, by0)}`),
+    crease(`M ${L(cx1 + tabIn, by1)} L ${L(w - tabIn, by1)}`)
+  ];
+  return { panels, segments, bbox: { x0: ox, y0: oy, x1: ox + w, y1: oy + h } };
+}
+function trayPieceSize(W, D, H, t) {
+  const Wp = W + 2 * t;
+  const Dp = D + 2 * t;
+  const Hp = H + t;
+  return { w: Wp + 2 * Hp, h: Dp + 2 * Hp };
+}
+
+// src/core/templates/lidBox.ts
+function generateLidBox(box, mat) {
+  const { W, D, H } = box;
+  const t = mat.thickness;
+  const clear = 0.8;
+  const lidW = W + 2 * t + clear;
+  const lidD = D + 2 * t + clear;
+  const lidH = Math.max(10, H * 0.4);
+  const GAP2 = 14;
+  const base = trayPieceSize(W, D, H, t);
+  const bx = base.w + GAP2;
+  const basePiece = buildTrayPiece("b-", 0, 0, W, D, H, t, 1);
+  const lidPiece = buildTrayPiece("l-", bx, 0, lidW, lidD, lidH, t, -1);
+  const panels = [...basePiece.panels, ...lidPiece.panels];
+  const segments = [...basePiece.segments, ...lidPiece.segments];
+  const width = lidPiece.bbox.x1;
+  const height = Math.max(basePiece.bbox.y1, lidPiece.bbox.y1);
+  const dims = [
+    { a: P(basePiece.bbox.x0, height + 12), b: P(basePiece.bbox.x1, height + 12), label: `\u0E10\u0E32\u0E19 ${fmt(W)}\xD7${fmt(D)}\xD7${fmt(H)}` },
+    { a: P(lidPiece.bbox.x0, height + 12), b: P(lidPiece.bbox.x1, height + 12), label: `\u0E1D\u0E32 ${fmt(lidW)}\xD7${fmt(lidD)}\xD7${fmt(lidH)}` }
+  ];
+  return { width, height, segments, panels, dims };
+}
+
 // src/core/templates/index.ts
 var TEMPLATES = [
   {
@@ -56244,6 +56406,16 @@ var TEMPLATES = [
     supportsHandle: false,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateSleeve
+  },
+  {
+    id: "lid-box",
+    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A (telescoping lid)",
+    detail: "\u0E10\u0E32\u0E19\u0E16\u0E32\u0E14\u0E25\u0E36\u0E01 + \u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E16\u0E32\u0E14\u0E15\u0E37\u0E49\u0E19\u0E2A\u0E27\u0E21\u0E17\u0E31\u0E1A 2 \u0E0A\u0E34\u0E49\u0E19 \u2014 \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E23\u0E2D\u0E07\u0E40\u0E17\u0E49\u0E32/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21",
+    defaults: { W: 160, D: 110, H: 70 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.H + m.thickness,
+    generate: generateLidBox
   },
   {
     id: "tray",
@@ -56874,7 +57046,8 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
 \u0E41\u0E19\u0E27\u0E01\u0E32\u0E23\u0E40\u0E25\u0E37\u0E2D\u0E01: \u0E02\u0E2D\u0E07\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E14\u0E35\u0E22\u0E27/\u0E41\u0E19\u0E27\u0E15\u0E31\u0E49\u0E07/\u0E23\u0E35\u0E40\u0E17\u0E25 \u2192 tuck-end; \u0E2A\u0E48\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C/\u0E02\u0E2D\u0E07\u0E2B\u0E25\u0E32\u0E22\u0E0A\u0E34\u0E49\u0E19/\u0E02\u0E2D\u0E07\u0E41\u0E1A\u0E19/\u0E40\u0E1B\u0E34\u0E14\u0E07\u0E48\u0E32\u0E22 \u2192 mailer; \u0E07\u0E32\u0E19\u0E2A\u0E48\u0E07\u0E17\u0E35\u0E48\u0E40\u0E19\u0E49\u0E19\u0E41\u0E02\u0E47\u0E07\u0E41\u0E23\u0E07/\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21/\u0E1C\u0E25\u0E34\u0E15\u0E08\u0E33\u0E19\u0E27\u0E19\u0E21\u0E32\u0E01\u0E41\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49\u0E01\u0E32\u0E27 (subscription box, \u0E02\u0E2D\u0E07\u0E41\u0E15\u0E01\u0E07\u0E48\u0E32\u0E22) \u2192 fefco-0427; \u0E0A\u0E38\u0E14\u0E02\u0E27\u0E14/\u0E01\u0E23\u0E30\u0E1B\u0E4B\u0E2D\u0E07\u0E2B\u0E25\u0E32\u0E22\u0E43\u0E1A\u0E41\u0E1A\u0E1A\u0E22\u0E01\u0E2B\u0E34\u0E49\u0E27 (4-pack, 6-pack, \u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E42\u0E0A\u0E27\u0E4C\u0E02\u0E27\u0E14) \u2192 bottle-carrier; \u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E04\u0E38\u0E01\u0E01\u0E35\u0E49/\u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E32\u0E01\u0E44\u0E14\u0E49\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27 (\u0E16\u0E37\u0E2D\u0E2A\u0E27\u0E22) \u2192 gable; \u0E16\u0E32\u0E14\u0E2D\u0E32\u0E2B\u0E32\u0E23/\u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C/\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 \u2192 tray; \u0E41\u0E04\u0E48\u0E1B\u0E25\u0E2D\u0E01\u0E23\u0E31\u0E14\u0E23\u0E2D\u0E1A\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E17\u0E35\u0E48\u0E21\u0E35\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2D\u0E22\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27 \u2192 sleeve. \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A mailer/fefco-0427: H \u0E04\u0E37\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07 (\u0E21\u0E31\u0E01\u0E40\u0E15\u0E35\u0E49\u0E22 \u0E40\u0E0A\u0E48\u0E19 40-80) \u0E2A\u0E48\u0E27\u0E19 W\xD7D \u0E04\u0E37\u0E2D footprint; \u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23/business card \u2192 card
 
 ## \u0E04\u0E27\u0E32\u0E21\u0E2B\u0E21\u0E32\u0E22\u0E02\u0E2D\u0E07 W/D/H \u0E15\u0E48\u0E2D template (\u0E2A\u0E33\u0E04\u0E31\u0E0D)
-- tuck-end / mailer / fefco-0427 / tray / gable: W\xD7D = footprint \u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19
+- tuck-end / mailer / fefco-0427 / tray / gable / lid-box: W\xD7D = footprint \u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19
+- lid-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A): \u0E10\u0E32\u0E19\u0E16\u0E32\u0E14\u0E25\u0E36\u0E01 + \u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E16\u0E32\u0E14\u0E15\u0E37\u0E49\u0E19\u0E2A\u0E27\u0E21\u0E17\u0E31\u0E1A (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E10\u0E32\u0E19; \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1D\u0E32\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 (\u0E01\u0E27\u0E49\u0E32\u0E07/\u0E25\u0E36\u0E01\u0E01\u0E27\u0E48\u0E32\u0E40\u0E25\u0E47\u0E01\u0E19\u0E49\u0E2D\u0E22 \u0E2A\u0E39\u0E07 ~40%), handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E23\u0E2D\u0E07\u0E40\u0E17\u0E49\u0E32/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E41\u0E22\u0E01\u0E0A\u0E34\u0E49\u0E19
 - gable: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E04\u0E32\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27 \u0E10\u0E32\u0E19\u0E15\u0E31\u0E19 \u0E1C\u0E19\u0E31\u0E07 4 \u0E14\u0E49\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19 \u0E41\u0E1C\u0E07\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E40\u0E2D\u0E35\u0E22\u0E07\u0E21\u0E32\u0E0A\u0E19\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E31\u0E19 \u0E21\u0E35\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E17\u0E35\u0E48\u0E22\u0E2D\u0E14 = \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E43\u0E19\u0E15\u0E31\u0E27 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false \u2014 \u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E40\u0E08\u0E32\u0E30\u0E40\u0E1E\u0E34\u0E48\u0E21); H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 \u0E23\u0E30\u0E1A\u0E1A\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E04\u0E32\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21
 - tray: \u0E16\u0E32\u0E14\u0E40\u0E1B\u0E34\u0E14\u0E1A\u0E19 (\u0E44\u0E21\u0E48\u0E21\u0E35\u0E1D\u0E32) \u0E1C\u0E19\u0E31\u0E07 4 \u0E14\u0E49\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19 \u0E21\u0E38\u0E21\u0E21\u0E35\u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u2014 H \u0E04\u0E37\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 (\u0E16\u0E32\u0E14\u0E21\u0E31\u0E01\u0E15\u0E37\u0E49\u0E19); \u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (handle=false); \u0E43\u0E0A\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E16\u0E32\u0E14/\u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C \u0E2B\u0E23\u0E37\u0E2D\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01\u0E04\u0E39\u0E48\u0E01\u0E31\u0E1A sleeve
 - fefco-0427: \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 (roll end) + \u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E10\u0E32\u0E19 \u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49\u0E01\u0E32\u0E27 \u2014 \u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48\u0E01\u0E27\u0E49\u0E32\u0E07\u0E01\u0E27\u0E48\u0E32 mailer \u0E18\u0E23\u0E23\u0E21\u0E14\u0E32 (\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E02\u0E49\u0E32\u0E07\u0E25\u0E30 ~H) \u0E41\u0E25\u0E30\u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false)

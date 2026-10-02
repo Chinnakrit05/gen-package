@@ -9,6 +9,7 @@ import { generateGableBox } from './gable'
 import { generateRSCBox } from './rsc'
 import { generateCard } from './card'
 import { generateSticker } from './sticker'
+import { generateLidBox } from './lidBox'
 
 export interface BoxTemplate {
   id: string
@@ -86,6 +87,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: false,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateSleeve,
+  },
+  {
+    id: 'lid-box',
+    nameTh: 'กล่องฝาครอบ (telescoping lid)',
+    detail: 'ฐานถาดลึก + ฝาครอบถาดตื้นสวมทับ 2 ชิ้น — กล่องของขวัญ/รองเท้า/เครื่องสำอางพรีเมียม',
+    defaults: { W: 160, D: 110, H: 70 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.H + m.thickness,
+    generate: generateLidBox,
   },
   {
     id: 'tray',
