@@ -15,6 +15,7 @@ import { generateDisplayBox } from './displayBox'
 import { generateFefco0215 } from './fefco0215'
 import { generateFefco0202 } from './fefco0202'
 import { generateFefco0217 } from './fefco0217'
+import { generateRolloverMailer } from './rolloverMailer'
 // import { generateWedgeBox } from './wedge' // กล่องแซนวิช — ซ่อนไว้ก่อน (re-add เมื่อเปิดใช้)
 
 export interface BoxTemplate {
@@ -51,6 +52,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsVents: true,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateMailerBox,
+  },
+  {
+    id: 'rollover-mailer',
+    nameTh: 'กล่องไปรษณีย์ขอบม้วน (rollover mailer)',
+    detail: 'mailer ฝาพับ ผนังข้างม้วนสองชั้น (rollover) ขอบเรียบแข็งแรง — e-commerce พรีเมียม',
+    defaults: { W: 220, D: 150, H: 70 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.H + m.thickness,
+    generate: generateRolloverMailer,
   },
   {
     id: 'fefco-0427',

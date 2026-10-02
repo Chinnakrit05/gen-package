@@ -57164,6 +57164,156 @@ function generateFefco0217(box, mat) {
   return { width, height, segments, panels, dims };
 }
 
+// src/core/templates/rolloverMailer.ts
+function generateRolloverMailer(box, mat) {
+  const { W, D, H } = box;
+  const t = mat.thickness;
+  const Wp = W + 2 * t;
+  const Dp = D + 2 * t;
+  const Hp = H + t;
+  const layer = t + 0.05;
+  const tuckIn = Math.max(1, t + 0.5);
+  const lipH = Math.max(10, Math.min(0.7 * Hp, 0.8 * Dp));
+  const r = Math.min(7, lipH * 0.45, (Wp - 2 * tuckIn) / 2);
+  const cx0 = 2 * Hp;
+  const cx1 = cx0 + Wp;
+  const ly0 = 0;
+  const ly1 = ly0 + lipH;
+  const ky1 = ly1 + Dp;
+  const by0 = ky1 + Hp;
+  const by1 = by0 + Dp;
+  const fy1 = by1 + Hp;
+  const width = cx1 + 2 * Hp;
+  const height = fy1;
+  const lipOutline = [
+    P(cx0 + tuckIn, ly1),
+    ...arcPts(cx0 + tuckIn + r, ly0 + r, r, Math.PI, Math.PI * 1.5),
+    ...arcPts(cx1 - tuckIn - r, ly0 + r, r, Math.PI * 1.5, Math.PI * 2),
+    P(cx1 - tuckIn, ly1)
+  ];
+  const panels = [
+    { id: "base", parentId: null, outline: rect(cx0, by0, cx1, by1), stage: 0 },
+    {
+      id: "back",
+      parentId: "base",
+      outline: rect(cx0, ky1, cx1, by0),
+      hingeA: P(cx0, by0),
+      hingeB: P(cx1, by0),
+      foldAngle: 90,
+      stage: 0
+    },
+    {
+      id: "front",
+      parentId: "base",
+      outline: rect(cx0, by1, cx1, fy1),
+      hingeA: P(cx0, by1),
+      hingeB: P(cx1, by1),
+      foldAngle: -90,
+      stage: 0
+    },
+    {
+      id: "side-left",
+      parentId: "base",
+      outline: rect(cx0 - Hp, by0, cx0, by1),
+      hingeA: P(cx0, by0),
+      hingeB: P(cx0, by1),
+      foldAngle: -90,
+      stage: 0
+    },
+    {
+      id: "side-right",
+      parentId: "base",
+      outline: rect(cx1, by0, cx1 + Hp, by1),
+      hingeA: P(cx1, by0),
+      hingeB: P(cx1, by1),
+      foldAngle: 90,
+      stage: 0
+    },
+    // แผ่นม้วน 180° (double wall) — พับทบกลับเข้าด้านในแนบผนังข้าง
+    {
+      id: "roll-left",
+      parentId: "side-left",
+      outline: rect(cx0 - 2 * Hp, by0, cx0 - Hp, by1),
+      hingeA: P(cx0 - Hp, by0),
+      hingeB: P(cx0 - Hp, by1),
+      foldAngle: -180,
+      stage: 1,
+      zOffset: layer
+    },
+    {
+      id: "roll-right",
+      parentId: "side-right",
+      outline: rect(cx1 + Hp, by0, cx1 + 2 * Hp, by1),
+      hingeA: P(cx1 + Hp, by0),
+      hingeB: P(cx1 + Hp, by1),
+      foldAngle: 180,
+      stage: 1,
+      zOffset: layer
+    },
+    // ฝาพับคลุม (ต่อจากผนังหลัง)
+    {
+      id: "lid",
+      parentId: "back",
+      outline: rect(cx0, ly1, cx1, ky1),
+      hingeA: P(cx0, ky1),
+      hingeB: P(cx1, ky1),
+      foldAngle: 90,
+      stage: 2
+    },
+    {
+      id: "lip",
+      parentId: "lid",
+      outline: lipOutline,
+      hingeA: P(cx0 + tuckIn, ly1),
+      hingeB: P(cx1 - tuckIn, ly1),
+      foldAngle: 90,
+      stage: 3,
+      zOffset: layer
+    }
+  ];
+  const cut = (d) => ({ kind: "cut", d });
+  const crease = (d) => ({ kind: "crease", d });
+  const segments = [
+    // ลิ้นหน้า (มุมโค้ง)
+    cut(
+      `M ${cx0 + tuckIn} ${ly1} L ${cx0 + tuckIn} ${ly0 + r} Q ${cx0 + tuckIn} ${ly0} ${cx0 + tuckIn + r} ${ly0} L ${cx1 - tuckIn - r} ${ly0} Q ${cx1 - tuckIn} ${ly0} ${cx1 - tuckIn} ${ly0 + r} L ${cx1 - tuckIn} ${ly1}`
+    ),
+    cut(`M ${cx0} ${ly1} L ${cx0 + tuckIn} ${ly1}`),
+    cut(`M ${cx1 - tuckIn} ${ly1} L ${cx1} ${ly1}`),
+    // ขอบซ้าย-ขวาของฝา
+    cut(`M ${cx0} ${ly1} L ${cx0} ${ky1}`),
+    cut(`M ${cx1} ${ly1} L ${cx1} ${ky1}`),
+    // แผ่นม้วนซ้าย-ขวา (ขอบนอก)
+    cut(`M ${cx0 - Hp} ${by0} L ${cx0 - 2 * Hp} ${by0} L ${cx0 - 2 * Hp} ${by1} L ${cx0 - Hp} ${by1}`),
+    cut(`M ${cx1 + Hp} ${by0} L ${cx1 + 2 * Hp} ${by0} L ${cx1 + 2 * Hp} ${by1} L ${cx1 + Hp} ${by1}`),
+    // ผนังหน้า
+    cut(`M ${cx0} ${by1} L ${cx0} ${fy1} L ${cx1} ${fy1} L ${cx1} ${by1}`),
+    // รอยพับ
+    crease(`M ${cx0 + tuckIn} ${ly1} L ${cx1 - tuckIn} ${ly1}`),
+    // ลิ้นหน้า|ฝา
+    crease(`M ${cx0} ${ky1} L ${cx1} ${ky1}`),
+    // ฝา|ผนังหลัง
+    crease(`M ${cx0} ${by0} L ${cx1} ${by0}`),
+    // ผนังหลัง|ฐาน
+    crease(`M ${cx0} ${by1} L ${cx1} ${by1}`),
+    // ฐาน|ผนังหน้า
+    crease(`M ${cx0} ${by0} L ${cx0} ${by1}`),
+    // ฐาน|ผนังซ้าย
+    crease(`M ${cx1} ${by0} L ${cx1} ${by1}`),
+    // ฐาน|ผนังขวา
+    crease(`M ${cx0 - Hp} ${by0} L ${cx0 - Hp} ${by1}`),
+    // ผนังซ้าย|แผ่นม้วน (180°)
+    crease(`M ${cx1 + Hp} ${by0} L ${cx1 + Hp} ${by1}`)
+    // ผนังขวา|แผ่นม้วน (180°)
+  ];
+  const dims = [
+    { a: P(cx0, fy1 + 10), b: P(cx1, fy1 + 10), label: `W ${fmt(Wp)}` },
+    { a: P(cx1 + 2 * Hp + 8, by0), b: P(cx1 + 2 * Hp + 8, by1), label: `D ${fmt(Dp)}` },
+    { a: P(cx0 - 2 * Hp - 8, by1), b: P(cx0 - 2 * Hp - 8, fy1), label: `H ${fmt(Hp)}` }
+  ];
+  return { width, height, segments, panels, dims };
+}
+
 // src/core/templates/index.ts
 var TEMPLATES = [
   {
@@ -57187,6 +57337,16 @@ var TEMPLATES = [
     supportsVents: true,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateMailerBox
+  },
+  {
+    id: "rollover-mailer",
+    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C\u0E02\u0E2D\u0E1A\u0E21\u0E49\u0E27\u0E19 (rollover mailer)",
+    detail: "mailer \u0E1D\u0E32\u0E1E\u0E31\u0E1A \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E21\u0E49\u0E27\u0E19\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 (rollover) \u0E02\u0E2D\u0E1A\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E41\u0E02\u0E47\u0E07\u0E41\u0E23\u0E07 \u2014 e-commerce \u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21",
+    defaults: { W: 220, D: 150, H: 70 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.H + m.thickness,
+    generate: generateRolloverMailer
   },
   {
     id: "fefco-0427",
@@ -57935,6 +58095,7 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
 - fefco-0215: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E1A\u0E19\u0E40\u0E2A\u0E35\u0E22\u0E1A + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 (snap/crash-lock bottom) \u2014 \u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E40\u0E23\u0E47\u0E27 \u0E01\u0E49\u0E19\u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E17\u0E32\u0E01\u0E32\u0E27\u0E17\u0E35\u0E25\u0E30\u0E43\u0E1A; \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E17\u0E25\u0E22\u0E2D\u0E14\u0E19\u0E34\u0E22\u0E21 (\u0E02\u0E2D\u0E07\u0E0A\u0E33/\u0E02\u0E19\u0E21/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07); handle=false
 - fefco-0202 (OSC): \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E25\u0E39\u0E01\u0E1F\u0E39\u0E01\u0E0A\u0E34\u0E1B\u0E1B\u0E34\u0E49\u0E07\u0E41\u0E1A\u0E1A RSC \u0E41\u0E15\u0E48\u0E25\u0E34\u0E49\u0E19\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E22\u0E32\u0E27\u0E40\u0E15\u0E47\u0E21\u0E40\u0E01\u0E22\u0E17\u0E31\u0E1A\u0E01\u0E31\u0E19\u0E40\u0E15\u0E47\u0E21\u0E41\u0E1C\u0E48\u0E19 (\u0E01\u0E49\u0E19/\u0E1D\u0E32\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19) \u0E41\u0E02\u0E47\u0E07\u0E41\u0E23\u0E07\u0E01\u0E27\u0E48\u0E32 RSC \u2014 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E02\u0E2D\u0E07\u0E2B\u0E19\u0E31\u0E01/\u0E02\u0E2D\u0E07\u0E41\u0E04\u0E1A\u0E17\u0E35\u0E48\u0E25\u0E34\u0E49\u0E19 RSC \u0E0A\u0E19\u0E44\u0E21\u0E48\u0E16\u0E36\u0E07\u0E01\u0E25\u0E32\u0E07; W\xD7D = footprint, H = \u0E2A\u0E39\u0E07, handle=false
 - fefco-0217: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E21\u0E35\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E14\u0E49\u0E32\u0E19\u0E1A\u0E19 (\u0E25\u0E34\u0E49\u0E19\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19\u0E0A\u0E19\u0E01\u0E31\u0E19\u0E40\u0E1B\u0E47\u0E19\u0E2B\u0E39\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E08\u0E31\u0E1A) + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 \u2014 \u0E40\u0E04\u0E49\u0E01/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E16\u0E37\u0E2D\u0E2A\u0E30\u0E14\u0E27\u0E01; W\xD7D = footprint, H = \u0E2A\u0E39\u0E07, handle=false (\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E21\u0E35\u0E43\u0E19\u0E15\u0E31\u0E27)
+- rollover-mailer: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C\u0E1D\u0E32\u0E1E\u0E31\u0E1A \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E21\u0E49\u0E27\u0E19\u0E17\u0E1A\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 (rollover) \u0E02\u0E2D\u0E1A\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E41\u0E02\u0E47\u0E07\u0E41\u0E23\u0E07 \u2014 e-commerce \u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21; W\xD7D = footprint, H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07 (\u0E21\u0E31\u0E01\u0E40\u0E15\u0E35\u0E49\u0E22), handle=false
 - lid-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A): \u0E10\u0E32\u0E19\u0E16\u0E32\u0E14\u0E25\u0E36\u0E01 + \u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E16\u0E32\u0E14\u0E15\u0E37\u0E49\u0E19\u0E2A\u0E27\u0E21\u0E17\u0E31\u0E1A (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E10\u0E32\u0E19; \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1D\u0E32\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 (\u0E01\u0E27\u0E49\u0E32\u0E07/\u0E25\u0E36\u0E01\u0E01\u0E27\u0E48\u0E32\u0E40\u0E25\u0E47\u0E01\u0E19\u0E49\u0E2D\u0E22 \u0E2A\u0E39\u0E07 ~40%), handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E23\u0E2D\u0E07\u0E40\u0E17\u0E49\u0E32/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E41\u0E22\u0E01\u0E0A\u0E34\u0E49\u0E19
 - slide-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E2A\u0E44\u0E25\u0E14\u0E4C/matchbox): \u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (\u0E16\u0E32\u0E14) \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E40\u0E02\u0E49\u0E32-\u0E2D\u0E2D\u0E01\u0E43\u0E19\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E20\u0E32\u0E22\u0E19\u0E2D\u0E01 (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (D = \u0E17\u0E34\u0E28\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19), \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E1B\u0E23\u0E30\u0E14\u0E31\u0E1A/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E25\u0E47\u0E01/\u0E44\u0E21\u0E49\u0E02\u0E35\u0E14
 - display-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E02\u0E49\u0E32\u0E07/\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07): \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1B\u0E34\u0E14 5 \u0E14\u0E49\u0E32\u0E19 + \u0E1D\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E44\u0E14\u0E49 \u0E40\u0E08\u0E32\u0E30\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32 \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E02\u0E2D\u0E07\u0E2A\u0E30\u0E2A\u0E21\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E40\u0E2B\u0E47\u0E19\u0E02\u0E49\u0E32\u0E07\u0E43\u0E19
