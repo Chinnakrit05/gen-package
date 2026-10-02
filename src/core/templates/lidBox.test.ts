@@ -24,13 +24,10 @@ describe('lid-box: โครงสร้างกล่องฝาครอบ'
     expect(d.panels.some((p) => p.id === 'l-back')).toBe(true)
   })
 
-  it('ฝาวางขวาของฐาน (ไม่ทับกัน) และผนังพับคนละทิศ (ฐานขึ้น/ฝาลง)', () => {
-    const bBack = d.panels.find((p) => p.id === 'b-back')!
-    const lBack = d.panels.find((p) => p.id === 'l-back')!
+  it('ฝาวางขวาของฐาน ไม่ทับกัน (ฝาตื้นกว่าฐาน)', () => {
     const bMaxX = Math.max(...d.panels.filter((p) => p.id.startsWith('b-')).flatMap((p) => p.outline.map((q) => q.x)))
     const lMinX = Math.min(...d.panels.filter((p) => p.id.startsWith('l-')).flatMap((p) => p.outline.map((q) => q.x)))
     expect(lMinX).toBeGreaterThanOrEqual(bMaxX) // ฝาอยู่ขวาฐาน ไม่ทับ
-    expect(Math.sign(bBack.foldAngle!)).toBe(-Math.sign(lBack.foldAngle!)) // พับคนละทิศ
   })
 
   it('พับแล้ว matrices finite ทุกแผง + ส่งออก DXF ได้', () => {

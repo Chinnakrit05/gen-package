@@ -1,18 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { computeMatrices, to3D } from '../fold'
-import { getTemplate } from './index'
+import { generateWedgeBox } from './wedge'
 import { getMaterial } from '../materials'
 import { dielineDXFString } from '../dxf'
 
 // กล่องแซนวิช = ปริซึมสามเหลี่ยม ชิ้นเดียว: ฐาน + หลัง + ฝาเฉียง + สามเหลี่ยมข้างสองด้าน
+// (ซ่อนจาก registry ไว้ก่อน จึงเรียก generator ตรง ๆ)
 const mat = getMaterial('carton-300')
-const tp = getTemplate('wedge')
 const box = { W: 120, D: 110, H: 80, handle: false }
-const d = tp.generate(box, mat)
+const d = generateWedgeBox(box, mat)
 
 describe('wedge: โครงสร้างกล่องแซนวิช', () => {
-  it('ลงทะเบียน + ครบ 5 แผง (ฐาน/หลัง/ฝา/ข้างซ้าย-ขวา)', () => {
-    expect(tp.id).toBe('wedge')
+  it('ครบ 5 แผง (ฐาน/หลัง/ฝา/ข้างซ้าย-ขวา)', () => {
     const ids = d.panels.map((p) => p.id).sort()
     expect(ids).toEqual(['back', 'base', 'side-left', 'side-right', 'top'])
   })

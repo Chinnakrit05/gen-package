@@ -11,7 +11,8 @@ import { generateCard } from './card'
 import { generateSticker } from './sticker'
 import { generateLidBox } from './lidBox'
 import { generateSlideBox } from './slideBox'
-import { generateWedgeBox } from './wedge'
+import { generateDisplayBox } from './displayBox'
+// import { generateWedgeBox } from './wedge' // กล่องแซนวิช — ซ่อนไว้ก่อน (re-add เมื่อเปิดใช้)
 
 export interface BoxTemplate {
   id: string
@@ -110,15 +111,26 @@ export const TEMPLATES: BoxTemplate[] = [
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateSlideBox,
   },
+  // กล่องแซนวิช (wedge) — ซ่อนจาก UI ไว้ก่อน (generator/เทสต์ยังอยู่ใน wedge.ts) เปิดใช้ได้โดย uncomment
+  // {
+  //   id: 'wedge',
+  //   nameTh: 'กล่องแซนวิช (wedge)',
+  //   detail: 'ปริซึมสามเหลี่ยม ฐาน+ผนังหลัง+ฝาเฉียง+ผนังข้างสามเหลี่ยม — ใส่แซนวิช/ขนมชิ้นสามเหลี่ยม',
+  //   defaults: { W: 120, D: 110, H: 80 },
+  //   tilt: -Math.PI / 2,
+  //   supportsHandle: false,
+  //   foldDepth: (b, m) => b.H + m.thickness,
+  //   generate: generateWedgeBox,
+  // },
   {
-    id: 'wedge',
-    nameTh: 'กล่องแซนวิช (wedge)',
-    detail: 'ปริซึมสามเหลี่ยม ฐาน+ผนังหลัง+ฝาเฉียง+ผนังข้างสามเหลี่ยม — ใส่แซนวิช/ขนมชิ้นสามเหลี่ยม',
-    defaults: { W: 120, D: 110, H: 80 },
+    id: 'display-box',
+    nameTh: 'กล่องฝาข้าง/หน้าต่าง (display)',
+    detail: 'กล่องปิด 5 ด้าน + ฝาหน้าเปิดได้ เจาะหน้าต่างโชว์สินค้า — กล่องโชว์/ของขวัญ/ของสะสม',
+    defaults: { W: 140, D: 90, H: 140 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
     foldDepth: (b, m) => b.H + m.thickness,
-    generate: generateWedgeBox,
+    generate: generateDisplayBox,
   },
   {
     id: 'tray',

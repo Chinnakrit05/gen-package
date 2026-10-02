@@ -56329,7 +56329,7 @@ function generateLidBox(box, mat) {
   const base = trayPieceSize(W, D, H, t);
   const bx = base.w + GAP2;
   const basePiece = buildTrayPiece("b-", 0, 0, W, D, H, t, 1);
-  const lidPiece = buildTrayPiece("l-", bx, 0, lidW, lidD, lidH, t, -1);
+  const lidPiece = buildTrayPiece("l-", bx, 0, lidW, lidD, lidH, t, 1);
   const panels = [...basePiece.panels, ...lidPiece.panels];
   const segments = [...basePiece.segments, ...lidPiece.segments];
   const width = lidPiece.bbox.x1;
@@ -56435,26 +56435,32 @@ function generateSlideBox(box, mat) {
   return { width, height, segments, panels, dims };
 }
 
-// src/core/templates/wedge.ts
-function generateWedgeBox(box, _mat) {
+// src/core/templates/displayBox.ts
+function generateDisplayBox(box, _mat) {
   const { W, D, H } = box;
-  const slant = Math.hypot(D, H);
-  const topFold = 90 + Math.atan2(D, H) * 180 / Math.PI;
-  const PAD = 7;
-  const cx0 = H + PAD;
+  const cx0 = H;
   const cx1 = cx0 + W;
-  const ty = PAD;
-  const fy = ty + slant;
-  const by0 = fy + H;
+  const ty0 = 0;
+  const ty1 = ty0 + D;
+  const ky1 = ty1 + H;
+  const by0 = ky1;
   const by1 = by0 + D;
-  const width = cx1 + H + PAD;
-  const height = by1 + PAD;
+  const dy1 = by1 + H;
+  const width = cx1 + H;
+  const height = dy1;
+  const m = Math.max(8, Math.min(W, H) * 0.2);
+  const win = [
+    P(cx0 + m, by1 + m),
+    P(cx1 - m, by1 + m),
+    P(cx1 - m, dy1 - m),
+    P(cx0 + m, dy1 - m)
+  ];
   const panels = [
     { id: "base", parentId: null, outline: rect(cx0, by0, cx1, by1), stage: 0 },
     {
       id: "back",
       parentId: "base",
-      outline: rect(cx0, fy, cx1, by0),
+      outline: rect(cx0, ty1, cx1, by0),
       hingeA: P(cx0, by0),
       hingeB: P(cx1, by0),
       foldAngle: 90,
@@ -56463,59 +56469,64 @@ function generateWedgeBox(box, _mat) {
     {
       id: "top",
       parentId: "back",
-      outline: rect(cx0, ty, cx1, fy),
-      hingeA: P(cx0, fy),
-      hingeB: P(cx1, fy),
-      foldAngle: topFold,
+      outline: rect(cx0, ty0, cx1, ty1),
+      hingeA: P(cx0, ty1),
+      hingeB: P(cx1, ty1),
+      foldAngle: 90,
       stage: 1
     },
     {
-      id: "side-left",
+      id: "left",
       parentId: "base",
-      outline: [P(cx0, by0), P(cx0, by1), P(cx0 - H, by0)],
+      outline: rect(0, by0, cx0, by1),
       hingeA: P(cx0, by0),
       hingeB: P(cx0, by1),
+      foldAngle: -90,
+      stage: 0
+    },
+    {
+      id: "right",
+      parentId: "base",
+      outline: rect(cx1, by0, cx1 + H, by1),
+      hingeA: P(cx1, by0),
+      hingeB: P(cx1, by1),
       foldAngle: 90,
       stage: 0
     },
     {
-      id: "side-right",
+      id: "door",
       parentId: "base",
-      outline: [P(cx1, by0), P(cx1, by1), P(cx1 + H, by0)],
-      hingeA: P(cx1, by0),
+      outline: rect(cx0, by1, cx1, dy1),
+      holes: [win],
+      hingeA: P(cx0, by1),
       hingeB: P(cx1, by1),
       foldAngle: -90,
-      stage: 0
+      stage: 1
     }
   ];
   const cut = (d) => ({ kind: "cut", d });
   const crease = (d) => ({ kind: "crease", d });
   const segments = [
-    cut(`M ${cx0} ${ty} L ${cx1} ${ty}`),
-    // ขอบบนฝา
-    cut(`M ${cx1} ${ty} L ${cx1} ${fy}`),
-    // ขอบขวาฝา
-    cut(`M ${cx1} ${fy} L ${cx1 + H} ${by0} L ${cx1} ${by1}`),
-    // สามเหลี่ยมขวา (ผ่านยอด)
-    cut(`M ${cx1} ${by1} L ${cx0} ${by1}`),
-    // ขอบล่างฐาน
-    cut(`M ${cx0} ${by1} L ${cx0 - H} ${by0} L ${cx0} ${fy}`),
-    // สามเหลี่ยมซ้าย
-    cut(`M ${cx0} ${fy} L ${cx0} ${ty}`),
-    // ขอบซ้ายฝา
-    crease(`M ${cx0} ${fy} L ${cx1} ${fy}`),
-    // ผนังหลัง|ฝา
+    // ขอบนอกไล่รอบ
+    cut(`M ${cx0} ${ty0} L ${cx1} ${ty0} L ${cx1} ${by0} L ${cx1 + H} ${by0} L ${cx1 + H} ${by1} L ${cx1} ${by1} L ${cx1} ${dy1} L ${cx0} ${dy1} L ${cx0} ${by1} L 0 ${by1} L 0 ${by0} L ${cx0} ${by0} Z`),
+    // หน้าต่าง (เจาะ)
+    cut(`M ${cx0 + m} ${by1 + m} L ${cx1 - m} ${by1 + m} L ${cx1 - m} ${dy1 - m} L ${cx0 + m} ${dy1 - m} Z`),
+    // รอยพับ
+    crease(`M ${cx0} ${ty1} L ${cx1} ${ty1}`),
+    // ผนังหลัง|ฝาบน
     crease(`M ${cx0} ${by0} L ${cx1} ${by0}`),
     // ฐาน|ผนังหลัง
+    crease(`M ${cx0} ${by1} L ${cx1} ${by1}`),
+    // ฐาน|ฝาหน้า
     crease(`M ${cx0} ${by0} L ${cx0} ${by1}`),
-    // ฐาน|สามเหลี่ยมซ้าย
+    // ฐาน|ผนังซ้าย
     crease(`M ${cx1} ${by0} L ${cx1} ${by1}`)
-    // ฐาน|สามเหลี่ยมขวา
+    // ฐาน|ผนังขวา
   ];
   const dims = [
-    { a: P(cx0, by1 + 4), b: P(cx1, by1 + 4), label: `W ${fmt(W)}` },
-    { a: P(width - 2, by0), b: P(width - 2, by1), label: `D ${fmt(D)}` },
-    { a: P(cx0 - H - 2, fy), b: P(cx0 - H - 2, by0), label: `H ${fmt(H)}` }
+    { a: P(cx0, dy1 + 4), b: P(cx1, dy1 + 4), label: `W ${fmt(W)}` },
+    { a: P(width + 6, by0), b: P(width + 6, by1), label: `D ${fmt(D)}` },
+    { a: P(-6, ty1), b: P(-6, by0), label: `H ${fmt(H)}` }
   ];
   return { width, height, segments, panels, dims };
 }
@@ -56606,15 +56617,26 @@ var TEMPLATES = [
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateSlideBox
   },
+  // กล่องแซนวิช (wedge) — ซ่อนจาก UI ไว้ก่อน (generator/เทสต์ยังอยู่ใน wedge.ts) เปิดใช้ได้โดย uncomment
+  // {
+  //   id: 'wedge',
+  //   nameTh: 'กล่องแซนวิช (wedge)',
+  //   detail: 'ปริซึมสามเหลี่ยม ฐาน+ผนังหลัง+ฝาเฉียง+ผนังข้างสามเหลี่ยม — ใส่แซนวิช/ขนมชิ้นสามเหลี่ยม',
+  //   defaults: { W: 120, D: 110, H: 80 },
+  //   tilt: -Math.PI / 2,
+  //   supportsHandle: false,
+  //   foldDepth: (b, m) => b.H + m.thickness,
+  //   generate: generateWedgeBox,
+  // },
   {
-    id: "wedge",
-    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E41\u0E0B\u0E19\u0E27\u0E34\u0E0A (wedge)",
-    detail: "\u0E1B\u0E23\u0E34\u0E0B\u0E36\u0E21\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21 \u0E10\u0E32\u0E19+\u0E1C\u0E19\u0E31\u0E07\u0E2B\u0E25\u0E31\u0E07+\u0E1D\u0E32\u0E40\u0E09\u0E35\u0E22\u0E07+\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21 \u2014 \u0E43\u0E2A\u0E48\u0E41\u0E0B\u0E19\u0E27\u0E34\u0E0A/\u0E02\u0E19\u0E21\u0E0A\u0E34\u0E49\u0E19\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21",
-    defaults: { W: 120, D: 110, H: 80 },
+    id: "display-box",
+    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E02\u0E49\u0E32\u0E07/\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07 (display)",
+    detail: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1B\u0E34\u0E14 5 \u0E14\u0E49\u0E32\u0E19 + \u0E1D\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E44\u0E14\u0E49 \u0E40\u0E08\u0E32\u0E30\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32 \u2014 \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E42\u0E0A\u0E27\u0E4C/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E02\u0E2D\u0E07\u0E2A\u0E30\u0E2A\u0E21",
+    defaults: { W: 140, D: 90, H: 140 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
     foldDepth: (b, m) => b.H + m.thickness,
-    generate: generateWedgeBox
+    generate: generateDisplayBox
   },
   {
     id: "tray",
@@ -57248,7 +57270,7 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
 - tuck-end / mailer / fefco-0427 / tray / gable / lid-box: W\xD7D = footprint \u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19
 - lid-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A): \u0E10\u0E32\u0E19\u0E16\u0E32\u0E14\u0E25\u0E36\u0E01 + \u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E16\u0E32\u0E14\u0E15\u0E37\u0E49\u0E19\u0E2A\u0E27\u0E21\u0E17\u0E31\u0E1A (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E10\u0E32\u0E19; \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1D\u0E32\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 (\u0E01\u0E27\u0E49\u0E32\u0E07/\u0E25\u0E36\u0E01\u0E01\u0E27\u0E48\u0E32\u0E40\u0E25\u0E47\u0E01\u0E19\u0E49\u0E2D\u0E22 \u0E2A\u0E39\u0E07 ~40%), handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E23\u0E2D\u0E07\u0E40\u0E17\u0E49\u0E32/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E41\u0E22\u0E01\u0E0A\u0E34\u0E49\u0E19
 - slide-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E2A\u0E44\u0E25\u0E14\u0E4C/matchbox): \u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (\u0E16\u0E32\u0E14) \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E40\u0E02\u0E49\u0E32-\u0E2D\u0E2D\u0E01\u0E43\u0E19\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E20\u0E32\u0E22\u0E19\u0E2D\u0E01 (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (D = \u0E17\u0E34\u0E28\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19), \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E1B\u0E23\u0E30\u0E14\u0E31\u0E1A/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E25\u0E47\u0E01/\u0E44\u0E21\u0E49\u0E02\u0E35\u0E14
-- wedge (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E41\u0E0B\u0E19\u0E27\u0E34\u0E0A): \u0E1B\u0E23\u0E34\u0E0B\u0E36\u0E21\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21\u0E21\u0E38\u0E21\u0E09\u0E32\u0E01 (\u0E10\u0E32\u0E19+\u0E1C\u0E19\u0E31\u0E07\u0E2B\u0E25\u0E31\u0E07+\u0E1D\u0E32\u0E40\u0E09\u0E35\u0E22\u0E07+\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21) \u2014 W = \u0E01\u0E27\u0E49\u0E32\u0E07, D = \u0E25\u0E36\u0E01\u0E10\u0E32\u0E19, H = \u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07\u0E2B\u0E25\u0E31\u0E07, handle=false; \u0E43\u0E0A\u0E49\u0E43\u0E2A\u0E48\u0E41\u0E0B\u0E19\u0E27\u0E34\u0E0A/\u0E02\u0E19\u0E21/\u0E02\u0E2D\u0E07\u0E17\u0E23\u0E07\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21
+- display-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E02\u0E49\u0E32\u0E07/\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07): \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1B\u0E34\u0E14 5 \u0E14\u0E49\u0E32\u0E19 + \u0E1D\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E44\u0E14\u0E49 \u0E40\u0E08\u0E32\u0E30\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32 \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E02\u0E2D\u0E07\u0E2A\u0E30\u0E2A\u0E21\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E40\u0E2B\u0E47\u0E19\u0E02\u0E49\u0E32\u0E07\u0E43\u0E19
 - gable: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E04\u0E32\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27 \u0E10\u0E32\u0E19\u0E15\u0E31\u0E19 \u0E1C\u0E19\u0E31\u0E07 4 \u0E14\u0E49\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19 \u0E41\u0E1C\u0E07\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E40\u0E2D\u0E35\u0E22\u0E07\u0E21\u0E32\u0E0A\u0E19\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E31\u0E19 \u0E21\u0E35\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E17\u0E35\u0E48\u0E22\u0E2D\u0E14 = \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E43\u0E19\u0E15\u0E31\u0E27 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false \u2014 \u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E40\u0E08\u0E32\u0E30\u0E40\u0E1E\u0E34\u0E48\u0E21); H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 \u0E23\u0E30\u0E1A\u0E1A\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E04\u0E32\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21
 - tray: \u0E16\u0E32\u0E14\u0E40\u0E1B\u0E34\u0E14\u0E1A\u0E19 (\u0E44\u0E21\u0E48\u0E21\u0E35\u0E1D\u0E32) \u0E1C\u0E19\u0E31\u0E07 4 \u0E14\u0E49\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19 \u0E21\u0E38\u0E21\u0E21\u0E35\u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u2014 H \u0E04\u0E37\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 (\u0E16\u0E32\u0E14\u0E21\u0E31\u0E01\u0E15\u0E37\u0E49\u0E19); \u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (handle=false); \u0E43\u0E0A\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E16\u0E32\u0E14/\u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C \u0E2B\u0E23\u0E37\u0E2D\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01\u0E04\u0E39\u0E48\u0E01\u0E31\u0E1A sleeve
 - fefco-0427: \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 (roll end) + \u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E10\u0E32\u0E19 \u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49\u0E01\u0E32\u0E27 \u2014 \u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48\u0E01\u0E27\u0E49\u0E32\u0E07\u0E01\u0E27\u0E48\u0E32 mailer \u0E18\u0E23\u0E23\u0E21\u0E14\u0E32 (\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E02\u0E49\u0E32\u0E07\u0E25\u0E30 ~H) \u0E41\u0E25\u0E30\u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false)

@@ -19,8 +19,9 @@ export function generateLidBox(box: BoxParams, mat: Material): Dieline {
   const base = trayPieceSize(W, D, H, t)
   const bx = base.w + GAP // จุดเริ่มชิ้นฝาตามแกน x
 
+  // ทั้งสองชิ้นผนังพับขึ้น (ถาดเปิด) — ฝาเป็นถาดตื้นกว่า; พับขึ้นเหมือนฐานเพื่อให้หน้าพิมพ์ไม่กลับด้าน
   const basePiece = buildTrayPiece('b-', 0, 0, W, D, H, t, 1)
-  const lidPiece = buildTrayPiece('l-', bx, 0, lidW, lidD, lidH, t, -1)
+  const lidPiece = buildTrayPiece('l-', bx, 0, lidW, lidD, lidH, t, 1)
 
   const panels: Panel[] = [...basePiece.panels, ...lidPiece.panels]
   const segments: Segment[] = [...basePiece.segments, ...lidPiece.segments]
