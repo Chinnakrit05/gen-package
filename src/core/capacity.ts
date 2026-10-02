@@ -46,9 +46,14 @@ export function tubeVolumeMl(W: number, H: number, rcap: number, capTop: number)
   return ((Math.PI * a * bAvg * bodyH) / 1000) * 0.9
 }
 
-// ข้อความแสดงผล: มล. ปัดพองาม หรือ ลิตร เมื่อ ≥ 1000 มล.
-export function formatCapacity(ml: number): string {
+// ข้อความแสดงผล: เมตริก = มล./ลิตร; imperial = fl oz / แกลลอน (US)
+export function formatCapacity(ml: number, imperial = false): string {
   if (!Number.isFinite(ml) || ml <= 0) return '—'
+  if (imperial) {
+    const oz = ml / 29.5735 // US fluid ounce
+    if (oz >= 128) return `≈ ${(oz / 128).toFixed(oz >= 1280 ? 0 : 1)} gal`
+    return `≈ ${oz >= 10 ? Math.round(oz) : Math.round(oz * 10) / 10} fl oz`
+  }
   if (ml >= 1000) return `≈ ${(ml / 1000).toFixed(ml >= 10000 ? 0 : 1)} ลิตร`
   if (ml >= 100) return `≈ ${Math.round(ml / 5) * 5} มล.`
   return `≈ ${Math.round(ml)} มล.`

@@ -38,7 +38,14 @@ function faceLabel(id: string): { th: string; en: string } | null {
   return null
 }
 
-function Dim({ d }: { d: DimMark }) {
+// แปลงตัวเลข (มม.) ในป้ายขนาดเป็นนิ้วเมื่ออยู่โหมด imperial — ตัวเลขบน dieline เป็นระยะ score (มม.) ทั้งหมด
+function dimLabel(label: string, imperial: boolean): string {
+  if (!imperial) return label
+  return label.replace(/\d+(\.\d+)?/g, (m) => String(Math.round((Number(m) / 25.4) * 100) / 100))
+}
+
+function Dim({ d, imperial = false }: { d: DimMark; imperial?: boolean }) {
+  const label = dimLabel(d.label, imperial)
   const vert = Math.abs(d.a.x - d.b.x) < 0.001
   const mx = (d.a.x + d.b.x) / 2
   const my = (d.a.y + d.b.y) / 2
@@ -59,7 +66,7 @@ function Dim({ d }: { d: DimMark }) {
             fill={DIM_COLOR}
             fontSize={6}
           >
-            {d.label}
+            {label}
           </text>
         </>
       ) : (
@@ -67,7 +74,7 @@ function Dim({ d }: { d: DimMark }) {
           <line x1={d.a.x} y1={d.a.y - 2.5} x2={d.a.x} y2={d.a.y + 2.5} vectorEffect="non-scaling-stroke" />
           <line x1={d.b.x} y1={d.b.y - 2.5} x2={d.b.x} y2={d.b.y + 2.5} vectorEffect="non-scaling-stroke" />
           <text x={mx} y={my - 2} textAnchor="middle" stroke="none" fill={DIM_COLOR} fontSize={6}>
-            {d.label}
+            {label}
           </text>
         </>
       )}
@@ -271,9 +278,11 @@ export const DielineSVG = memo(function DielineSVG({
   onRedo,
   canUndo,
   canRedo,
+  imperial = false,
 }: {
   dieline: Dieline
   showDims: boolean
+  imperial?: boolean
   decos?: Deco[]
   guides?: Guides | null
   fillColor?: string | null
@@ -1500,7 +1509,7 @@ export const DielineSVG = memo(function DielineSVG({
         ),
       )}
 
-      {showDims && dieline.dims.map((d, i) => <Dim key={i} d={d} />)}
+      {showDims && dieline.dims.map((d, i) => <Dim key={i} d={d} imperial={imperial} />)}
 
       {/* ป้ายกำกับหน้า (เช่น หน้า/หลัง ของนามบัตร) — โชว์เสมอในพรีวิว ไม่เข้าไฟล์ผลิต */}
       {dieline.captions?.map((c, i) => (

@@ -171,10 +171,20 @@ interface DimFieldProps {
   // pop = แสดงเป็นปุ่มเล็ก คลิกแล้ว dropdown สไลเดอร์ลงมา (แบบ Canva) — ใช้ในแถบบน
   pop?: boolean
   icon?: React.ReactNode // ถ้ามี → ปุ่ม pop โชว์ไอคอนแทนป้ายข้อความ (label ยังอยู่ใน dropdown + tooltip)
+  imperial?: boolean // true = แสดง/ป้อนเป็นนิ้ว (ค่าจริงเก็บเป็น มม. เสมอ)
 }
 
-function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange, pop: popProp, icon }: DimFieldProps) {
-  const commit = (v: number) => onChange(clamp(Number.isFinite(v) ? v : min, min, max))
+const MM_PER_IN = 25.4
+
+function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange, pop: popProp, icon, imperial = false }: DimFieldProps) {
+  // ค่า state จริงเป็น มม. เสมอ (เรขาคณิตใช้ มม.) — โหมดนิ้วแค่แปลงตอนแสดง/ป้อน
+  const toDisp = (v: number) => (imperial ? Math.round((v / MM_PER_IN) * 1000) / 1000 : v)
+  const toMm = (n: number) => (imperial ? n * MM_PER_IN : n)
+  const unitLabel = imperial ? 'นิ้ว' : unit
+  const dMin = toDisp(min)
+  const dMax = toDisp(max)
+  const dStep = imperial ? 0.05 : step
+  const commit = (vmm: number) => onChange(clamp(Number.isFinite(vmm) ? vmm : min, min, max))
   const inTopBar = useContext(TopBarCtx) // เรียก hook แบบไม่มีเงื่อนไข
   const pop = popProp || inTopBar // ในแถบบน = โหมด dropdown อัตโนมัติ
   const [open, setOpen] = useState(false)
@@ -182,8 +192,9 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
   const [text, setText] = useState(String(value))
   const [editing, setEditing] = useState(false)
   useEffect(() => {
-    if (!editing) setText(String(value))
-  }, [value, editing])
+    if (!editing) setText(String(toDisp(value)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, editing, imperial])
   const btnRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null)
@@ -233,9 +244,9 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
   const num = (
     <input
       type="number"
-      min={min}
-      max={max}
-      step={step}
+      min={dMin}
+      max={dMax}
+      step={dStep}
       value={text}
       disabled={disabled}
       aria-label={label}
@@ -244,11 +255,11 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
         setText(e.target.value)
         const n = Number(e.target.value)
         // อัปเดตสด (สไลเดอร์/3D ตาม) เฉพาะเมื่อเป็นตัวเลขในช่วง — ไม่ clamp ระหว่างพิมพ์
-        if (e.target.value !== '' && Number.isFinite(n) && n >= min && n <= max) onChange(n)
+        if (e.target.value !== '' && Number.isFinite(n) && n >= dMin && n <= dMax) onChange(toMm(n))
       }}
       onBlur={() => {
         setEditing(false)
-        commit(Number(text)) // clamp ตอนออกจากช่อง
+        commit(toMm(Number(text))) // clamp ตอนออกจากช่อง (เป็น มม.)
       }}
     />
   )
@@ -286,7 +297,7 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
             <span className="field-pop-label">{label}</span>
           )}
           <b>
-            {value}
+            {toDisp(value)}
             {unit === '×' ? '×' : ''}
           </b>
         </button>
@@ -302,7 +313,7 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
                 {label}
                 <span className="field-num">
                   {num}
-                  {unit}
+                  {unitLabel}
                 </span>
               </span>
               {slider}
@@ -319,7 +330,7 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
         {label}
         <span className="field-num">
           {num}
-          {unit}
+          {unitLabel}
         </span>
       </span>
       {slider}
@@ -929,6 +940,22 @@ export default function App({
     }
   }, [lang])
   const t = (th: string, en: string) => (lang === 'en' ? en : th)
+  // หน่วยวัดช่องขนาด (มม./นิ้ว) — ค่าจริงเก็บเป็น มม. เสมอ สลับแค่การแสดงผล
+  const [unit, setUnit] = useState<'mm' | 'in'>(() => {
+    try {
+      return localStorage.getItem('packit-unit') === 'in' ? 'in' : 'mm'
+    } catch {
+      return 'mm'
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('packit-unit', unit)
+    } catch {
+      /* ปิด storage — ข้าม */
+    }
+  }, [unit])
+  const imperial = unit === 'in'
   const [decos, setDecos] = useState<Deco[]>(initialActive.decos)
   const textFontKey = decos
     .filter((d): d is TextEl => d.type === 'text' && !d.hidden)
@@ -2583,7 +2610,26 @@ export default function App({
             open={groups.size}
             onToggle={() => toggleGroup('size')}
           >
+            <div className="unit-toggle" role="group" aria-label={t('หน่วยวัด', 'Unit')}>
+              <button
+                type="button"
+                className={!imperial ? 'active' : ''}
+                aria-pressed={!imperial}
+                onClick={() => setUnit('mm')}
+              >
+                {t('มม.', 'mm')}
+              </button>
+              <button
+                type="button"
+                className={imperial ? 'active' : ''}
+                aria-pressed={imperial}
+                onClick={() => setUnit('in')}
+              >
+                {t('นิ้ว', 'inch')}
+              </button>
+            </div>
             <DimField
+              imperial={imperial}
               label={
                 kind === 'box'
                   ? t('กว้าง W', 'Width W')
@@ -2607,6 +2653,7 @@ export default function App({
             {!(kind === 'pouch' && (pouchStyle === 'flat' || pouchStyle === 'pillow')) &&
               !(kind === 'box' && (templateId === 'card' || templateId === 'sticker')) && (
               <DimField
+                imperial={imperial}
                 label={
                   kind === 'box'
                     ? t('ลึก D', 'Depth D')
@@ -2624,6 +2671,7 @@ export default function App({
               />
             )}
             <DimField
+              imperial={imperial}
               label={kind === 'pouch' ? t('สูงลำตัว H', 'Body height H') : t('สูง H', 'Height H')}
               value={H}
               min={30}
@@ -2634,7 +2682,7 @@ export default function App({
             {capacityMl != null && (
               <div className="capacity">
                 <span className="capacity-label">{t('ความจุโดยประมาณ', 'Est. capacity')}</span>
-                <span className="capacity-value">{formatCapacity(capacityMl)}</span>
+                <span className="capacity-value">{formatCapacity(capacityMl, imperial)}</span>
               </div>
             )}
             {mat.foldable && template.supportsHandle && (
@@ -4348,6 +4396,7 @@ export default function App({
                 onRedo={redo}
                 canUndo={!aiBusy && undoStack.length > 0}
                 canRedo={!aiBusy && redoStack.length > 0}
+                imperial={imperial}
               />
               <span className="bp-legend">
                 <i className="sw-cut" /> เส้นตัด

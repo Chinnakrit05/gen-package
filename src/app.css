@@ -943,6 +943,32 @@ select {
   margin-top: 6px;
 }
 
+.unit-toggle {
+  display: inline-flex;
+  gap: 0;
+  margin-bottom: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.unit-toggle button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 14px;
+  cursor: pointer;
+}
+.unit-toggle button + button {
+  border-left: 1px solid var(--border-strong);
+}
+.unit-toggle button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
 .capacity {
   display: flex;
   align-items: baseline;

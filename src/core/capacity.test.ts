@@ -54,4 +54,10 @@ describe('capacity: รูปแบบข้อความ', () => {
     expect(formatCapacity(1500)).toContain('ลิตร')
     expect(formatCapacity(0)).toBe('—')
   })
+
+  it('imperial = fl oz / แกลลอน', () => {
+    expect(formatCapacity(295.735, true)).toContain('fl oz') // ~10 fl oz
+    expect(formatCapacity(295.735, true)).toContain('10')
+    expect(formatCapacity(8000, true)).toContain('gal') // > 128 fl oz
+  })
 })
