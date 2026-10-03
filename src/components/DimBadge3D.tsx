@@ -9,13 +9,22 @@ export interface Dim3D {
   mm: number
 }
 
-// สีเส้น/ตัวอักษรบอกขนาด — เข้มพออ่านบนพื้นขาวของฉาก 3D (ฉากตั้งพื้นขาวเสมอ)
+// สีเส้นบอกขนาด — เข้มพออ่านบนพื้นขาวของฉาก 3D (ฉากตั้งพื้นขาวเสมอ)
 const LINE_COLOR = '#5a696c'
 
-// ป้ายขนาด กว้าง/ลึก/สูง บนมุมมอง 3D ตามหน่วยที่เลือก (มม./นิ้ว)
-// variant 'lines' = เส้นบอกขนาดพาดตามขอบจริงของโมเดล (เส้นต่อ + หัวลูกศร + ตัวเลข) แบบ CAD
-// variant 'badge' = ป้ายรวมลอยเหนือโมเดล (ใช้กับภาชนะที่ขนาด D = ⌀ปาก ไม่ใช่ความกว้างแกน)
-// ทั้งคู่ยึดกับ bounding box จริง (วัดทุกเฟรม) จึงเกาะอยู่กับชิ้นงานขณะพับ/หมุน
+type Vec3 = [number, number, number]
+// เส้นวัดหนึ่งเส้น: ขอบจริง p0→p1 + ทิศ/ระยะยื่นออก off (เวกเตอร์เต็มรวมความยาวแล้ว) + ข้อความ
+interface Measure {
+  p0: Vec3
+  p1: Vec3
+  off: Vec3
+  label: string
+}
+
+// ป้ายขนาด กว้าง/ลึก/สูง บนมุมมอง 3D ตามหน่วยที่เลือก (มม./นิ้ว) — ยึดกับ bounding box จริง
+// variant 'lines'  = กล่อง/ถุง: จับขนาดเข้าแกนตามช่วง แล้ววาดเส้นตามขอบจริงทั้ง 3 แกน
+// variant 'vessel' = ภาชนะ/หลอด: ⌀ตัวที่ฐาน + สูงด้านซ้าย + ⌀ปากที่ยอด (ยาวเท่า ⌀ จริง)
+// variant 'badge'  = ป้ายรวมลอย (สำรองไว้)
 export function DimBadge3D({
   targetRef,
   dims,
@@ -25,24 +34,110 @@ export function DimBadge3D({
   targetRef: React.RefObject<THREE.Object3D | null>
   dims: Dim3D[]
   imperial: boolean
-  variant?: 'lines' | 'badge'
+  variant?: 'lines' | 'vessel' | 'badge'
 }) {
   if (variant === 'badge') return <DimCard targetRef={targetRef} dims={dims} imperial={imperial} />
-  return <DimLines targetRef={targetRef} dims={dims} imperial={imperial} />
+  const build = variant === 'vessel' ? buildVessel : buildAuto
+  return <DimLines targetRef={targetRef} dims={dims} imperial={imperial} build={build} />
 }
 
-// ---- เส้นบอกขนาด (CAD) ----
+// จับคู่ขนาด (W/D/H) เข้ากับแกนของทรงตามช่วงที่ใกล้ที่สุด แล้ววาดตามขอบจริง (กล่อง/ถุง)
+// x = ขอบหน้า-ล่าง (ยื่นลง), y = ขอบหน้า-ซ้าย (ยื่นซ้าย), z = ขอบซ้าย-ล่าง (ยื่นซ้าย)
+function buildAuto(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[] {
+  const { min, max } = b
+  const span = [max.x - min.x, max.y - min.y, max.z - min.z]
+  const off = Math.max(10, Math.max(span[0], span[1], span[2]) * 0.13)
+  const used = [false, false, false]
+  const axisDim = [-1, -1, -1]
+  const order = dims.map((_, i) => i).sort((a, c) => dims[c].mm - dims[a].mm)
+  for (const di of order) {
+    let bestAxis = -1
+    let bestErr = Infinity
+    for (let a = 0; a < 3; a++) {
+      if (used[a]) continue
+      const err = Math.abs(span[a] - dims[di].mm)
+      if (err < bestErr) {
+        bestErr = err
+        bestAxis = a
+      }
+    }
+    if (bestAxis >= 0) {
+      used[bestAxis] = true
+      axisDim[bestAxis] = di
+    }
+  }
+  const edges: { p0: Vec3; dir: Vec3; len: number; offv: Vec3 }[] = [
+    { p0: [min.x, min.y, max.z], dir: [1, 0, 0], len: span[0], offv: [0, -1, 0] },
+    { p0: [min.x, min.y, max.z], dir: [0, 1, 0], len: span[1], offv: [-1, 0, 0] },
+    { p0: [min.x, min.y, min.z], dir: [0, 0, 1], len: span[2], offv: [-1, 0, 0] },
+  ]
+  const out: Measure[] = []
+  for (let a = 0; a < 3; a++) {
+    const di = axisDim[a]
+    if (di < 0) continue
+    const e = edges[a]
+    out.push({
+      p0: e.p0,
+      p1: [e.p0[0] + e.dir[0] * e.len, e.p0[1] + e.dir[1] * e.len, e.p0[2] + e.dir[2] * e.len],
+      off: [e.offv[0] * off, e.offv[1] * off, e.offv[2] * off],
+      label: `${dims[di].label} ${fmtDim(dims[di].mm, imperial)}`,
+    })
+  }
+  return out
+}
+
+// ภาชนะ/หลอด (ทรงหมุน): ⌀ตัว = เส้นนอนที่ฐาน (เต็มความกว้าง), สูง = เส้นตั้งด้านซ้าย,
+// ⌀ปาก = เส้นนอนสั้น ๆ ที่ยอด ยาวเท่าค่า ⌀ปากจริง (ไม่ใช่เต็มลำตัว) จัดกึ่งกลาง
+// dims เรียง [⌀ตัว(W), ⌀ปาก(D), สูง(H)] ตามที่ App ส่งมา
+function buildVessel(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[] {
+  const { min, max } = b
+  const span = [max.x - min.x, max.y - min.y, max.z - min.z]
+  const off = Math.max(10, Math.max(span[0], span[1], span[2]) * 0.13)
+  const cx = (min.x + max.x) / 2
+  const mouth = dims[1] ? dims[1].mm : span[0]
+  const out: Measure[] = []
+  // ⌀ตัว — ขอบฐานด้านหน้า เต็มความกว้าง ยื่นลง
+  out.push({
+    p0: [min.x, min.y, max.z],
+    p1: [max.x, min.y, max.z],
+    off: [0, -off, 0],
+    label: `${dims[0].label} ${fmtDim(dims[0].mm, imperial)}`,
+  })
+  // สูง — ขอบซ้ายด้านหน้า เต็มความสูง ยื่นซ้าย
+  if (dims[2]) {
+    out.push({
+      p0: [min.x, min.y, max.z],
+      p1: [min.x, max.y, max.z],
+      off: [-off, 0, 0],
+      label: `${dims[2].label} ${fmtDim(dims[2].mm, imperial)}`,
+    })
+  }
+  // ⌀ปาก — เส้นนอนสั้นที่ยอด ยาวเท่า ⌀ปากจริง จัดกึ่งกลาง ยื่นขึ้น
+  if (dims[1]) {
+    out.push({
+      p0: [cx - mouth / 2, max.y, max.z],
+      p1: [cx + mouth / 2, max.y, max.z],
+      off: [0, off, 0],
+      label: `${dims[1].label} ${fmtDim(dims[1].mm, imperial)}`,
+    })
+  }
+  return out
+}
+
+// ---- วาดเส้นบอกขนาด (CAD) จากรายการ Measure ----
 function DimLines({
   targetRef,
   dims,
   imperial,
+  build,
 }: {
   targetRef: React.RefObject<THREE.Object3D | null>
   dims: Dim3D[]
   imperial: boolean
+  build: (b: THREE.Box3, dims: Dim3D[], imperial: boolean) => Measure[]
 }) {
   const geoRef = useRef<THREE.BufferGeometry>(null)
-  // 3 แกน × สูงสุด 7 เส้น (ต่อ 2 + เส้นวัด 1 + หัวลูกศร 4) × 2 จุด × 3 พิกัด
+  // 3 เส้น × 7 ช่วง (ต่อ 2 + เส้นวัด 1 + หัวลูกศร 4) × 2 จุด × 3 พิกัด
   const posAttr = useMemo(() => new THREE.BufferAttribute(new Float32Array(3 * 7 * 2 * 3), 3), [])
   const g0 = useRef<THREE.Group>(null)
   const g1 = useRef<THREE.Group>(null)
@@ -62,44 +157,9 @@ function DimLines({
     box.current.setFromObject(target)
     const b = box.current
     if (b.isEmpty() || !Number.isFinite(b.min.x)) return
-    const { min, max } = b
-    const sx = max.x - min.x
-    const sy = max.y - min.y
-    const sz = max.z - min.z
-    const span = [sx, sy, sz]
-    const biggest = Math.max(sx, sy, sz)
-    const off = Math.max(10, biggest * 0.13) // ระยะยื่นของเส้นวัดออกจากขอบ
+    const biggest = Math.max(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z)
     const arr = Math.max(4, biggest * 0.03) // ความยาวหัวลูกศร
-
-    // จับคู่ขนาดที่ตั้งไว้ (W/D/H) เข้ากับแกนของกล่องตามความใกล้เคียงของช่วง
-    // (ตัวใหญ่จับก่อน) — ทำให้ป้ายถูกแกนแม้ template เอียงสลับแกน y↔z
-    const used = [false, false, false]
-    const axisDim = [-1, -1, -1]
-    const order = dims.map((_, i) => i).sort((a, c) => dims[c].mm - dims[a].mm)
-    for (const di of order) {
-      let bestAxis = -1
-      let bestErr = Infinity
-      for (let a = 0; a < 3; a++) {
-        if (used[a]) continue
-        const err = Math.abs(span[a] - dims[di].mm)
-        if (err < bestErr) {
-          bestErr = err
-          bestAxis = a
-        }
-      }
-      if (bestAxis >= 0) {
-        used[bestAxis] = true
-        axisDim[bestAxis] = di
-      }
-    }
-
-    // ขอบที่ใช้วางเส้นวัดของแต่ละแกน + ทิศยื่นออก (offv) ให้เส้นอยู่นอกรูปทรง
-    // x = ขอบหน้า-ล่าง (ยื่นลง), y = ขอบหน้า-ซ้าย (ยื่นซ้าย), z = ขอบซ้าย-ล่าง (ยื่นซ้าย)
-    const edges = [
-      { p0: [min.x, min.y, max.z], dir: [1, 0, 0], len: sx, offv: [0, -1, 0] },
-      { p0: [min.x, min.y, max.z], dir: [0, 1, 0], len: sy, offv: [-1, 0, 0] },
-      { p0: [min.x, min.y, min.z], dir: [0, 0, 1], len: sz, offv: [-1, 0, 0] },
-    ]
+    const measures = build(b, dims, imperial)
 
     const data = posAttr.array as Float32Array
     let s = 0
@@ -110,44 +170,47 @@ function DimLines({
       s++
     }
 
-    for (let a = 0; a < 3; a++) {
-      const di = axisDim[a]
-      const lg = labelGroups[a].current
-      const le = labelEls[a].current
-      if (di < 0) {
+    for (let i = 0; i < 3; i++) {
+      const lg = labelGroups[i].current
+      const le = labelEls[i].current
+      const m = measures[i]
+      if (!m) {
         if (lg) lg.visible = false
         continue
       }
-      const e = edges[a]
-      const dx = e.dir[0], dy = e.dir[1], dz = e.dir[2]
-      const ox = e.offv[0] * off, oy = e.offv[1] * off, oz = e.offv[2] * off
-      // จุดปลายขอบจริง
-      const P0x = e.p0[0], P0y = e.p0[1], P0z = e.p0[2]
-      const P1x = P0x + dx * e.len, P1y = P0y + dy * e.len, P1z = P0z + dz * e.len
-      // จุดบนเส้นวัด (ขยับออกตาม offv)
-      const E0x = P0x + ox, E0y = P0y + oy, E0z = P0z + oz
-      const E1x = P1x + ox, E1y = P1y + oy, E1z = P1z + oz
-      // เส้นต่อจากขอบไปเส้นวัด
-      seg(P0x, P0y, P0z, E0x, E0y, E0z)
-      seg(P1x, P1y, P1z, E1x, E1y, E1z)
-      // เส้นวัดหลัก
+      const [ax, ay, az] = m.p0
+      const [bx, by, bz] = m.p1
+      const [ox, oy, oz] = m.off
+      // ทิศของขอบ (หน่วย)
+      let dx = bx - ax, dy = by - ay, dz = bz - az
+      const dl = Math.hypot(dx, dy, dz) || 1
+      dx /= dl; dy /= dl; dz /= dl
+      // ทิศยื่นออก (หน่วย) ใช้เป็นแกนของหัวลูกศร/ตำแหน่งป้าย
+      let px = ox, py = oy, pz = oz
+      const ol = Math.hypot(px, py, pz) || 1
+      px /= ol; py /= ol; pz /= ol
+      // จุดบนเส้นวัด
+      const E0x = ax + ox, E0y = ay + oy, E0z = az + oz
+      const E1x = bx + ox, E1y = by + oy, E1z = bz + oz
+      // เส้นต่อจากขอบไปเส้นวัด + เส้นวัดหลัก
+      seg(ax, ay, az, E0x, E0y, E0z)
+      seg(bx, by, bz, E1x, E1y, E1z)
       seg(E0x, E0y, E0z, E1x, E1y, E1z)
-      // หัวลูกศรสองปลาย (ใช้ทิศ offv เป็นแกนตั้งฉากระนาบ)
-      const px = e.offv[0], py = e.offv[1], pz = e.offv[2]
+      // หัวลูกศรสองปลาย
       seg(E0x, E0y, E0z, E0x + dx * arr + px * arr * 0.6, E0y + dy * arr + py * arr * 0.6, E0z + dz * arr + pz * arr * 0.6)
       seg(E0x, E0y, E0z, E0x + dx * arr - px * arr * 0.6, E0y + dy * arr - py * arr * 0.6, E0z + dz * arr - pz * arr * 0.6)
       seg(E1x, E1y, E1z, E1x - dx * arr + px * arr * 0.6, E1y - dy * arr + py * arr * 0.6, E1z - dz * arr + pz * arr * 0.6)
       seg(E1x, E1y, E1z, E1x - dx * arr - px * arr * 0.6, E1y - dy * arr - py * arr * 0.6, E1z - dz * arr - pz * arr * 0.6)
-      // ป้ายตัวเลขกึ่งกลางเส้นวัด ขยับออกอีกนิด
+      // ป้ายตัวเลขกึ่งกลางเส้นวัด ขยับออกตามทิศยื่นอีกนิด
       if (lg) {
         lg.visible = true
         lg.position.set(
-          (E0x + E1x) / 2 + e.offv[0] * off * 0.22,
-          (E0y + E1y) / 2 + e.offv[1] * off * 0.22,
-          (E0z + E1z) / 2 + e.offv[2] * off * 0.22,
+          (E0x + E1x) / 2 + px * arr * 1.6,
+          (E0y + E1y) / 2 + py * arr * 1.6,
+          (E0z + E1z) / 2 + pz * arr * 1.6,
         )
       }
-      if (le) le.textContent = `${dims[di].label} ${fmtDim(dims[di].mm, imperial)}`
+      if (le) le.textContent = m.label
     }
 
     geo.setDrawRange(0, s * 2)
@@ -173,7 +236,7 @@ function DimLines({
   )
 }
 
-// ---- ป้ายรวมลอยเหนือโมเดล (ภาชนะ) ----
+// ---- ป้ายรวมลอยเหนือโมเดล (สำรอง) ----
 function DimCard({
   targetRef,
   dims,
