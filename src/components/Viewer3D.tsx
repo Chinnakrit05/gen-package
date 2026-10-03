@@ -293,9 +293,10 @@ interface ModelProps {
   fillImage?: FillImage | null
   dims?: Dim3D[]
   imperial?: boolean
+  dimVariant?: 'lines' | 'badge'
 }
 
-function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillImage, dims, imperial }: ModelProps) {
+function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillImage, dims, imperial, dimVariant }: ModelProps) {
   const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage)
 
   const geoms = useMemo(
@@ -373,7 +374,7 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillIm
           ))}
         </group>
       </group>
-      {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} />}
+      {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant={dimVariant} />}
     </>
   )
 }
@@ -381,7 +382,7 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillIm
 // นามบัตรใน 3D = การ์ดใบเดียว (แผ่นบาง) พิมพ์ลายหน้าที่ +Z และลายหลังที่ -Z
 // ลายมาจาก texture แผ่นคลี่ผืนเดียวกับ blueprint (หน้าอยู่ช่วง x ซ้าย, หลังอยู่ช่วง x ขวา)
 // จึงคำนวณ UV ของแต่ละหน้าให้ชี้ไปช่วง x ของหน้านั้น ๆ — หลังกลับ (หมุนรอบแกน Y) ให้อ่านถูกด้าน
-function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial }: ModelProps) {
+function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial, dimVariant }: ModelProps) {
   const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage)
   const front = dieline.panels[0]
   const back = dieline.panels[1]
@@ -455,7 +456,7 @@ function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial }
           <meshStandardMaterial ref={backMat} map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
         </mesh>
       </group>
-      {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} />}
+      {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant={dimVariant} />}
     </>
   )
 }

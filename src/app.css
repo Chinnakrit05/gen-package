@@ -2713,6 +2713,58 @@ aside .art-actions .file-pick:only-child {
   font-variant-numeric: tabular-nums;
 }
 
+/* ป้ายตัวเลขบนเส้นบอกขนาด (CAD) — ฉาก 3D พื้นขาวเสมอ จึงใช้สีคงที่ */
+.dim3d-label {
+  transform: translate(-50%, -50%);
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #3a4446;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ปุ่มเปิด/ปิดการแสดงขนาดบนมุมมอง 3D */
+.dim3d-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  left: auto;
+  width: auto;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-solid);
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 7px rgba(20, 18, 14, 0.12);
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.dim3d-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent-border);
+}
+.dim3d-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.dim3d-toggle-ic {
+  font-size: 14px;
+  line-height: 1;
+}
+
 /* --- modal ตั้งชื่องาน --- */
 .modal-overlay {
   position: fixed;

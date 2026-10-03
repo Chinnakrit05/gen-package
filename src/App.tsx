@@ -957,6 +957,21 @@ export default function App({
     }
   }, [unit])
   const imperial = unit === 'in'
+  // แสดง/ซ่อนเส้นบอกขนาดบนมุมมอง 3D (จำค่าไว้)
+  const [showDims3d, setShowDims3d] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('packit-dims3d') !== '0'
+    } catch {
+      return true
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('packit-dims3d', showDims3d ? '1' : '0')
+    } catch {
+      /* ปิด storage — ข้าม */
+    }
+  }, [showDims3d])
   const [decos, setDecos] = useState<Deco[]>(initialActive.decos)
   const textFontKey = decos
     .filter((d): d is TextEl => d.type === 'text' && !d.hidden)
@@ -2181,27 +2196,43 @@ export default function App({
           { label: 'ลึก', mm: D },
           { label: 'สูง', mm: H },
         ]
+  const dims3dOn = showDims3d ? dims3d : undefined
   const viewer3D = (
-    <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
-      {kind === 'box' ? (
-        <Viewer3D
-          dieline={dieline}
-          mat={mat}
-          fold={fold}
-          depth={template.foldDepth({ W, D, H }, mat)}
-          tilt={template.tilt}
-          decos={decos}
-          fillColor={fillColor}
-          fillImage={fillImage}
-          dims={dims3d}
-          imperial={imperial}
-        />
-      ) : kind === 'vessel' ? (
-        <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3d} imperial={imperial} />
-      ) : (
-        <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3d} imperial={imperial} />
-      )}
-    </Suspense>
+    <>
+      <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
+        {kind === 'box' ? (
+          <Viewer3D
+            dieline={dieline}
+            mat={mat}
+            fold={fold}
+            depth={template.foldDepth({ W, D, H }, mat)}
+            tilt={template.tilt}
+            decos={decos}
+            fillColor={fillColor}
+            fillImage={fillImage}
+            dims={dims3dOn}
+            imperial={imperial}
+            dimVariant="lines"
+          />
+        ) : kind === 'vessel' ? (
+          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} />
+        ) : (
+          <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} dimVariant="lines" />
+        )}
+      </Suspense>
+      <button
+        type="button"
+        className={`dim3d-toggle${showDims3d ? ' on' : ''}`}
+        aria-pressed={showDims3d}
+        title={showDims3d ? 'ซ่อนขนาดบนโมเดล' : 'แสดงขนาดบนโมเดล'}
+        onClick={() => setShowDims3d((v) => !v)}
+      >
+        <span className="dim3d-toggle-ic" aria-hidden>
+          ⟺
+        </span>
+        ขนาด
+      </button>
+    </>
   )
   // แท็บ "ออกแบบ" = โชว์ 3D ของแพ็กเกจเป็นจอหลัก (แทน blueprint)
   const design3D = sideTab === 'design'

@@ -349,6 +349,7 @@ function PouchModel({
   fillImage,
   dims,
   imperial,
+  dimVariant,
 }: {
   pouch: Pouch
   mat: Material
@@ -357,6 +358,7 @@ function PouchModel({
   fillImage: FillImage | null | undefined
   dims?: Dim3D[]
   imperial?: boolean
+  dimVariant?: 'lines' | 'badge'
 }) {
   const tex = usePouchTexture(pouch, decos, fillColor, fillImage)
   const geo = usePouchGeometry(pouch)
@@ -457,7 +459,7 @@ function PouchModel({
         </mesh>
       )}
     </group>
-    {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} />}
+    {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant={dimVariant} />}
     </>
   )
 }
@@ -470,6 +472,7 @@ export function PouchViewer3D({
   fillImage,
   dims,
   imperial,
+  dimVariant,
 }: {
   pouch: Pouch
   mat: Material
@@ -478,6 +481,7 @@ export function PouchViewer3D({
   fillImage?: FillImage | null
   dims?: Dim3D[]
   imperial?: boolean
+  dimVariant?: 'lines' | 'badge'
 }) {
   const dist = Math.max(pouch.H, pouch.W) * 2.6
   return (
@@ -491,7 +495,7 @@ export function PouchViewer3D({
       <ambientLight intensity={0.85} />
       <directionalLight position={[250, 420, 300]} intensity={1.6} />
       <directionalLight position={[-220, 120, -260]} intensity={0.6} />
-      <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} />
+      <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} dimVariant={dimVariant} />
       <OrbitControls makeDefault enableDamping />
     </Canvas>
   )
