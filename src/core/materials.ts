@@ -4,7 +4,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'carton-300',
     nameTh: 'กระดาษกล่องแป้ง 300 gsm',
-    detail: 'folding carton มาตรฐานกล่องเครื่องสำอาง/ยา',
+    detail: 'กล่องเครื่องสำอาง · ยา/อาหารเสริม · ขนม',
     thickness: 0.4,
     foldable: true,
     process: 'ไดคัท + พับ + ทากาว',
@@ -14,7 +14,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'carton-400',
     nameTh: 'กระดาษกล่องแป้ง 400 gsm',
-    detail: 'folding carton หนา แข็งแรงขึ้น',
+    detail: 'กล่องสินค้าน้ำหนักมาก · ของพรีเมียม · กล่องรองเท้า',
     thickness: 0.55,
     foldable: true,
     process: 'ไดคัท + พับ + ทากาว',
@@ -24,7 +24,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'kraft-350',
     nameTh: 'กระดาษคราฟท์ 350 gsm',
-    detail: 'สีน้ำตาลธรรมชาติ สายอีโค่',
+    detail: 'แบรนด์อีโค่/ออร์แกนิก · ของฝากคราฟท์ · เบเกอรี่',
     thickness: 0.5,
     foldable: true,
     process: 'ไดคัท + พับ + ทากาว',
@@ -34,7 +34,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'corrugated-e',
     nameTh: 'ลูกฟูกลอน E',
-    detail: 'micro flute ผิวเรียบ พิมพ์สวย',
+    detail: 'กล่องรีเทลพิมพ์สวย · กล่องของขวัญ · สินค้ากันกระแทกบาง',
     thickness: 1.6,
     foldable: true,
     process: 'ไดคัท + พับ',
@@ -44,7 +44,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'corrugated-b',
     nameTh: 'ลูกฟูกลอน B',
-    detail: 'กล่องไปรษณีย์/ขนส่ง',
+    detail: 'กล่องไปรษณีย์ · ขนส่ง/ลังสินค้า · ของหนัก',
     thickness: 3,
     foldable: true,
     process: 'ไดคัท + พับ',
@@ -54,7 +54,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'pet-sheet',
     nameTh: 'แผ่น PET ใส 0.3 มม.',
-    detail: 'กล่องพลาสติกใสโชว์สินค้า',
+    detail: 'กล่องโชว์สินค้า · ของขวัญใส · เบเกอรี่/คัพเค้ก',
     thickness: 0.3,
     foldable: true,
     process: 'ไดคัท + รีดรอยพับ (crease) + พับ',
@@ -65,7 +65,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'pet-bottle',
     nameTh: 'ขวด PET',
-    detail: 'ขวดน้ำ/ขวดเครื่องดื่ม',
+    detail: 'น้ำดื่ม · น้ำผลไม้/น้ำอัดลม · ซอส/เครื่องปรุง',
     thickness: 0.25,
     foldable: false,
     process: 'เป่าขึ้นรูป (blow molding)',
@@ -77,7 +77,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'glass',
     nameTh: 'แก้ว',
-    detail: 'ขวด/โหลแก้ว',
+    detail: 'น้ำผึ้ง/แยม · เครื่องดื่มพรีเมียม · เทียนหอม/ครีม',
     thickness: 2,
     foldable: false,
     process: 'เป่า/หล่อขึ้นรูป',
@@ -89,7 +89,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'aluminum',
     nameTh: 'อะลูมิเนียม',
-    detail: 'กระป๋องเครื่องดื่ม',
+    detail: 'น้ำอัดลม/เบียร์ · น้ำผลไม้ · เครื่องดื่มชูกำลัง',
     thickness: 0.2,
     foldable: false,
     process: 'ดึงขึ้นรูป (draw & iron)',
@@ -100,7 +100,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'pouch-foil',
     nameTh: 'ถุงฟอยล์ตั้งได้ (doypack)',
-    detail: 'ฟิล์มลามิเนตฟอยล์ ก้นตั้งได้ กันความชื้น — กาแฟ/ขนม/ผงชง',
+    detail: 'กาแฟ/ชา · ขนม/ของขบเคี้ยว · ผงชง/อาหารเสริม',
     thickness: 0.12,
     foldable: false,
     form: 'pouch',
@@ -112,7 +112,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'pouch-kraft',
     nameTh: 'ถุงคราฟท์ตั้งได้',
-    detail: 'ฟิล์มคราฟท์สายอีโค่ ก้นตั้งได้ — ชา/ธัญพืช/สินค้าออร์แกนิก',
+    detail: 'ชา/ธัญพืช · สินค้าออร์แกนิก · กาแฟสายอีโค่',
     thickness: 0.14,
     foldable: false,
     form: 'pouch',
@@ -124,7 +124,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'tube-laminate',
     nameTh: 'หลอดครีม (laminate tube)',
-    detail: 'หลอดบีบครีม/เจล/โลชั่น — ตัวหลอดพิมพ์/ฉลากพันรอบ ฝาเกลียว ปลายซีลแบน',
+    detail: 'ครีม/โลชั่น · ยาสีฟัน · เจลล้างหน้า/ยาทา',
     thickness: 0.3,
     foldable: false,
     form: 'tube',
@@ -136,7 +136,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'sticker-vinyl',
     nameTh: 'สติกเกอร์ไวนิล',
-    detail: 'สติกเกอร์กันน้ำ พิมพ์ + ไดคัทตามรูป — ฉลากสินค้า/โลโก้',
+    detail: 'ฉลากกันน้ำ · สติกเกอร์ขวด/แก้ว · โลโก้ติดสินค้า',
     thickness: 0.1,
     foldable: true,
     process: 'พิมพ์ + เคลือบ + ไดคัท',
@@ -147,7 +147,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'sticker-paper',
     nameTh: 'สติกเกอร์กระดาษ',
-    detail: 'สติกเกอร์กระดาษเคลือบ ราคาประหยัด — ฉลากทั่วไป',
+    detail: 'ฉลากทั่วไป · สติกเกอร์ราคาประหยัด · ฉลากกล่อง/ถุง',
     thickness: 0.12,
     foldable: true,
     process: 'พิมพ์ + ไดคัท',
@@ -158,7 +158,7 @@ export const MATERIALS: Material[] = [
   {
     id: 'pouch-clear',
     nameTh: 'ถุงใสตั้งได้',
-    detail: 'ฟิล์มใสโชว์สินค้า ก้นตั้งได้ — ลูกอม/ขนม/ของแห้ง',
+    detail: 'ลูกอม/ขนม · ของแห้ง/ถั่ว · สินค้าโชว์เนื้อใน',
     thickness: 0.1,
     foldable: false,
     form: 'pouch',

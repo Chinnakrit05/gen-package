@@ -2416,7 +2416,7 @@ export default function App({
                 </span>
                 <span className="pick-body">
                   <span className="pick-name">{t('กล่องพับ', 'Folding box')}</span>
-                  <span className="pick-detail">{t('กล่องกระดาษพับขึ้นรูป — เลือกทรง + วัสดุ', 'Folded paperboard box — pick shape + material')}</span>
+                  <span className="pick-detail">{t('เครื่องสำอาง · อาหาร/ขนม · ส่งของออนไลน์', 'Cosmetics · food/snacks · e-commerce')}</span>
                 </span>
               </button>
               <button
@@ -2432,7 +2432,7 @@ export default function App({
                 </span>
                 <span className="pick-body">
                   <span className="pick-name">{t('ภาชนะ + ฉลาก', 'Vessel + label')}</span>
-                  <span className="pick-detail">{t('ผลิตตัวขวด/โหล/กระป๋อง + ฉลากพันรอบ', 'Make a bottle/jar/can + wrap-around label')}</span>
+                  <span className="pick-detail">{t('น้ำดื่ม/เครื่องดื่ม · ครีม/โลชั่น · อาหารในโหล', 'Drinks/beverages · cream/lotion · jarred food')}</span>
                 </span>
               </button>
               <button
@@ -2448,7 +2448,7 @@ export default function App({
                 </span>
                 <span className="pick-body">
                   <span className="pick-name">{t('ถุงฟิล์ม (ตั้งได้)', 'Film pouch (stand-up)')}</span>
-                  <span className="pick-detail">{t('ถุง doypack ก้นตั้ง — พิมพ์ฟิล์มซีลขอบ', 'Stand-up doypack — printed edge-sealed film')}</span>
+                  <span className="pick-detail">{t('กาแฟ/ชา · ขนม/ของแห้ง · ผงชง/อาหารเสริม', 'Coffee/tea · snacks/dry goods · drink mixes')}</span>
                 </span>
               </button>
               <button
@@ -2470,7 +2470,7 @@ export default function App({
                 </span>
                 <span className="pick-body">
                   <span className="pick-name">{t('หลอดครีม (tube)', 'Cosmetic tube')}</span>
-                  <span className="pick-detail">{t('หลอดบีบครีม/เจล — ฝาเกลียว ก้นซีล + งานพิมพ์พันรอบ', 'Squeeze tube — screw cap, sealed end + wrap print')}</span>
+                  <span className="pick-detail">{t('ครีม/โลชั่น · ยาสีฟัน · เจล/ยาทา', 'Cream/lotion · toothpaste · gel/topical')}</span>
                 </span>
               </button>
               <button
@@ -2487,7 +2487,7 @@ export default function App({
                 </span>
                 <span className="pick-body">
                   <span className="pick-name">{t('นามบัตร', 'Business card')}</span>
-                  <span className="pick-detail">{t('การ์ดแบนพิมพ์ ขนาดมาตรฐาน 90×54 มม.', 'Flat printed card, standard 90×54 mm')}</span>
+                  <span className="pick-detail">{t('นามบัตร · การ์ดสะสม · คูปอง/การ์ดเชิญ', 'Business cards · collectible cards · coupons/invites')}</span>
                 </span>
               </button>
               <button
@@ -2504,7 +2504,7 @@ export default function App({
                 </span>
                 <span className="pick-body">
                   <span className="pick-name">{t('สติกเกอร์', 'Sticker')}</span>
-                  <span className="pick-detail">{t('สติกเกอร์พิมพ์ไดคัทตามรูป — ฉลากสินค้า/โลโก้', 'Die-cut printed sticker — product label/logo')}</span>
+                  <span className="pick-detail">{t('ฉลากสินค้า · โลโก้แบรนด์ · สติกเกอร์ตกแต่ง', 'Product labels · brand logos · decorative stickers')}</span>
                 </span>
               </button>
             </div>

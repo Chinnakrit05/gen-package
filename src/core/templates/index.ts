@@ -34,7 +34,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'tuck-end',
     nameTh: 'กล่องฝาเสียบ (tuck end)',
-    detail: 'กล่องสินค้าทั่วไป เครื่องสำอาง/ยา/ของชิ้นเดียว เสียบฝาหัว-ท้าย',
+    detail: 'เครื่องสำอาง · ยา/อาหารเสริม · ขนม · สินค้าชิ้นเดียวทั่วไป',
     defaults: { W: 80, D: 50, H: 120 },
     tilt: 0,
     supportsHandle: true,
@@ -45,7 +45,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'mailer',
     nameTh: 'กล่องไปรษณีย์ฝาพับ (≈FEFCO 0426)',
-    detail: 'กล่องฝาเปิดด้านบนแบบ e-commerce ถาด+ฝาพับในตัว (ตระกูล FEFCO 0426) แข็งแรง เหมาะส่งของ/ของฝากหลายชิ้น',
+    detail: 'ส่งของออนไลน์ · กล่อง subscription · ชุดของฝากหลายชิ้น',
     defaults: { W: 200, D: 140, H: 60 },
     tilt: -Math.PI / 2,
     supportsHandle: true,
@@ -56,7 +56,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'rollover-mailer',
     nameTh: 'กล่องไปรษณีย์ขอบม้วน (rollover mailer)',
-    detail: 'mailer ฝาพับ ผนังข้างม้วนสองชั้น (rollover) ขอบเรียบแข็งแรง — e-commerce พรีเมียม',
+    detail: 'กล่องแบรนด์พรีเมียม · ส่งเสื้อผ้า/เครื่องสำอาง · ของขวัญ',
     defaults: { W: 220, D: 150, H: 70 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
@@ -66,7 +66,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'fefco-0427',
     nameTh: 'กล่องไปรษณีย์ฝาล็อก (FEFCO 0427)',
-    detail: 'mailer มาตรฐานอุตสาหกรรม ผนังข้างม้วนสองชั้น ลิ้นล็อกเสียบฐาน แข็งแรง ไม่ใช้กาว',
+    detail: 'ส่งหนังสือ/ของหนัก · อีคอมเมิร์ซ · สินค้ากันกระแทก',
     defaults: { W: 200, D: 140, H: 60 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
@@ -77,7 +77,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'fefco-0215',
     nameTh: 'กล่องฝาบนก้นล็อก (FEFCO 0215)',
-    detail: 'ฝาบนเสียบ + ก้นล็อกอัตโนมัติ (snap-lock) ประกอบเร็วไม่ต้องทากาวก้น — กล่องรีเทลยอดนิยม',
+    detail: 'สินค้ารีเทลวางชั้น · เครื่องสำอาง · ขนม/อาหารแห้ง',
     defaults: { W: 90, D: 60, H: 150 },
     tilt: 0,
     supportsHandle: false,
@@ -87,7 +87,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'fefco-0202',
     nameTh: 'กล่องลูกฟูกลิ้นเกย OSC (FEFCO 0202)',
-    detail: 'ชิปปิ้งแบบ RSC แต่ลิ้นหน้า-หลังยาวเต็มเกยทับกันเต็มแผ่น — ก้น/ฝาสองชั้น แข็งแรงกว่า เหมาะของหนัก/ของแคบ',
+    detail: 'ของหนัก/ทรงสูงแคบ · ขวด · อะไหล่/ชิ้นส่วน',
     defaults: { W: 120, D: 90, H: 180 },
     tilt: 0,
     supportsHandle: false,
@@ -98,7 +98,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'rsc',
     nameTh: 'กล่องลูกฟูก RSC (FEFCO 0201)',
-    detail: 'กล่องชิปปิ้งมาตรฐาน ผนัง 4 ด้านเป็นท่อ ลิ้นบน-ล่างพับมาชนกลาง ปิดสองชั้น แข็งแรง ใช้กับสินค้าทั่วไป',
+    detail: 'ลังขนส่งทั่วไป · สต็อก/กระจายสินค้า · สินค้าจำนวนมาก',
     defaults: { W: 250, D: 200, H: 150 },
     tilt: 0,
     supportsHandle: false,
@@ -109,7 +109,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'fefco-0217',
     nameTh: 'กล่องหูหิ้วบนก้นล็อก (FEFCO 0217)',
-    detail: 'กล่องรีเทลมีหูหิ้วด้านบน (ผนังหน้า-หลังชนเป็นหูเจาะรูจับ + ผนังข้างทรงจั่วร่องล็อก) + ก้น crash-lock — เค้ก/เบเกอรี่/ของฝากถือสะดวก',
+    detail: 'เค้ก/เบเกอรี่ · ของฝากถือกลับ · ชุดของขวัญ',
     defaults: { W: 300, D: 150, H: 180 },
     tilt: 0,
     supportsHandle: false,
@@ -119,7 +119,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'bottle-carrier',
     nameTh: 'กล่องหูหิ้วขวด (bottle carrier)',
-    detail: 'ตะกร้าเปิดบน หูหิ้วกลางเจาะรูมือ + หน้าต่างโชว์สินค้า สำหรับขวด 2-6 ขวด',
+    detail: 'ขวดน้ำ/น้ำผลไม้ · เบียร์คราฟท์ · ซอส/เครื่องปรุง (2-6 ขวด)',
     defaults: { W: 150, D: 150, H: 230 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
@@ -129,7 +129,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'sleeve',
     nameTh: 'ปลอกสวม (sleeve)',
-    detail: 'ปลอกรัดรอบกล่อง/ถาด เปิดสองด้าน ใช้เป็นแบนด์พิมพ์ลาย',
+    detail: 'แบนด์รอบกล่องอาหาร · สบู่/เทียนหอม · เซ็ตของขวัญ',
     defaults: { W: 80, D: 50, H: 60 },
     tilt: 0,
     supportsHandle: false,
@@ -139,7 +139,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'lid-box',
     nameTh: 'กล่องฝาครอบ (FEFCO 0300 telescope)',
-    detail: 'ฐานถาดลึก + ฝาครอบถาดตื้นสวมทับ 2 ชิ้น (FEFCO 0300 FTSSC) — กล่องของขวัญ/รองเท้า/เครื่องสำอางพรีเมียม',
+    detail: 'ของขวัญพรีเมียม · รองเท้า · เซ็ตเครื่องสำอาง',
     defaults: { W: 160, D: 110, H: 70 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
@@ -149,7 +149,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'slide-box',
     nameTh: 'กล่องฝาสไลด์ (matchbox)',
-    detail: 'ลิ้นชัก (ถาด) เลื่อนเข้า-ออกในปลอกสวมภายนอก 2 ชิ้น — กล่องเครื่องประดับ/ของขวัญชิ้นเล็ก/ไม้ขีด',
+    detail: 'เครื่องประดับ · ของขวัญชิ้นเล็ก · ช็อกโกแลต/ขนม',
     defaults: { W: 90, D: 120, H: 35 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
@@ -170,7 +170,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'display-box',
     nameTh: 'กล่องฝาข้าง/หน้าต่าง (display)',
-    detail: 'กล่องปิด 5 ด้าน + ฝาหน้าเปิดได้ เจาะหน้าต่างโชว์สินค้า — กล่องโชว์/ของขวัญ/ของสะสม',
+    detail: 'ของโชว์หน้าร้าน · ฟิกเกอร์/ของสะสม · ของขวัญโชว์สินค้า',
     defaults: { W: 140, D: 90, H: 140 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
@@ -180,7 +180,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'tray',
     nameTh: 'กล่องถาด (open tray)',
-    detail: 'ถาดเปิดบน ผนัง 4 ด้านพับขึ้น มุมมีลิ้นล็อกด้านใน — ถาดอาหาร/ดิสเพลย์ หรือลิ้นชักคู่กับ sleeve',
+    detail: 'ถาดอาหาร/เบเกอรี่ · ดิสเพลย์หน้าร้าน · ลิ้นชักคู่ปลอกสวม',
     defaults: { W: 160, D: 110, H: 40 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
@@ -191,7 +191,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'gable',
     nameTh: 'กล่องหูหิ้วทรงจั่ว (gable)',
-    detail: 'กล่องหลังคาทรงจั่ว หูหิ้วในตัวที่สัน — ของขวัญ/เบเกอรี่/อาหาร ดูพรีเมียม',
+    detail: 'เบเกอรี่/ขนม · อาหารถือกลับ · ชุดของขวัญ',
     defaults: { W: 120, D: 100, H: 150 },
     tilt: -Math.PI / 2,
     supportsHandle: false,
@@ -202,7 +202,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'card',
     nameTh: 'นามบัตร (business card)',
-    detail: 'การ์ดแบนพิมพ์ ขนาดมาตรฐาน 90×54 มม. — ออกแบบได้ทั้งด้านหน้าและด้านหลัง ไม่มีรอยพับ',
+    detail: 'นามบัตร · การ์ดสะสม · คูปอง/การ์ดเชิญ',
     defaults: { W: 90, D: 54, H: 54 },
     tilt: 0,
     supportsHandle: false,
@@ -212,7 +212,7 @@ export const TEMPLATES: BoxTemplate[] = [
   {
     id: 'sticker',
     nameTh: 'สติกเกอร์ไดคัท (die-cut sticker)',
-    detail: 'สติกเกอร์พิมพ์แบนชิ้นเดียว ไดคัทตามรูป มุมมน — ฉลากสินค้า/โลโก้ ไม่มีรอยพับ',
+    detail: 'ฉลากสินค้า · โลโก้แบรนด์ · สติกเกอร์ตกแต่ง',
     defaults: { W: 60, D: 60, H: 60 },
     tilt: 0,
     supportsHandle: false,
