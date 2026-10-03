@@ -3,6 +3,7 @@ import {
   brickAt,
   brickRows,
   brickShape,
+  BRICK_SEAL,
   generatePouch,
   pouchDepthFactor,
   pouchWidthFactor,
@@ -143,10 +144,10 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
     expect(p.style).toBe('gusset')
     expect(p.gusset).toBe(D) // จีบข้าง = D (clamp 10..W)
     expect(p.label.width).toBe(2 * W + 2 * D + POUCH_SIDE_SEAL) // หน้า+หลัง+จีบสองข้าง+ซีล
-    expect(p.label.height).toBe(POUCH_TOP_SEAL + H + POUCH_TOP_SEAL) // ริมบน+ตัว+ริมล่าง (ไม่มีก้น)
+    expect(p.label.height).toBe(BRICK_SEAL + H + BRICK_SEAL) // ริมบน+ตัว+ริมล่าง (ไม่มีก้น)
     // หลังอยู่ถัดจากหน้า+จีบซ้าย
-    expect(p.frontRect).toEqual({ x: 0, y: POUCH_TOP_SEAL, w: W, h: H })
-    expect(p.backRect).toEqual({ x: W + D, y: POUCH_TOP_SEAL, w: W, h: H })
+    expect(p.frontRect).toEqual({ x: 0, y: BRICK_SEAL, w: W, h: H })
+    expect(p.backRect).toEqual({ x: W + D, y: BRICK_SEAL, w: W, h: H })
     // crease: ซีลข้าง(กาว) + สันพับ 3 + จีบกลาง 2 + ซีลบน + ซีลล่าง = 8
     expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(8)
     expect(p.label.dims.some((d) => d.label.includes('จีบข้าง'))).toBe(true)
@@ -210,7 +211,7 @@ describe('pouch: ทรง 3D ซองข้างจีบ (brick) แบบ�
     H = 120
   const p = generatePouch({ W, D, H }, mat, { style: 'gusset' })
   const s = brickShape(p)
-  const rows = brickRows(s, POUCH_TOP_SEAL)
+  const rows = brickRows(s, BRICK_SEAL)
   const top = rows[rows.length - 1]
 
   it('ก้นแบนเต็มความลึก (ตั้งได้) + กว้างเท่าหน้าตลอดถึงปลายครีบ', () => {
@@ -221,11 +222,11 @@ describe('pouch: ทรง 3D ซองข้างจีบ (brick) แบบ�
 
   it('ความยาวผิวหน้า ลำตัว+ไหล่ = H และครีบสูง = แถบซีลบน (UV ไม่ยืด)', () => {
     expect(s.bodyH + s.shoulderL).toBeCloseTo(H, 6)
-    expect(s.finH).toBe(POUCH_TOP_SEAL)
+    expect(s.finH).toBe(BRICK_SEAL)
     expect(top.y).toBeCloseTo(s.topY, 6)
     // dieline แนวตั้ง: ก้น = ขอบล่างแผงหน้า, โคนครีบ = แนวซีลบน, ปลายครีบ = ขอบบนแผ่น
-    expect(rows[0].dly).toBeCloseTo(POUCH_TOP_SEAL + H, 6)
-    expect(rows.find((r) => Math.abs(r.y - (s.bodyH + s.shoulderH)) < 1e-9)?.dly).toBeCloseTo(POUCH_TOP_SEAL, 6)
+    expect(rows[0].dly).toBeCloseTo(BRICK_SEAL + H, 6)
+    expect(rows.find((r) => Math.abs(r.y - (s.bodyH + s.shoulderH)) < 1e-9)?.dly).toBeCloseTo(BRICK_SEAL, 6)
     expect(top.dly).toBeCloseTo(0, 6)
     for (let i = 1; i < rows.length; i++) {
       expect(rows[i].y).toBeGreaterThanOrEqual(rows[i - 1].y)

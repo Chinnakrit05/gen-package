@@ -26,6 +26,7 @@ export const POUCH_STYLES: { id: PouchStyle; nameTh: string; detail: string }[] 
 
 export const POUCH_SIDE_SEAL = 6 // ริมซีล/ลิ้นทากาวข้าง (มม.)
 export const POUCH_TOP_SEAL = 10 // ริมซีลปากบน (มม.)
+export const BRICK_SEAL = 20 // แถบซีลบน/ล่างของซองข้างจีบ (มม.)
 export const POUCH_ZIP_INSET = 18 // ระยะจากปากบนลงมาถึงแนวซิปล็อก (มม.)
 // ตัวคูณความลึก 3D ของถุงตั้ง: ถุงจริงพองไม่เต็ม gusset — หรี่ความป่อง (หน้า-หลัง) ให้ดูแบนสมจริง
 // มีผลเฉพาะทรง 3D ไม่แตะ dieline/ก้นที่ส่งผลิต; ปรับค่านี้ตัวเดียวเพื่อเพิ่ม/ลดความป่อง
@@ -92,8 +93,8 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const fx = backSeam ? W / 2 : 0 // จุดเริ่มพื้นที่พิมพ์หน้าบนแผ่นฟิล์ม
   const fcx = fx + W / 2 // จุดกึ่งกลางหน้า (ใช้วาง marker จุก/วาล์ว/รูแขวน)
   const ss = POUCH_SIDE_SEAL
-  const st = POUCH_TOP_SEAL
-  const sb = flat || gus || pillow ? POUCH_TOP_SEAL : 0 // ไม่มีก้น → ใช้ริมซีลล่างแทน
+  const st = gus ? BRICK_SEAL : POUCH_TOP_SEAL
+  const sb = gus ? BRICK_SEAL : flat || pillow ? POUCH_TOP_SEAL : 0 // ไม่มีก้น → ใช้ริมซีลล่างแทน
   const filmH = st + H + bottomGusset + sb
   // ความกว้างพิมพ์ = หน้า + หลัง + จีบข้างสองด้าน (ไม่มีจีบ → 2W)
   const Wp = 2 * W + 2 * sideGusset
@@ -152,6 +153,12 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   }
   if (sideGusset > 0) {
     dims.push({ a: P(W, filmH + 12), b: P(W + sideGusset, filmH + 12), label: `จีบข้าง ${fmt(sideGusset)}` })
+  }
+  if (gus) {
+    dims.push(
+      { a: P(width + 12, 0), b: P(width + 12, st), label: `ซีลบน ${fmt(st)}` },
+      { a: P(width + 12, st + H), b: P(width + 12, filmH), label: `ซีลล่าง ${fmt(sb)}` },
+    )
   }
 
   if (spout) {
@@ -297,7 +304,7 @@ export interface BrickShape {
 export function brickShape(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect'>): BrickShape {
   const a = p.W / 2
   const b0 = p.depth3D
-  const finHalf = Math.max(0.35, b0 * 0.025)
+  const finHalf = 0.35 // ซีลเป็นฟิล์มบาง ความหนาไม่เพิ่มตามขนาดถุง
   const creaseIn = Math.min(a * 0.14, b0 * 0.28)
   const drop = b0 - finHalf
   // ไหล่ไม่กินเกิน 60% ของความยาวหน้า (ถุงเตี้ย-จีบลึก → ไหล่ราบลง)

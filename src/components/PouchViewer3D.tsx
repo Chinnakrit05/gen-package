@@ -119,8 +119,7 @@ function usePouchTexture(
 }
 
 // สร้าง BufferGeometry ถุง: วงแหวนวงรีตามความสูง + ฝาก้น/ปาก + UV แม็พหน้า/หลังตาม dieline
-function usePouchGeometry(pouch: Pouch) {
-  return useMemo(() => {
+export function buildPouchGeometry(pouch: Pouch) {
     const { W, H, depth3D, style, frontRect, backRect, backSeam, label } = pouch
     const NU = 64 // รอบวง
     const NV = 48 // ตามความสูง
@@ -198,11 +197,40 @@ function usePouchGeometry(pouch: Pouch) {
           idx.push(p, p + cols, p + 1, p + 1, p + cols, p + cols + 1)
         }
       }
+      // ซีลล่างพับไปด้านหลังใต้ฐาน โดยใช้แถบซีลล่างของแผ่นคลี่เต็มความยาว
+      let bottomFlap: { start: number; end: number; y0: number; z0: number; y1: number; z1: number } | null = null
+      if (style === 'gusset') {
+        const s = brickShape(pouch)
+        const sealLength = dh - st - H
+        const angle = Math.PI / 24
+        const y0 = -s.finHalf
+        const z0 = -s.b0 + Math.min(sealLength * 0.35, s.b0 * 0.6)
+        const d = Math.min(s.a, Math.sqrt(s.gussetHalf ** 2 - s.finHalf ** 2))
+        const start = pos.length / 3
+        const nFold = 4
+        for (let i = 0; i <= nFold; i++) {
+          const length = (i / nFold) * sealLength
+          for (const fX of us) {
+            const [x, z] = boxSectionPt(fX, W, g, s.a, s.finHalf, d)
+            pos.push(x, y0 - length * Math.sin(angle) + z * Math.cos(angle),
+              z0 - length * Math.cos(angle) - z * Math.sin(angle))
+            uv.push(fX / dw, (st + H + length) / dh)
+          }
+        }
+        for (let i = 0; i < nFold; i++) {
+          for (let iu = 0; iu < cols - 1; iu++) {
+            const p = start + i * cols + iu
+            idx.push(p, p + 1, p + cols, p + 1, p + cols + 1, p + cols)
+          }
+        }
+        bottomFlap = { start, end: start + nFold * cols, y0, z0,
+          y1: y0 - sealLength * Math.sin(angle), z1: z0 - sealLength * Math.cos(angle) }
+      }
       const sideIdxCount = idx.length
       // ปิดปลายครีบ/ก้น (fan) = material 1 สีพื้น (เลี่ยงลายยืดที่ปลายเรียว/ก้นแบน)
-      const capRow = (rowY: number, rowBase: number, flip: boolean) => {
+      const capRow = (rowY: number, rowBase: number, flip: boolean, rowZ = 0) => {
         const center = pos.length / 3
-        pos.push(0, rowY, 0)
+        pos.push(0, rowY, rowZ)
         uv.push((frontRect.x + W / 2) / dw, 0)
         for (let iu = 0; iu < cols - 1; iu++) {
           const p0 = rowBase + iu
@@ -213,6 +241,10 @@ function usePouchGeometry(pouch: Pouch) {
       }
       capRow(rows[0].y, 0, false)
       capRow(rows[rows.length - 1].y, (rows.length - 1) * cols, true)
+      if (bottomFlap) {
+        capRow(bottomFlap.y0, bottomFlap.start, false, bottomFlap.z0)
+        capRow(bottomFlap.y1, bottomFlap.end, true, bottomFlap.z1)
+      }
       const geoB = new THREE.BufferGeometry()
       geoB.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
       geoB.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
@@ -346,7 +378,10 @@ function usePouchGeometry(pouch: Pouch) {
     geo.addGroup(sideIdxCount, idx.length - sideIdxCount, 1)
     geo.computeVertexNormals()
     return geo
-  }, [pouch])
+}
+
+function usePouchGeometry(pouch: Pouch) {
+  return useMemo(() => buildPouchGeometry(pouch), [pouch])
 }
 
 function PouchModel({
