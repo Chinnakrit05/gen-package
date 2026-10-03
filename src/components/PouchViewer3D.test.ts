@@ -38,7 +38,31 @@ describe.each([
     geometry.dispose()
   })
 
-  it('keeps the bottom seal below the flat base and exposes its folded edge', () => {
+  it('joins the body, folded base and bottom seal into one indexed surface', () => {
+    const pouch = generatePouch(size, getMaterial('pouch-foil'), { style: 'gusset' })
+    const geometry = buildPouchGeometry(pouch)
+    const index = geometry.getIndex()!
+    const neighbors = new Map<number, Set<number>>()
+    for (let i = 0; i < index.count; i += 3) {
+      const triangle = [index.getX(i), index.getX(i + 1), index.getX(i + 2)]
+      for (const vertex of triangle) {
+        if (!neighbors.has(vertex)) neighbors.set(vertex, new Set())
+        for (const other of triangle) neighbors.get(vertex)!.add(other)
+      }
+    }
+    const visited = new Set<number>()
+    const pending = [index.getX(0)]
+    while (pending.length) {
+      const vertex = pending.pop()!
+      if (visited.has(vertex)) continue
+      visited.add(vertex)
+      pending.push(...neighbors.get(vertex)!)
+    }
+    expect(visited.size).toBe(neighbors.size)
+    geometry.dispose()
+  })
+
+  it('tucks the complete bottom seal inside the base footprint', () => {
     const pouch = generatePouch(size, getMaterial('pouch-foil'), { style: 'gusset' })
     const geometry = buildPouchGeometry(pouch)
     const uv = geometry.getAttribute('uv')
@@ -50,10 +74,40 @@ describe.each([
     expect(folded.length).toBeGreaterThan(0)
     for (const i of folded) {
       expect(position.getY(i)).toBeLessThan(0)
+      expect(position.getY(i)).toBeGreaterThan(-2)
       expect(Math.abs(position.getX(i))).toBeLessThanOrEqual(size.W / 2)
+      expect(Math.abs(position.getZ(i))).toBeLessThanOrEqual(size.D / 2)
     }
-    expect(Math.min(...folded.map((i) => position.getZ(i)))).toBeLessThan(-size.D / 2)
     expect(Math.max(...folded.map((i) => uv.getY(i)))).toBeCloseTo(1, 5)
+    geometry.dispose()
+  })
+
+  it('closes the folded skin without open edges or internal caps', () => {
+    const pouch = generatePouch(size, getMaterial('pouch-foil'), { style: 'gusset' })
+    const geometry = buildPouchGeometry(pouch)
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()!
+    const vertices = new Map<string, number>()
+    const welded: number[] = []
+    for (let i = 0; i < position.count; i++) {
+      // Only weld the duplicated UV seam for this surface-boundary check.
+      const key = [position.getX(i), position.getY(i), position.getZ(i)]
+        .map((value) => value.toFixed(5)).join(',')
+      if (!vertices.has(key)) vertices.set(key, vertices.size)
+      welded.push(vertices.get(key)!)
+    }
+    const edges = new Map<string, number>()
+    for (let i = 0; i < index.count; i += 3) {
+      const triangle = [index.getX(i), index.getX(i + 1), index.getX(i + 2)].map((v) => welded[v])
+      expect(new Set(triangle).size).toBe(3)
+      for (let e = 0; e < 3; e++) {
+        const a = triangle[e]
+        const b = triangle[(e + 1) % 3]
+        const key = `${Math.min(a, b)},${Math.max(a, b)}`
+        edges.set(key, (edges.get(key) ?? 0) + 1)
+      }
+    }
+    expect(new Set(edges.values())).toEqual(new Set([2]))
     geometry.dispose()
   })
 })

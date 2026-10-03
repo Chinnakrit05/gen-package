@@ -197,36 +197,60 @@ export function buildPouchGeometry(pouch: Pouch) {
           idx.push(p, p + cols, p + 1, p + 1, p + cols, p + cols + 1)
         }
       }
-      // ซีลล่างพับไปด้านหลังใต้ฐาน โดยใช้แถบซีลล่างของแผ่นคลี่เต็มความยาว
-      let bottomFlap: { start: number; end: number; y0: number; z0: number; y1: number; z1: number } | null = null
+      const baseIndices: number[] = []
+      let bottomSeal: { end: number; y: number; z: number } | null = null
       if (style === 'gusset') {
         const s = brickShape(pouch)
         const sealLength = dh - st - H
-        const angle = Math.PI / 24
-        const y0 = -s.finHalf
-        const z0 = -s.b0 + Math.min(sealLength * 0.35, s.b0 * 0.6)
-        const d = Math.min(s.a, Math.sqrt(s.gussetHalf ** 2 - s.finHalf ** 2))
-        const start = pos.length / 3
-        const nFold = 4
-        for (let i = 0; i <= nFold; i++) {
-          const length = (i / nFold) * sealLength
+        const rootZ = Math.min(sealLength * 0.35, s.b0 * 0.35)
+        const rootY = -2 * s.finHalf
+        const gussetPanel = (fX: number) => (fX > W && fX < W + g) || (fX > 2 * W + g && fX < wp)
+        const nBase = 8
+        let previous = 0
+        // Fold the existing body ring into the seal root; do not cap or duplicate that joint.
+        for (let i = 1; i <= nBase; i++) {
+          const t = i / nBase
+          const b = s.b0 + (s.finHalf - s.b0) * t
+          const d = s.creaseIn * (1 - t)
+          const start = pos.length / 3
           for (const fX of us) {
-            const [x, z] = boxSectionPt(fX, W, g, s.a, s.finHalf, d)
-            pos.push(x, y0 - length * Math.sin(angle) + z * Math.cos(angle),
-              z0 - length * Math.cos(angle) - z * Math.sin(angle))
+            const [x, z] = boxSectionPt(fX, W, g, s.a, b, d)
+            const side = z / b
+            let foldedZ = side * s.b0 * (1 - t) + rootZ * t
+            if (gussetPanel(fX)) {
+              // Tuck the gusset above the rear base sheet, not through it.
+              const rearSheetZ = -s.b0 + (rootZ + s.b0) * t * (2 + side)
+              foldedZ = Math.max(foldedZ, Math.min(rootZ, rearSheetZ))
+            }
+            pos.push(x, rootY * t - side * s.finHalf * t,
+              foldedZ)
+            uv.push(fX / dw, (st + H) / dh)
+          }
+          for (let iu = 0; iu < cols - 1; iu++) {
+            baseIndices.push(previous + iu, previous + iu + 1, start + iu,
+              previous + iu + 1, start + iu + 1, start + iu)
+          }
+          previous = start
+        }
+        const nSeal = 4
+        for (let i = 1; i <= nSeal; i++) {
+          const length = (i / nSeal) * sealLength
+          const start = pos.length / 3
+          for (const fX of us) {
+            const [x, z] = boxSectionPt(fX, W, g, s.a, s.finHalf, 0)
+            pos.push(x, rootY - z, rootZ - length)
             uv.push(fX / dw, (st + H + length) / dh)
           }
-        }
-        for (let i = 0; i < nFold; i++) {
           for (let iu = 0; iu < cols - 1; iu++) {
-            const p = start + i * cols + iu
-            idx.push(p, p + 1, p + cols, p + 1, p + cols + 1, p + cols)
+            idx.push(previous + iu, previous + iu + 1, start + iu,
+              previous + iu + 1, start + iu + 1, start + iu)
           }
+          previous = start
         }
-        bottomFlap = { start, end: start + nFold * cols, y0, z0,
-          y1: y0 - sealLength * Math.sin(angle), z1: z0 - sealLength * Math.cos(angle) }
+        bottomSeal = { end: previous, y: rootY, z: rootZ - sealLength }
       }
       const sideIdxCount = idx.length
+      idx.push(...baseIndices)
       // ปิดปลายครีบ/ก้น (fan) = material 1 สีพื้น (เลี่ยงลายยืดที่ปลายเรียว/ก้นแบน)
       const capRow = (rowY: number, rowBase: number, flip: boolean, rowZ = 0) => {
         const center = pos.length / 3
@@ -239,12 +263,9 @@ export function buildPouchGeometry(pouch: Pouch) {
           else idx.push(center, p0, p1)
         }
       }
-      capRow(rows[0].y, 0, false)
+      if (!bottomSeal) capRow(rows[0].y, 0, false)
       capRow(rows[rows.length - 1].y, (rows.length - 1) * cols, true)
-      if (bottomFlap) {
-        capRow(bottomFlap.y0, bottomFlap.start, false, bottomFlap.z0)
-        capRow(bottomFlap.y1, bottomFlap.end, true, bottomFlap.z1)
-      }
+      if (bottomSeal) capRow(bottomSeal.y, bottomSeal.end, true, bottomSeal.z)
       const geoB = new THREE.BufferGeometry()
       geoB.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
       geoB.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
