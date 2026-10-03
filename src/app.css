@@ -2713,18 +2713,17 @@ aside .art-actions .file-pick:only-child {
   font-variant-numeric: tabular-nums;
 }
 
-/* ป้ายตัวเลขบนเส้นบอกขนาด (CAD) — ฉาก 3D พื้นขาวเสมอ จึงใช้สีคงที่ */
+/* ป้ายตัวเลขบนเส้นบอกขนาด (CAD) — ไม่มีพื้นหลัง (ใส) ใช้เงาขาวจาง ๆ ช่วยให้อ่านออกบนลายกล่อง */
 .dim3d-label {
   transform: translate(-50%, -50%);
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.92);
+  background: transparent;
   color: #3a4446;
   font-size: 11.5px;
   font-weight: 700;
   line-height: 1.3;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 2px rgba(255, 255, 255, 0.9), 0 0 2px rgba(255, 255, 255, 0.9);
   user-select: none;
   pointer-events: none;
 }
