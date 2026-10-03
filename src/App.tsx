@@ -2532,7 +2532,7 @@ export default function App({
           {kind === 'pouch' && (
             <Group title={t('รูปแบบถุง', 'Pouch style')} open={groups.label} onToggle={() => toggleGroup('label')}>
               <div className="pick-list">
-                {POUCH_STYLES.map((s) => (
+                {POUCH_STYLES.filter((s) => s.id !== 'box').map((s) => (
                   <button
                     key={s.id}
                     className={`pick-item${pouchStyle === s.id ? ' active' : ''}`}
