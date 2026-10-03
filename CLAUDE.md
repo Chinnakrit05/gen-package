@@ -68,6 +68,11 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   — dieline คุมด้วย sideGusset (gusset/box) + bottomGusset (stand/box/spout) + sb (flat/gusset/pillow);
   โปรไฟล์ 3D ผ่าน `pouchDepthFactor(v, style)` + `pouchWidthFactor(v, style)` + `pouchSection(θ, style)`
   (gusset/box ใช้ superellipse = ทรงเหลี่ยม) + `Pouch.depth3D`/`stands`/`spout`; `generatePouch(box, mat, { style, zipper })`
+  ยกเว้น 3D ของ gusset (แบบถุงกาแฟ) ใช้ `brickShape`/`brickRows`/`brickAt` (pure): ลำตัวก้นแบน → ไหล่ (จีบพับเข้าเป็น
+  สามเหลี่ยม ความยาวครึ่งจีบคงที่) → ครีบซีลตั้งตรงกว้างเต็มหน้า; ผิวหน้า ลำตัว+ไหล่ ยาว = H และครีบ = แถบซีลบน
+  → UV ตรง dieline; ซิป/วาล์ว/tin-tie ของ gusset วางตามระยะบน dieline ผ่าน `brickAt` (ไม่ใช่ v×H)
+  ซองข้างจีบใช้ `BRICK_SEAL` 20 มม. ทั้งบน/ล่าง; ครีบบนตั้งตรง ส่วนซีลล่างพับเป็นชั้นบางไปด้านหลังใต้ฐาน
+  และแม็พ UV ไปยังแถบซีลล่างเต็มความยาว. รูปแบบถุงอื่นยังใช้ `POUCH_TOP_SEAL` 10 มม.
   ออปชันเสริม `PouchAddons` = { hangHole (รูแขวน euro-hole, ตัดจริง), valve (วาล์วกาแฟ marker+จาน 3D),
   tinTie (ที่รัดปาก แถบ 3D) } — ตำแหน่งใช้ค่าคงที่ร่วม dieline/3D (`VALVE_V`/`TINTIE_INSET`/`valveR`)
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
