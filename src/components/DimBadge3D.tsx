@@ -23,7 +23,8 @@ interface Measure {
 
 // ป้ายขนาด กว้าง/ลึก/สูง บนมุมมอง 3D ตามหน่วยที่เลือก (มม./นิ้ว) — ยึดกับ bounding box จริง
 // variant 'lines'  = กล่อง/ถุง: จับขนาดเข้าแกนตามช่วง แล้ววาดเส้นตามขอบจริงทั้ง 3 แกน
-// variant 'vessel' = ภาชนะ/หลอด: ⌀ตัวที่ฐาน + สูงด้านซ้าย + ⌀ปากที่ยอด (ยาวเท่า ⌀ จริง)
+// variant 'vessel' = ขวด/โหล: ตัวกว้างที่ฐาน + สูงด้านซ้าย + ปากแคบที่ยอด (ยาวเท่า ⌀ จริง)
+// variant 'tube'   = หลอดครีม: กลับหัวจากขวด — ตัวกว้างที่ยอด (ตะเข็บซีล) + ปาก/ฝาแคบที่ฐาน
 // variant 'badge'  = ป้ายรวมลอย (สำรองไว้)
 export function DimBadge3D({
   targetRef,
@@ -34,10 +35,10 @@ export function DimBadge3D({
   targetRef: React.RefObject<THREE.Object3D | null>
   dims: Dim3D[]
   imperial: boolean
-  variant?: 'lines' | 'vessel' | 'badge'
+  variant?: 'lines' | 'vessel' | 'tube' | 'badge'
 }) {
   if (variant === 'badge') return <DimCard targetRef={targetRef} dims={dims} imperial={imperial} />
-  const build = variant === 'vessel' ? buildVessel : buildAuto
+  const build = variant === 'vessel' ? buildVessel : variant === 'tube' ? buildTube : buildAuto
   return <DimLines targetRef={targetRef} dims={dims} imperial={imperial} build={build} />
 }
 
@@ -118,6 +119,43 @@ function buildVessel(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[]
       p0: [cx - mouth / 2, max.y, max.z],
       p1: [cx + mouth / 2, max.y, max.z],
       off: [0, off, 0],
+      label: `${dims[1].label} ${fmtDim(dims[1].mm, imperial)}`,
+    })
+  }
+  return out
+}
+
+// หลอดครีม: กลับหัวจากขวด — ตัวหลอด (กว้างสุด) คือตะเข็บซีลที่ยอด, ปาก/ฝาอยู่ที่ฐาน
+// ⌀ตัว = เส้นนอนเต็มกว้างที่ "ยอด", ⌀ปาก = เส้นนอนสั้นที่ "ฐาน" ยาวเท่า ⌀ปากจริง, สูง = ด้านซ้าย
+function buildTube(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[] {
+  const { min, max } = b
+  const span = [max.x - min.x, max.y - min.y, max.z - min.z]
+  const off = Math.max(10, Math.max(span[0], span[1], span[2]) * 0.13)
+  const cx = (min.x + max.x) / 2
+  const mouth = dims[1] ? dims[1].mm : span[0]
+  const out: Measure[] = []
+  // ⌀ตัว — ขอบบนด้านหน้า เต็มความกว้าง ยื่นขึ้น
+  out.push({
+    p0: [min.x, max.y, max.z],
+    p1: [max.x, max.y, max.z],
+    off: [0, off, 0],
+    label: `${dims[0].label} ${fmtDim(dims[0].mm, imperial)}`,
+  })
+  // สูง — ขอบซ้ายด้านหน้า เต็มความสูง ยื่นซ้าย
+  if (dims[2]) {
+    out.push({
+      p0: [min.x, min.y, max.z],
+      p1: [min.x, max.y, max.z],
+      off: [-off, 0, 0],
+      label: `${dims[2].label} ${fmtDim(dims[2].mm, imperial)}`,
+    })
+  }
+  // ⌀ปาก — เส้นนอนสั้นที่ฐาน (ฝา/คอ) ยาวเท่า ⌀ปากจริง จัดกึ่งกลาง ยื่นลง
+  if (dims[1]) {
+    out.push({
+      p0: [cx - mouth / 2, min.y, max.z],
+      p1: [cx + mouth / 2, min.y, max.z],
+      off: [0, -off, 0],
       label: `${dims[1].label} ${fmtDim(dims[1].mm, imperial)}`,
     })
   }

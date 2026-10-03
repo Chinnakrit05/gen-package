@@ -323,7 +323,7 @@ function VesselModel({
         </mesh>
       )}
     </group>
-    {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant="vessel" />}
+    {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant={tube ? 'tube' : 'vessel'} />}
     </>
   )
 }
