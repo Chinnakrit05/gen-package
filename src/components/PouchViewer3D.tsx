@@ -6,6 +6,9 @@ import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
 import {
   type Pouch,
+  brickAt,
+  brickRows,
+  brickShape,
   pouchDepthFactor,
   pouchWidthFactor,
   pouchSection,
@@ -14,6 +17,19 @@ import {
   TINTIE_INSET,
 } from '../core/pouch'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
+
+// จุดบนหน้าตัดทรงกล่องที่ตำแหน่งรอบรูป fX ของแผ่นฟิล์ม [หน้า W | จีบขวา g | หลัง W | จีบซ้าย g]
+// a = ครึ่งกว้าง, b = ครึ่งลึก, d = รอยจีบกลางพับเข้า → คืน [x, z] (หน้าอยู่ +z)
+function boxSectionPt(fX: number, W: number, g: number, a: number, b: number, d: number): [number, number] {
+  if (fX <= W) return [-a + 2 * a * (fX / W), b] // หน้า: ซ้าย→ขวา
+  if (fX <= W + g) {
+    const t = (fX - W) / g // จีบขวา: หน้า→หลัง พับกลางเข้า
+    return [a - d * (1 - Math.abs(1 - 2 * t)), b * (1 - 2 * t)]
+  }
+  if (fX <= 2 * W + g) return [a - 2 * a * ((fX - (W + g)) / W), -b] // หลัง: ขวา→ซ้าย
+  const t = (fX - (2 * W + g)) / g // จีบซ้าย: หลัง→หน้า พับกลางเข้า
+  return [-a + d * (1 - Math.abs(1 - 2 * t)), -b + 2 * b * t]
+}
 
 // พรีวิวถุงฟิล์มตั้งได้ (doypack): พื้นผิว loft หน้าตัดวงรีเปลี่ยนตามความสูง
 // ก้นแบนตั้งได้ พุงกลางป่อง ปากบนซีลแบน — ลาย (หน้า/หลัง) map ลงผิวถุงตรงกับ dieline
@@ -120,71 +136,64 @@ function usePouchGeometry(pouch: Pouch) {
     const halfSeal = Math.max(1, depth3D * 0.12)
     const gInMax = Math.min((W / 2) * 0.14, depth3D * 0.28) // รอยพับจีบกลาง (ตื้น ไม่บีบลำตัวเข้ามาก)
 
-    // ───────── brick/box: ลำตัว + ครีบซีลปาก(และก้น brick) เป็น loft เดียว ลายต่อเนื่อง ─────────
-    // ครีบยื่นเหนือ/ใต้ลำตัว แต่เป็นเนื้อเดียวกัน (material 0 มีลาย) ไม่ใช่ชิ้นแยก
-    // UV ครีบแม็พไปที่ "แถบซีล" บน/ล่างของ dieline (y∈[0,st] และ [st+H,filmH]) → ตกแต่งส่วนบน/ล่างได้
+    // ───────── brick/box: ลำตัว + ครีบซีลปาก เป็น loft เดียว ลายต่อเนื่อง ─────────
+    // ครีบยื่นเหนือลำตัว แต่เป็นเนื้อเดียวกัน (material 0 มีลาย) ไม่ใช่ชิ้นแยก
+    // UV ครีบแม็พไปที่ "แถบซีลบน" ของ dieline (y∈[0,st]) → ตกแต่งส่วนบนได้
     if (boxy) {
-      const lerp = (p: number, q: number, t: number) => p + (q - p) * Math.max(0, Math.min(1, t))
-      const finH = Math.min(H * 0.13, 18) // ความยาวครีบที่ยื่นออก
-      const hasBotFin = style === 'gusset' // brick ซีลก้น; box ก้นแบนตั้ง
-      const yBot = hasBotFin ? -finH : 0
-      const yTop = H + finH
       const st = frontRect.y // ความสูงแถบซีลบนบน dieline
       const g = gussetW
       const wp = 2 * W + 2 * g
-      const finHalf = Math.max(0.35, depth3D * 0.025) // ครึ่งความหนาครีบ = ฟิล์มบางมาก (~0.7 มม.)
-      // ครึ่งความลึก: "ลำตัวแบนเต็มทั้งความสูง" (ไม่มีไหล่กินหน้าถุง) — การบีบซีลเกิดเฉพาะในส่วนครีบ
-      const bAtY = (y: number) => {
-        if (y >= H) return lerp(depth3D, finHalf, (y - H) / finH) // ครีบบน: ลู่จากลำตัวเต็ม→บาง
-        if (hasBotFin && y <= 0) return lerp(depth3D, finHalf, -y / finH) // ครีบล่าง
-        return depth3D // ลำตัว: เต็ม แบน ตลอด
+      // แถวตามความสูง: y, ครึ่งกว้าง a, ครึ่งลึก b, รอยจีบพับเข้า d, พิกัด dieline แนวตั้ง dly
+      let rows: { y: number; a: number; b: number; d: number; dly: number }[]
+      // ตำแหน่งรอบรูปบนแผ่นฟิล์ม (fX) ของแต่ละคอลัมน์
+      let us: number[]
+      if (style === 'gusset') {
+        // brick แบบถุงกาแฟ: ลำตัวก้นแบน → ไหล่ (จีบพับเข้าเป็นสามเหลี่ยม) → ครีบซีลตั้งตรงเต็มหน้า
+        const s = brickShape(pouch)
+        rows = brickRows(s, st).map((r) => ({ ...r, a: s.a }))
+        // คอลัมน์ลงตรงสันพับ/รอยจีบพอดี → ขอบแท่งคม ไม่ถูกตัดมุมระหว่างจุด
+        us = []
+        const seg = (x0: number, x1: number, n: number) => {
+          for (let i = us.length ? 1 : 0; i <= n; i++) us.push(x0 + ((x1 - x0) * i) / n)
+        }
+        seg(0, W, 16)
+        seg(W, W + g / 2, 6)
+        seg(W + g / 2, W + g, 6)
+        seg(W + g, 2 * W + g, 16)
+        seg(2 * W + g, 2 * W + 1.5 * g, 6)
+        seg(2 * W + 1.5 * g, wp, 6)
+      } else {
+        // box: ลำตัวแบนเต็มทั้งความสูง ก้นแบนตั้ง — การบีบซีลเกิดเฉพาะในส่วนครีบ
+        const lerp = (p: number, q: number, t: number) => p + (q - p) * Math.max(0, Math.min(1, t))
+        const finH = Math.min(H * 0.13, 18) // ความยาวครีบที่ยื่นออก
+        const finHalf = Math.max(0.35, depth3D * 0.025) // ครึ่งความหนาครีบ = ฟิล์มบางมาก (~0.7 มม.)
+        const NV = 72
+        rows = []
+        for (let iv = 0; iv <= NV; iv++) {
+          const y = (iv / NV) * (H + finH)
+          const f = (y - H) / finH // ครีบบน: ลู่จากลำตัวเต็ม→บาง, แคบลงที่ปลาย
+          const b = y >= H ? lerp(depth3D, finHalf, f) : depth3D
+          rows.push({
+            y,
+            a: (W / 2) * (y >= H ? lerp(1, 0.8, f) : 1),
+            b,
+            d: gInMax * (b / depth3D), // รอยพับจีบลำตัว (ลึกเข้าเล็กน้อย) จางลงที่ครีบ
+            // UV แนวตั้ง: ลำตัว→แผงหน้า [st..st+H], ครีบ→แถบซีลบน [0..st]
+            dly: y >= H ? st * (1 - Math.min(1, f)) : st + (1 - y / H) * H,
+          })
+        }
+        us = Array.from({ length: NU + 1 }, (_, iu) => (iu / NU) * wp)
       }
-      // ครึ่งความกว้าง: ลำตัวเต็มตลอด, แคบลงเฉพาะปลายครีบ
-      const wAtY = (y: number) => {
-        const base = W / 2
-        if (y >= H) return base * lerp(1, 0.8, (y - H) / finH)
-        if (hasBotFin && y <= 0) return base * lerp(1, 0.8, -y / finH)
-        return base
-      }
-      // UV แนวตั้ง: ลำตัว→แผงหน้า [st..st+H], ครีบบน→แถบซีลบน [0..st], ครีบล่าง→แถบซีลล่าง [st+H..filmH]
-      const dlyAtY = (y: number) => {
-        if (y >= H) return st * (1 - Math.min(1, (y - H) / finH))
-        if (hasBotFin && y <= 0) return st + H + Math.min(1, -y / finH) * (dh - (st + H))
-        return st + (1 - y / H) * H
-      }
-      const NV = 72
-      const cols = NU + 1
-      for (let iv = 0; iv <= NV; iv++) {
-        const y = yBot + (iv / NV) * (yTop - yBot)
-        const a = wAtY(y)
-        const b = bAtY(y)
-        const d = gInMax * (b / depth3D) // รอยพับจีบลำตัว (ลึกเข้าเล็กน้อย) จางลงที่ครีบ
-        const dly = dlyAtY(y)
-        for (let iu = 0; iu <= NU; iu++) {
-          const fX = (iu / NU) * wp
-          let x: number
-          let z: number
-          if (fX <= W) {
-            x = -a + 2 * a * (fX / W)
-            z = b
-          } else if (fX <= W + g) {
-            const t = (fX - W) / g
-            z = b * (1 - 2 * t)
-            x = a - d * (1 - Math.abs(1 - 2 * t)) // ขวา: a-d → ยื่นออกเมื่อ d<0 (หู)
-          } else if (fX <= 2 * W + g) {
-            x = a - 2 * a * ((fX - (W + g)) / W)
-            z = -b
-          } else {
-            const t = (fX - (2 * W + g)) / g
-            z = -b + 2 * b * t
-            x = -a + d * (1 - Math.abs(1 - 2 * t)) // ซ้าย: -a+d → ยื่นออกเมื่อ d<0 (หู)
-          }
-          pos.push(x, y, z)
-          uv.push(fX / dw, dly / dh)
+      const cols = us.length
+      for (const r of rows) {
+        for (const fX of us) {
+          const [x, z] = boxSectionPt(fX, W, g, r.a, r.b, r.d)
+          pos.push(x, r.y, z)
+          uv.push(fX / dw, r.dly / dh)
         }
       }
-      for (let iv = 0; iv < NV; iv++) {
-        for (let iu = 0; iu < NU; iu++) {
+      for (let iv = 0; iv < rows.length - 1; iv++) {
+        for (let iu = 0; iu < cols - 1; iu++) {
           const p = iv * cols + iu
           idx.push(p, p + cols, p + 1, p + 1, p + cols, p + cols + 1)
         }
@@ -195,15 +204,15 @@ function usePouchGeometry(pouch: Pouch) {
         const center = pos.length / 3
         pos.push(0, rowY, 0)
         uv.push((frontRect.x + W / 2) / dw, 0)
-        for (let iu = 0; iu < NU; iu++) {
+        for (let iu = 0; iu < cols - 1; iu++) {
           const p0 = rowBase + iu
           const p1 = rowBase + iu + 1
           if (flip) idx.push(center, p1, p0)
           else idx.push(center, p0, p1)
         }
       }
-      capRow(yBot, 0, false)
-      capRow(yTop, NV * cols, true)
+      capRow(rows[0].y, 0, false)
+      capRow(rows[rows.length - 1].y, (rows.length - 1) * cols, true)
       const geoB = new THREE.BufferGeometry()
       geoB.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
       geoB.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
@@ -364,9 +373,42 @@ function PouchModel({
     if (matRef.current) matRef.current.needsUpdate = true
   }, [hasTex])
 
+  // brick: ทรงตามความยาวฟิล์ม (ไหล่เอียง) → ซิป/วาล์ว/tin-tie วางตามระยะบน dieline ผ่าน brickAt
+  const brick = useMemo(() => (pouch.style === 'gusset' ? brickShape(pouch) : null), [pouch])
+  const zipBand = useMemo(() => {
+    if (!brick || !pouch.zipper || pouch.zipY === undefined) return null
+    // แถบซิป = loft บาง ๆ ตามหน้าตัดจริง (โค้งตามไหล่) ดันออกจากผิว 0.6 มม.
+    const dl0 = pouch.zipY - pouch.frontRect.y
+    const g = pouch.backRect.x - pouch.W
+    const wp = 2 * pouch.W + 2 * g
+    const NU = 96
+    const pos: number[] = []
+    const idx: number[] = []
+    const NR = 4
+    for (let i = 0; i <= NR; i++) {
+      const r = brickAt(brick, dl0 - 2.5 + (5 * i) / NR)
+      for (let iu = 0; iu <= NU; iu++) {
+        const [x, z] = boxSectionPt((iu / NU) * wp, pouch.W, g, brick.a + 0.6, r.b + 0.6, r.d)
+        pos.push(x, r.y, z)
+      }
+    }
+    for (let i = 0; i < NR; i++) {
+      for (let iu = 0; iu < NU; iu++) {
+        const p = i * (NU + 1) + iu
+        idx.push(p, p + NU + 1, p + 1, p + 1, p + NU + 1, p + NU + 2)
+      }
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    geo.setIndex(idx)
+    geo.computeVertexNormals()
+    return geo
+  }, [brick, pouch])
+  useEffect(() => () => zipBand?.dispose(), [zipBand])
+
   // แถบซิปล็อก: วงรีบาง ๆ พาดรอบใกล้ปาก ที่ระดับความสูงเดียวกับแนวซิปบน dieline
   let zip: { y: number; ax: number; bz: number } | null = null
-  if (pouch.zipper && pouch.zipY !== undefined) {
+  if (!brick && pouch.zipper && pouch.zipY !== undefined) {
     const vzip = Math.min(0.98, Math.max(0.02, 1 - (pouch.zipY - pouch.frontRect.y) / pouch.H))
     zip = {
       y: vzip * pouch.H,
@@ -387,9 +429,12 @@ function PouchModel({
   const ttV = Math.min(0.97, Math.max(0.03, 1 - (TINTIE_INSET + 3) / pouch.H))
   const ttZ = pouch.depth3D * pouchDepthFactor(ttV, pouch.style)
   const ttW = pouch.W * pouchWidthFactor(ttV, pouch.style) * 0.9
+  // brick: จุดบนหน้า (y, ผิว z, มุมเอียงไหล่) ที่ระยะบน dieline เดียวกับ marker
+  const bValve = brick ? brickAt(brick, (1 - VALVE_V) * pouch.H) : null
+  const bTie = brick ? brickAt(brick, TINTIE_INSET + 3) : null
 
   return (
-    <group position={[0, -pouch.H / 2, 0]}>
+    <group position={[0, -(brick ? brick.topY : pouch.H) / 2, 0]}>
       <mesh geometry={geo}>
         {/* material 0 = ผิวข้าง (พิมพ์ลาย) */}
         <meshStandardMaterial
@@ -420,6 +465,11 @@ function PouchModel({
           <meshStandardMaterial color="#6f685c" roughness={0.5} metalness={0} side={THREE.DoubleSide} />
         </mesh>
       )}
+      {zipBand && (
+        <mesh geometry={zipBand}>
+          <meshStandardMaterial color="#6f685c" roughness={0.5} metalness={0} side={THREE.DoubleSide} />
+        </mesh>
+      )}
       {pouch.spout && (
         <group position={[0, pouch.H, 0]}>
           {/* คอจุก */}
@@ -435,16 +485,30 @@ function PouchModel({
         </group>
       )}
       {pouch.valve && (
-        // วาล์วกาแฟ: จานกลมนูนออกจากผิวหน้า (แกนตามแนว z)
-        <mesh position={[0, VALVE_V * pouch.H, valveZ + 1]} rotation={[Math.PI / 2, 0, 0]}>
+        // วาล์วกาแฟ: จานกลมนูนออกจากผิวหน้า (แกนตามแนวตั้งฉากผิว — บนไหล่ brick เอียงตาม)
+        <mesh
+          position={
+            bValve
+              ? [0, bValve.y + Math.sin(bValve.tilt), bValve.b + Math.cos(bValve.tilt)]
+              : [0, VALVE_V * pouch.H, valveZ + 1]
+          }
+          rotation={[Math.PI / 2 - (bValve?.tilt ?? 0), 0, 0]}
+        >
           <cylinderGeometry args={[vR, vR, 3, 24]} />
           <meshStandardMaterial color="#2f2c28" roughness={0.5} metalness={0.1} />
         </mesh>
       )}
       {pouch.tinTie && (
-        // ที่รัดปาก: แถบบางพาดขวางหน้าถุงใกล้ปาก
-        <mesh position={[0, ttV * pouch.H, ttZ + 1]}>
-          <boxGeometry args={[ttW, 6, 2]} />
+        // ที่รัดปาก: แถบบางพาดขวางหน้าถุงใกล้ปาก (บนไหล่ brick เอียงตามผิว)
+        <mesh
+          position={
+            bTie
+              ? [0, bTie.y + Math.sin(bTie.tilt), bTie.b + Math.cos(bTie.tilt)]
+              : [0, ttV * pouch.H, ttZ + 1]
+          }
+          rotation={[-(bTie?.tilt ?? 0), 0, 0]}
+        >
+          <boxGeometry args={[bTie ? pouch.W * 0.9 : ttW, 6, 2]} />
           <meshStandardMaterial color="#a89a7a" roughness={0.6} metalness={0.2} />
         </mesh>
       )}

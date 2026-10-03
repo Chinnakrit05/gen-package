@@ -84,7 +84,8 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const gVal = flat || pillow ? 0 : Math.min(Math.max(D, 10), W)
   const sideGusset = gus || boxp ? gVal : 0 // จีบข้าง: ซองข้างจีบ + ถุงก้นแบน
   const bottomGusset = style === 'stand' || boxp || spout ? gVal : 0 // ก้น gusset: ถุงตั้ง/ก้นแบน/มีจุก
-  const stands = bottomGusset > 0 // ตั้งได้เมื่อมีก้น
+  // ตั้งได้เมื่อมีก้น — ซองข้างจีบก็ตั้งได้ (ซีลก้นพับซ่อนใต้ฐานแบบถุงกาแฟ ดู brickShape)
+  const stands = bottomGusset > 0 || gus
   // ถุงรอยต่อกลางหลัง (back-seam): หน้าเป็นผืนต่อเนื่องกลางแผ่น หลังแยกไปสองข้าง (ขอบนอกมากาวกันกลางหลัง)
   // → ใน 3D หน้าสะอาดไม่มีรอยต่อขอบข้าง; ใช้กับ stand/pillow/spout (ไม่ใช้กับซองแบน/ข้างจีบ)
   const backSeam = style === 'stand' || pillow || spout
@@ -234,14 +235,9 @@ const lerpS = (a: number, b: number, t: number) => a + (b - a) * smooth(t)
 // - flat: วงรีสมมาตร ซีลแบนทั้งบน-ล่าง (v→0/1 ≈ 0) พองสุดกลางลำตัว — ซองแบนไม่ตั้ง
 export function pouchDepthFactor(v: number, style: PouchStyle = 'stand'): number {
   if (style === 'flat' || style === 'pillow') return Math.max(0.04, Math.sin(Math.PI * clamp01(v)) ** 0.6)
-  if (style === 'gusset') {
-    // ทรงแท่งวางนอน/ตั้ง: ลำตัวเต็ม บีบแบนทั้งริมบน-ล่าง (brick ก้นซีลแบน)
-    if (v < 0.08) return lerpS(0.12, 1.0, v / 0.08)
-    if (v > 0.92) return lerpS(1.0, 0.12, (v - 0.92) / 0.08)
-    return 1.0
-  }
-  if (style === 'box') {
-    // ก้นแบนตั้งเหลี่ยม: ฐานเต็ม (ยืนได้) ลำตัวเต็ม บีบเฉพาะปากบนซีล
+  if (style === 'gusset' || style === 'box') {
+    // ทรงเหลี่ยมก้นแบน: ฐานเต็ม (ยืนได้) ลำตัวเต็ม บีบเฉพาะปากบนซีล
+    // (โดยประมาณ — ทรง 3D จริงของ gusset ใช้ brickShape ตามความยาวฟิล์ม)
     if (v < 0.05) return lerpS(0.82, 1.0, v / 0.05)
     if (v > 0.9) return lerpS(1.0, 0.12, (v - 0.9) / 0.1)
     return 1.0
@@ -276,4 +272,92 @@ export function pouchSection(theta: number, style: PouchStyle = 'stand'): { cx: 
     return { cx: Math.sign(c) * Math.abs(c) ** e, cz: Math.sign(s) * Math.abs(s) ** e }
   }
   return { cx: c, cz: s }
+}
+
+// --- ทรง 3D ซองข้างจีบ (brick) แบบถุงกาแฟ/ถุงข้าวสุญญากาศ ---
+// ลำตัวเหลี่ยมก้นแบน (ตั้งได้; ซีลก้นพับซ่อนใต้ฐาน) → "ไหล่" หน้า-หลังลาดเข้าหากัน จีบข้างพับเข้าเป็นสามเหลี่ยม
+// → ครีบซีลบนแบนตั้งตรง กว้างเต็มหน้า. ความยาวตามผิวหน้า (ลำตัว+ไหล่) = H, ครีบ = แถบซีลบนของ dieline
+// → ลายจาก dieline ลงผิว 3D ตามความยาวฟิล์มจริง ไม่ยืด
+export const BRICK_SHOULDER = 0.9 // ความสูงไหล่ ÷ ครึ่งความลึกลำตัว (มาก = ไหล่ชัน)
+
+export interface BrickShape {
+  H: number // ความยาวฟิล์มหน้า (ลำตัว+ไหล่) = ความสูงลำตัวบน dieline
+  a: number // ครึ่งกว้าง = W/2 คงที่ตั้งแต่ก้นถึงปลายครีบ
+  b0: number // ครึ่งความลึกลำตัว
+  finHalf: number // ครึ่งความหนาครีบ (ฟิล์มสองชั้นประกบ)
+  creaseIn: number // รอยจีบกลางลำตัวพับเข้า
+  gussetHalf: number // ความยาวครึ่งจีบ (สันข้าง→รอยจีบกลาง) — ฟิล์มไม่ยืด จึงคงที่ทุกระดับ
+  bodyH: number // ความสูงลำตัวตั้งตรง (ก้นที่ y=0)
+  shoulderH: number // ความสูงไหล่ (แนวดิ่ง)
+  shoulderL: number // ความยาวไหล่ตามผิวฟิล์ม
+  finH: number // ความสูงครีบ = แถบซีลบน
+  topY: number // ความสูงรวมถึงปลายครีบ
+}
+
+export function brickShape(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect'>): BrickShape {
+  const a = p.W / 2
+  const b0 = p.depth3D
+  const finHalf = Math.max(0.35, b0 * 0.025)
+  const creaseIn = Math.min(a * 0.14, b0 * 0.28)
+  const drop = b0 - finHalf
+  // ไหล่ไม่กินเกิน 60% ของความยาวหน้า (ถุงเตี้ย-จีบลึก → ไหล่ราบลง)
+  const shoulderH = Math.min(b0 * BRICK_SHOULDER, Math.sqrt(Math.max(0, (p.H * 0.6) ** 2 - drop * drop)))
+  const shoulderL = Math.hypot(shoulderH, drop)
+  const bodyH = Math.max(p.H * 0.4, p.H - shoulderL)
+  const finH = p.frontRect.y
+  return {
+    H: p.H,
+    a,
+    b0,
+    finHalf,
+    creaseIn,
+    gussetHalf: Math.hypot(b0, creaseIn),
+    bodyH,
+    shoulderH,
+    shoulderL,
+    finH,
+    topY: bodyH + shoulderH + finH,
+  }
+}
+
+// รอยจีบพับเข้าเมื่อหน้า-หลังบีบเหลือครึ่งลึก b (ครึ่งจีบยาวคงที่ → d = √(ครึ่งจีบ² − b²))
+const brickFold = (s: BrickShape, b: number) => Math.min(s.a, Math.sqrt(Math.max(0, s.gussetHalf ** 2 - b * b)))
+
+export interface BrickRow {
+  y: number // ความสูง
+  b: number // ครึ่งความลึก
+  d: number // รอยจีบพับเข้า
+  dly: number // พิกัดแนวตั้งบน dieline (UV)
+}
+
+// แถวโปรไฟล์ก้น → ปลายครีบ พร้อมพิกัด dieline: ลำตัว = ส่วนล่างของแผงหน้า, ไหล่ = ส่วนบน, ครีบ = แถบซีลบน [0..st]
+export function brickRows(s: BrickShape, st: number, nBody = 12, nShoulder = 16, nFin = 3): BrickRow[] {
+  const rows: BrickRow[] = []
+  for (let i = 0; i <= nBody; i++) {
+    const t = i / nBody
+    rows.push({ y: t * s.bodyH, b: s.b0, d: s.creaseIn, dly: st + s.shoulderL + (1 - t) * (s.H - s.shoulderL) })
+  }
+  for (let i = 1; i <= nShoulder; i++) {
+    const t = i / nShoulder
+    const b = s.b0 + (s.finHalf - s.b0) * t
+    rows.push({ y: s.bodyH + t * s.shoulderH, b, d: brickFold(s, b), dly: st + (1 - t) * s.shoulderL })
+  }
+  for (let i = 1; i <= nFin; i++) {
+    const t = i / nFin
+    rows.push({ y: s.bodyH + s.shoulderH + t * s.finH, b: s.finHalf, d: brickFold(s, s.finHalf), dly: (1 - t) * st })
+  }
+  return rows
+}
+
+// จุดบนเส้นกึ่งกลางหน้าที่ระยะ dl ตามผิวฟิล์ม นับจากแนวซีลบน (โคนครีบ) ลงมา — ใช้วางซิป/วาล์ว/tin-tie
+// ให้ตรงตำแหน่งบน dieline; tilt = มุมเอียงของผิวจากแนวดิ่ง (ไหล่เอียงไปด้านหลัง)
+export function brickAt(s: BrickShape, dl: number): { y: number; b: number; d: number; tilt: number } {
+  const L = s.shoulderL
+  if (dl < L) {
+    const t = Math.max(0, dl) / L // 0 = โคนครีบ, 1 = ขอบบนลำตัว
+    const b = s.finHalf + (s.b0 - s.finHalf) * t
+    return { y: s.bodyH + s.shoulderH * (1 - t), b, d: brickFold(s, b), tilt: Math.atan2(s.b0 - s.finHalf, s.shoulderH) }
+  }
+  const t = Math.min(1, (dl - L) / Math.max(1e-6, s.H - L))
+  return { y: s.bodyH * (1 - t), b: s.b0, d: s.creaseIn, tilt: 0 }
 }
