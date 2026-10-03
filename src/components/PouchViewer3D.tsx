@@ -19,6 +19,18 @@ import {
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
 
+const POUCH_PRINT_BACKGROUND = '#ffffff'
+
+export function getPouchSealColor(
+  pouch: Pouch,
+  mat: Material,
+  fillColor: string | null | undefined,
+  hasTexture: boolean,
+) {
+  // The folded brick base belongs to the same printed film as the body.
+  return pouch.style === 'gusset' && hasTexture ? fillColor || POUCH_PRINT_BACKGROUND : mat.color
+}
+
 // จุดบนหน้าตัดทรงกล่องที่ตำแหน่งรอบรูป fX ของแผ่นฟิล์ม [หน้า W | จีบขวา g | หลัง W | จีบซ้าย g]
 // a = ครึ่งกว้าง, b = ครึ่งลึก, d = รอยจีบกลางพับเข้า → คืน [x, z] (หน้าอยู่ +z)
 function boxSectionPt(fX: number, W: number, g: number, a: number, b: number, d: number): [number, number] {
@@ -84,7 +96,7 @@ function usePouchTexture(
     }
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.fillStyle = fillColor || '#ffffff'
+    ctx.fillStyle = fillColor || POUCH_PRINT_BACKGROUND
     ctx.fillRect(0, 0, w, h)
     const fimg = fillImage ? imgCache.current.get(fillImage.src) : undefined
     if (fillImage && fimg) {
@@ -514,10 +526,10 @@ function PouchModel({
           opacity={mat.opacity ?? 1}
           side={THREE.DoubleSide}
         />
-        {/* material 1 = ฝาก้น/ปาก (ซีล/ฐาน) สีวัสดุล้วน — ไม่เอาลายไปยืดที่ปลาย */}
+        {/* Neutral base/caps: match the brick's print background without stretching artwork. */}
         <meshStandardMaterial
           attach="material-1"
-          color={mat.color}
+          color={getPouchSealColor(pouch, mat, fillColor, hasTex)}
           roughness={mat.roughness ?? 0.6}
           metalness={0}
           transparent={mat.opacity !== undefined}

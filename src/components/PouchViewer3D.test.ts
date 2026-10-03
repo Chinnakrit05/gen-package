@@ -1,8 +1,38 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
-import { buildPouchGeometry } from './PouchViewer3D'
-import { generatePouch } from '../core/pouch'
+import { buildPouchGeometry, getPouchSealColor } from './PouchViewer3D'
+import { generatePouch, type PouchStyle } from '../core/pouch'
 import { getMaterial } from '../core/materials'
+
+describe('brick pouch seal color', () => {
+  const size = { W: 80, D: 50, H: 120 }
+
+  it.each(['pouch-foil', 'pouch-kraft', 'pouch-clear'])('matches the white print background for %s', (id) => {
+    const mat = getMaterial(id)
+    const pouch = generatePouch(size, mat, { style: 'gusset' })
+    for (const fillColor of [undefined, null, '']) {
+      expect(getPouchSealColor(pouch, mat, fillColor, true)).toBe('#ffffff')
+    }
+  })
+
+  it.each(['#91b6bd', '#e94859', '#243c32'])('matches a custom print background %s', (fillColor) => {
+    const mat = getMaterial('pouch-foil')
+    const pouch = generatePouch(size, mat, { style: 'gusset' })
+    expect(getPouchSealColor(pouch, mat, fillColor, true)).toBe(fillColor)
+  })
+
+  it('keeps the body material color while its texture is not ready', () => {
+    const mat = getMaterial('pouch-kraft')
+    const pouch = generatePouch(size, mat, { style: 'gusset' })
+    expect(getPouchSealColor(pouch, mat, '#91b6bd', false)).toBe(mat.color)
+  })
+
+  it.each<PouchStyle>(['stand', 'flat', 'box', 'pillow', 'spout'])('does not change %s seals', (style) => {
+    const mat = getMaterial('pouch-foil')
+    const pouch = generatePouch(size, mat, { style })
+    expect(getPouchSealColor(pouch, mat, '#91b6bd', true)).toBe(mat.color)
+  })
+})
 
 describe.each([
   { W: 80, D: 50, H: 120 },
