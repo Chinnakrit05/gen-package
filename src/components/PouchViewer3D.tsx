@@ -522,7 +522,7 @@ function PouchModel({
           map={tex}
           color={tex ? '#ffffff' : mat.color}
           roughness={mat.roughness ?? 0.6}
-          metalness={0}
+          metalness={mat.metalness ?? 0}
           transparent={mat.opacity !== undefined}
           opacity={mat.opacity ?? 1}
           side={THREE.DoubleSide}
@@ -532,7 +532,7 @@ function PouchModel({
           attach="material-1"
           color={getPouchSealColor(pouch, mat, fillColor, hasTex)}
           roughness={mat.roughness ?? 0.6}
-          metalness={0}
+          metalness={mat.metalness ?? 0}
           transparent={mat.opacity !== undefined}
           opacity={mat.opacity ?? 1}
           side={THREE.DoubleSide}

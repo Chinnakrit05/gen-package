@@ -52,6 +52,8 @@ export interface Material {
   color: string
   opacity?: number
   roughness?: number
+  // ความเป็นโลหะ (0–1) สำหรับผิว 3D — ฟอยล์/อะลูมิเนียมตั้งสูงเพื่อสะท้อน environment ให้ดูเงา
+  metalness?: number
   note?: string
 }
 

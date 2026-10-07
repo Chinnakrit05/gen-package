@@ -93,8 +93,9 @@ export const MATERIALS: Material[] = [
     thickness: 0.2,
     foldable: false,
     process: 'ดึงขึ้นรูป (draw & iron)',
-    color: '#c8ccd0',
-    roughness: 0.3,
+    color: '#dfe3e7',
+    roughness: 0.22,
+    metalness: 0.9,
     note: 'ดึงขึ้นรูปจากแผ่น — blueprint ที่เห็นคือ dieline ของฉลาก/สติกเกอร์พันรอบกระป๋อง พร้อมส่งพิมพ์',
   },
   {
@@ -106,7 +107,8 @@ export const MATERIALS: Material[] = [
     form: 'pouch',
     process: 'พิมพ์ + ลามิเนต + ซีลขอบขึ้นรูปถุง',
     color: '#e7e3d8',
-    roughness: 0.55,
+    roughness: 0.32,
+    metalness: 0.55,
     note: 'ถุงฟิล์มซีลขอบ — blueprint ที่เห็นคือแผ่นฟิล์มแบน (หน้า+หลัง+ก้น) พร้อมส่งพิมพ์',
   },
   {

@@ -296,7 +296,7 @@ function VesselModel({
           <meshStandardMaterial
             color={mat.color}
             roughness={mat.roughness ?? (metal ? 0.3 : 0.12)}
-            metalness={metal ? 0.85 : 0}
+            metalness={mat.metalness ?? (metal ? 0.85 : 0)}
             transparent={mat.opacity !== undefined}
             opacity={mat.opacity ?? 1}
             side={THREE.DoubleSide}

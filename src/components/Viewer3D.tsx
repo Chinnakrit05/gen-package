@@ -261,7 +261,7 @@ function PanelMesh({ geometry, edges, matrix, mat, tex }: PanelMeshProps) {
         // texture มีสีวัสดุอยู่ในตัวแล้ว ถ้าคูณสีซ้ำภาพจะมืดลง
         color={tex ? '#ffffff' : mat.color}
         roughness={mat.roughness ?? 0.8}
-        metalness={0}
+        metalness={mat.metalness ?? 0}
         transparent={mat.opacity !== undefined}
         opacity={mat.opacity ?? 1}
         side={THREE.DoubleSide}
