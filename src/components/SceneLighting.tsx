@@ -1,48 +1,93 @@
-import { useEffect } from 'react'
+import { memo, useEffect } from 'react'
 import * as THREE from 'three'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { Environment, Lightformer } from '@react-three/drei'
 
-// ชุดไฟ + tone mapping + environment ที่สลับได้ ใช้ร่วมทุก viewer (กล่อง/ภาชนะ/ถุง)
-// โหมดปกติ: ACES Filmic (ค่า default ของ R3F) — นุ่มนวลแต่สีจะจืด/ไฮไลต์หม่นลง
-// โหมด "แสงสด": NoToneMapping + เพิ่มความสว่าง/แสงฟุ้ง ให้สีอิ่มและสว่างขึ้น (เหมาะพรีวิวสินค้า)
-//
-// Environment = สตูดิโอจำลองจาก Lightformer (สร้าง cubemap ในหน่วยความจำ ไม่โหลดไฟล์ HDR นอก
-// ตามแนว self-host ของโปรเจกต์) — ให้ผิวโลหะ (metalness สูง เช่น ฟอยล์/อะลูมิเนียม) มีอะไรสะท้อน
-// จึงดูเงาวับ ไม่ทึบดำ; ผิวกระดาษ (roughness สูง) ได้แค่ fill นุ่ม ๆ ไม่เปลี่ยนมาก
-export function SceneLighting({ vivid }: { vivid: boolean }) {
+// โหมดแสงของมุมมอง 3D (ใช้ร่วมทุก viewer: กล่อง/ภาชนะ/ถุง)
+// 'soft'       = ปิดแสงสด: ACES Filmic (ค่า default ของ R3F) นุ่มนวลแต่สีจืด/ไฮไลต์หม่น
+// 'studio'     = แสงสดแบบสตูดิโอ: Neutral tone mapping + แสงฟุ้งรอบด้าน เงาน้อย — เช็กลาย/สีได้ทุกด้าน
+// 'threePoint' = แสงสดแบบ 3 จุด: key (หน้าเฉียงซ้ายบน) + fill (อ่อน ขวา) + rim (ตรงหลัง ส่องขอบบน)
+//                ได้มิติ/ขอบแยกจากพื้นขาวชัด แบบภาพโฆษณาสินค้า แต่ด้านเงาจะมืดกว่า
+export type LightMode = 'soft' | 'studio' | 'threePoint'
+
+// Environment = สตูดิโอจำลองจาก Lightformer (cubemap ในหน่วยความจำ ไม่โหลดไฟล์ HDR นอก
+// ตามแนว self-host ของโปรเจกต์) — ให้ผิวโลหะ (ฟอยล์/อะลูมิเนียม) มีอะไรสะท้อนจึงดูเงา
+export function SceneLighting({ mode }: { mode: LightMode }) {
   const gl = useThree((s) => s.gl)
   const scene = useThree((s) => s.scene)
+  const vivid = mode !== 'soft'
+  const threePoint = mode === 'threePoint'
 
-  // เปลี่ยน tone mapping ต้อง recompile material ที่มีอยู่ (ตัวที่สร้างใหม่ใช้ค่าปัจจุบันเองตอน compile)
-  useEffect(() => {
-    gl.toneMapping = vivid ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping
-    gl.toneMappingExposure = vivid ? 1.05 : 1
+  // tone mapping ต่อโหมด: ปิดแสงสด = ACES (ค่า default ของ R3F); แสงสด = Neutral (Khronos PBR Neutral —
+  // คงสีพื้นตรงและอิ่ม ไม่เพี้ยนเฉดแบบ ACES) + exposure ดันให้สว่าง; NoToneMapping ใช้ไม่ได้เพราะไม่รับ exposure
+  // เลยมืดกว่าเดิม. tone mapping ถูก "อบ" ลง shader ตอน compile — ตั้งครั้งเดียวใน effect ไม่พอ (ตรวจแล้วเจอ
+  // material ที่ compile ค้างเป็น ACES ทั้งที่ renderer ตั้ง Neutral) จึงบังคับทุกเฟรม: ตั้ง renderer ให้ตรง
+  // และสั่ง recompile เฉพาะ material ที่ค่าที่ compile ไว้ไม่ตรง (exposure เป็น uniform ไม่ต้อง recompile)
+  const toneMapping = vivid ? THREE.NeutralToneMapping : THREE.ACESFilmicToneMapping
+  const exposure = threePoint ? 1.3 : vivid ? 1.5 : 1
+  useFrame(() => {
+    if (gl.toneMapping !== toneMapping) gl.toneMapping = toneMapping
+    if (gl.toneMappingExposure !== exposure) gl.toneMappingExposure = exposure
     scene.traverse((o) => {
-      const mesh = o as THREE.Mesh
-      const m = mesh.material
+      const m = (o as THREE.Mesh).material
       if (!m) return
-      for (const mm of Array.isArray(m) ? m : [m]) mm.needsUpdate = true
+      for (const mm of Array.isArray(m) ? m : [m]) {
+        const compiled = (gl.properties.get(mm) as { toneMapping?: number }).toneMapping
+        const want = mm.toneMapped ? toneMapping : THREE.NoToneMapping
+        if (compiled !== undefined && compiled !== want) mm.needsUpdate = true
+      }
     })
-  }, [vivid, gl, scene])
+  })
+
+  // ความแรงของ environment ต่อโหมด — ตั้งที่ scene เองแทน prop ของ <Environment> (ดู StudioEnv)
+  const envIntensity = threePoint ? 0.35 : vivid ? 1 : 0.6
+  useEffect(() => {
+    scene.environmentIntensity = envIntensity
+  }, [scene, envIntensity])
 
   return (
     <>
-      <ambientLight intensity={vivid ? 0.9 : 0.65} />
-      {/* แสงฟุ้งจากฟ้า/พื้น เติมเงาให้สว่างนุ่ม ไม่ทึบ */}
-      <hemisphereLight args={['#ffffff', '#efeae0', vivid ? 0.55 : 0.22]} />
-      <directionalLight position={[250, 420, 300]} intensity={vivid ? 2 : 1.5} />
-      <directionalLight position={[-220, 120, -260]} intensity={vivid ? 0.85 : 0.5} />
-      {/* สตูดิโอสะท้อนสำหรับผิวโลหะ — เรนเดอร์ครั้งเดียว (ไฟไม่ขยับ) */}
-      <Environment resolution={256} frames={1} environmentIntensity={vivid ? 1 : 0.8}>
-        {/* ซอฟต์บ็อกซ์บนหัว = ไฮไลต์เส้นยาวบนผิวโลหะ */}
-        <Lightformer form="rect" intensity={vivid ? 3.2 : 2.4} position={[0, 6, 1]} scale={[10, 5, 1]} color="#ffffff" />
-        {/* แผงข้างซ้าย-ขวา = ขอบสว่างสองด้าน */}
-        <Lightformer form="rect" intensity={1.6} position={[-6, 1, 3]} scale={[4, 8, 1]} color="#f4f7fb" />
-        <Lightformer form="rect" intensity={1.6} position={[6, 1, 3]} scale={[4, 8, 1]} color="#f4f7fb" />
-        {/* วงแหวนด้านหลัง = ประกายโค้งบนทรงกระบอก */}
-        <Lightformer form="ring" intensity={1.2} position={[0, 3, -6]} scale={5} color="#eef2f6" />
-      </Environment>
+      {threePoint ? (
+        <>
+          {/* แสงรอบข้างต่ำ ให้ด้านเงายังเห็นลายแต่มีมิติ */}
+          <ambientLight intensity={0.25} />
+          <hemisphereLight args={['#ffffff', '#e9e4da', 0.15]} />
+          {/* key: หน้าเฉียงซ้ายบน (ฝั่งตรงข้ามกล้องที่มองจากขวา) — ฝาบน+หน้าสว่างสุด อุ่นเล็กน้อย */}
+          <directionalLight position={[-300, 420, 380]} intensity={3} color="#fff8ee" />
+          {/* fill: ขวาต่ำ อ่อน — ผนังข้างที่กล้องเห็นตกอยู่ในเงานุ่ม ได้มิติ (ยังเห็นลาย) เย็นเล็กน้อย */}
+          <directionalLight position={[420, 60, 160]} intensity={0.55} color="#eef3ff" />
+          {/* rim: ตรงหลังสูง — แตะแค่ขอบบน/ด้านหลัง ไม่ลบเงาของผนังข้างที่กล้องเห็น */}
+          <directionalLight position={[0, 300, -500]} intensity={2} />
+        </>
+      ) : (
+        <>
+          <ambientLight intensity={vivid ? 0.9 : 0.65} />
+          {/* แสงฟุ้งจากฟ้า/พื้น เติมเงาให้สว่างนุ่ม ไม่ทึบ */}
+          <hemisphereLight args={['#ffffff', '#efeae0', vivid ? 0.55 : 0.22]} />
+          <directionalLight position={[250, 420, 300]} intensity={vivid ? 2 : 1.5} />
+          <directionalLight position={[-220, 120, -260]} intensity={vivid ? 0.85 : 0.5} />
+        </>
+      )}
+      <StudioEnv />
     </>
   )
 }
+
+// สตูดิโอสะท้อนสำหรับผิวโลหะ — สร้าง cubemap ครั้งเดียวต่อ Canvas
+// drei <Environment> ถ่าย cubemap ใหม่ (6 หน้า + สร้าง PMREM) ใน layout effect ทุกครั้งที่ parent re-render
+// เพราะ children เป็น JSX ใหม่ทุกรอบ — เช่นทุกติ๊กตอนลากสไลเดอร์ขนาด ทั้งที่ไฟสตูดิโอไม่เคยเปลี่ยน
+// จึงเป็น memo ไม่มี prop (ไม่ re-render ตาม parent) และไม่ผูกค่าตามโหมด — ความแรงต่อโหมดปรับผ่าน
+// scene.environmentIntensity ใน SceneLighting แทน; เปลี่ยนชนิดงานได้ Canvas ใหม่ = สร้างใหม่เอง
+const StudioEnv = memo(function StudioEnv() {
+  return (
+    <Environment resolution={256} frames={1}>
+      {/* ซอฟต์บ็อกซ์บนหัว = ไฮไลต์เส้นยาวบนผิวโลหะ */}
+      <Lightformer form="rect" intensity={3.2} position={[0, 6, 1]} scale={[10, 5, 1]} color="#ffffff" />
+      {/* แผงข้างซ้าย-ขวา = ขอบสว่างสองด้าน */}
+      <Lightformer form="rect" intensity={1.6} position={[-6, 1, 3]} scale={[4, 8, 1]} color="#f4f7fb" />
+      <Lightformer form="rect" intensity={1.6} position={[6, 1, 3]} scale={[4, 8, 1]} color="#f4f7fb" />
+      {/* วงแหวนด้านหลัง = ประกายโค้งบนทรงกระบอก */}
+      <Lightformer form="ring" intensity={1.2} position={[0, 3, -6]} scale={5} color="#eef2f6" />
+    </Environment>
+  )
+})

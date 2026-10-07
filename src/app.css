@@ -2803,6 +2803,38 @@ aside .art-actions .file-pick:only-child {
   line-height: 1;
 }
 
+/* ตัวเลือกรูปแบบแสง (โผล่เมื่อเปิดแสงสด): สตูดิโอ | 3 จุด */
+.light-rig {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-solid);
+  box-shadow: 0 2px 7px rgba(20, 18, 14, 0.12);
+}
+.light-rig button {
+  width: auto;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.light-rig button + button {
+  border-left: 1px solid var(--border);
+}
+.light-rig button:hover {
+  color: var(--text);
+  background: transparent;
+}
+.light-rig button.on {
+  background: #fde7bd;
+  color: #3a2d05;
+}
+
 /* --- modal ตั้งชื่องาน --- */
 .modal-overlay {
   position: fixed;

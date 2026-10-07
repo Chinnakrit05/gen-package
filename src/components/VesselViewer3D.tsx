@@ -7,7 +7,7 @@ import type { Material } from '../core/types'
 import type { Vessel } from '../core/vessel'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
-import { SceneLighting } from './SceneLighting'
+import { SceneLighting, type LightMode } from './SceneLighting'
 
 // พรีวิวภาชนะขึ้นรูป: โปรไฟล์หมุนรอบแกน (LatheGeometry) + ฉลากพันรอบตัว
 // ฉลากเป็นทรงกระบอกบาง ๆ ลอยเหนือผิว เท็กซ์เจอร์วาดจาก dieline ฉลาก (สีขาว = กระดาษฉลาก)
@@ -337,7 +337,7 @@ export function VesselViewer3D({
   fillImage,
   dims,
   imperial,
-  vivid,
+  lightMode,
 }: {
   vessel: Vessel
   mat: Material
@@ -346,7 +346,7 @@ export function VesselViewer3D({
   fillImage?: FillImage | null
   dims?: Dim3D[]
   imperial?: boolean
-  vivid?: boolean
+  lightMode?: LightMode
 }) {
   const dist = Math.max(vessel.H, vessel.labelR * 4) * 2.2
   return (
@@ -357,7 +357,7 @@ export function VesselViewer3D({
       aria-label="มุมมอง 3 มิติของภาชนะพร้อมฉลาก"
     >
       <color attach="background" args={['#ffffff']} />
-      <SceneLighting vivid={!!vivid} />
+      <SceneLighting mode={lightMode ?? 'soft'} />
       <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} />
       <OrbitControls makeDefault enableDamping />
     </Canvas>

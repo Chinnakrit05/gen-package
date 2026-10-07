@@ -102,6 +102,7 @@ const PouchViewer3D = lazy(() =>
 )
 import { DielineSVG } from './components/DielineSVG'
 import type { Dim3D } from './components/DimBadge3D'
+import type { LightMode } from './components/SceneLighting'
 import { PromptBar } from './components/PromptBar'
 import { ColorField } from './components/ColorField'
 import { ProjectGallery } from './components/ProjectGallery'
@@ -987,6 +988,22 @@ export default function App({
       /* ปิด storage — ข้าม */
     }
   }, [vivid3d])
+  // รูปแบบแสงเมื่อเปิดแสงสด: 'studio' = ฟุ้งรอบด้าน (เช็กลาย) / 'threePoint' = key+fill+rim (มีมิติแบบภาพโฆษณา)
+  const [lightRig3d, setLightRig3d] = useState<'studio' | 'threePoint'>(() => {
+    try {
+      return localStorage.getItem('packit-lightrig3d') === 'threePoint' ? 'threePoint' : 'studio'
+    } catch {
+      return 'studio'
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('packit-lightrig3d', lightRig3d)
+    } catch {
+      /* ปิด storage — ข้าม */
+    }
+  }, [lightRig3d])
+  const lightMode3d: LightMode = vivid3d ? lightRig3d : 'soft'
   const [decos, setDecos] = useState<Deco[]>(initialActive.decos)
   const textFontKey = decos
     .filter((d): d is TextEl => d.type === 'text' && !d.hidden)
@@ -2228,12 +2245,12 @@ export default function App({
             dims={dims3dOn}
             imperial={imperial}
             dimVariant="lines"
-            vivid={vivid3d}
+            lightMode={lightMode3d}
           />
         ) : kind === 'vessel' ? (
-          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} vivid={vivid3d} />
+          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} lightMode={lightMode3d} />
         ) : (
-          <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} dimVariant="lines" vivid={vivid3d} />
+          <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} dimVariant="lines" lightMode={lightMode3d} />
         )}
       </Suspense>
       <div className="viewer3d-tools">
@@ -2261,6 +2278,27 @@ export default function App({
           </span>
           แสงสด
         </button>
+        {vivid3d && (
+          <div className="light-rig" role="group" aria-label="รูปแบบแสง">
+            {(
+              [
+                ['studio', 'สตูดิโอ', 'แสงฟุ้งรอบด้าน เงาน้อย — เช็กลาย/สีได้ทุกด้าน'],
+                ['threePoint', '3 จุด', 'ไฟหลัก + ไฟเติม + ไฟส่องขอบ — มีมิติแบบภาพโฆษณาสินค้า'],
+              ] as const
+            ).map(([id, label, tip]) => (
+              <button
+                key={id}
+                type="button"
+                className={lightRig3d === id ? 'on' : ''}
+                aria-pressed={lightRig3d === id}
+                title={tip}
+                onClick={() => setLightRig3d(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </>
   )
