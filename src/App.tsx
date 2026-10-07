@@ -2269,7 +2269,10 @@ export default function App({
           { label: 'ลึก', mm: D },
           { label: 'สูง', mm: H },
         ]
-  const dims3dOn = showDims3d ? dims3d : undefined
+  // จอ 3D เล็กมุมจอ (PiP ในแท็บตกแต่ง/ส่งออก ที่ยังไม่ได้ขยาย): ซ่อนปุ่มและเส้นบอกขนาดให้เห็นโมเดลเต็ม ๆ
+  // — กดขยายเป็นหน้าต่างใหญ่หรืออยู่แท็บออกแบบ (จอหลัก) ค่อยแสดง; โหมดแสงที่ตั้งไว้ยังมีผลเหมือนเดิม
+  const pip3dCompact = sideTab !== 'design' && !expand3d
+  const dims3dOn = showDims3d && !pip3dCompact ? dims3d : undefined
   const viewer3D = (
     <>
       <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
@@ -2294,6 +2297,7 @@ export default function App({
           <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} dimVariant="lines" lightMode={lightMode3d} />
         )}
       </Suspense>
+      {!pip3dCompact && (
       <div className="viewer3d-tools">
         <button
           type="button"
@@ -2341,6 +2345,7 @@ export default function App({
           </div>
         )}
       </div>
+      )}
     </>
   )
   // แท็บ "ออกแบบ" = โชว์ 3D ของแพ็กเกจเป็นจอหลัก (แทน blueprint)
