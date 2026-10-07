@@ -1,4 +1,4 @@
-import { memo, useEffect } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Environment, Lightformer } from '@react-three/drei'
@@ -10,11 +10,22 @@ import { Environment, Lightformer } from '@react-three/drei'
 //                ได้มิติ/ขอบแยกจากพื้นขาวชัด แบบภาพโฆษณาสินค้า แต่ด้านเงาจะมืดกว่า
 export type LightMode = 'soft' | 'studio' | 'threePoint'
 
+// ไฟทิศทาง (key/fill/rim) ยึดกับ "มุมมองคนดู" ไม่ใช่กับโลกของฉาก: หมุนโมเดลไปด้านไหน ด้านที่หันหากล้อง
+// ได้แสงแบบเดียวกับด้านหน้าตอนเริ่ม (เหมือนไฟสตูดิโอที่ตั้งติดกล้อง) — ตำแหน่งไฟด้านล่างเขียนไว้สำหรับ
+// มุมกล้องเริ่มต้น (ทิศเดียวกับ FitCamera ของกล่อง) แล้วแต่ละเฟรมหมุนทั้งชุดตามที่กล้องโคจรไปจากมุมนั้น
+const REF_VIEW_INV = new THREE.Quaternion()
+  .setFromRotationMatrix(
+    new THREE.Matrix4().lookAt(new THREE.Vector3(0.5, 0.42, 1), new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0)),
+  )
+  .invert()
+
 // Environment = สตูดิโอจำลองจาก Lightformer (cubemap ในหน่วยความจำ ไม่โหลดไฟล์ HDR นอก
 // ตามแนว self-host ของโปรเจกต์) — ให้ผิวโลหะ (ฟอยล์/อะลูมิเนียม) มีอะไรสะท้อนจึงดูเงา
 export function SceneLighting({ mode }: { mode: LightMode }) {
   const gl = useThree((s) => s.gl)
   const scene = useThree((s) => s.scene)
+  const camera = useThree((s) => s.camera)
+  const rig = useRef<THREE.Group>(null)
   const vivid = mode !== 'soft'
   const threePoint = mode === 'threePoint'
 
@@ -26,6 +37,12 @@ export function SceneLighting({ mode }: { mode: LightMode }) {
   const toneMapping = vivid ? THREE.NeutralToneMapping : THREE.ACESFilmicToneMapping
   const exposure = threePoint ? 1.3 : vivid ? 1.5 : 1
   useFrame(() => {
+    // ชุดไฟหมุนตามกล้อง: q = (การหมุนของกล้องตอนนี้) × (มุมเริ่มต้น)⁻¹ — ที่มุมเริ่มต้น q = ไม่หมุน
+    // (แสงตรงกับค่าที่จูนไว้ทุกอย่าง) และ environment (แสงสะท้อนบนโลหะ) หมุนตามเพื่อให้ไฮไลต์ไม่ค้างที่เดิม
+    if (rig.current) {
+      rig.current.quaternion.copy(camera.quaternion).multiply(REF_VIEW_INV)
+      scene.environmentRotation.setFromQuaternion(rig.current.quaternion)
+    }
     if (gl.toneMapping !== toneMapping) gl.toneMapping = toneMapping
     if (gl.toneMappingExposure !== exposure) gl.toneMappingExposure = exposure
     scene.traverse((o) => {
@@ -52,20 +69,24 @@ export function SceneLighting({ mode }: { mode: LightMode }) {
           {/* แสงรอบข้างต่ำ ให้ด้านเงายังเห็นลายแต่มีมิติ */}
           <ambientLight intensity={0.25} />
           <hemisphereLight args={['#ffffff', '#e9e4da', 0.15]} />
-          {/* key: หน้าเฉียงซ้ายบน (ฝั่งตรงข้ามกล้องที่มองจากขวา) — ฝาบน+หน้าสว่างสุด อุ่นเล็กน้อย */}
-          <directionalLight position={[-300, 420, 380]} intensity={3} color="#fff8ee" />
-          {/* fill: ขวาต่ำ อ่อน — ผนังข้างที่กล้องเห็นตกอยู่ในเงานุ่ม ได้มิติ (ยังเห็นลาย) เย็นเล็กน้อย */}
-          <directionalLight position={[420, 60, 160]} intensity={0.55} color="#eef3ff" />
-          {/* rim: ตรงหลังสูง — แตะแค่ขอบบน/ด้านหลัง ไม่ลบเงาของผนังข้างที่กล้องเห็น */}
-          <directionalLight position={[0, 300, -500]} intensity={2} />
+          <group ref={rig}>
+            {/* key: หน้าเฉียงซ้ายบน (ฝั่งตรงข้ามกล้องที่มองจากขวา) — ฝาบน+หน้าสว่างสุด อุ่นเล็กน้อย */}
+            <directionalLight position={[-300, 420, 380]} intensity={3} color="#fff8ee" />
+            {/* fill: ขวาต่ำ อ่อน — ผนังข้างที่กล้องเห็นตกอยู่ในเงานุ่ม ได้มิติ (ยังเห็นลาย) เย็นเล็กน้อย */}
+            <directionalLight position={[420, 60, 160]} intensity={0.55} color="#eef3ff" />
+            {/* rim: ตรงหลังสูง — แตะแค่ขอบบน/ด้านหลัง ไม่ลบเงาของผนังข้างที่กล้องเห็น */}
+            <directionalLight position={[0, 300, -500]} intensity={2} />
+          </group>
         </>
       ) : (
         <>
           <ambientLight intensity={vivid ? 0.9 : 0.65} />
           {/* แสงฟุ้งจากฟ้า/พื้น เติมเงาให้สว่างนุ่ม ไม่ทึบ */}
           <hemisphereLight args={['#ffffff', '#efeae0', vivid ? 0.55 : 0.22]} />
-          <directionalLight position={[250, 420, 300]} intensity={vivid ? 2 : 1.5} />
-          <directionalLight position={[-220, 120, -260]} intensity={vivid ? 0.85 : 0.5} />
+          <group ref={rig}>
+            <directionalLight position={[250, 420, 300]} intensity={vivid ? 2 : 1.5} />
+            <directionalLight position={[-220, 120, -260]} intensity={vivid ? 0.85 : 0.5} />
+          </group>
         </>
       )}
       <StudioEnv />
