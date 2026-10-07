@@ -2096,33 +2096,28 @@ button[aria-disabled='true'] {
   pointer-events: none;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
-/* ปุ่มพรีวิวสีงานพิมพ์ CMYK (soft-proof) — มุมขวาบนของ blueprint */
+/* ปุ่มพรีวิวสีงานพิมพ์ CMYK (soft-proof) — ต่อท้ายแถบเครื่องมือซ้ายบนของ blueprint (.bp-tools) */
 .proof-toggle {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 3;
   width: auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 11px 5px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.94);
-  color: #3a4446;
+  padding: 4px 9px 4px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #2a2440;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
   cursor: pointer;
-  box-shadow: 0 2px 7px rgba(20, 18, 14, 0.12);
 }
 .proof-toggle:hover {
-  border-color: var(--accent-border);
-  background: #fff;
+  background: rgba(42, 36, 64, 0.07);
 }
 .proof-toggle.on {
   background: #2a2f33;
-  border-color: #2a2f33;
   color: #fff;
 }
 .proof-dots {

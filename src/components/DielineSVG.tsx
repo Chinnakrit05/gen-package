@@ -279,6 +279,7 @@ export const DielineSVG = memo(function DielineSVG({
   canUndo,
   canRedo,
   imperial = false,
+  toolsExtra,
 }: {
   dieline: Dieline
   showDims: boolean
@@ -304,6 +305,7 @@ export const DielineSVG = memo(function DielineSVG({
   onRedo?: () => void
   canUndo?: boolean
   canRedo?: boolean
+  toolsExtra?: React.ReactNode // ปุ่มเพิ่มจากภายนอก ต่อท้ายแถบเครื่องมือซ้ายบน (เลื่อนลงตามแถบเมื่อเลือกชิ้น)
 }) {
   const [showRuler, setShowRuler] = useState(false)
   const t = useT()
@@ -1068,8 +1070,11 @@ export const DielineSVG = memo(function DielineSVG({
             ↷
           </button>
         )}
+        {toolsExtra && <span className="bp-tools-sep" />}
+        {toolsExtra}
       </div>
     )}
+    {!editable && toolsExtra && <div className="bp-tools">{toolsExtra}</div>}
     <svg
       ref={svgRef}
       className={`dieline-svg${zoom > 1 ? ' zoomed' : ''}${spacePan ? ' grabbable' : ''}${penMode ? ' pen' : ''}`}

@@ -2220,6 +2220,31 @@ export default function App({
 
   // สำเนาลาย/สีพื้นที่จำลองสีพิมพ์ CMYK ส่งให้ blueprint (ปิดอยู่ = ค่าเดิม)
   const proofed = useSoftProof(softProof, decos, fillColor, fillImage)
+  // ปุ่มเปิด/ปิด soft-proof — ส่งเข้าแถบเครื่องมือซ้ายบนของ blueprint; memo ไว้ไม่ให้ DielineSVG (memo) re-render ทุกรอบ
+  const proofToggle = useMemo(
+    () => (
+      <button
+        type="button"
+        className={`proof-toggle${softProof ? ' on' : ''}`}
+        aria-pressed={softProof}
+        title={
+          softProof
+            ? `กำลังจำลองสีงานพิมพ์ CMYK (${CMYK_PROOF_PROFILE}) — สีที่หม่นลงคือสีที่หมึกพิมพ์ทำไม่ได้ · ไฟล์ส่งออกไม่เปลี่ยน`
+            : 'จำลองสีเมื่อพิมพ์จริงด้วยหมึก CMYK — ดูว่าสีไหนจะหม่นลง (เฉพาะการแสดงผล)'
+        }
+        onClick={() => setSoftProof((v) => !v)}
+      >
+        <span className="proof-dots" aria-hidden>
+          <i style={{ background: '#00a3e0' }} />
+          <i style={{ background: '#d6007e' }} />
+          <i style={{ background: '#f5e100' }} />
+          <i style={{ background: '#222' }} />
+        </span>
+        {softProof ? 'พรีวิวสีพิมพ์ CMYK' : 'ดูสีแบบพิมพ์'}
+      </button>
+    ),
+    [softProof],
+  )
 
   // มุมมอง 3D (ใช้ซ้ำได้ทั้งจอเล็ก PiP และจอหลักในแท็บออกแบบ)
   // ป้ายขนาดบนมุมมอง 3D — ป้ายชื่อตามชนิดงาน (ภาชนะ W/D = เส้นผ่านศูนย์กลางตัว/ปาก)
@@ -4519,26 +4544,8 @@ export default function App({
                 canUndo={!aiBusy && undoStack.length > 0}
                 canRedo={!aiBusy && redoStack.length > 0}
                 imperial={imperial}
+                toolsExtra={proofToggle}
               />
-              <button
-                type="button"
-                className={`proof-toggle${softProof ? ' on' : ''}`}
-                aria-pressed={softProof}
-                title={
-                  softProof
-                    ? `กำลังจำลองสีงานพิมพ์ CMYK (${CMYK_PROOF_PROFILE}) — สีที่หม่นลงคือสีที่หมึกพิมพ์ทำไม่ได้ · ไฟล์ส่งออกไม่เปลี่ยน`
-                    : 'จำลองสีเมื่อพิมพ์จริงด้วยหมึก CMYK — ดูว่าสีไหนจะหม่นลง (เฉพาะการแสดงผล)'
-                }
-                onClick={() => setSoftProof((v) => !v)}
-              >
-                <span className="proof-dots" aria-hidden>
-                  <i style={{ background: '#00a3e0' }} />
-                  <i style={{ background: '#d6007e' }} />
-                  <i style={{ background: '#f5e100' }} />
-                  <i style={{ background: '#222' }} />
-                </span>
-                {softProof ? 'พรีวิวสีพิมพ์ CMYK' : 'ดูสีแบบพิมพ์'}
-              </button>
               <span className="bp-legend">
                 <i className="sw-cut" /> เส้นตัด
                 <i className="sw-crease" />{' '}
