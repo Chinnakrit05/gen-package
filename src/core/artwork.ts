@@ -382,9 +382,18 @@ export const withTextW = (e: TextEl): TextEl => ({
 // --- โหลดไฟล์รูป ---
 // เก็บลง localStorage รวมกับข้อมูลงาน จึงต้องคุมขนาดไม่ให้ชน quota (~5MB ทั้ง origin)
 // แล้วทำให้ save ของทั้งแอปล้มเงียบ ๆ ไปด้วย — ไล่ย่อลงจนกว่าจะเข้าเกณฑ์
-// เพดานสูงขึ้นเพื่อคุณภาพงานพิมพ์: โลโก้กว้าง 100 มม. ที่ 300 dpi ≈ 1180px จึงเริ่มที่ 1200
+// เริ่มที่ 2400 px (≈ ภาพกว้าง 200 มม. ที่ 300 dpi) แล้วไล่ลงจนกว่าจะเข้างบไบต์
+// รูปทึบ (ไม่มีส่วนโปร่งใส เช่นรูปถ่าย) เก็บเป็น JPEG คุณภาพสูง — เล็กกว่า PNG หลายเท่า จึงได้ความละเอียด
+// สูงในงบเดียวกัน (เดิม PNG ล้วน รูปถ่ายมักถูกย่อเหลือ 640/480 px จนเบลอ)
+// รูปที่มีพื้นโปร่งใส (โลโก้) ยังเป็น PNG — JPEG จะฆ่า alpha ทำให้โลโก้ติดกรอบขาว
 const MAX_BYTES = 700_000
-const SIZES = [1200, 900, 640, 480]
+const SIZES = [2400, 1800, 1200, 900, 640, 480]
+
+function isOpaque(ctx: CanvasRenderingContext2D, w: number, h: number): boolean {
+  const d = ctx.getImageData(0, 0, w, h).data
+  for (let i = 3; i < d.length; i += 4) if (d[i] < 255) return false
+  return true
+}
 
 export async function loadImageFile(file: File): Promise<{ src: string; aspect: number }> {
   // SVG = เวกเตอร์: เก็บเป็น data URL ตรง ๆ (คมทุกสเกล + ฝังลง .svg/.pdf ได้แบบเวกเตอร์)
@@ -392,6 +401,7 @@ export async function loadImageFile(file: File): Promise<{ src: string; aspect: 
   const bmp = await createImageBitmap(file)
   const aspect = bmp.width / bmp.height
   let src = ''
+  let opaque: boolean | null = null
   for (const max of SIZES) {
     const scale = Math.min(1, max / Math.max(bmp.width, bmp.height))
     const w = Math.max(1, Math.round(bmp.width * scale))
@@ -399,11 +409,12 @@ export async function loadImageFile(file: File): Promise<{ src: string; aspect: 
     const canvas = document.createElement('canvas')
     canvas.width = w
     canvas.height = h
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) throw new Error('เปิด canvas ไม่ได้')
+    ctx.imageSmoothingQuality = 'high'
     ctx.drawImage(bmp, 0, 0, w, h)
-    // PNG เท่านั้น — JPEG จะฆ่า alpha ทำให้โลโก้ติดกรอบขาวมาด้วย
-    src = canvas.toDataURL('image/png')
+    if (opaque === null) opaque = isOpaque(ctx, w, h) // ตรวจครั้งเดียวที่ขนาดใหญ่สุด
+    src = opaque ? canvas.toDataURL('image/jpeg', 0.92) : canvas.toDataURL('image/png')
     if (src.length <= MAX_BYTES) break
   }
   bmp.close()

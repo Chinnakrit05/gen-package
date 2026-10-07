@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { textureScale } from '../core/textureRes'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
@@ -65,6 +66,7 @@ function useSheetTexture(
   fillColor: string | null | undefined,
   fillImage: FillImage | null | undefined,
 ) {
+  const gl = useThree((st) => st.gl)
   const [tex, setTex] = useState<THREE.CanvasTexture | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const imgCache = useRef(new Map<string, HTMLImageElement>())
@@ -102,7 +104,7 @@ function useSheetTexture(
       setTex(null)
       return
     }
-    const s = Math.min(3, 2048 / Math.max(dieline.width, dieline.height))
+    const s = textureScale(dieline.width, dieline.height, gl.capabilities.maxTextureSize)
     const w = Math.max(1, Math.round(dieline.width * s))
     const h = Math.max(1, Math.round(dieline.height * s))
 
@@ -148,6 +150,8 @@ function useSheetTexture(
       }
       const t = new THREE.CanvasTexture(canvas)
       t.colorSpace = THREE.SRGBColorSpace
+      // มองด้านที่เอียงไม่ให้เบลอ (ค่าเริ่มต้น 1 = เบลอมากเมื่อผิวเฉียงกล้อง)
+      t.anisotropy = gl.capabilities.getMaxAnisotropy()
       return t
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { Canvas } from '@react-three/fiber'
+import { textureScale } from '../core/textureRes'
+import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
@@ -20,6 +21,7 @@ function useLabelTexture(
   fillColor: string | null | undefined,
   fillImage: FillImage | null | undefined,
 ) {
+  const gl = useThree((st) => st.gl)
   const [tex, setTex] = useState<THREE.CanvasTexture | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const imgCache = useRef(new Map<string, HTMLImageElement>())
@@ -50,7 +52,7 @@ function useLabelTexture(
   const { width, height } = vessel.label
 
   useEffect(() => {
-    const s = Math.min(3, 2048 / Math.max(width, height))
+    const s = textureScale(width, height, gl.capabilities.maxTextureSize)
     const w = Math.max(1, Math.round(width * s))
     const h = Math.max(1, Math.round(height * s))
     let canvas = canvasRef.current
@@ -89,6 +91,8 @@ function useLabelTexture(
       }
       const t = new THREE.CanvasTexture(canvas)
       t.colorSpace = THREE.SRGBColorSpace
+      // มองด้านที่เอียงไม่ให้เบลอ (ค่าเริ่มต้น 1 = เบลอมากเมื่อผิวเฉียงกล้อง)
+      t.anisotropy = gl.capabilities.getMaxAnisotropy()
       // โชว์เฉพาะช่วงเส้นรอบวงจริง — หางทับซ้อน (กาว) มุดใต้รอยต่อ มองไม่เห็นบนขวด
       t.repeat.x = (2 * Math.PI * vessel.labelR) / width
       t.wrapS = THREE.ClampToEdgeWrapping
