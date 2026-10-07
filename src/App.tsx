@@ -104,6 +104,8 @@ import { DielineSVG } from './components/DielineSVG'
 import type { Dim3D } from './components/DimBadge3D'
 import type { LightMode } from './components/SceneLighting'
 import { useSoftProof } from './components/useSoftProof'
+import { useImageDpi } from './components/useImageDpi'
+import { GOOD_DPI, LOW_DPI, imageDrawMm, pixelsNeeded } from './core/imageDpi'
 import { CMYK_PROOF_PROFILE } from './core/cmykProofLut'
 import { PromptBar } from './components/PromptBar'
 import { ColorField } from './components/ColorField'
@@ -2220,6 +2222,13 @@ export default function App({
 
   // สำเนาลาย/สีพื้นที่จำลองสีพิมพ์ CMYK ส่งให้ blueprint (ปิดอยู่ = ค่าเดิม)
   const proofed = useSoftProof(softProof, decos, fillColor, fillImage)
+  // ความละเอียดรูปตามขนาดที่วางจริง — ป้ายเตือนบน blueprint, ค่าในแผงปรับแต่ง, และสรุปก่อนส่งออก
+  const imgDpi = useImageDpi(decos, fillImage, dieline)
+  const lowResMap = useMemo(
+    () => new Map(imgDpi.low.filter((l) => l.id !== 'fill').map((l) => [l.id, l.dpi] as const)),
+    [imgDpi],
+  )
+  const fillLowDpi = imgDpi.fillDpi != null && imgDpi.fillDpi < LOW_DPI ? imgDpi.fillDpi : null
   // ปุ่มเปิด/ปิด soft-proof — ส่งเข้าแถบเครื่องมือซ้ายบนของ blueprint; memo ไว้ไม่ให้ DielineSVG (memo) re-render ทุกรอบ
   const proofToggle = useMemo(
     () => (
@@ -4022,6 +4031,21 @@ export default function App({
                             สัดส่วนเดิม
                           </button>
                         </div>
+                        {imgDpi.dpiById.has(selected.id) &&
+                          (() => {
+                            const dpi = imgDpi.dpiById.get(selected.id)!
+                            const lvl = dpi < LOW_DPI ? 'low' : dpi < GOOD_DPI ? 'ok' : 'good'
+                            return (
+                              <div className={`dpi-note ${lvl}`}>
+                                ความละเอียดที่ขนาดนี้ ≈ {dpi} dpi
+                                {lvl === 'good'
+                                  ? ' · คมพอสำหรับพิมพ์'
+                                  : lvl === 'ok'
+                                    ? ' · พอใช้ (แนะนำ ≥ 300)'
+                                    : ` · ต่ำ อาจแตกเมื่อพิมพ์ — ใช้รูปกว้าง ≥ ${pixelsNeeded(imageDrawMm(selected).w)} px หรือย่อรูปลง`}
+                              </div>
+                            )
+                          })()}
                         <DimField
                           label="มุมโค้ง (มม.)"
                           icon={<IconCorner />}
@@ -4251,6 +4275,18 @@ export default function App({
                     เส้นเผื่อตัด / ปลอดภัย
                   </label>
                 </div>
+                {imgDpi.low.length > 0 && (
+                  <div className="lowres-warn" role="alert">
+                    <b>⚠ รูปความละเอียดต่ำ {imgDpi.low.length} ชิ้น</b> — พิมพ์ออกมาอาจแตก/เบลอ (แนะนำ ≥ {GOOD_DPI} dpi)
+                    <ul>
+                      {imgDpi.low.map((l) => (
+                        <li key={l.id}>
+                          {l.label}: {l.dpi} dpi → ใช้รูปกว้าง ≥ {l.wantPx} px หรือย่อรูปลง
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="export-list">
                   <button className="export-item primary" onClick={() => void downloadSpecSheet()}>
                     <span className="export-badge">PDF</span>
@@ -4545,6 +4581,8 @@ export default function App({
                 canRedo={!aiBusy && redoStack.length > 0}
                 imperial={imperial}
                 toolsExtra={proofToggle}
+                lowResDpi={lowResMap}
+                fillLowDpi={fillLowDpi}
               />
               <span className="bp-legend">
                 <i className="sw-cut" /> เส้นตัด

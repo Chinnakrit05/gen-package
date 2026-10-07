@@ -254,6 +254,21 @@ type Grab =
   | { mode: 'handle'; id: string; idx: number; which: 'o' | 'i'; alt: boolean } // ลากแขน bezier
   | { mode: 'crop'; id: string; sx: number; sy: number; cx0: number; cy0: number; cz0: number; ovx: number; ovy: number; rot: number } // เลื่อนรูปในกรอบครอป
 
+// ป้ายเตือนรูปความละเอียดต่ำ (มุมซ้ายบนของรูป ในพิกัดแผ่นคลี่ มม.) — ไม่รับคลิก ไม่ไปถึงไฟล์ส่งออก
+// fs = ขนาดตัวอักษรเป็น มม. ที่คำนวณจากซูมปัจจุบัน ให้ป้ายสูงคงที่บนจอ (ไม่เล็กจนอ่านไม่ออกตอนดูทั้งแผ่น)
+function LowResBadge({ x, y, fs, text }: { x: number; y: number; fs: number; text: string }) {
+  const pad = fs * 0.35
+  const tw = text.length * fs * 0.56 + pad * 2
+  return (
+    <g className="lowres-badge" pointerEvents="none">
+      <rect x={x + pad} y={y + pad} width={tw} height={fs + pad * 2} rx={fs * 0.35} fill="#c62828" opacity={0.92} />
+      <text x={x + pad * 2} y={y + pad * 2 + fs * 0.82} fontSize={fs} fontWeight={700} fill="#fff" stroke="none">
+        {text}
+      </text>
+    </g>
+  )
+}
+
 export const DielineSVG = memo(function DielineSVG({
   dieline,
   showDims,
@@ -280,6 +295,8 @@ export const DielineSVG = memo(function DielineSVG({
   canRedo,
   imperial = false,
   toolsExtra,
+  lowResDpi,
+  fillLowDpi,
 }: {
   dieline: Dieline
   showDims: boolean
@@ -306,6 +323,8 @@ export const DielineSVG = memo(function DielineSVG({
   canUndo?: boolean
   canRedo?: boolean
   toolsExtra?: React.ReactNode // ปุ่มเพิ่มจากภายนอก ต่อท้ายแถบเครื่องมือซ้ายบน (เลื่อนลงตามแถบเมื่อเลือกชิ้น)
+  lowResDpi?: Map<string, number> // id รูปที่ความละเอียดต่ำ → dpi (ป้ายเตือนบนรูป; ไม่ติดไปไฟล์ส่งออก)
+  fillLowDpi?: number | null // รูปพื้นความละเอียดต่ำ → dpi
 }) {
   const [showRuler, setShowRuler] = useState(false)
   const t = useT()
@@ -473,6 +492,12 @@ export const DielineSVG = memo(function DielineSVG({
   const penDrag = useRef<{ idx: number; ax: number; ay: number; moved: boolean } | null>(null)
   const penClosing = useRef(false) // กำลังปิดวง (ลากได้เพื่อทำโค้งที่จุดปิด)
   const pxToMm = (px: number) => px / (svgRef.current?.getScreenCTM()?.a || 1)
+  // ขนาดป้ายเตือนรูปความละเอียดต่ำ ≈ 11px บนจอ (hypot กันกรณีหมุนมุมมอง 90° ที่ a = 0)
+  const badgeFs = (() => {
+    const m = svgRef.current?.getScreenCTM()
+    const pxPerMm = m ? Math.hypot(m.a, m.b) : 0
+    return pxPerMm > 0 ? 11 / pxPerMm : 4
+  })()
 
   const penCommit = (closed: boolean) => {
     const pts = pen
@@ -1227,6 +1252,9 @@ export const DielineSVG = memo(function DielineSVG({
             {/* รูปที่ถูกครอป/ใส่กรอบจะคลิกได้เฉพาะพื้นที่ที่เห็น — เพิ่มพื้นที่จับใส (โปร่งใสแต่รับคลิก)
                 คลุมทั้งกรอบ เพื่อให้เลือก/ลาก/ย่อได้จากทั้งกล่องเหมือนรูปปกติ */}
             {d.type === 'image' && cropId !== d.id && <rect x={d.x} y={d.y} width={w} height={h} fill="transparent" />}
+            {d.type === 'image' && cropId !== d.id && lowResDpi?.has(d.id) && (
+              <LowResBadge x={d.x} y={d.y} fs={badgeFs} text={`⚠ ${lowResDpi.get(d.id)} dpi`} />
+            )}
             {sel && cropId !== d.id && (
               <>
                 <rect
@@ -1329,6 +1357,10 @@ export const DielineSVG = memo(function DielineSVG({
           </g>
         )
       })}
+      {fillLowDpi != null && (() => {
+        const b = panelsBBox(dieline)
+        return <LowResBadge x={b.x0} y={b.y0} fs={badgeFs} text={`⚠ ${t('รูปพื้น', 'Background')} ${fillLowDpi} dpi`} />
+      })()}
 
       {penMode && penHover && (
         // เครื่องหมายเล็ง (กากบาท) ตามเมาส์ — เห็นชัดว่ากำลังอยู่โหมดปากกา

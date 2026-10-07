@@ -3964,3 +3964,41 @@ aside .art-actions .file-pick:only-child {
     display: none;
   }
 }
+
+/* ความละเอียดรูปที่เลือก (แผงปรับแต่ง) — เขียว ≥300 / เหลือง 150–299 / แดง <150 dpi */
+.dpi-note {
+  margin-top: 6px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.dpi-note.good {
+  background: rgba(46, 140, 87, 0.1);
+  color: #2e7d4f;
+}
+.dpi-note.ok {
+  background: rgba(214, 150, 20, 0.13);
+  color: #8a5d00;
+}
+.dpi-note.low {
+  background: rgba(198, 40, 40, 0.1);
+  color: #b3261e;
+  font-weight: 600;
+}
+
+/* สรุปรูปความละเอียดต่ำก่อนส่งออก */
+.lowres-warn {
+  margin: 4px 0 10px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid rgba(198, 40, 40, 0.35);
+  background: rgba(198, 40, 40, 0.07);
+  color: #b3261e;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.lowres-warn ul {
+  margin: 5px 0 0;
+  padding-left: 18px;
+}
