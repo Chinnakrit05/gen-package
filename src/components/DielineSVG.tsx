@@ -493,7 +493,9 @@ export const DielineSVG = memo(function DielineSVG({
   const penClosing = useRef(false) // กำลังปิดวง (ลากได้เพื่อทำโค้งที่จุดปิด)
   const pxToMm = (px: number) => px / (svgRef.current?.getScreenCTM()?.a || 1)
   // ขนาดป้ายเตือนรูปความละเอียดต่ำ ≈ 11px บนจอ (hypot กันกรณีหมุนมุมมอง 90° ที่ a = 0)
+  // อ่าน getScreenCTM (บังคับ layout) เฉพาะตอนมีป้ายให้วาด — ไม่ทำทุกครั้งที่ลากชิ้นงาน
   const badgeFs = (() => {
+    if (!lowResDpi?.size && fillLowDpi == null) return 4
     const m = svgRef.current?.getScreenCTM()
     const pxPerMm = m ? Math.hypot(m.a, m.b) : 0
     return pxPerMm > 0 ? 11 / pxPerMm : 4

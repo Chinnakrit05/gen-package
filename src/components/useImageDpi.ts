@@ -19,7 +19,8 @@ export function useImageDpi(decos: Deco[], fillImage: FillImage | null, dieline:
   const srcs: string[] = []
   for (const d of decos) if (d.type === 'image' && needsDpiCheck(d)) srcs.push(d.src)
   if (fillImage && !isVectorSrc(fillImage.src)) srcs.push(fillImage.src)
-  const srcKey = srcs.join('|')
+  // key จากความยาว+ท้าย data URL — ไม่ต่อสตริงรูปทั้งก้อน (หลายร้อย KB) ทุกครั้งที่ render
+  const srcKey = srcs.map((s) => `${s.length}:${s.slice(-48)}`).join('|')
 
   useEffect(() => {
     let dead = false

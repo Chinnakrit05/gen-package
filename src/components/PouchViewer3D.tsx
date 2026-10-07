@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { textureScale } from '../core/textureRes'
-import { Canvas, useThree } from '@react-three/fiber'
+import { useArtTexture } from './useArtTexture'
+import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
@@ -56,84 +56,39 @@ function usePouchTexture(
   fillColor: string | null | undefined,
   fillImage: FillImage | null | undefined,
 ) {
-  const gl = useThree((st) => st.gl)
-  const [tex, setTex] = useState<THREE.CanvasTexture | null>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const imgCache = useRef(new Map<string, HTMLImageElement>())
-  const [imgReady, setImgReady] = useState(0)
-
-  const srcs = decos.filter((d): d is Extract<Deco, { type: 'image' }> => d.type === 'image').map((d) => d.src)
-  if (fillImage) srcs.push(fillImage.src)
-  const srcKey = srcs.join('|')
-  useEffect(() => {
-    let dead = false
-    for (const src of srcs) {
-      if (imgCache.current.has(src)) continue
-      const el = new Image()
-      el.onload = () => {
-        if (dead) return
-        imgCache.current.set(src, el)
-        setImgReady((n) => n + 1)
-      }
-      el.src = src
-    }
-    return () => {
-      dead = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [srcKey])
-
-  const decoKey = JSON.stringify(decos)
   const { width, height } = pouch.label
-
-  useEffect(() => {
-    const s = textureScale(width, height, gl.capabilities.maxTextureSize)
-    const w = Math.max(1, Math.round(width * s))
-    const h = Math.max(1, Math.round(height * s))
-    let canvas = canvasRef.current
-    if (!canvas || canvas.width !== w || canvas.height !== h) {
-      canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      canvasRef.current = canvas
-    }
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.fillStyle = fillColor || POUCH_PRINT_BACKGROUND
-    ctx.fillRect(0, 0, w, h)
-    const fimg = fillImage ? imgCache.current.get(fillImage.src) : undefined
-    if (fillImage && fimg) {
-      const r = fillImageRect({ x0: 0, y0: 0, x1: width, y1: height }, fillImage)
-      ctx.save()
-      if (fillImage.opacity !== undefined && fillImage.opacity < 1) ctx.globalAlpha = fillImage.opacity
-      if (fillImage.rot) {
-        const cx = (width / 2) * s
-        const cy = (height / 2) * s
-        ctx.translate(cx, cy)
-        ctx.rotate((fillImage.rot * Math.PI) / 180)
-        ctx.translate(-cx, -cy)
-      }
-      ctx.drawImage(fimg, r.x * s, r.y * s, r.w * s, r.h * s)
-      ctx.restore()
-    }
-    for (const e of decos) drawDeco2D(ctx, e, s, (src) => imgCache.current.get(src))
-    setTex((prev) => {
-      if (prev && prev.image === canvas) {
-        prev.needsUpdate = true
-        return prev
-      }
-      const t = new THREE.CanvasTexture(canvas)
-      t.colorSpace = THREE.SRGBColorSpace
-      // มองด้านที่เอียงไม่ให้เบลอ (ค่าเริ่มต้น 1 = เบลอมากเมื่อผิวเฉียงกล้อง)
-      t.anisotropy = gl.capabilities.getMaxAnisotropy()
+  return useArtTexture({
+    sheetW: width,
+    sheetH: height,
+    decos,
+    fillImage,
+    enabled: true,
+    deps: [fillColor, fillImage],
+    configure: (t) => {
       t.flipY = false // UV คำนวณเป็นพิกัดแผ่นคลี่ตรง ๆ (y ลง) จึงไม่ต้องพลิก
-      return t
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decoKey, imgReady, fillColor, fillImage, width, height])
-
-  useEffect(() => () => tex?.dispose(), [tex])
-  return tex
+    },
+    draw: (ctx, s, imgOf) => {
+      ctx.fillStyle = fillColor || POUCH_PRINT_BACKGROUND
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+      // รูปพื้น (ถ้ามี) คลุมทั้งแผ่น (สี่เหลี่ยมเดียว ไม่ต้อง clip แผง) แล้วลายทับ
+      const fimg = fillImage ? imgOf(fillImage.src) : undefined
+      if (fillImage && fimg) {
+        const r = fillImageRect({ x0: 0, y0: 0, x1: width, y1: height }, fillImage)
+        ctx.save()
+        if (fillImage.opacity !== undefined && fillImage.opacity < 1) ctx.globalAlpha = fillImage.opacity
+        if (fillImage.rot) {
+          const cx = (width / 2) * s
+          const cy = (height / 2) * s
+          ctx.translate(cx, cy)
+          ctx.rotate((fillImage.rot * Math.PI) / 180)
+          ctx.translate(-cx, -cy)
+        }
+        ctx.drawImage(fimg, r.x * s, r.y * s, r.w * s, r.h * s)
+        ctx.restore()
+      }
+      for (const e of decos) drawDeco2D(ctx, e, s, imgOf)
+    },
+  })
 }
 
 // สร้าง BufferGeometry ถุง: วงแหวนวงรีตามความสูง + ฝาก้น/ปาก + UV แม็พหน้า/หลังตาม dieline

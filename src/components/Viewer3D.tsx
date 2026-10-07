@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { textureScale } from '../core/textureRes'
+import { useArtTexture } from './useArtTexture'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
@@ -66,101 +66,38 @@ function useSheetTexture(
   fillColor: string | null | undefined,
   fillImage: FillImage | null | undefined,
 ) {
-  const gl = useThree((st) => st.gl)
-  const [tex, setTex] = useState<THREE.CanvasTexture | null>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const imgCache = useRef(new Map<string, HTMLImageElement>())
-  const [imgReady, setImgReady] = useState(0) // เพิ่มค่าเมื่อมีรูปโหลดเสร็จ เพื่อสั่งวาดใหม่
-
-  // ถอดรหัสรูปแต่ละ src ครั้งเดียว เก็บใน cache — ไม่ decode ซ้ำตอนลาก/หมุน (รวมรูปพื้นด้วย)
-  const srcs = decos.filter((d): d is Extract<Deco, { type: 'image' }> => d.type === 'image').map((d) => d.src)
-  if (fillImage) srcs.push(fillImage.src)
-  const srcKey = srcs.join('|')
-  useEffect(() => {
-    let dead = false
-    for (const src of srcs) {
-      if (imgCache.current.has(src)) continue
-      const el = new Image()
-      el.onload = () => {
-        if (dead) return
-        imgCache.current.set(src, el)
-        setImgReady((n) => n + 1)
-      }
-      el.src = src
-    }
-    return () => {
-      dead = true
-    }
-    // srcKey ครอบคลุมการเปลี่ยนชุด src แล้ว
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [srcKey])
-
-  // มี hash ของ decos เพื่อวาดใหม่เฉพาะเมื่อค่าที่มีผลต่อภาพเปลี่ยน (ไม่รวม id)
-  const decoKey = JSON.stringify(decos)
-
-  useEffect(() => {
+  return useArtTexture({
+    sheetW: dieline.width,
+    sheetH: dieline.height,
+    decos,
+    fillImage,
     // ไม่มีทั้งลาย สีพื้น และรูปพื้น → ใช้สีวัสดุตรง ๆ ไม่ต้องมี texture
-    if (decos.length === 0 && !fillColor && !fillImage) {
-      setTex(null)
-      return
-    }
-    const s = textureScale(dieline.width, dieline.height, gl.capabilities.maxTextureSize)
-    const w = Math.max(1, Math.round(dieline.width * s))
-    const h = Math.max(1, Math.round(dieline.height * s))
-
-    let canvas = canvasRef.current
-    if (!canvas || canvas.width !== w || canvas.height !== h) {
-      canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      canvasRef.current = canvas
-    }
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    ctx.clearRect(0, 0, w, h)
-    // พื้นสีวัสดุก่อน (ช่องว่าง/ขอบ) แล้วทับด้วยสีพื้นแพ็กเกจเฉพาะพื้นที่แผงจริง
-    ctx.fillStyle = mat.color
-    ctx.fillRect(0, 0, w, h)
-    // รูปพื้นมาก่อน (ถ้ามี) ไม่งั้นใช้สีพื้นทึบ — แล้วค่อยลายทับ
-    const fimg = fillImage ? imgCache.current.get(fillImage.src) : undefined
-    try {
-      if (fillImage && fimg) drawFillImage(ctx, dieline, fimg, fillImage, s)
-      else if (fillColor) drawFill(ctx, dieline, fillColor, s)
-    } catch (err) {
-      console.warn('วาดพื้นแพ็กเกจลง texture ไม่สำเร็จ', err)
-    }
-    // วาดทีละชิ้นแบบกันพลาด — ชิ้นที่วาดไม่ได้ (เช่นค่ารัศมี/ขนาดผิดปกติทำให้ canvas โยน error)
-    // ต้องไม่ทำให้ทั้ง texture หลุด (ไม่งั้น map เป็น null → กล่อง/การ์ดโชว์สีวัสดุล้วนไม่มีลาย)
-    for (const e of decos) {
-      if (e.hidden) continue
+    enabled: decos.length > 0 || !!fillColor || !!fillImage,
+    deps: [fillColor, fillImage, mat.color, dieline],
+    draw: (ctx, s, imgOf) => {
+      // พื้นสีวัสดุก่อน (ช่องว่าง/ขอบ) แล้วทับด้วยสีพื้นแพ็กเกจเฉพาะพื้นที่แผงจริง
+      ctx.fillStyle = mat.color
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+      // รูปพื้นมาก่อน (ถ้ามี) ไม่งั้นใช้สีพื้นทึบ — แล้วค่อยลายทับ
+      const fimg = fillImage ? imgOf(fillImage.src) : undefined
       try {
-        drawDeco(ctx, e, s, (src) => imgCache.current.get(src))
+        if (fillImage && fimg) drawFillImage(ctx, dieline, fimg, fillImage, s)
+        else if (fillColor) drawFill(ctx, dieline, fillColor, s)
       } catch (err) {
-        console.warn('วาดองค์ประกอบลง texture ไม่สำเร็จ (ข้ามชิ้นนี้)', e.type, err)
+        console.warn('วาดพื้นแพ็กเกจลง texture ไม่สำเร็จ', err)
       }
-    }
-
-    // ห้าม dispose ของเก่าตรงนี้ — StrictMode เรียกตัวอัปเดตซ้ำได้
-    // ปล่อยให้ cleanup ของ effect ด้านล่างเป็นคนคืนหน่วยความจำแทน
-    setTex((prev) => {
-      if (prev && prev.image === canvas) {
-        prev.needsUpdate = true
-        return prev
+      // วาดทีละชิ้นแบบกันพลาด — ชิ้นที่วาดไม่ได้ (เช่นค่ารัศมี/ขนาดผิดปกติทำให้ canvas โยน error)
+      // ต้องไม่ทำให้ทั้ง texture หลุด (ไม่งั้น map เป็น null → กล่อง/การ์ดโชว์สีวัสดุล้วนไม่มีลาย)
+      for (const e of decos) {
+        if (e.hidden) continue
+        try {
+          drawDeco(ctx, e, s, imgOf)
+        } catch (err) {
+          console.warn('วาดองค์ประกอบลง texture ไม่สำเร็จ (ข้ามชิ้นนี้)', e.type, err)
+        }
       }
-      const t = new THREE.CanvasTexture(canvas)
-      t.colorSpace = THREE.SRGBColorSpace
-      // มองด้านที่เอียงไม่ให้เบลอ (ค่าเริ่มต้น 1 = เบลอมากเมื่อผิวเฉียงกล้อง)
-      t.anisotropy = gl.capabilities.getMaxAnisotropy()
-      return t
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decoKey, imgReady, fillColor, fillImage, mat.color, dieline.width, dieline.height])
-
-  // คืนหน่วยความจำเมื่อ viewer ถูกถอด
-  useEffect(() => () => tex?.dispose(), [tex])
-
-  return tex
+    },
+  })
 }
 
 // นามบัตรถูก gen เป็นแผ่นคลี่สองหน้า (card + card-back เรียงข้างกันสำหรับ blueprint)
