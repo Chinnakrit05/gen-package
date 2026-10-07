@@ -103,6 +103,8 @@ const PouchViewer3D = lazy(() =>
 import { DielineSVG } from './components/DielineSVG'
 import type { Dim3D } from './components/DimBadge3D'
 import type { LightMode } from './components/SceneLighting'
+import { useSoftProof } from './components/useSoftProof'
+import { CMYK_PROOF_PROFILE } from './core/cmykProofLut'
 import { PromptBar } from './components/PromptBar'
 import { ColorField } from './components/ColorField'
 import { ProjectGallery } from './components/ProjectGallery'
@@ -920,6 +922,8 @@ export default function App({
   const [qty, setQty] = useState(initialActive.qty)
   const [fillColor, setFillColor] = useState<string | null>(initialActive.fillColor)
   const [fillImage, setFillImage] = useState<FillImage | null>(initialActive.fillImage ?? null)
+  // พรีวิวสีงานพิมพ์ CMYK บน blueprint (soft-proof) — ตั้งใจไม่จำค่าข้ามรอบ กันลืมเปิดค้างแล้วนึกว่าสีลายเพี้ยน
+  const [softProof, setSoftProof] = useState(false)
   const [labelStyle, setLabelStyle] = useState<LabelStyle>(initialActive.labelStyle ?? 'body')
   const [pouchStyle, setPouchStyle] = useState<PouchStyle>(initialActive.pouchStyle ?? 'stand')
   const [zipper, setZipper] = useState<boolean>(initialActive.zipper ?? false)
@@ -2213,6 +2217,9 @@ export default function App({
       <span className="fold-label">พับ</span>
     </div>
   ) : null
+
+  // สำเนาลาย/สีพื้นที่จำลองสีพิมพ์ CMYK ส่งให้ blueprint (ปิดอยู่ = ค่าเดิม)
+  const proofed = useSoftProof(softProof, decos, fillColor, fillImage)
 
   // มุมมอง 3D (ใช้ซ้ำได้ทั้งจอเล็ก PiP และจอหลักในแท็บออกแบบ)
   // ป้ายขนาดบนมุมมอง 3D — ป้ายชื่อตามชนิดงาน (ภาชนะ W/D = เส้นผ่านศูนย์กลางตัว/ปาก)
@@ -4486,10 +4493,10 @@ export default function App({
               <DielineSVG
                 dieline={dieline}
                 showDims={showDims}
-                decos={decos}
+                decos={proofed.decos}
                 guides={guides}
-                fillColor={fillColor}
-                fillImage={fillImage}
+                fillColor={proofed.fillColor}
+                fillImage={proofed.fillImage}
                 selectedIds={selectedIds}
                 onSelect={selectDeco}
                 onMove={moveDeco}
@@ -4513,6 +4520,25 @@ export default function App({
                 canRedo={!aiBusy && redoStack.length > 0}
                 imperial={imperial}
               />
+              <button
+                type="button"
+                className={`proof-toggle${softProof ? ' on' : ''}`}
+                aria-pressed={softProof}
+                title={
+                  softProof
+                    ? `กำลังจำลองสีงานพิมพ์ CMYK (${CMYK_PROOF_PROFILE}) — สีที่หม่นลงคือสีที่หมึกพิมพ์ทำไม่ได้ · ไฟล์ส่งออกไม่เปลี่ยน`
+                    : 'จำลองสีเมื่อพิมพ์จริงด้วยหมึก CMYK — ดูว่าสีไหนจะหม่นลง (เฉพาะการแสดงผล)'
+                }
+                onClick={() => setSoftProof((v) => !v)}
+              >
+                <span className="proof-dots" aria-hidden>
+                  <i style={{ background: '#00a3e0' }} />
+                  <i style={{ background: '#d6007e' }} />
+                  <i style={{ background: '#f5e100' }} />
+                  <i style={{ background: '#222' }} />
+                </span>
+                {softProof ? 'พรีวิวสีพิมพ์ CMYK' : 'ดูสีแบบพิมพ์'}
+              </button>
               <span className="bp-legend">
                 <i className="sw-cut" /> เส้นตัด
                 <i className="sw-crease" />{' '}
