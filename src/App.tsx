@@ -2236,30 +2236,32 @@ export default function App({
           <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} dimVariant="lines" vivid={vivid3d} />
         )}
       </Suspense>
-      <button
-        type="button"
-        className={`dim3d-toggle${showDims3d ? ' on' : ''}`}
-        aria-pressed={showDims3d}
-        title={showDims3d ? 'ซ่อนขนาดบนโมเดล' : 'แสดงขนาดบนโมเดล'}
-        onClick={() => setShowDims3d((v) => !v)}
-      >
-        <span className="dim3d-toggle-ic" aria-hidden>
-          ⟺
-        </span>
-        ขนาด
-      </button>
-      <button
-        type="button"
-        className={`light3d-toggle${vivid3d ? ' on' : ''}`}
-        aria-pressed={vivid3d}
-        title={vivid3d ? 'ปิดแสงสด (โทนฟิล์มนุ่ม)' : 'เปิดแสงสด (สีสด/สว่างขึ้น)'}
-        onClick={() => setVivid3d((v) => !v)}
-      >
-        <span className="light3d-toggle-ic" aria-hidden>
-          ☀
-        </span>
-        แสงสด
-      </button>
+      <div className="viewer3d-tools">
+        <button
+          type="button"
+          className={`dim3d-toggle${showDims3d ? ' on' : ''}`}
+          aria-pressed={showDims3d}
+          title={showDims3d ? 'ซ่อนขนาดบนโมเดล' : 'แสดงขนาดบนโมเดล'}
+          onClick={() => setShowDims3d((v) => !v)}
+        >
+          <span className="dim3d-toggle-ic" aria-hidden>
+            ⟺
+          </span>
+          ขนาด
+        </button>
+        <button
+          type="button"
+          className={`light3d-toggle${vivid3d ? ' on' : ''}`}
+          aria-pressed={vivid3d}
+          title={vivid3d ? 'ปิดแสงสด (โทนฟิล์มนุ่ม)' : 'เปิดแสงสด (สีสด/สว่างขึ้น)'}
+          onClick={() => setVivid3d((v) => !v)}
+        >
+          <span className="light3d-toggle-ic" aria-hidden>
+            ☀
+          </span>
+          แสงสด
+        </button>
+      </div>
     </>
   )
   // แท็บ "ออกแบบ" = โชว์ 3D ของแพ็กเกจเป็นจอหลัก (แทน blueprint)
