@@ -27,6 +27,12 @@ describe('soft-proof CMYK: LUT', () => {
     expect(outGamut).toBeGreaterThan(inGamut * 5)
   })
 
+  it('แดงสดที่หมึกพิมพ์ได้ (≈ M88 Y79) ไม่ถูกกดเป็นแดงอิฐ — การแก้ gray balance ไม่ลามไปสีอิ่ม', () => {
+    const [r, g, b] = proofRGB(230, 80, 72)
+    expect(r).toBeGreaterThanOrEqual(222) // เดิมเหลือ 212 เพราะเส้นโค้งจากสีเทาไปกดช่องแดง
+    expect(dist([r, g, b], [230, 80, 72])).toBeLessThan(25)
+  })
+
   it('proofPixels = proofRGB ทีละพิกเซล และไม่แตะ alpha', () => {
     const px = new Uint8ClampedArray([0, 0, 255, 128, 200, 200, 200, 7])
     proofPixels(px)

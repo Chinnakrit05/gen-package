@@ -19,6 +19,7 @@ from pathlib import Path
 
 from PIL import Image, ImageCms
 
+CHROMA_FADE = 64  # ความอิ่มสี (max−min ของ RGB) ที่การแก้ gray balance จางหายหมด
 N = 17  # จุดต่อแกน — 17³ = 4913 สี พอสำหรับ interpolate แบบ trilinear บนพรีวิว
 DEFAULT_PROFILE = r"C:\Windows\System32\spool\drivers\color\RSWOP.icm"
 OUT = Path(__file__).resolve().parent.parent / "src" / "core" / "cmykProofLut.ts"
@@ -78,7 +79,20 @@ def main() -> None:
     ramp.putdata([(v, v, v) for v in range(256)])
     gray = ImageCms.applyTransform(ImageCms.applyTransform(ramp, to_cmyk), to_rgb).tobytes()
     curves = [inverse_curve([gray[v * 3 + c] for v in range(256)]) for c in range(3)]
-    data = bytes(curves[i % 3][raw[i]] for i in range(len(raw)))
+
+    # เส้นโค้งวัดจากสีเทา จึงใช้เต็มที่เฉพาะสีที่เกือบเทา แล้วค่อย ๆ จางหายเมื่อสีอิ่มขึ้น — ถ้าใช้กับทุกสี
+    # จะกดช่องแดงของแดงสดลงผิด (#e65048 ที่พิมพ์ได้จริง กลายเป็นแดงอิฐ) ส่วนสีอิ่มใช้ผล profile ตรง ๆ
+    data = bytearray(len(raw))
+    for gi_ in range(N * N * N):
+        ri, rem = divmod(gi_, N * N)
+        gi, bi = divmod(rem, N)
+        src = (ri * step, gi * step, bi * step)
+        t = max(0.0, 1.0 - (max(src) - min(src)) / CHROMA_FADE)
+        w = t * t * (3 - 2 * t)  # smoothstep
+        for c in range(3):
+            r = raw[gi_ * 3 + c]
+            data[gi_ * 3 + c] = round(r + w * (curves[c][r] - r))
+    data = bytes(data)
 
     b64 = base64.b64encode(data).decode("ascii")
     lines = [b64[i : i + 100] for i in range(0, len(b64), 100)]
