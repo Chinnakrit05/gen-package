@@ -972,6 +972,21 @@ export default function App({
       /* ปิด storage — ข้าม */
     }
   }, [showDims3d])
+  // แสงสด: เพิ่มไฟ + ปิด tone mapping ฟิล์มให้สีสด/สว่างขึ้นในมุมมอง 3D (จำค่าไว้; เปิดเป็นค่าเริ่มต้น)
+  const [vivid3d, setVivid3d] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('packit-vivid3d') !== '0'
+    } catch {
+      return true
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('packit-vivid3d', vivid3d ? '1' : '0')
+    } catch {
+      /* ปิด storage — ข้าม */
+    }
+  }, [vivid3d])
   const [decos, setDecos] = useState<Deco[]>(initialActive.decos)
   const textFontKey = decos
     .filter((d): d is TextEl => d.type === 'text' && !d.hidden)
@@ -2213,11 +2228,12 @@ export default function App({
             dims={dims3dOn}
             imperial={imperial}
             dimVariant="lines"
+            vivid={vivid3d}
           />
         ) : kind === 'vessel' ? (
-          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} />
+          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} vivid={vivid3d} />
         ) : (
-          <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} dimVariant="lines" />
+          <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} dimVariant="lines" vivid={vivid3d} />
         )}
       </Suspense>
       <button
@@ -2231,6 +2247,18 @@ export default function App({
           ⟺
         </span>
         ขนาด
+      </button>
+      <button
+        type="button"
+        className={`light3d-toggle${vivid3d ? ' on' : ''}`}
+        aria-pressed={vivid3d}
+        title={vivid3d ? 'ปิดแสงสด (โทนฟิล์มนุ่ม)' : 'เปิดแสงสด (สีสด/สว่างขึ้น)'}
+        onClick={() => setVivid3d((v) => !v)}
+      >
+        <span className="light3d-toggle-ic" aria-hidden>
+          ☀
+        </span>
+        แสงสด
       </button>
     </>
   )

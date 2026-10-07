@@ -21,6 +21,7 @@ import {
 import { computeMatrices, rollBeads } from '../core/fold'
 import { assignOuterFaceGroups } from '../core/panelFaces'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
+import { SceneLighting } from './SceneLighting'
 
 // วาดองค์ประกอบ (รูป/ข้อความ) ลง ctx ในพิกัดแผ่นคลี่ (สเกล s) พร้อมหมุนรอบจุดกึ่งกลาง
 // ใช้พิกัดชุดเดียวกับ blueprint (y ชี้ลง, มุมหมุนตามเข็ม) เพื่อให้จอสองฝั่งตรงกัน
@@ -294,6 +295,7 @@ interface ModelProps {
   dims?: Dim3D[]
   imperial?: boolean
   dimVariant?: 'lines' | 'badge'
+  vivid?: boolean
 }
 
 function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillImage, dims, imperial, dimVariant }: ModelProps) {
@@ -471,9 +473,7 @@ export function Viewer3D(props: ModelProps) {
       aria-label={card ? 'มุมมอง 3 มิติของนามบัตร (หมุนดูหน้า-หลังได้)' : 'มุมมอง 3 มิติของกล่องที่กำลังพับ'}
     >
       <color attach="background" args={['#ffffff']} />
-      <ambientLight intensity={0.9} />
-      <directionalLight position={[250, 420, 300]} intensity={1.7} />
-      <directionalLight position={[-220, 120, -260]} intensity={0.55} />
+      <SceneLighting vivid={!!props.vivid} />
       {card ? <CardModel {...props} /> : <FoldedModel {...props} />}
       <OrbitControls makeDefault enableDamping />
       <FitCamera dieline={props.dieline} />

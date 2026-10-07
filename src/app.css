@@ -2764,6 +2764,42 @@ aside .art-actions .file-pick:only-child {
   line-height: 1;
 }
 
+/* ปุ่มเปิด/ปิดแสงสด (มุมขวาบนของมุมมอง 3D) */
+.light3d-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  left: auto;
+  width: auto;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-solid);
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 7px rgba(20, 18, 14, 0.12);
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.light3d-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent-border);
+}
+.light3d-toggle.on {
+  background: #f6a723;
+  border-color: #f6a723;
+  color: #3a2d05;
+}
+.light3d-toggle-ic {
+  font-size: 14px;
+  line-height: 1;
+}
+
 /* --- modal ตั้งชื่องาน --- */
 .modal-overlay {
   position: fixed;

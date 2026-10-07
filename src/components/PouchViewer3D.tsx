@@ -18,6 +18,7 @@ import {
 } from '../core/pouch'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
+import { SceneLighting } from './SceneLighting'
 
 const POUCH_PRINT_BACKGROUND = '#ffffff'
 
@@ -605,6 +606,7 @@ export function PouchViewer3D({
   dims,
   imperial,
   dimVariant,
+  vivid,
 }: {
   pouch: Pouch
   mat: Material
@@ -614,6 +616,7 @@ export function PouchViewer3D({
   dims?: Dim3D[]
   imperial?: boolean
   dimVariant?: 'lines' | 'badge'
+  vivid?: boolean
 }) {
   const dist = Math.max(pouch.H, pouch.W) * 2.6
   return (
@@ -624,9 +627,7 @@ export function PouchViewer3D({
       aria-label="มุมมอง 3 มิติของถุงพร้อมลาย"
     >
       <color attach="background" args={['#ffffff']} />
-      <ambientLight intensity={0.85} />
-      <directionalLight position={[250, 420, 300]} intensity={1.6} />
-      <directionalLight position={[-220, 120, -260]} intensity={0.6} />
+      <SceneLighting vivid={!!vivid} />
       <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} dimVariant={dimVariant} />
       <OrbitControls makeDefault enableDamping />
     </Canvas>
