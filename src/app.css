@@ -2133,6 +2133,10 @@ button[aria-disabled='true'] {
   margin-left: -3px;
 }
 
+.bp-legend-note {
+  margin-left: 6px;
+  color: #5a696c;
+}
 .bp-legend i {
   display: inline-block;
   width: 22px;

@@ -1588,9 +1588,14 @@ export const DielineSVG = memo(function DielineSVG({
               dominantBaseline="central"
               fontSize={fs}
               fontWeight={700}
-              fill="var(--accent, #17677a)"
-              opacity={0.28}
-              stroke="none"
+              // ตัวเข้ม + ขอบขาว (วาดขอบก่อนด้วย paint-order) — อ่านออกทั้งบนสีพื้นอ่อนและเข้ม
+              // (เดิมสี accent จาง ๆ ไม่มีขอบ หายไปเมื่อสีพื้นแพ็กเกจเป็นฟ้า/น้ำเงินเข้ม)
+              fill="#1f3d44"
+              stroke="#ffffff"
+              strokeWidth={fs * 0.22}
+              strokeLinejoin="round"
+              paintOrder="stroke"
+              opacity={0.62}
               pointerEvents="none"
             >
               {t(label.th, label.en)}

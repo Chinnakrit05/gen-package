@@ -4593,6 +4593,12 @@ export default function App({
                 <i className="sw-cut" /> เส้นตัด
                 <i className="sw-crease" />{' '}
                 {kind === 'box' ? 'เส้นพับ' : kind === 'pouch' ? 'รอยพับ/ซีล' : 'แนวทับกาว'}
+                {/* ตัวเลขบนแบบ = ระยะเส้นพับจริง (ด้านใน + เผื่อความหนา) จึงมากกว่าขนาดที่ตั้ง/ที่ 3D แสดงเล็กน้อย */}
+                {kind === 'box' && showDims && (
+                  <span className="bp-legend-note">
+                    · ตัวเลข = ระยะเส้นพับ (ด้านใน + ความหนา)
+                  </span>
+                )}
               </span>
             </div>
             {expand3d && <div className="viewer-backdrop" onClick={() => setExpand3d(false)} />}
