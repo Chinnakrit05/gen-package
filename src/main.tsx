@@ -1,4 +1,4 @@
-import { StrictMode, Suspense, lazy, useState } from 'react'
+import { StrictMode, Suspense, lazy, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 // ฟอนต์ไทย self-host (เลิกพึ่ง Google CDN) — โหลดพร้อม bundle ใช้งานได้แม้ออฟไลน์
 // และไฟล์ที่ rasterize (PDF/ใบสเปก) ได้เมตริก/รูปตัวอักษรตรงกับที่เห็นบนจอเสมอ
@@ -25,7 +25,6 @@ import '@fontsource/pridi/400.css'
 import '@fontsource/pridi/700.css'
 import '@fontsource/kodchasan/400.css'
 import '@fontsource/kodchasan/700.css'
-import App from './App'
 import { Login } from './components/Login'
 import { LoadingBoundary, LoadingStage } from './components/LoadingBoundary'
 import { ClientConfigError, loadClientConfig } from './config'
@@ -34,6 +33,10 @@ import './app.css'
 
 const AUTH_KEY = 'packit-auth'
 const CloudRoot = lazy(() => import('./CloudRoot').then((module) => ({ default: module.CloudRoot })))
+// ตัวแอป (App + blueprint + template ทั้งหมด + โค้ดส่งออก) โหลดแยก — หน้าต้อนรับ/ล็อกอินไม่ต้องรอโค้ดทั้งก้อน
+// แล้วเริ่มโหลดล่วงหน้าทันทีหลังหน้าแรกขึ้น จึงกด "เริ่มใช้งาน" แล้วเข้าได้เลย
+const loadApp = () => import('./App')
+const App = lazy(loadApp)
 const clientConfig = (() => {
   try {
     return { value: loadClientConfig(), error: null }
@@ -83,7 +86,20 @@ function LocalDemoRoot() {
     localStorage.removeItem(AUTH_KEY)
     setAuthed(false)
   }
-  return authed ? <App onLogout={logout} /> : <Login mode="local" onLogin={login} />
+  useEffect(() => {
+    if (authed) return
+    const t = window.setTimeout(() => void loadApp(), 200)
+    return () => window.clearTimeout(t)
+  }, [authed])
+  return authed ? (
+    <LoadingBoundary>
+      <Suspense fallback={<LoadingStage title="กำลังเปิดพื้นที่ทำงาน" message="กำลังโหลดเครื่องมือออกแบบ…" />}>
+        <App onLogout={logout} />
+      </Suspense>
+    </LoadingBoundary>
+  ) : (
+    <Login mode="local" onLogin={login} />
+  )
 }
 
 function StartupMessage({ title, message }: { title: string; message: string }) {

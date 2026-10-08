@@ -1,19 +1,27 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { Login } from './components/Login'
 import { LoadingStage } from './components/LoadingBoundary'
 import type { ClientConfig } from './config'
-import { CloudWorkspace } from './features/projects/CloudWorkspace'
 import { bootstrapSession } from './services/api/session'
 import { createBrowserSupabaseClient } from './services/auth/supabaseAuth'
 import { WorkspaceBootstrapController, type WorkspaceBootstrapState } from './services/auth/workspaceBootstrap'
 import type { CloudStartupVariant } from './services/auth/startupLoading'
+
+// พื้นที่ทำงาน (ดึง App ทั้งก้อนมาด้วย) โหลดแยกจากหน้าตรวจบัญชี/ล็อกอิน — เริ่มโหลดคู่ขนานกับการตรวจ session
+// ตั้งแต่ CloudRoot ขึ้น ผู้ที่ล็อกอินอยู่แล้วจึงไม่ต้องรอเพิ่ม ส่วนหน้าล็อกอินขึ้นได้เร็วขึ้น
+const loadWorkspace = () => import('./features/projects/CloudWorkspace')
+const CloudWorkspace = lazy(() => loadWorkspace().then((m) => ({ default: m.CloudWorkspace })))
 
 export function CloudRoot({ config, startupVariant }: { config: ClientConfig; startupVariant: CloudStartupVariant }) {
   if (!config.supabase) throw new Error('CloudRoot ต้องมี Supabase client config')
   const auth = useMemo(() => createBrowserSupabaseClient(config.supabase!), [config.supabase])
   const [session, setSession] = useState<Session | null | undefined>(undefined)
   const [bootstrap, setBootstrap] = useState<WorkspaceBootstrapState>({ status: 'idle' })
+  // โหลดโค้ดพื้นที่ทำงานคู่ขนานกับการตรวจ session (ไม่รอให้ตรวจเสร็จก่อนค่อยเริ่มโหลด)
+  useEffect(() => {
+    void loadWorkspace()
+  }, [])
   const [loginError, setLoginError] = useState<string | null>(null)
   const [loginBusy, setLoginBusy] = useState(false)
   const bootstrapController = useMemo(() => new WorkspaceBootstrapController<Session>({
@@ -114,14 +122,16 @@ export function CloudRoot({ config, startupVariant }: { config: ClientConfig; st
 
   const appUserId = bootstrap.data.user.id
   return (
-    <CloudWorkspace
-      key={appUserId}
-      onLogout={signOut}
-      apiBaseUrl={config.apiBaseUrl}
-      accessToken={session.access_token}
-      appUserId={appUserId}
-      workspaceId={bootstrap.data.personalWorkspace.id}
-    />
+    <Suspense fallback={<LoadingStage title="กำลังตรวจสอบบัญชี" message="กำลังเตรียมพื้นที่ทำงานของคุณ…" />}>
+      <CloudWorkspace
+        key={appUserId}
+        onLogout={signOut}
+        apiBaseUrl={config.apiBaseUrl}
+        accessToken={session.access_token}
+        appUserId={appUserId}
+        workspaceId={bootstrap.data.personalWorkspace.id}
+      />
+    </Suspense>
   )
 }
 
