@@ -337,6 +337,9 @@ export const DielineSVG = memo(function DielineSVG({
   const [editing, setEditing] = useState<string | null>(null)
   const editCandidate = useRef<string | null>(null) // ข้อความที่ "เลือกอยู่แล้ว" ตอนกด — ถ้าไม่ลากคือจะแก้
   const dragMoved = useRef(false)
+  // ลากย้ายชิ้น: ขยับ <g> ของชิ้นตรง ๆ ใน DOM ทุกเฟรม แล้วส่งตำแหน่งสุดท้ายให้ App ครั้งเดียวตอนปล่อย
+  // (เดิมเรียก onMove ทุก pointermove → App ทั้งก้อน + แผงข้าง + 3D re-render ทุกเฟรม ชิ้นงานตามเมาส์ไม่ทัน)
+  const dragPreview = useRef<{ id: string; x: number; y: number; els: { el: SVGGElement; orig: string }[] } | null>(null)
   // เส้นไกด์ที่กำลังดูดติด (ค่า x ของเส้นตั้ง / y ของเส้นนอน) — null = ไม่มี
   const [snap, setSnap] = useState<{ vx: number | null; vy: number | null }>({ vx: null, vy: null })
   // ซูม/แพน blueprint ผ่าน viewBox — zoom=1 คือพอดีจอ, center=null คือกึ่งกลาง
@@ -802,14 +805,31 @@ export const DielineSVG = memo(function DielineSVG({
         const s = applySnap(rx, ry, w, h, snapT.current, SNAP_PX / scale)
         rx = s.x
         ry = s.y
-        setSnap({ vx: s.vx, vy: s.vy })
+        // อัปเดต state เฉพาะเมื่อเส้นดูดเปลี่ยน — ไม่ re-render blueprint ทุกเฟรมโดยไม่จำเป็น
+        if (s.vx !== snap.vx || s.vy !== snap.vy) setSnap({ vx: s.vx, vy: s.vy })
       } else if (snap.vx !== null || snap.vy !== null) {
         setSnap({ vx: null, vy: null })
       }
       // กันลากหลุดจนหาไม่เจอ แต่ยังให้เลยขอบได้ (งานจริงมักออกแบบให้ลายตกขอบ)
       const x = Math.min(Math.max(rx, -w / 2), dieline.width - w / 2)
       const y = Math.min(Math.max(ry, -h / 2), dieline.height - h / 2)
-      onMove?.(d.id, x, y)
+      // ชิ้นที่ขยับตามกัน = ทั้งชุดที่เลือก (ถ้าเลือกหลายชิ้นและลากชิ้นในชุด) — ตรงกับ moveDeco ของ App
+      let pv = dragPreview.current
+      if (!pv || pv.id !== d.id) {
+        const ids = selectedIds.length > 1 && selectedIds.includes(d.id) ? selectedIds : [d.id]
+        const els: { el: SVGGElement; orig: string }[] = []
+        for (const id of ids) {
+          const el = svgRef.current?.querySelector<SVGGElement>(`g.deco[data-id="${CSS.escape(id)}"]`)
+          if (el) els.push({ el, orig: el.getAttribute('transform') ?? '' })
+        }
+        pv = dragPreview.current = { id: d.id, x, y, els }
+      }
+      pv.x = x
+      pv.y = y
+      // decos ยังเป็นค่าตอนเริ่มลาก (ยังไม่ commit) จึงเลื่อนด้วยระยะจากตำแหน่งเดิม
+      const tdx = x - d.x
+      const tdy = y - d.y
+      for (const { el, orig } of pv.els) el.setAttribute('transform', `translate(${tdx} ${tdy}) ${orig}`)
     } else {
       const c = elCenter(d)
       // handle อยู่เหนือกล่อง → ชี้ขึ้น = 0 องศา จึงบวก 90
@@ -839,6 +859,14 @@ export const DielineSVG = memo(function DielineSVG({
       // ลากพื้นที่ว่างแบบไม่ขยับ = คลิกที่ว่าง → ยกเลิกการเลือก
       if (!pan.current.moved) onSelect?.(null)
       pan.current = null
+    }
+    // ส่งตำแหน่งสุดท้ายของการลากย้ายให้ App ครั้งเดียว (คืน transform เดิมก่อน — App re-render ทันทีใน
+    // event เดียวกันก่อนวาดจอ จึงไม่กะพริบกลับ)
+    const pv = dragPreview.current
+    if (pv) {
+      dragPreview.current = null
+      for (const { el, orig } of pv.els) el.setAttribute('transform', orig)
+      onMove?.(pv.id, pv.x, pv.y)
     }
     grab.current = null
     snapT.current = null
@@ -1211,6 +1239,7 @@ export const DielineSVG = memo(function DielineSVG({
         return (
           <g
             key={d.id}
+            data-id={d.id}
             className={`deco${sel ? ' selected' : ''}${active && sel ? ' dragging' : ''}${d.locked ? ' locked' : ''}`}
             transform={`rotate(${d.rot} ${c.x} ${c.y})`}
             onPointerDown={(e) => startMove(e, d)}
