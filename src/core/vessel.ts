@@ -172,7 +172,7 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
   ]
 
   const dims: DimMark[] = [
-    { a: P(0, h + 12), b: P(circ, h + 12), label: `รอบวง π⌀ ${fmt(circ)}` },
+    { a: P(0, h + 12), b: P(circ, h + 12), label: `รอบวง ${fmt(circ)}` },
     { a: P(circ, h + 12), b: P(w, h + 12), label: `กาว ${fmt(LABEL_OVERLAP)}` },
     { a: P(w + 10, 0), b: P(w + 10, h), label: `สูงฉลาก ${fmt(h)}` },
   ]
