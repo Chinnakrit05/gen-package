@@ -194,8 +194,9 @@ export function dielineDXFString(d: Dieline): string {
       for (let i = 1; i < poly.length; i++) {
         const a = { x: poly[i - 1].x, y: fy(poly[i - 1].y) }
         const b = { x: poly[i].x, y: fy(poly[i].y) }
-        // ตัดเส้นยาวศูนย์ทิ้ง (เกิดได้ตอนปิด path ที่จุดสุดท้ายซ้ำจุดเริ่ม)
-        if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-9) continue
+        // ตัดเส้นยาวศูนย์ทิ้ง (เกิดได้ตอนปิด path ที่จุดสุดท้ายซ้ำจุดเริ่ม) — เทียบหลังปัดทศนิยมตามที่เขียนลงไฟล์
+        // ไม่งั้นเศษจากการ flatten arc (~1e-6) รอดไปเป็นเส้นยาว 0 ในไฟล์
+        if (f(a.x) === f(b.x) && f(a.y) === f(b.y)) continue
         lines.push({ layer, a, b })
       }
     }

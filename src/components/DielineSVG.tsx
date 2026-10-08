@@ -32,6 +32,8 @@ function faceLabel(id: string): { th: string; en: string } | null {
   if (id === 'back' || id === 'card-back') return { th: 'หลัง', en: 'Back' }
   if (['side-left', 'side-right', 'left', 'right', 'side-a', 'side-b'].includes(id)) return { th: 'ด้านข้าง', en: 'Side' }
   if (id === 'lid') return { th: 'ฝา', en: 'Lid' }
+  if (id.startsWith('roof-')) return { th: 'หลังคา', en: 'Roof' }
+  if (id.startsWith('fin-')) return { th: 'หูหิ้ว', en: 'Handle' }
   if (['base', 'base-a', 'base-b'].includes(id)) return { th: 'ฐาน', en: 'Base' }
   if (id === 'glue') return { th: 'ลิ้นกาว', en: 'Glue tab' }
   if (id.startsWith('flap')) return { th: 'ลิ้น', en: 'Flap' }

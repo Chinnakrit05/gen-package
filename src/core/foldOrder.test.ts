@@ -14,7 +14,6 @@ const ALLOWED = new Set([
   // ก้น auto-lock: ลิ้นก้นสอดล็อกผ่านกันจริงตามแบบ (ระยะซ้อน 2–5 มม.)
   'fefco-0215:base-left→base-front', 'fefco-0215:base-left→base-back',
   'fefco-0215:base-right→base-front', 'fefco-0215:base-right→base-back',
-  'fefco-0217:base-left→base-front', 'fefco-0217:base-right→base-back',
   // ลิ้นยาวเต็มความลึก: ปลายลิ้นหน้าแตะแนวบานพับลิ้นหลังพอดี (เฉียดขอบ ไม่ผ่านเนื้อแผง)
   'fefco-0202:flap-t-back→flap-t-front', 'fefco-0202:flap-b-back→flap-b-front',
 ])
