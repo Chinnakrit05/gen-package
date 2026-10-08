@@ -74,8 +74,9 @@ describe('rsc: ตำแหน่งหลังพับสุด (fold=1)', ()
     const stack = 3 * (t + 0.05)
     const tops = ['flap-t-sl', 'flap-t-sr', 'flap-t-front', 'flap-t-back'].map((id) => world(id).y)
     const bots = ['flap-b-sl', 'flap-b-sr', 'flap-b-front', 'flap-b-back'].map((id) => world(id).y)
-    const yTop = tops[0]
-    const yBot = bots[0]
+    // อ้างอิงลิ้นหน้า (outer ชั้นนอกสุด ใกล้ขอบปากสุด) — ลิ้นข้างพับก่อนจึงอยู่ลึกเข้าไปอีกชั้น
+    const yTop = tops[2]
+    const yBot = bots[2]
     for (const y of tops) expect(Math.abs(y - yTop)).toBeLessThan(stack) // ลิ้นบนอยู่แถวระนาบบน
     for (const y of bots) expect(Math.abs(y - yBot)).toBeLessThan(stack)
     expect(Math.abs(Math.abs(yTop - yBot) - Hp)).toBeLessThan(stack + 1) // บน-ล่างห่าง ~Hp

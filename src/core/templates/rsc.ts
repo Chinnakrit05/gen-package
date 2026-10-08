@@ -57,36 +57,36 @@ export function generateRSCBox(box: BoxParams, mat: Material): Dieline {
     // ลิ้นข้าง (inner) พับก่อน — stage 1
     {
       id: 'flap-t-sl', parentId: 'side-left', outline: rect(x1 + fin, top - innerLen, x2 - fin, top),
-      hingeA: P(x1, top), hingeB: P(x2, top), foldAngle: 90, stage: 1, zOffset: layer,
+      hingeA: P(x1, top), hingeB: P(x2, top), foldAngle: 90, stage: 1, zOffset: 2 * layer,
     },
     {
       id: 'flap-t-sr', parentId: 'side-right', outline: rect(x3 + fin, top - innerLen, x4 - fin, top),
-      hingeA: P(x3, top), hingeB: P(x4, top), foldAngle: 90, stage: 1, zOffset: layer,
+      hingeA: P(x3, top), hingeB: P(x4, top), foldAngle: 90, stage: 1, zOffset: 2 * layer,
     },
     {
       id: 'flap-b-sl', parentId: 'side-left', outline: rect(x1 + fin, bot, x2 - fin, bot + innerLen),
-      hingeA: P(x1, bot), hingeB: P(x2, bot), foldAngle: -90, stage: 1, zOffset: layer,
+      hingeA: P(x1, bot), hingeB: P(x2, bot), foldAngle: -90, stage: 1, zOffset: 2 * layer,
     },
     {
       id: 'flap-b-sr', parentId: 'side-right', outline: rect(x3 + fin, bot, x4 - fin, bot + innerLen),
-      hingeA: P(x3, bot), hingeB: P(x4, bot), foldAngle: -90, stage: 1, zOffset: layer,
+      hingeA: P(x3, bot), hingeB: P(x4, bot), foldAngle: -90, stage: 1, zOffset: 2 * layer,
     },
     // ลิ้นหน้า-หลัง (outer) พับทับมาชนกลาง — stage 2, ยกสูงกว่าลิ้นข้างหนึ่งชั้น
     {
       id: 'flap-t-front', parentId: 'front', outline: rect(x2 + fin, top - outerLen, x3 - fin, top),
-      hingeA: P(x2, top), hingeB: P(x3, top), foldAngle: 90, stage: 2, zOffset: 2 * layer,
+      hingeA: P(x2, top), hingeB: P(x3, top), foldAngle: 90, stage: 2, zOffset: layer,
     },
     {
       id: 'flap-t-back', parentId: 'back', outline: rect(x4 + fin, top - outerLen, x5 - fin, top),
-      hingeA: P(x4, top), hingeB: P(x5, top), foldAngle: 90, stage: 2, zOffset: 2 * layer,
+      hingeA: P(x4, top), hingeB: P(x5, top), foldAngle: 90, stage: 2, zOffset: layer,
     },
     {
       id: 'flap-b-front', parentId: 'front', outline: rect(x2 + fin, bot, x3 - fin, bot + outerLen),
-      hingeA: P(x2, bot), hingeB: P(x3, bot), foldAngle: -90, stage: 2, zOffset: 2 * layer,
+      hingeA: P(x2, bot), hingeB: P(x3, bot), foldAngle: -90, stage: 2, zOffset: layer,
     },
     {
       id: 'flap-b-back', parentId: 'back', outline: rect(x4 + fin, bot, x5 - fin, bot + outerLen),
-      hingeA: P(x4, bot), hingeB: P(x5, bot), foldAngle: -90, stage: 2, zOffset: 2 * layer,
+      hingeA: P(x4, bot), hingeB: P(x5, bot), foldAngle: -90, stage: 2, zOffset: layer,
     },
   ]
 

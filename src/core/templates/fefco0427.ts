@@ -117,13 +117,14 @@ export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
     },
     {
       id: 'side-left', parentId: 'base', outline: rect(xr1, y3, cx0, y4),
-      hingeA: P(cx0, y3), hingeB: P(cx0, y4), foldAngle: -90, stage: 0,
+      hingeA: P(cx0, y3), hingeB: P(cx0, y4), foldAngle: -90, stage: 2,
     },
     {
       id: 'side-right', parentId: 'base', outline: rect(cx1, y3, xr2, y4),
-      hingeA: P(cx1, y3), hingeB: P(cx1, y4), foldAngle: 90, stage: 0,
+      hingeA: P(cx1, y3), hingeB: P(cx1, y4), foldAngle: 90, stage: 2,
     },
-    // หูมุม (stage 1) — พับเข้าแนบผนังข้างก่อนแผ่นม้วนทับ
+    // หูมุม (stage 1) — ผนังหน้า-หลังตั้งก่อน (0) หูมุมพับเข้า แล้วผนังข้างค่อยตั้งขึ้นปิดนอกหู (2)
+    // ถ้าผนังข้างตั้งพร้อมหน้า-หลัง หูมุมจะกวาดอยู่นอกผนังข้างแล้วทะลุเข้าไปตอนท้าย
     {
       id: 'ear-fl', parentId: 'front', outline: earPts(cx0, -1, y4, y5),
       hingeA: P(cx0, y4), hingeB: P(cx0, y5), foldAngle: -90, stage: 1, zOffset: layer,
@@ -140,23 +141,23 @@ export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
       id: 'ear-br', parentId: 'back', outline: earPts(cx1, 1, y3, y2),
       hingeA: P(cx1, y2), hingeB: P(cx1, y3), foldAngle: 90, stage: 1, zOffset: layer,
     },
-    // แผ่นม้วน (stage 2) — รอหูมุมพับเสร็จก่อนค่อยทบ 180° กลับเข้าด้านในทับไว้ ทับหูมุม ลิ้นชี้ลงหาช่องบนฐาน
+    // แผ่นม้วน (stage 3) — รอหูมุมพับเสร็จก่อนค่อยทบ 180° กลับเข้าด้านในทับไว้ ทับหูมุม ลิ้นชี้ลงหาช่องบนฐาน
     // zOffset ติดลบ: หลังหมุน 180° แกน z ท้องถิ่นกลับทิศ (ชี้ออกนอกกล่อง)
     // จึงต้องดันทางลบเพื่อให้แผ่นม้วนลอยเข้าด้านใน ไม่ใช่ทะลุออกนอกผนัง
     {
       id: 'roll-left', parentId: 'side-left', outline: rollOutline(xr1, xr0, 0).pts,
       hingeA: P(xr1, y3 + rollIns), hingeB: P(xr1, y4 - rollIns),
-      foldAngle: -180, stage: 2, zOffset: -2 * layer,
+      foldAngle: -180, stage: 3, zOffset: -2 * layer,
     },
     {
       id: 'roll-right', parentId: 'side-right', outline: rollOutline(xr2, xr3, width).pts,
       hingeA: P(xr2, y3 + rollIns), hingeB: P(xr2, y4 - rollIns),
-      foldAngle: 180, stage: 2, zOffset: -2 * layer,
+      foldAngle: 180, stage: 3, zOffset: -2 * layer,
     },
-    // ฝาปิด (stage 3) + ลิ้นหน้า (tuck: มุมพับผูกกับฝา ลิ้นงอเข้าระหว่างฝาลง ไม่กวาดทะลุผนังหน้า)
+    // ฝาปิด (stage 4) + ลิ้นหน้า (tuck: มุมพับผูกกับฝา ลิ้นงอเข้าระหว่างฝาลง ไม่กวาดทะลุผนังหน้า)
     {
       id: 'lid', parentId: 'back', outline: rect(cx0, y1, cx1, y2),
-      hingeA: P(cx0, y2), hingeB: P(cx1, y2), foldAngle: 90, stage: 3,
+      hingeA: P(cx0, y2), hingeB: P(cx1, y2), foldAngle: 90, stage: 4,
     },
     {
       id: 'lip', parentId: 'lid', outline: lipOutline,

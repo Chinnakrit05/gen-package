@@ -58,15 +58,17 @@ export function generateMailerBox(box: BoxParams, mat: Material): Dieline {
     P(xb - dustIn, y),
   ]
 
+  // ลำดับพับแบบกล่องจริง: ผนังข้าง (0) → ลิ้นกันฝุ่นพับเข้า (1) → ผนังหน้า-หลังตั้งปิดทับ (2)
+  // → ฝา + ลิ้นหน้า (tuck) + ปีกข้างฝาพับลงพร้อมกัน (3) — ปีกข้างอยู่ในระนาบนอกผนังข้างตลอดทาง
   const panels: Panel[] = [
     { id: 'base', parentId: null, outline: rect(cx0, y3, cx1, y4), stage: 0 },
     {
       id: 'front', parentId: 'base', outline: rect(cx0, y4, cx1, y5),
-      hingeA: P(cx0, y4), hingeB: P(cx1, y4), foldAngle: -90, stage: 0,
+      hingeA: P(cx0, y4), hingeB: P(cx1, y4), foldAngle: -90, stage: 2,
     },
     {
       id: 'back', parentId: 'base', outline: rect(cx0, y2, cx1, y3),
-      hingeA: P(cx0, y3), hingeB: P(cx1, y3), foldAngle: 90, stage: 0,
+      hingeA: P(cx0, y3), hingeB: P(cx1, y3), foldAngle: 90, stage: 2,
     },
     {
       id: 'side-left', parentId: 'base', outline: rect(cx0 - Hp, y3, cx0, y4),
@@ -96,7 +98,7 @@ export function generateMailerBox(box: BoxParams, mat: Material): Dieline {
     },
     {
       id: 'lid', parentId: 'back', outline: rect(cx0, y1, cx1, y2),
-      hingeA: P(cx0, y2), hingeB: P(cx1, y2), foldAngle: 90, stage: 2,
+      hingeA: P(cx0, y2), hingeB: P(cx1, y2), foldAngle: 90, stage: 3,
     },
     {
       id: 'lip', parentId: 'lid', outline: lipOutline,

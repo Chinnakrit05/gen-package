@@ -40,11 +40,11 @@ export function generateTrayBox(box: BoxParams, mat: Material): Dieline {
     { id: 'base', parentId: null, outline: rect(cx0, by0, cx1, by1), stage: 0 },
     {
       id: 'back', parentId: 'base', outline: rect(cx0, 0, cx1, by0),
-      hingeA: P(cx0, by0), hingeB: P(cx1, by0), foldAngle: 90, stage: 0,
+      hingeA: P(cx0, by0), hingeB: P(cx1, by0), foldAngle: 90, stage: 2,
     },
     {
       id: 'front', parentId: 'base', outline: rect(cx0, by1, cx1, height),
-      hingeA: P(cx0, by1), hingeB: P(cx1, by1), foldAngle: -90, stage: 0,
+      hingeA: P(cx0, by1), hingeB: P(cx1, by1), foldAngle: -90, stage: 2,
     },
     {
       id: 'left', parentId: 'base', outline: rect(0, by0, cx0, by1),

@@ -48,15 +48,17 @@ export function buildTrayPiece(
   const r = (xa: number, ya: number, xb: number, yb: number) =>
     rect(ox + xa, oy + ya, ox + xb, oy + yb)
 
+  // ลำดับพับแบบกล่องจริง: ผนังซ้าย-ขวา (0) → ลิ้นมุมพับเข้า (1) → ผนังหน้า-หลังตั้งขึ้นปิดทับลิ้น (2)
+  // ถ้าหน้า-หลังตั้งก่อน ลิ้นมุมจะกวาดอยู่นอกผนังแล้วทะลุเข้าไปตอนท้าย
   const panels: Panel[] = [
     { id: `${prefix}base`, parentId: null, outline: r(cx0, by0, cx1, by1), stage: 0 },
     {
       id: `${prefix}back`, parentId: `${prefix}base`, outline: r(cx0, 0, cx1, by0),
-      hingeA: a(cx0, by0), hingeB: a(cx1, by0), foldAngle: 90 * dir, stage: 0,
+      hingeA: a(cx0, by0), hingeB: a(cx1, by0), foldAngle: 90 * dir, stage: 2,
     },
     {
       id: `${prefix}front`, parentId: `${prefix}base`, outline: r(cx0, by1, cx1, h),
-      hingeA: a(cx0, by1), hingeB: a(cx1, by1), foldAngle: -90 * dir, stage: 0,
+      hingeA: a(cx0, by1), hingeB: a(cx1, by1), foldAngle: -90 * dir, stage: 2,
     },
     {
       id: `${prefix}left`, parentId: `${prefix}base`, outline: r(0, by0, cx0, by1),

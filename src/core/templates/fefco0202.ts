@@ -53,19 +53,19 @@ export function generateFefco0202(box: BoxParams, mat: Material): Dieline {
     // ลิ้นข้าง (inner) พับก่อน
     {
       id: 'flap-t-sl', parentId: 'side-left', outline: rect(x1 + fin, top - innerLen, x2 - fin, top),
-      hingeA: P(x1, top), hingeB: P(x2, top), foldAngle: 90, stage: 1, zOffset: layer,
+      hingeA: P(x1, top), hingeB: P(x2, top), foldAngle: 90, stage: 1, zOffset: 3 * layer,
     },
     {
       id: 'flap-t-sr', parentId: 'side-right', outline: rect(x3 + fin, top - innerLen, x4 - fin, top),
-      hingeA: P(x3, top), hingeB: P(x4, top), foldAngle: 90, stage: 1, zOffset: layer,
+      hingeA: P(x3, top), hingeB: P(x4, top), foldAngle: 90, stage: 1, zOffset: 3 * layer,
     },
     {
       id: 'flap-b-sl', parentId: 'side-left', outline: rect(x1 + fin, bot, x2 - fin, bot + innerLen),
-      hingeA: P(x1, bot), hingeB: P(x2, bot), foldAngle: -90, stage: 1, zOffset: layer,
+      hingeA: P(x1, bot), hingeB: P(x2, bot), foldAngle: -90, stage: 1, zOffset: 3 * layer,
     },
     {
       id: 'flap-b-sr', parentId: 'side-right', outline: rect(x3 + fin, bot, x4 - fin, bot + innerLen),
-      hingeA: P(x3, bot), hingeB: P(x4, bot), foldAngle: -90, stage: 1, zOffset: layer,
+      hingeA: P(x3, bot), hingeB: P(x4, bot), foldAngle: -90, stage: 1, zOffset: 3 * layer,
     },
     // ลิ้นหน้า (outer เต็มลึก) พับก่อน แล้วลิ้นหลังพับทับบนสุด (เกยเต็ม)
     {
@@ -74,7 +74,7 @@ export function generateFefco0202(box: BoxParams, mat: Material): Dieline {
     },
     {
       id: 'flap-t-back', parentId: 'back', outline: rect(x4 + fin, top - outerLen, x5 - fin, top),
-      hingeA: P(x4, top), hingeB: P(x5, top), foldAngle: 90, stage: 3, zOffset: 3 * layer,
+      hingeA: P(x4, top), hingeB: P(x5, top), foldAngle: 90, stage: 3, zOffset: layer,
     },
     {
       id: 'flap-b-front', parentId: 'front', outline: rect(x2 + fin, bot, x3 - fin, bot + outerLen),
@@ -82,7 +82,7 @@ export function generateFefco0202(box: BoxParams, mat: Material): Dieline {
     },
     {
       id: 'flap-b-back', parentId: 'back', outline: rect(x4 + fin, bot, x5 - fin, bot + outerLen),
-      hingeA: P(x4, bot), hingeB: P(x5, bot), foldAngle: -90, stage: 3, zOffset: 3 * layer,
+      hingeA: P(x4, bot), hingeB: P(x5, bot), foldAngle: -90, stage: 3, zOffset: layer,
     },
   ]
 
