@@ -222,7 +222,7 @@ header h1 {
   white-space: nowrap;
   border-radius: 8px;
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .project-gallery-trigger {
@@ -268,7 +268,7 @@ header h1 {
 .project-gallery-trigger-copy strong {
   overflow: hidden;
   color: var(--text);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -292,7 +292,7 @@ header h1 {
 .project-gallery-count {
   flex: none;
   color: var(--text-3);
-  font-size: 11px;
+  font-size: 16px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1355,7 +1355,7 @@ main {
   width: auto;
   padding: 8px 16px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -3881,7 +3881,7 @@ aside .art-actions .file-pick:only-child {
 }
 .cloud-save-state {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-3);
   white-space: nowrap;
 }
@@ -3905,7 +3905,7 @@ aside .art-actions .file-pick:only-child {
   width: auto;
   align-self: center;
   padding: 5px 11px;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1;
   color: var(--text-2);
 }
@@ -3920,7 +3920,7 @@ aside .art-actions .file-pick:only-child {
   width: auto;
   align-self: center;
   padding: 5px 10px;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -3937,7 +3937,7 @@ aside .art-actions .file-pick:only-child {
   width: auto;
   align-self: center;
   padding: 5px 12px;
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--text-2);
 }
 .logout-btn svg {
