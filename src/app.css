@@ -683,7 +683,7 @@ aside h2 {
   background: none;
 }
 .tgroup-title {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2995,7 +2995,7 @@ aside .art-actions .file-pick:only-child {
   border: 1px solid transparent;
   background: transparent;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 500;
   line-height: 1.2;
   color: var(--text-2);
