@@ -117,7 +117,7 @@ export function generateTuckEndBox(box: BoxParams, mat: Material): Dieline {
     },
     {
       id: 'tongue-top', parentId: 'tuck-top', outline: tongueTopOutline,
-      hingeA: P(x4 + tuckIn, tiTop), hingeB: P(x5 - tuckIn, tiTop), foldAngle: 90, stage: 3, zOffset: 0.15,
+      hingeA: P(x4 + tuckIn, tiTop), hingeB: P(x5 - tuckIn, tiTop), foldAngle: 90, stage: 3, zOffset: 0.15, tuck: true,
     },
     {
       id: 'tuck-bot', parentId: 'back', outline: rect(x4 + tuckIn, bot, x5 - tuckIn, tiBot),
@@ -125,7 +125,7 @@ export function generateTuckEndBox(box: BoxParams, mat: Material): Dieline {
     },
     {
       id: 'tongue-bot', parentId: 'tuck-bot', outline: tongueBotOutline,
-      hingeA: P(x4 + tuckIn, tiBot), hingeB: P(x5 - tuckIn, tiBot), foldAngle: -90, stage: 3, zOffset: 0.15,
+      hingeA: P(x4 + tuckIn, tiBot), hingeB: P(x5 - tuckIn, tiBot), foldAngle: -90, stage: 3, zOffset: 0.15, tuck: true,
     },
   ]
 

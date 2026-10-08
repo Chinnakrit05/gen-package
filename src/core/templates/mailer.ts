@@ -100,7 +100,7 @@ export function generateMailerBox(box: BoxParams, mat: Material): Dieline {
     },
     {
       id: 'lip', parentId: 'lid', outline: lipOutline,
-      hingeA: P(cx0 + tuckIn, y1), hingeB: P(cx1 - tuckIn, y1), foldAngle: 90, stage: 3, zOffset: layer,
+      hingeA: P(cx0 + tuckIn, y1), hingeB: P(cx1 - tuckIn, y1), foldAngle: 90, stage: 3, zOffset: layer, tuck: true,
     },
     {
       id: 'lip-left', parentId: 'lid',

@@ -30,6 +30,38 @@ function stageProgress(windows: [number, number][], stage: number, fold: number)
   return u * u * (3 - 2 * u)
 }
 
+// ระยะตั้งฉากจากจุด q ถึงเส้นตรงผ่าน a→b (พิกัดแผ่นคลี่)
+function distToLine(q: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  return Math.abs((q.x - a.x) * dy - (q.y - a.y) * dx) / Math.hypot(dx, dy)
+}
+
+// มุมพับ (เรเดียน มีเครื่องหมายตาม foldAngle) ของลิ้นเสียบที่ต่อจากฝา
+// มองหน้าตัดตั้งฉากบานพับ: บานพับฝาอยู่ที่ขอบบนผนังหลัง, ฝายาว L หมุนลงมุม φ (0 = ตั้งตรง, 90° = ปิด)
+// ลิ้นยาว T ต่อจากปลายฝา ทิศรวม α = φ + ψ (วัดจากแนวตั้ง กวาดไปทางผนังหน้า)
+// เงื่อนไข: ปลายลิ้นห่างแนวผนังหลังได้ไม่เกิน L (= ตำแหน่งบานพับลิ้นตอนปิดสนิท ซึ่งอยู่ในผนังหน้า)
+//   L·sinφ + T·sinα ≤ L  →  α ≥ π − asin(s), s = L(1 − sinφ)/T  (ใช้ได้เมื่อ s < 1)
+// ช่วง s ≥ 1 (ฝายังเปิดกว้าง ปลายลิ้นยังไม่ถึงแนวผนัง) ลาด α ขึ้นเชิงเส้นจาก 0 ถึง 90° ที่ s = 1
+// ให้ลิ้นค่อย ๆ งอเข้าเหมือนมือพับ ไม่กระโดด; จังหวะพับเดิมของลิ้น (stage) ยังใช้ถ้ามากกว่า
+function tuckAngle(p: Panel, lid: Panel | undefined, progress: number, lidProgress: number): number {
+  const fa = ((p.foldAngle ?? 0) * Math.PI) / 180
+  const natural = fa * progress
+  if (!lid?.hingeA || !lid.hingeB || lid.foldAngle === undefined || !p.hingeA || !p.hingeB) return natural
+  const L = distToLine(p.hingeA, lid.hingeA, lid.hingeB)
+  const T = Math.max(...p.outline.map((q) => distToLine(q, p.hingeA!, p.hingeB!)))
+  if (L <= 0 || T <= 0) return natural
+  const phi = (Math.abs(lid.foldAngle) * Math.PI * lidProgress) / 180
+  const s = (L * (1 - Math.sin(phi))) / T
+  const s0 = L / T // ค่า s ตอนฝายังไม่ขยับ
+  let req: number
+  if (s < 1) req = Math.PI - Math.asin(s)
+  else req = s0 > 1 ? (Math.PI / 2) * ((s0 - s) / (s0 - 1)) : Math.PI / 2
+  req *= Math.min(1, phi / (Math.PI / 18)) // กันกระโดดตอนฝาเพิ่งเริ่ม (ลิ้นยาวเกินฝา)
+  const psi = Math.min(Math.PI - 0.01, Math.max(Math.abs(natural), req - phi))
+  return Math.sign(fa) * psi
+}
+
 // คำนวณ transform ของทุก panel ที่ค่าการพับ fold ∈ [0,1]
 // แต่ละ panel หมุนรอบเส้น crease ของตัวเอง (นิยามในพิกัดแผ่นคลี่)
 // แล้วส่งผ่าน transform ของ panel แม่แบบลูกโซ่
@@ -45,12 +77,19 @@ export function computeMatrices(panels: Panel[], fold: number): Map<string, Matr
     const p = byId.get(id)
     if (!p) throw new Error(`unknown panel: ${id}`)
     const m = p.parentId ? get(p.parentId).clone() : new Matrix4()
-    const progress = stageProgress(windows, p.stage, fold)
+    let progress = stageProgress(windows, p.stage, fold)
     if (p.hingeA && p.hingeB && p.foldAngle !== undefined) {
       const a = to3D(p.hingeA)
       const b = to3D(p.hingeB)
       const axis = b.clone().sub(a).normalize()
-      const theta = (p.foldAngle * Math.PI * progress) / 180
+      let theta = (p.foldAngle * Math.PI * progress) / 180
+      if (p.tuck && p.foldAngle !== 0) {
+        const lid = p.parentId ? byId.get(p.parentId) : undefined
+        theta = tuckAngle(p, lid, progress, stageProgress(windows, lid?.stage ?? 0, fold))
+        // ชั้นวัสดุ (zOffset) ดันตามมุมที่พับไปจริง — ลิ้นถูกพับนำจังหวะ stage ของตัวเอง
+        // ถ้าใช้ progress เดิม ลิ้นจะเบียดผนังหน้าเกินความหนาชั้นช่วงที่ไถลลง
+        progress = Math.min(1, (theta * 180) / Math.PI / p.foldAngle)
+      }
       const local = new Matrix4()
         .makeTranslation(a.x, a.y, a.z)
         .multiply(new Matrix4().makeRotationAxis(axis, theta))

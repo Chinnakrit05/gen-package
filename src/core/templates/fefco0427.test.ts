@@ -183,15 +183,18 @@ describe('fefco-0427: ลำดับจังหวะพับ', () => {
     expect(progressAt('ear-fl', started)).toBeGreaterThan(0.85)
   })
 
-  it('ลิ้นฝายังไม่เสียบจนฝาปิดไปแล้วเกิน 75%', () => {
-    let started = 1
+  // ลิ้นฝาเป็นลิ้นเสียบ (Panel.tuck): พับเข้าตามฝาที่กำลังปิด ไม่รอฝาปิดก่อน
+  // — การรอแล้วค่อยพับ 90° ทำให้ปลายลิ้นกวาดทะลุผนังหน้า; ตรวจระยะจริงใน tuck.test.ts
+  it('ลิ้นฝาผูกจังหวะกับฝา และพับเข้าแล้วเกินครึ่งก่อนฝาปิดสนิท', () => {
+    expect(d.panels.find((p) => p.id === 'lip')!.tuck).toBe(true)
+    let closed = 1
     for (let f = 0; f <= 1.0001; f += 0.01) {
-      if (progressAt('lip', f) > 0.01) {
-        started = f
+      if (progressAt('lid', f) > 0.999) {
+        closed = f
         break
       }
     }
-    expect(progressAt('lid', started)).toBeGreaterThan(0.75)
+    expect(progressAt('lip', closed)).toBeGreaterThan(0.5)
   })
 
   it('ทุกแผงพับครบเมื่อ fold=1', () => {

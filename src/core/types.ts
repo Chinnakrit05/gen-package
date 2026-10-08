@@ -20,6 +20,9 @@ export interface Panel {
   foldAngle?: number
   stage: number
   zOffset?: number
+  // ลิ้นเสียบที่ต่อจากฝา: มุมพับผูกกับมุมฝา (แผงแม่) ให้ปลายลิ้นไม่ล้ำแนวที่ลิ้นจะอยู่ตอนปิด
+  // — ลิ้นพับเข้าระหว่างฝากำลังปิดแล้วไถลลงตามผนังด้านใน แทนการกวาดทะลุผนังหน้า (ดู fold.ts)
+  tuck?: boolean
 }
 
 export interface DimMark {

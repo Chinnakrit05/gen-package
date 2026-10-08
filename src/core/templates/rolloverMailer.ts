@@ -69,7 +69,7 @@ export function generateRolloverMailer(box: BoxParams, mat: Material): Dieline {
     },
     {
       id: 'lip', parentId: 'lid', outline: lipOutline,
-      hingeA: P(cx0 + tuckIn, ly1), hingeB: P(cx1 - tuckIn, ly1), foldAngle: 90, stage: 3, zOffset: layer,
+      hingeA: P(cx0 + tuckIn, ly1), hingeB: P(cx1 - tuckIn, ly1), foldAngle: 90, stage: 3, zOffset: layer, tuck: true,
     },
   ]
 

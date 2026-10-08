@@ -99,7 +99,7 @@ export function generateFefco0215(box: BoxParams, mat: Material): Dieline {
     },
     {
       id: 'tongue-top', parentId: 'tuck-top', outline: tongueTopOutline,
-      hingeA: P(x4 + tuckIn, tiTop), hingeB: P(x5 - tuckIn, tiTop), foldAngle: 90, stage: 3, zOffset: 0.15,
+      hingeA: P(x4 + tuckIn, tiTop), hingeB: P(x5 - tuckIn, tiTop), foldAngle: 90, stage: 3, zOffset: 0.15, tuck: true,
     },
     // --- ก้น auto-lock: ลิ้นข้างก่อน (stage 1) แล้วลิ้นหน้า-หลังทับ (stage 2) ---
     {

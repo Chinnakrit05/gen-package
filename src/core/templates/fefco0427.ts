@@ -153,14 +153,14 @@ export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
       hingeA: P(xr2, y3 + rollIns), hingeB: P(xr2, y4 - rollIns),
       foldAngle: 180, stage: 2, zOffset: -2 * layer,
     },
-    // ฝาปิด (stage 3) แล้วลิ้นหน้าค่อยเสียบ (stage 4) — แยกจังหวะกันลิ้นกวาดทะลุผนังหน้า
+    // ฝาปิด (stage 3) + ลิ้นหน้า (tuck: มุมพับผูกกับฝา ลิ้นงอเข้าระหว่างฝาลง ไม่กวาดทะลุผนังหน้า)
     {
       id: 'lid', parentId: 'back', outline: rect(cx0, y1, cx1, y2),
       hingeA: P(cx0, y2), hingeB: P(cx1, y2), foldAngle: 90, stage: 3,
     },
     {
       id: 'lip', parentId: 'lid', outline: lipOutline,
-      hingeA: P(cx0 + tuckIn, y1), hingeB: P(cx1 - tuckIn, y1), foldAngle: 90, stage: 4, zOffset: layer,
+      hingeA: P(cx0 + tuckIn, y1), hingeB: P(cx1 - tuckIn, y1), foldAngle: 90, stage: 4, zOffset: layer, tuck: true,
     },
   ]
 

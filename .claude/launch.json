@@ -11,6 +11,19 @@
       "port": 5173
     },
     {
+      "name": "gen-package-dev-alt",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--mode",
+        "local-demo",
+        "--port",
+        "5175",
+        "--strictPort"
+      ],
+      "port": 5175
+    },
+    {
       "name": "gen-package-prod-preview",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
