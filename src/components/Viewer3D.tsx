@@ -261,6 +261,8 @@ interface ModelProps {
   fold: number
   depth: number
   tilt: number
+  // หมุนแผ่นในระนาบก่อนเอียง (rad) — template ที่หมุนผัง dieline เพื่อความเข้าใจ (เช่น FEFCO 0427) หมุนกลับใน 3D
+  spin?: number
   decos?: Deco[]
   fillColor?: string | null
   fillImage?: FillImage | null
@@ -270,7 +272,7 @@ interface ModelProps {
   lightMode?: LightMode
 }
 
-function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillImage, dims, imperial, dimVariant }: ModelProps) {
+function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillColor, fillImage, dims, imperial, dimVariant }: ModelProps) {
   const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage)
 
   const geoms = useMemo(
@@ -336,7 +338,7 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillIm
       <group
         ref={modelRef}
         scale={[-1, 1, 1]}
-        rotation={[tilt * fold, dieline.panels.every((p) => !p.hingeA) ? Math.PI : 0, 0]}
+        rotation={[tilt * fold, dieline.panels.every((p) => !p.hingeA) ? Math.PI : 0, spin * fold]}
       >
         <group position={[-cx, cy, -depth / 2]}>
           {dieline.panels.map((p, i) => (

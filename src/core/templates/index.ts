@@ -1,7 +1,7 @@
 import type { BoxParams, Dieline, Material } from '../types'
 import { generateTuckEndBox } from './tuckEnd'
 import { generateMailerBox } from './mailer'
-import { generateFefco0427 } from './fefco0427'
+import { generateFefco0427, FEFCO0427_SPIN as SPIN_0427 } from './fefco0427'
 import { generateSleeve } from './sleeve'
 import { generateBottleCarrier } from './bottleCarrier'
 import { generateTrayBox } from './tray'
@@ -24,6 +24,8 @@ export interface BoxTemplate {
   detail: string
   defaults: BoxParams
   tilt: number
+  // หมุนแผ่นในระนาบใน 3D (rad, ก่อนเอียง) — ใช้เมื่อ generate หมุนผัง dieline ให้ตรงแบบมาตรฐาน
+  spin?: number
   supportsHandle: boolean
   supportsVents?: boolean // รองรับรูระบายอากาศ (กล่องทรงปิด/ถาดที่มีผนังตั้ง)
   foldDepth: (box: BoxParams, mat: Material) => number
@@ -69,6 +71,7 @@ export const TEMPLATES: BoxTemplate[] = [
     detail: 'ส่งหนังสือ/ของหนัก · อีคอมเมิร์ซ · สินค้ากันกระแทก',
     defaults: { W: 200, D: 140, H: 60 },
     tilt: -Math.PI / 2,
+    spin: SPIN_0427,
     supportsHandle: false,
     supportsVents: true,
     foldDepth: (b, m) => b.H + m.thickness,

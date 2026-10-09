@@ -1,15 +1,20 @@
-import type { BoxParams, Dieline, DimMark, Material, Panel, Segment } from '../types'
+import type { BoxParams, Dieline, DimMark, Material, Panel, Segment, Vec2 } from '../types'
 import { P, arcPts, fmt, obroundPath, obroundPts, rect } from './shared'
+import { placePath, placePoint } from '../stickerSheet'
 
-// FEFCO 0427 ตัวเต็ม (roll end tray with lock front)
-// ต่างจาก mailer อย่างย่อตรงหัวใจของแบบนี้: ผนังข้างเป็นสองชั้นแบบม้วนกลับ (roll end)
-// ปลายแผ่นม้วนมีลิ้นล็อกเสียบลงช่องที่เจาะบนฐาน หูมุมของผนังหน้า-หลังถูกแผ่นม้วนทับไว้
-// จึงแข็งแรงและประกอบได้โดยไม่ใช้กาวเลย — W,D,H คือขนาดด้านใน
+// FEFCO 0427 ตัวเต็ม (roll end tray with lock front) — แบบ dieline มาตรฐานงานจริง
+// ผนังข้างสองชั้นแบบพับทบ: ผนัง → สัน (รอยพับคู่ กว้าง = ความหนาผนัง+หู+ชั้นทบ) → ชั้นทบลงด้านใน
+// ปลายชั้นทบมีลิ้นล็อกเสียบช่องบนฐาน หูมุมของผนังหน้า-หลังถูกชั้นทบหนีบไว้ — ไม่ใช้กาว
+// ฝา: แคบกว่ากล่องเท่าความหนาผนังสองชั้น (ลงพอดีระหว่างสันผนังข้าง) มีปีกข้างพับลงด้านในชั้นทบ
+// และลิ้นหน้ามุมโค้งใหญ่เสียบด้านในผนังหน้า (ผนังหน้าเตี้ยกว่า t ให้ฝาวางบนขอบ) — W,D,H คือขนาดด้านใน
 //
-// ผังแผ่นคลี่ (x ขวา y ลง):
-//   คอลัมน์: [ลิ้น|ม้วนซ้าย|ผนังซ้าย|  ฐาน  |ผนังขวา|ม้วนขวา|ลิ้น]
-//   แถว:     ลิ้นฝา / ฝา / ผนังหลัง(+หู) / ฐาน / ผนังหน้า(+หู)
-export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
+// generate ผังแนวตั้งแล้วหมุน 90° ให้ตรงผัง dieline มาตรฐาน (ฝาเปิดไปทางขวา) — template ตั้ง spin
+// ให้ viewer หมุนกลับ จึงยังเห็นผนังหน้าหันหากล้องเหมือนเดิม
+//
+// ผังก่อนหมุน (x ขวา y ลง):
+//   คอลัมน์: [ลิ้น|ชั้นทบ|สัน|ผนังข้าง|  ฐาน  |ผนังข้าง|สัน|ชั้นทบ|ลิ้น]
+//   แถว:     ลิ้นฝา / ฝา(+ปีกข้าง) / ผนังหลัง(+หู) / ฐาน / ผนังหน้า(+หู)
+export function fefco0427Layout(box: BoxParams, mat: Material): Dieline {
   const { W, D, H } = box
   const t = mat.thickness
 
@@ -18,92 +23,130 @@ export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
   const Hp = H + t
   const layer = t + 0.05
 
-  // แผ่นม้วนสั้นกว่าผนัง t กันปลายชนฐาน และหดปลายบน-ล่างหลบหูมุม
+  // สัน = ระยะผนังนอก → ชั้นทบ: ผนัง t + หูมุม t + ชั้นทบ t (+ช่องว่างเล็กน้อย) → รอยพับคู่บน dieline
+  const sp = 3 * t + 0.2
+  // ชั้นทบยาวถึงผิวบนของฐาน (สั้นกว่าผนัง t) หดปลายบน-ล่างหลบหูมุม
   const rollW = Math.max(6, Hp - t)
   const rollIns = Math.max(1.5, 2 * t)
-  // ลิ้นล็อกยื่นจากขอบแผ่นม้วน + ช่องเสียบบนฐาน (ยาวกว่าลิ้นเล็กน้อยให้เสียบง่าย)
-  const tabL = Math.max(5, Math.min(8, 0.35 * rollW))
-  const tabW = Math.max(12, Math.min(26, 0.22 * Dp))
+  // ลิ้นล็อกปลายชั้นทบ + ช่องเสียบบนฐานตรงแนวชั้นทบ (ห่างขอบฐาน sp − t/2)
+  const tabL = Math.max(4, Math.min(7, 0.3 * rollW))
+  const tabW = Math.max(12, Math.min(26, 0.2 * Dp))
   const slotL = tabW + 1.5
   const slotW = Math.max(1.5, t + 0.6)
-  const slotOff = Math.max(2, 2.5 * t) // ระยะช่องจากขอบฐาน = ความหนาผนัง+ม้วน
-  // หูมุมของผนังหน้า-หลัง พับเข้าแนบผนังข้าง แล้วถูกแผ่นม้วนทับ
-  const earW = Math.max(8, Math.min(0.9 * Hp, 0.4 * Dp))
+  const slotOff = sp - t / 2
+  // หูมุมผนังหน้า-หลัง: สี่เหลี่ยม (ตามแบบงานจริง) พับแนบด้านในผนังข้าง ถูกชั้นทบทับ
+  const earW = Math.max(8, Math.min(1.3 * Hp, 0.4 * Dp))
   const earIns = Math.max(1.5, t + 0.5)
   const topIns = Math.max(1.5, 2 * t)
-  const earSlant = Math.min(6, earW * 0.5)
-  // ลิ้นหน้าของฝา พร้อมบ่าล็อกเล็ก ๆ สองข้าง (front lock)
+  // ผนังหน้าเตี้ยกว่า t: ฝาวางบนขอบ แล้วลิ้นหน้าเสียบด้านใน
+  const Hf = Hp - t
+  // ฝา: แคบกว่ากล่องข้างละ sp (ลงระหว่างสันผนังข้าง) + ปีกข้างลึกเกือบเท่าผนัง
+  const lx0Off = sp
+  const flapH = Math.max(8, Hp - 2 * t)
+  const flapIn = 1
+  // ลิ้นหน้าฝา: ลึกเกือบเท่าผนังหน้า มุมนอกโค้งใหญ่
   const tuckIn = Math.max(1, t + 0.5)
-  const lipH = Math.max(10, Math.min(0.7 * Hp, 0.8 * Dp))
-  const lockW = Math.min(4, tuckIn + 3)
-  const lockH = Math.min(10, lipH * 0.5)
-  const r = Math.min(7, lipH * 0.45, (Wp - 2 * tuckIn) / 2)
+  const lipH = Math.max(10, Math.min(Hf - t, 0.8 * Dp))
 
   // แกน x
-  const xr0 = tabL
-  const xr1 = xr0 + rollW
-  const cx0 = xr1 + Hp
+  const xr0 = tabL // ขอบอิสระชั้นทบซ้าย (ลิ้นยื่นไปถึง x=0)
+  const xr1 = xr0 + rollW // ชั้นทบ|สัน
+  const xs1 = xr1 + sp // สัน|ผนังข้าง
+  const cx0 = xs1 + Hp // ผนังข้าง|ฐาน
   const cx1 = cx0 + Wp
-  const xr2 = cx1 + Hp
+  const xs2 = cx1 + Hp
+  const xr2 = xs2 + sp
   const xr3 = xr2 + rollW
   const width = xr3 + tabL
+  const lx0 = cx0 + lx0Off
+  const lx1 = cx1 - lx0Off
   // แกน y
   const y1 = lipH
   const y2 = y1 + Dp
   const y3 = y2 + Hp
   const y4 = y3 + Dp
-  const y5 = y4 + Hp
+  const y5 = y4 + Hf
   const height = y5
 
-  // ตำแหน่งลิ้น/ช่อง ตามแนว D สองจุดต่อข้าง
+  const r = Math.min(lipH * 0.85, (lx1 - lx0 - 2 * tuckIn) / 2)
   const yc1 = y3 + Dp * 0.28
   const yc2 = y3 + Dp * 0.72
 
-  // แผ่นม้วน: สี่เหลี่ยมหดปลาย + ลิ้นล็อกสองอันบนขอบอิสระ
-  const rollOutline = (x0: number, x1: number, tabX: number): { pts: ReturnType<typeof P>[] } => {
-    // x0 = ขอบพับ (hinge), x1 = ขอบอิสระ, tabX = ปลายลิ้น
+  // ชั้นทบ: สี่เหลี่ยมหดปลาย + ลิ้นล็อกสองอันบนขอบอิสระ (x0 = รอยพับกับสัน, x1 = ขอบอิสระ)
+  const rollOutline = (x0: number, x1: number, tabX: number): Vec2[] => {
     const pts = [P(x0, y3 + rollIns), P(x1, y3 + rollIns)]
     for (const yc of [yc1, yc2]) {
-      pts.push(P(x1, yc - tabW / 2))
-      pts.push(P(tabX, yc - tabW / 2 + 1.5))
-      pts.push(P(tabX, yc + tabW / 2 - 1.5))
-      pts.push(P(x1, yc + tabW / 2))
+      pts.push(P(x1, yc - tabW / 2), P(tabX, yc - tabW / 2 + 1.5), P(tabX, yc + tabW / 2 - 1.5), P(x1, yc + tabW / 2))
     }
     pts.push(P(x1, y4 - rollIns), P(x0, y4 - rollIns))
-    return { pts }
+    return pts
+  }
+  const rollFreeCut = (x1: number, tabX: number) => {
+    let d = `M ${x1} ${y3 + rollIns}`
+    for (const yc of [yc1, yc2]) {
+      d +=
+        ` L ${x1} ${yc - tabW / 2} L ${tabX} ${yc - tabW / 2 + 1.5}` +
+        ` L ${tabX} ${yc + tabW / 2 - 1.5} L ${x1} ${yc + tabW / 2}`
+    }
+    return d + ` L ${x1} ${y4 - rollIns}`
   }
 
-  // hx = เส้นพับ, dir = ทิศยื่น (-1 ซ้าย +1 ขวา), ya = ขอบผนังฝั่งติดฐาน, yb = ขอบไกล
-  // sy = ทิศเข้าเนื้อผนัง: ผนังหน้าอยู่ฝั่ง +y ของ ya, ผนังหลังอยู่ฝั่ง −y — ต้องปรับ inset
-  // ตามด้าน ไม่งั้นหูมุมหลังจะถูกวางในโซนฐานแล้วพับทะลุ
+  // หูมุมสี่เหลี่ยม: hx = เส้นพับ, dir = ทิศยื่น, ya = ขอบฝั่งติดฐาน, yb = ขอบไกล
   const earPts = (hx: number, dir: 1 | -1, ya: number, yb: number) => {
     const sy = Math.sign(yb - ya) || 1
-    return [
-      P(hx, ya + sy * earIns),
-      P(hx + dir * earW, ya + sy * (earIns + earSlant)),
-      P(hx + dir * earW, yb - sy * (topIns + earSlant)),
-      P(hx, yb - sy * topIns),
-    ]
+    return [P(hx, ya + sy * earIns), P(hx + dir * earW, ya + sy * earIns), P(hx + dir * earW, yb - sy * topIns), P(hx, yb - sy * topIns)]
+  }
+  const earCut = (hx: number, dir: 1 | -1, ya: number, yb: number) => {
+    const e = earPts(hx, dir, ya, yb)
+    return `M ${e[0].x} ${e[0].y} L ${e[1].x} ${e[1].y} L ${e[2].x} ${e[2].y} L ${e[3].x} ${e[3].y}`
   }
 
-  // ลิ้นฝา: โค้งมนแบบ mailer + บ่าล็อกสองข้างที่โคน
+  // ปีกข้างฝา: คางหมูปลายลาด มุมนอกมน — hx = รอยพับ, dir = ทิศยื่น
+  const cham = Math.min(flapH * 0.35, Dp * 0.2)
+  const fr = Math.min(4, cham * 0.6)
+  const flapPts = (hx: number, dir: 1 | -1): Vec2[] => {
+    const xo = hx + dir * flapH
+    const ya = y1 + flapIn
+    const yb = y2 - flapIn
+    // มุมนอกมน: ปัดด้วยจุดบนโค้งกำลังสอง (ตรงกับ Q ใน path)
+    const q = (p0: Vec2, c: Vec2, p1: Vec2) =>
+      [0.25, 0.5, 0.75].map((s) => P((1 - s) ** 2 * p0.x + 2 * (1 - s) * s * c.x + s * s * p1.x, (1 - s) ** 2 * p0.y + 2 * (1 - s) * s * c.y + s * s * p1.y))
+    const c1 = P(xo, ya + cham)
+    const c2 = P(xo, yb - cham)
+    const a1 = P(hx + dir * (flapH - fr), ya + cham * (1 - fr / flapH))
+    const b1 = P(xo, ya + cham + fr)
+    const a2 = P(xo, yb - cham - fr)
+    const b2 = P(hx + dir * (flapH - fr), yb - cham * (1 - fr / flapH))
+    return [P(hx, ya), a1, ...q(a1, c1, b1), b1, a2, ...q(a2, c2, b2), b2, P(hx, yb)]
+  }
+  const flapCut = (hx: number, dir: 1 | -1) => {
+    const xo = hx + dir * flapH
+    const ya = y1 + flapIn
+    const yb = y2 - flapIn
+    return (
+      `M ${hx} ${y1} L ${hx} ${ya} L ${hx + dir * (flapH - fr)} ${ya + cham * (1 - fr / flapH)} ` +
+      `Q ${xo} ${ya + cham} ${xo} ${ya + cham + fr} L ${xo} ${yb - cham - fr} ` +
+      `Q ${xo} ${yb - cham} ${hx + dir * (flapH - fr)} ${yb - cham * (1 - fr / flapH)} L ${hx} ${yb} L ${hx} ${y2}`
+    )
+  }
+
+  // ลิ้นหน้าฝา: มุมนอกโค้งใหญ่ (ไม่มีบ่าล็อก)
+  const la = lx0 + tuckIn
+  const lb = lx1 - tuckIn
   const lipOutline = [
-    P(cx0 + tuckIn, y1),
-    P(cx0 + tuckIn - lockW, y1 - lockH * 0.35),
-    P(cx0 + tuckIn, y1 - lockH),
-    ...arcPts(cx0 + tuckIn + r, r, r, Math.PI, Math.PI * 1.5),
-    ...arcPts(cx1 - tuckIn - r, r, r, Math.PI * 1.5, Math.PI * 2),
-    P(cx1 - tuckIn, y1 - lockH),
-    P(cx1 - tuckIn + lockW, y1 - lockH * 0.35),
-    P(cx1 - tuckIn, y1),
+    P(la, y1),
+    ...arcPts(la + r, r, r, Math.PI, Math.PI * 1.5),
+    ...arcPts(lb - r, r, r, Math.PI * 1.5, Math.PI * 2),
+    P(lb, y1),
   ]
 
-  const slots = [
-    obroundPts(cx0 + slotOff, yc1, slotL, slotW, true),
-    obroundPts(cx0 + slotOff, yc2, slotL, slotW, true),
-    obroundPts(cx1 - slotOff, yc1, slotL, slotW, true),
-    obroundPts(cx1 - slotOff, yc2, slotL, slotW, true),
+  const slotCs: [number, number][] = [
+    [cx0 + slotOff, yc1],
+    [cx0 + slotOff, yc2],
+    [cx1 - slotOff, yc1],
+    [cx1 - slotOff, yc2],
   ]
+  const slots = slotCs.map(([x, y]) => obroundPts(x, y, slotL, slotW, true))
 
   const panels: Panel[] = [
     { id: 'base', parentId: null, outline: rect(cx0, y3, cx1, y4), holes: slots, stage: 0 },
@@ -116,15 +159,14 @@ export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
       hingeA: P(cx0, y3), hingeB: P(cx1, y3), foldAngle: 90, stage: 0,
     },
     {
-      id: 'side-left', parentId: 'base', outline: rect(xr1, y3, cx0, y4),
+      id: 'side-left', parentId: 'base', outline: rect(xs1, y3, cx0, y4),
       hingeA: P(cx0, y3), hingeB: P(cx0, y4), foldAngle: -90, stage: 2,
     },
     {
-      id: 'side-right', parentId: 'base', outline: rect(cx1, y3, xr2, y4),
+      id: 'side-right', parentId: 'base', outline: rect(cx1, y3, xs2, y4),
       hingeA: P(cx1, y3), hingeB: P(cx1, y4), foldAngle: 90, stage: 2,
     },
-    // หูมุม (stage 1) — ผนังหน้า-หลังตั้งก่อน (0) หูมุมพับเข้า แล้วผนังข้างค่อยตั้งขึ้นปิดนอกหู (2)
-    // ถ้าผนังข้างตั้งพร้อมหน้า-หลัง หูมุมจะกวาดอยู่นอกผนังข้างแล้วทะลุเข้าไปตอนท้าย
+    // หูมุม (stage 1) พับก่อนผนังข้างตั้ง (2) — ไม่งั้นหูกวาดอยู่นอกผนังข้างแล้วทะลุเข้าตอนท้าย
     {
       id: 'ear-fl', parentId: 'front', outline: earPts(cx0, -1, y4, y5),
       hingeA: P(cx0, y4), hingeB: P(cx0, y5), foldAngle: -90, stage: 1, zOffset: layer,
@@ -141,66 +183,56 @@ export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
       id: 'ear-br', parentId: 'back', outline: earPts(cx1, 1, y3, y2),
       hingeA: P(cx1, y2), hingeB: P(cx1, y3), foldAngle: 90, stage: 1, zOffset: layer,
     },
-    // แผ่นม้วน (stage 3) — รอหูมุมพับเสร็จก่อนค่อยทบ 180° กลับเข้าด้านในทับไว้ ทับหูมุม ลิ้นชี้ลงหาช่องบนฐาน
-    // zOffset ติดลบ: หลังหมุน 180° แกน z ท้องถิ่นกลับทิศ (ชี้ออกนอกกล่อง)
-    // จึงต้องดันทางลบเพื่อให้แผ่นม้วนลอยเข้าด้านใน ไม่ใช่ทะลุออกนอกผนัง
+    // สัน + ชั้นทบ (stage 3): พับ 90° สองครั้งที่รอยพับคู่ → ชั้นทบลงขนานผนังห่าง sp ทับหูมุม ลิ้นลงช่องบนฐาน
     {
-      id: 'roll-left', parentId: 'side-left', outline: rollOutline(xr1, xr0, 0).pts,
-      hingeA: P(xr1, y3 + rollIns), hingeB: P(xr1, y4 - rollIns),
-      foldAngle: -180, stage: 3, zOffset: -2 * layer,
+      id: 'spine-left', parentId: 'side-left', outline: rect(xr1, y3 + rollIns, xs1, y4 - rollIns),
+      hingeA: P(xs1, y3 + rollIns), hingeB: P(xs1, y4 - rollIns), foldAngle: -90, stage: 3,
     },
     {
-      id: 'roll-right', parentId: 'side-right', outline: rollOutline(xr2, xr3, width).pts,
-      hingeA: P(xr2, y3 + rollIns), hingeB: P(xr2, y4 - rollIns),
-      foldAngle: 180, stage: 3, zOffset: -2 * layer,
+      id: 'roll-left', parentId: 'spine-left', outline: rollOutline(xr1, xr0, 0),
+      hingeA: P(xr1, y3 + rollIns), hingeB: P(xr1, y4 - rollIns), foldAngle: -90, stage: 3,
     },
-    // ฝาปิด (stage 4) + ลิ้นหน้า (tuck: มุมพับผูกกับฝา ลิ้นงอเข้าระหว่างฝาลง ไม่กวาดทะลุผนังหน้า)
     {
-      id: 'lid', parentId: 'back', outline: rect(cx0, y1, cx1, y2),
-      hingeA: P(cx0, y2), hingeB: P(cx1, y2), foldAngle: 90, stage: 4,
+      id: 'spine-right', parentId: 'side-right', outline: rect(xs2, y3 + rollIns, xr2, y4 - rollIns),
+      hingeA: P(xs2, y3 + rollIns), hingeB: P(xs2, y4 - rollIns), foldAngle: 90, stage: 3,
+    },
+    {
+      id: 'roll-right', parentId: 'spine-right', outline: rollOutline(xr2, xr3, width),
+      hingeA: P(xr2, y3 + rollIns), hingeB: P(xr2, y4 - rollIns), foldAngle: 90, stage: 3,
+    },
+    // ฝา (stage 5) — ปีกข้าง (4) พับลงก่อน แล้วฝาปิดพาปีกลงด้านในชั้นทบ; ลิ้นหน้า tuck ผูกจังหวะกับฝา
+    {
+      id: 'lid', parentId: 'back', outline: rect(lx0, y1, lx1, y2),
+      hingeA: P(lx0, y2), hingeB: P(lx1, y2), foldAngle: 90, stage: 5,
+    },
+    {
+      id: 'lid-flap-left', parentId: 'lid', outline: flapPts(lx0, -1),
+      hingeA: P(lx0, y1 + flapIn), hingeB: P(lx0, y2 - flapIn), foldAngle: -90, stage: 4,
+    },
+    {
+      id: 'lid-flap-right', parentId: 'lid', outline: flapPts(lx1, 1),
+      hingeA: P(lx1, y1 + flapIn), hingeB: P(lx1, y2 - flapIn), foldAngle: 90, stage: 4,
     },
     {
       id: 'lip', parentId: 'lid', outline: lipOutline,
-      hingeA: P(cx0 + tuckIn, y1), hingeB: P(cx1 - tuckIn, y1), foldAngle: 90, stage: 4, zOffset: layer, tuck: true,
+      hingeA: P(la, y1), hingeB: P(lb, y1), foldAngle: 90, stage: 5, zOffset: layer, tuck: true,
     },
   ]
 
   const cut = (d: string): Segment => ({ kind: 'cut', d })
   const crease = (d: string): Segment => ({ kind: 'crease', d })
 
-  const earCut = (hx: number, dir: 1 | -1, ya: number, yb: number) => {
-    const sy = Math.sign(yb - ya) || 1
-    return (
-      `M ${hx} ${ya + sy * earIns} L ${hx + dir * earW} ${ya + sy * (earIns + earSlant)} ` +
-      `L ${hx + dir * earW} ${yb - sy * (topIns + earSlant)} L ${hx} ${yb - sy * topIns}`
-    )
-  }
-
-  // ขอบอิสระของแผ่นม้วน (แนวตั้ง) พร้อมลิ้นสองอัน
-  const rollFreeCut = (x1: number, tabX: number) => {
-    let d = `M ${x1} ${y3 + rollIns}`
-    for (const yc of [yc1, yc2]) {
-      d +=
-        ` L ${x1} ${yc - tabW / 2} L ${tabX} ${yc - tabW / 2 + 1.5}` +
-        ` L ${tabX} ${yc + tabW / 2 - 1.5} L ${x1} ${yc + tabW / 2}`
-    }
-    d += ` L ${x1} ${y4 - rollIns}`
-    return d
-  }
-
   const segments: Segment[] = [
-    // ลิ้นฝา (โค้งมน + บ่าล็อก)
-    cut(
-      `M ${cx0 + tuckIn} ${y1} L ${cx0 + tuckIn - lockW} ${y1 - lockH * 0.35} L ${cx0 + tuckIn} ${y1 - lockH} ` +
-        `L ${cx0 + tuckIn} ${r} Q ${cx0 + tuckIn} 0 ${cx0 + tuckIn + r} 0 ` +
-        `L ${cx1 - tuckIn - r} 0 Q ${cx1 - tuckIn} 0 ${cx1 - tuckIn} ${r} ` +
-        `L ${cx1 - tuckIn} ${y1 - lockH} L ${cx1 - tuckIn + lockW} ${y1 - lockH * 0.35} L ${cx1 - tuckIn} ${y1}`,
-    ),
-    cut(`M ${cx0} ${y1} L ${cx0 + tuckIn} ${y1}`),
-    cut(`M ${cx1 - tuckIn} ${y1} L ${cx1} ${y1}`),
-    // ขอบข้างฝา (ไม่มีปีก — ขอบข้างจบด้วยผนังม้วน)
-    cut(`M ${cx0} ${y1} L ${cx0} ${y2}`),
-    cut(`M ${cx1} ${y1} L ${cx1} ${y2}`),
+    // ลิ้นหน้าฝา (มุมโค้งใหญ่)
+    cut(`M ${la} ${y1} L ${la} ${r} Q ${la} 0 ${la + r} 0 L ${lb - r} 0 Q ${lb} 0 ${lb} ${r} L ${lb} ${y1}`),
+    cut(`M ${lx0} ${y1} L ${la} ${y1}`),
+    cut(`M ${lb} ${y1} L ${lx1} ${y1}`),
+    // ปีกข้างฝา
+    cut(flapCut(lx0, -1)),
+    cut(flapCut(lx1, 1)),
+    // ขอบบนผนังหลังนอกช่วงฝา (ฝาแคบกว่ากล่อง)
+    cut(`M ${cx0} ${y2} L ${lx0} ${y2}`),
+    cut(`M ${lx1} ${y2} L ${cx1} ${y2}`),
     // หูมุมผนังหลัง + รอยตัดช่วงหด
     cut(`M ${cx0} ${y2} L ${cx0} ${y2 + topIns}`),
     cut(earCut(cx0, -1, y3, y2)),
@@ -208,12 +240,12 @@ export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
     cut(`M ${cx1} ${y2} L ${cx1} ${y2 + topIns}`),
     cut(earCut(cx1, 1, y3, y2)),
     cut(`M ${cx1} ${y3 - earIns} L ${cx1} ${y3}`),
-    // แถวผนังข้าง: ขอบบน-ล่างของผนัง + แผ่นม้วน (มีสเต็ปช่วงหด rollIns)
-    cut(`M ${cx0} ${y3} L ${xr1} ${y3} L ${xr1} ${y3 + rollIns} L ${xr0} ${y3 + rollIns}`),
-    cut(`M ${cx0} ${y4} L ${xr1} ${y4} L ${xr1} ${y4 - rollIns} L ${xr0} ${y4 - rollIns}`),
+    // แถวผนังข้าง: ขอบบน-ล่างผนัง → สัน+ชั้นทบ (หดปลาย rollIns)
+    cut(`M ${cx0} ${y3} L ${xs1} ${y3} L ${xs1} ${y3 + rollIns} L ${xr0} ${y3 + rollIns}`),
+    cut(`M ${cx0} ${y4} L ${xs1} ${y4} L ${xs1} ${y4 - rollIns} L ${xr0} ${y4 - rollIns}`),
     cut(rollFreeCut(xr0, 0)),
-    cut(`M ${cx1} ${y3} L ${xr2} ${y3} L ${xr2} ${y3 + rollIns} L ${xr3} ${y3 + rollIns}`),
-    cut(`M ${cx1} ${y4} L ${xr2} ${y4} L ${xr2} ${y4 - rollIns} L ${xr3} ${y4 - rollIns}`),
+    cut(`M ${cx1} ${y3} L ${xs2} ${y3} L ${xs2} ${y3 + rollIns} L ${xr3} ${y3 + rollIns}`),
+    cut(`M ${cx1} ${y4} L ${xs2} ${y4} L ${xs2} ${y4 - rollIns} L ${xr3} ${y4 - rollIns}`),
     cut(rollFreeCut(xr3, width)),
     // หูมุมผนังหน้า
     cut(`M ${cx0} ${y4} L ${cx0} ${y4 + earIns}`),
@@ -222,35 +254,64 @@ export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
     cut(`M ${cx1} ${y4} L ${cx1} ${y4 + earIns}`),
     cut(earCut(cx1, 1, y4, y5)),
     cut(`M ${cx1} ${y5 - topIns} L ${cx1} ${y5}`),
-    // ขอบล่างสุด
     cut(`M ${cx0} ${y5} L ${cx1} ${y5}`),
     // ช่องเสียบลิ้นบนฐาน
-    cut(obroundPath(cx0 + slotOff, yc1, slotL, slotW, true)),
-    cut(obroundPath(cx0 + slotOff, yc2, slotL, slotW, true)),
-    cut(obroundPath(cx1 - slotOff, yc1, slotL, slotW, true)),
-    cut(obroundPath(cx1 - slotOff, yc2, slotL, slotW, true)),
+    ...slotCs.map(([x, y]) => cut(obroundPath(x, y, slotL, slotW, true))),
     // รอยพับ
-    crease(`M ${cx0 + tuckIn} ${y1} L ${cx1 - tuckIn} ${y1}`), // ลิ้นฝา|ฝา
-    crease(`M ${cx0} ${y2} L ${cx1} ${y2}`), // ฝา|ผนังหลัง
+    crease(`M ${la} ${y1} L ${lb} ${y1}`), // ลิ้นหน้า|ฝา
+    crease(`M ${lx0} ${y1 + flapIn} L ${lx0} ${y2 - flapIn}`), // ปีกข้างฝา
+    crease(`M ${lx1} ${y1 + flapIn} L ${lx1} ${y2 - flapIn}`),
+    crease(`M ${lx0} ${y2} L ${lx1} ${y2}`), // ฝา|ผนังหลัง
     crease(`M ${cx0} ${y3} L ${cx1} ${y3}`), // ผนังหลัง|ฐาน
     crease(`M ${cx0} ${y4} L ${cx1} ${y4}`), // ฐาน|ผนังหน้า
     crease(`M ${cx0} ${y3} L ${cx0} ${y4}`), // ฐาน|ผนังซ้าย
     crease(`M ${cx1} ${y3} L ${cx1} ${y4}`), // ฐาน|ผนังขวา
-    crease(`M ${xr1} ${y3 + rollIns} L ${xr1} ${y4 - rollIns}`), // ผนังซ้าย|ม้วน
-    crease(`M ${xr2} ${y3 + rollIns} L ${xr2} ${y4 - rollIns}`), // ผนังขวา|ม้วน
-    crease(`M ${cx0} ${y2 + topIns} L ${cx0} ${y3 - earIns}`), // หูหลังซ้าย
-    crease(`M ${cx1} ${y2 + topIns} L ${cx1} ${y3 - earIns}`), // หูหลังขวา
-    crease(`M ${cx0} ${y4 + earIns} L ${cx0} ${y5 - topIns}`), // หูหน้าซ้าย
-    crease(`M ${cx1} ${y4 + earIns} L ${cx1} ${y5 - topIns}`), // หูหน้าขวา
+    // รอยพับคู่ของผนังทบ (ผนัง|สัน, สัน|ชั้นทบ)
+    crease(`M ${xs1} ${y3 + rollIns} L ${xs1} ${y4 - rollIns}`),
+    crease(`M ${xr1} ${y3 + rollIns} L ${xr1} ${y4 - rollIns}`),
+    crease(`M ${xs2} ${y3 + rollIns} L ${xs2} ${y4 - rollIns}`),
+    crease(`M ${xr2} ${y3 + rollIns} L ${xr2} ${y4 - rollIns}`),
+    // หูมุม
+    crease(`M ${cx0} ${y2 + topIns} L ${cx0} ${y3 - earIns}`),
+    crease(`M ${cx1} ${y2 + topIns} L ${cx1} ${y3 - earIns}`),
+    crease(`M ${cx0} ${y4 + earIns} L ${cx0} ${y5 - topIns}`),
+    crease(`M ${cx1} ${y4 + earIns} L ${cx1} ${y5 - topIns}`),
   ]
 
   const dims: DimMark[] = [
     { a: P(cx0, y5 + 12), b: P(cx1, y5 + 12), label: `W ${fmt(Wp)}` },
     { a: P(xr3 + 8, y3), b: P(xr3 + 8, y4), label: `D ${fmt(Dp)}` },
-    { a: P(cx0 - 8, y4), b: P(cx0 - 8, y5), label: `H ${fmt(Hp)}` },
+    { a: P(cx0 - 8, y2), b: P(cx0 - 8, y3), label: `H ${fmt(Hp)}` },
     { a: P(0, -10), b: P(width, -10), label: fmt(width) },
     { a: P(width + 10, 0), b: P(width + 10, height), label: fmt(height) },
   ]
 
   return { width, height, segments, panels, dims }
 }
+
+// หมุนทั้ง dieline 90° (proper rotation ไม่สะท้อน → เครื่องหมายมุมพับใช้ได้เดิม): (x, y) → (H − y, x)
+// ผนังหน้าไปอยู่ซ้าย ฝาเปิดไปทางขวา ตามผัง dieline มาตรฐาน
+export function rotateDieline90(d: Dieline): Dieline {
+  const pl = { rot: true, tx: d.height, ty: 0 }
+  const pt = (p: Vec2) => placePoint(pl, p)
+  return {
+    width: d.height,
+    height: d.width,
+    segments: d.segments.map((s) => ({ ...s, d: placePath(s.d, pl) })),
+    panels: d.panels.map((p) => ({
+      ...p,
+      outline: p.outline.map(pt),
+      ...(p.holes ? { holes: p.holes.map((h) => h.map(pt)) } : {}),
+      ...(p.hingeA ? { hingeA: pt(p.hingeA) } : {}),
+      ...(p.hingeB ? { hingeB: pt(p.hingeB) } : {}),
+    })),
+    dims: d.dims.map((m) => ({ ...m, a: pt(m.a), b: pt(m.b) })),
+  }
+}
+
+export function generateFefco0427(box: BoxParams, mat: Material): Dieline {
+  return rotateDieline90(fefco0427Layout(box, mat))
+}
+
+// viewer หมุนแผ่นกลับเท่ามุมที่หมุนผัง (กลับทิศเพราะกลุ่มโมเดลสะท้อนแกน x ก่อนหมุน) — เทสต์คุมใน fefco0427.test
+export const FEFCO0427_SPIN = -Math.PI / 2

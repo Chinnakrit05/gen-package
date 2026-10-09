@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { Quaternion, Vector3 } from 'three'
+import { Group, Quaternion, Vector3 } from 'three'
 import { computeMatrices, rollBeads, to3D } from '../fold'
+import { FEFCO0427_SPIN, fefco0427Layout } from './fefco0427'
 import { getTemplate } from './index'
 import { getMaterial } from '../materials'
 import { computeGuides } from '../guides'
@@ -15,7 +16,10 @@ const mat = getMaterial('corrugated-e')
 const t = mat.thickness
 const tp = getTemplate('fefco-0427')
 const Hp = 60 + t
-const d = tp.generate({ W: 200, D: 140, H: 60, handle: false }, mat)
+// ตรวจเรขาคณิตการพับบนผังก่อนหมุน (แกนอ่านง่าย) — ผังที่ส่งออกจริงคือผังนี้หมุน 90° (เทสต์ท้ายไฟล์)
+const box = { W: 200, D: 140, H: 60, handle: false }
+const d = fefco0427Layout(box, mat)
+const sp = 3 * t + 0.2
 const M = computeMatrices(d.panels, 1)
 
 const centroid = (pts: Vec2[]) => {
@@ -38,9 +42,33 @@ const yF = -Math.max(...base.outline.map((p) => p.y)) // ระนาบผน�
 const yB = -Math.min(...base.outline.map((p) => p.y))
 
 describe('fefco-0427: โครงสร้าง dieline', () => {
-  it('ลงทะเบียนใน registry และมีแผงครบ 13 ชิ้น', () => {
+  it('ลงทะเบียนใน registry และมีแผงครบ 17 ชิ้น (สัน 2 + ปีกข้างฝา 2)', () => {
     expect(tp.id).toBe('fefco-0427')
-    expect(d.panels).toHaveLength(13)
+    expect(d.panels).toHaveLength(17)
+    for (const id of ['spine-left', 'spine-right', 'lid-flap-left', 'lid-flap-right']) {
+      expect(d.panels.some((p) => p.id === id)).toBe(true)
+    }
+  })
+
+  it('ผนังทบเป็นรอยพับคู่ห่างกัน sp (ไม่ใช่พับ 180° เส้นเดียว)', () => {
+    for (const id of ['spine-left', 'spine-right']) {
+      const p = d.panels.find((q) => q.id === id)!
+      const xs = p.outline.map((q) => q.x)
+      expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(sp, 6)
+    }
+    expect(d.panels.every((p) => Math.abs(p.foldAngle ?? 0) <= 90)).toBe(true)
+  })
+
+  it('ฝาแคบกว่าฐานข้างละ sp (ลงระหว่างสันผนังข้าง) และผนังหน้าเตี้ยกว่าผนังหลัง t', () => {
+    const lid = d.panels.find((p) => p.id === 'lid')!
+    const lxs = lid.outline.map((q) => q.x)
+    expect(Math.min(...lxs)).toBeCloseTo(cx0 + sp, 6)
+    expect(Math.max(...lxs)).toBeCloseTo(cx1 - sp, 6)
+    const h = (id: string) => {
+      const ys = d.panels.find((p) => p.id === id)!.outline.map((q) => q.y)
+      return Math.max(...ys) - Math.min(...ys)
+    }
+    expect(h('back') - h('front')).toBeCloseTo(t, 6)
   })
 
   it('ฐานเจาะช่องเสียบลิ้น 4 ช่อง ชิดขอบซ้าย-ขวา', () => {
@@ -98,7 +126,7 @@ describe('fefco-0427: ตำแหน่งหลังพับสุด (fold=
   it.each([
     ['roll-left', cx0, 1],
     ['roll-right', cx1, -1],
-  ] as const)('%s ม้วน 180° กลับเข้าด้านใน พาดจากบนผนังลงถึงฐาน', (id, plane, dir) => {
+  ] as const)('%s ทบกลับเข้าด้านใน (ห่างผนัง ~sp) พาดจากบนผนังลงถึงฐาน', (id, plane, dir) => {
     const pts = worldPts(id)
     const xs = pts.map((v) => v.x)
     const zs = pts.map((v) => v.z)
@@ -124,34 +152,36 @@ describe('fefco-0427: ตำแหน่งหลังพับสุด (fold=
   })
 })
 
-describe('fefco-0427: สันโค้งรอยพับม้วน (rollBeads)', () => {
-  it('มีสัน 2 เส้น (ม้วนซ้าย+ขวา) เมื่อพับสุด', () => {
-    const beads = rollBeads(d.panels, M)
-    expect(beads.map((b) => b.id).sort()).toEqual(['roll-left', 'roll-right'])
+describe('fefco-0427: สันผนังทบ + ปีกข้างฝา', () => {
+  it('ไม่มีรอยพับ 180° แล้ว (สันเป็นแผ่นแบนกว้าง sp) → ไม่มีสันโค้ง', () => {
+    expect(rollBeads(d.panels, M)).toHaveLength(0)
   })
 
-  it('ตอนกาง (fold=0) ยังไม่มีสัน', () => {
-    expect(rollBeads(d.panels, computeMatrices(d.panels, 0))).toHaveLength(0)
-  })
-
-  it('รัศมีสัน ≈ ครึ่งของระยะสองชั้น (สเกลตามความหนา) และวางตามแนวสันบนผนัง', () => {
-    const beads = rollBeads(d.panels, M)
-    for (const bd of beads) {
-      // ระยะสองชั้น = |zOffset| = 2*(t+0.05) → รัศมี = t+0.05
-      expect(bd.r).toBeGreaterThan(0)
-      expect(bd.r).toBeCloseTo(t + 0.05, 1)
-      // สันพาดตามแนว D (ยาว ~ ช่วง hinge) และอยู่แถวสันบนกล่อง (z สูง)
-      expect(bd.a.distanceTo(bd.b)).toBeGreaterThan(10)
-      expect((bd.a.z + bd.b.z) / 2).toBeGreaterThan(Hp * 0.3)
+  it.each([
+    ['spine-left', cx0, 1],
+    ['spine-right', cx1, -1],
+  ] as const)('%s นอนบนยอดผนังข้าง z≈Hp ระหว่างผนังนอกกับชั้นทบ', (id, plane, dir) => {
+    const pts = worldPts(id)
+    for (const v of pts) {
+      expect(Math.abs(v.z - Hp)).toBeLessThan(t + 0.5)
+      expect((v.x - plane) * dir).toBeGreaterThan(-0.01)
+      expect((v.x - plane) * dir).toBeLessThan(sp + 0.01)
     }
   })
 
-  it('สันโตขึ้นตามการพับ (0.5 < เต็ม)', () => {
-    const half = rollBeads(d.panels, computeMatrices(d.panels, 0.98))
-    const full = rollBeads(d.panels, M)
-    // ที่ 0.98 ม้วนเกือบเต็ม รัศมีควรใกล้แต่ไม่เกินเต็ม
-    expect(half.length).toBe(2)
-    expect(Math.max(...half.map((b) => b.r))).toBeLessThanOrEqual(Math.max(...full.map((b) => b.r)) + 1e-6)
+  it.each([
+    ['lid-flap-left', cx0, 1],
+    ['lid-flap-right', cx1, -1],
+  ] as const)('%s ห้อยลงด้านในชั้นทบ (ไม่ทับชั้นทบ/ผนัง) อยู่ใต้ฝาเหนือฐาน', (id, plane, dir) => {
+    const pts = worldPts(id)
+    for (const v of pts) {
+      expect((v.x - plane) * dir).toBeGreaterThanOrEqual(sp - 0.01) // ชั้นทบอยู่ที่ ≤ sp
+      expect((v.x - plane) * dir).toBeLessThan(sp + 2 * t + 1)
+      expect(v.z).toBeGreaterThan(t)
+      expect(v.z).toBeLessThan(Hp + 0.5)
+      expect(v.y).toBeGreaterThan(yF - 0.5)
+      expect(v.y).toBeLessThan(yB + 0.5)
+    }
   })
 })
 
@@ -213,5 +243,45 @@ describe('fefco-0427: เข้ากับระบบอื่น', () => {
     const dxf = dielineDXFString(d)
     expect(dxf).toContain('EOF')
     expect(dxf).not.toContain('NaN')
+  })
+})
+
+describe('fefco-0427: ผัง dieline มาตรฐาน (หมุน 90°) + viewer หมุนกลับ', () => {
+  const out = tp.generate(box, mat)
+
+  it('ผังที่ส่งออก = ผังพับหมุน 90°: ฝาเปิดไปทางขวา ผนังหน้าอยู่ซ้ายของฐาน', () => {
+    expect(out.width).toBeCloseTo(d.height, 6)
+    expect(out.height).toBeCloseTo(d.width, 6)
+    const cxOf = (id: string) => centroid(out.panels.find((p) => p.id === id)!.outline).x
+    expect(cxOf('lid')).toBeGreaterThan(cxOf('base'))
+    expect(cxOf('front')).toBeLessThan(cxOf('base'))
+    for (const p of out.panels) for (const q of p.outline) {
+      expect(q.x).toBeGreaterThanOrEqual(-1e-6)
+      expect(q.x).toBeLessThanOrEqual(out.width + 1e-6)
+    }
+  })
+
+  it('3D หลังพับ: ผังหมุน + spin ของ template = ตำแหน่งเดิมทุกแผง (ผนังหน้ายังหันหากล้อง)', () => {
+    // จำลองลำดับ transform ของ viewer: scale x=-1 → rotation (tilt, 0, spin·fold) → เลื่อนให้ฐานอยู่กลาง
+    const place = (dl: typeof d, spin: number, id: string) => {
+      const g = new Group()
+      g.scale.set(-1, 1, 1)
+      g.rotation.set(tp.tilt, 0, spin)
+      g.updateMatrixWorld(true)
+      const base = dl.panels[0].outline
+      const xs = base.map((q) => q.x)
+      const ys = base.map((q) => q.y)
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2
+      const cy = (Math.min(...ys) + Math.max(...ys)) / 2
+      const p = dl.panels.find((q) => q.id === id)!
+      const v = to3D(centroid(p.outline)).applyMatrix4(computeMatrices(dl.panels, 1).get(id)!)
+      return v.add(new Vector3(-cx, cy, 0)).applyMatrix4(g.matrixWorld)
+    }
+    expect(tp.spin).toBe(FEFCO0427_SPIN)
+    for (const id of ['front', 'back', 'lid', 'side-left', 'lip']) {
+      const a = place(d, 0, id)
+      const b = place(out, FEFCO0427_SPIN, id)
+      expect(a.distanceTo(b)).toBeLessThan(1e-3)
+    }
   })
 })

@@ -2682,6 +2682,7 @@ export default function App({
             fold={fold}
             depth={template.foldDepth({ W, D, H }, mat)}
             tilt={template.tilt}
+            spin={template.spin}
             decos={decos}
             fillColor={fillColor}
             fillImage={fillImage}
