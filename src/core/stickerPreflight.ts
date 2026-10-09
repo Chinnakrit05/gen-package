@@ -7,7 +7,7 @@ import { STICKER_RULES, loopArea, type AlphaMask } from './stickerContour'
 //  3) ช่องเจาะ (เส้นตัดด้านใน) ≥2 มม.
 //  4) เส้นตัดไม่หักศอก (รัศมีโค้ง ≥0.5 มม.)
 //  5) ชิ้นเล็กเกินไป (ลอกยาก) / เส้นตัดชนขอบแผ่น
-export type PreflightCode = 'art-edge' | 'gap' | 'hole' | 'corner' | 'tiny' | 'edge'
+export type PreflightCode = 'art-edge' | 'gap' | 'hole' | 'corner' | 'tiny' | 'edge' | 'clear-light'
 export interface PreflightIssue {
   code: PreflightCode
   level: 'error' | 'warn'
@@ -17,6 +17,8 @@ export interface PreflightIssue {
 }
 
 const fmt1 = (v: number) => String(Math.round(v * 10) / 10)
+// ฟิล์มใสไม่รองขาว: ลายสีอ่อนเกินสัดส่วนนี้ → เตือน
+export const CLEAR_LIGHT_MAX = 0.2
 
 // จุดบน loop ทุกระยะ step (มม.) พร้อม normal ชี้เข้าในเนื้อ
 function samples(loop: Vec2[], step: number): { p: Vec2; n: Vec2 }[] {
@@ -104,9 +106,11 @@ export interface PreflightInput {
   art?: AlphaMask | null // alpha ของลาย (ไม่รวมสีพื้น/รูปพื้น) — มีขอบเผื่อรอบแผ่นเพื่อดูสีที่เลยเส้นตัด
   sheet: { w: number; h: number }
   contour?: boolean // ไดคัทตามรูป — เตือนเมื่อเส้นตัดชนขอบแผ่น (สี่เหลี่ยมเต็มแผ่นชนขอบโดยตั้งใจ)
+  // ฟิล์มใสไม่รองขาว: สีอ่อน/ขาวในลาย (สัดส่วนจาก art.lightRatio) หรือสีพื้นอ่อน จะจางจนแทบมองไม่เห็น
+  clearNoWhite?: { lightFill: boolean }
 }
 
-export function preflightSticker({ loops, art, sheet, contour = false }: PreflightInput): PreflightIssue[] {
+export function preflightSticker({ loops, art, sheet, contour = false, clearNoWhite }: PreflightInput): PreflightIssue[] {
   const R = STICKER_RULES
   const issues: PreflightIssue[] = []
   // แยกเส้นนอก / ช่องเจาะ (loop ที่อยู่ในอีก loop)
@@ -212,6 +216,20 @@ export function preflightSticker({ loops, art, sheet, contour = false }: Preflig
       level: 'warn',
       th: 'เส้นตัดชนขอบแผ่น — ขยายขนาดสติกเกอร์ หรือย้ายลายเข้ามาให้มีที่ว่างรอบตัว',
       en: 'Cut line hits the sheet edge — enlarge the sticker or move the artwork inward',
+    })
+  }
+
+  if (clearNoWhite && ((art?.lightRatio ?? 0) > CLEAR_LIGHT_MAX || clearNoWhite.lightFill)) {
+    const pct = Math.round((art?.lightRatio ?? 0) * 100)
+    issues.push({
+      code: 'clear-light',
+      level: 'warn',
+      th:
+        (clearNoWhite.lightFill ? 'สีพื้นเป็นสีอ่อน' : `ลายเป็นสีอ่อน/ขาว ~${pct}%`) +
+        ' — บนสติกเกอร์ใสที่ไม่รองขาว สีขาวจะใสและสีอ่อนจะจางจนแทบมองไม่เห็น ใช้สีเข้มขึ้น หรือเลือก "PP ใส รองขาว"',
+      en:
+        (clearNoWhite.lightFill ? 'Light background colour' : `~${pct}% of the artwork is light/white`) +
+        ' — on clear film without white ink, white turns transparent and light colours nearly vanish; use darker colours or "Clear PP + white"',
     })
   }
 

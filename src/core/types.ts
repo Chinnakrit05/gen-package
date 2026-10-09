@@ -57,6 +57,10 @@ export interface Material {
   roughness?: number
   // ความเป็นโลหะ (0–1) สำหรับผิว 3D — ฟอยล์/อะลูมิเนียมตั้งสูงเพื่อสะท้อน environment ให้ดูเงา
   metalness?: number
+  // ฟิล์มใส (สติกเกอร์ PP ใส): ส่วนที่ไม่มีลายมองทะลุ; หมึก CMYK โปร่งแสง — สีขาวในงานจะใส สีอ่อนจะจาง
+  clear?: boolean
+  // พิมพ์หมึกขาวรองใต้ลาย (white underbase) บนฟิล์มใส → ลายทึบสด; ไฟล์ส่งออกมีเลเยอร์ White อัตโนมัติ
+  underbase?: boolean
   note?: string
 }
 

@@ -1,4 +1,4 @@
-import type { Dieline } from './types'
+import type { Dieline, Vec2 } from './types'
 import { pathToPolylines } from './dxf'
 import type { Guides } from './guides'
 
@@ -61,6 +61,8 @@ export function dielinePDFBytes(
   artwork?: PdfArtwork,
   guides?: Guides | null,
   fillColor?: string | null,
+  // หมึกขาวรอง (สติกเกอร์ฟิล์มใส): loop ปิดในพิกัดแผ่น เติมแบบ even-odd ด้วยสี spot "White"
+  white?: Vec2[][] | null,
 ): Uint8Array {
   const pad = withDims ? 26 : 5
   const pageW = (d.width + pad * 2) * K
@@ -145,6 +147,8 @@ export function dielinePDFBytes(
   const artOCG = artwork ? num++ : 0
   const guidesOCG = hasGuides ? num++ : 0
   const fillOCG = hasFill ? num++ : 0
+  const hasWhite = !!white && white.some((l) => l.length >= 3)
+  const whiteOCG = hasWhite ? num++ : 0
   const imgNum = artwork ? num++ : 0
   const lastObj = num - 1
 
@@ -162,6 +166,21 @@ export function dielinePDFBytes(
     }
     parts.push('f')
     fillBody = `q\n/OC /OCf BDC\n${parts.join('\n')}\nEMC\nQ\n`
+  }
+
+  // เลเยอร์หมึกขาว: สี spot (Separation) ชื่อ White แยกเพลตได้ใน RIP — สีสำรองตอนแสดงผลเป็นฟ้าอ่อน
+  // ให้มองเห็นบนจอ (ขาวบนพื้นขาวจะมองไม่เห็น) วาดล่างสุด ใต้สีพื้นและลาย เหมือนลำดับพิมพ์จริง
+  let whiteBody = ''
+  if (hasWhite && white) {
+    const parts: string[] = ['/CSW cs', '1 scn']
+    for (const l of white) {
+      if (l.length < 3) continue
+      parts.push(`${n(tx(l[0].x))} ${n(ty(l[0].y))} m`)
+      for (let i = 1; i < l.length; i++) parts.push(`${n(tx(l[i].x))} ${n(ty(l[i].y))} l`)
+      parts.push('h')
+    }
+    parts.push('f*')
+    whiteBody = `q\n/OC /OCw BDC\n${parts.join('\n')}\nEMC\nQ\n`
   }
 
   // เลเยอร์ไกด์: safe (น้ำเงินประ ปิด polygon) + bleed (ม่วงประ เฉพาะขอบนอก)
@@ -193,13 +212,14 @@ export function dielinePDFBytes(
     : ''
 
   // ทั้งหน้าอยู่ในระบบ มม. โดยสเกลครั้งเดียวที่นี่ ตัวเลขในสตรีมจึงอ่านเป็น มม. ตรง ๆ
-  const stream = `q\n${n(K)} 0 0 ${n(K)} 0 0 cm\n${fillBody}${artBody}${cutBody}${creaseBody}${guideBody}${dimsBody}Q\n`
+  const stream = `q\n${n(K)} 0 0 ${n(K)} 0 0 cm\n${whiteBody}${fillBody}${artBody}${cutBody}${creaseBody}${guideBody}${dimsBody}Q\n`
 
   const ocgRefs: string[] = [`${cutOCG} 0 R`, `${creaseOCG} 0 R`]
   if (dimsOCG) ocgRefs.push(`${dimsOCG} 0 R`)
   if (artOCG) ocgRefs.push(`${artOCG} 0 R`)
   if (guidesOCG) ocgRefs.push(`${guidesOCG} 0 R`)
   if (fillOCG) ocgRefs.push(`${fillOCG} 0 R`)
+  if (whiteOCG) ocgRefs.push(`${whiteOCG} 0 R`)
   const ocgList = ocgRefs.join(' ')
 
   const props: string[] = [`/OC1 ${cutOCG} 0 R`, `/OC2 ${creaseOCG} 0 R`]
@@ -207,6 +227,10 @@ export function dielinePDFBytes(
   if (artOCG) props.push(`/OCa ${artOCG} 0 R`)
   if (guidesOCG) props.push(`/OCg ${guidesOCG} 0 R`)
   if (fillOCG) props.push(`/OCf ${fillOCG} 0 R`)
+  if (whiteOCG) props.push(`/OCw ${whiteOCG} 0 R`)
+  const cs = hasWhite
+    ? ` /ColorSpace << /CSW [/Separation /White /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0.45 0 0.05 0] /N 1 >>] >>`
+    : ''
   const xobj = artwork ? ` /XObject << /Im0 ${imgNum} 0 R >>` : ''
 
   const enc = new TextEncoder()
@@ -232,7 +256,7 @@ export function dielinePDFBytes(
   obj('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n')
   obj(
     `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(pageW)} ${n(pageH)}] ` +
-      `/Contents 4 0 R /Resources << /Font << /F1 5 0 R >>${xobj} /Properties << ${props.join(' ')} >> >> >>\nendobj\n`,
+      `/Contents 4 0 R /Resources << /Font << /F1 5 0 R >>${xobj}${cs} /Properties << ${props.join(' ')} >> >> >>\nendobj\n`,
   )
   obj(`4 0 obj\n<< /Length ${enc.encode(stream).length} >>\nstream\n${stream}endstream\nendobj\n`)
   obj('5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n')
@@ -242,6 +266,7 @@ export function dielinePDFBytes(
   if (artOCG) obj(`${artOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('artwork')} >>\nendobj\n`)
   if (guidesOCG) obj(`${guidesOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('guides')} >>\nendobj\n`)
   if (fillOCG) obj(`${fillOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('fill')} >>\nendobj\n`)
+  if (whiteOCG) obj(`${whiteOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('White')} >>\nendobj\n`)
   if (artwork) {
     offsets.push(len)
     push(

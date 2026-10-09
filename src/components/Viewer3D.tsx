@@ -56,6 +56,31 @@ function drawDeco(
   ctx.restore()
 }
 
+// จำลองการพิมพ์บนฟิล์มใส (สติกเกอร์ PP ใส): หมึก CMYK โปร่งแสง ไม่มีหมึกขาว
+// → ความทึบของหมึกแปรตามความเข้ม (ขาว ≈ ใส, ดำ ≈ ทึบ) เว้นแต่มีหมึกขาวรองใต้ลาย (underbase = ทึบตามลาย)
+// แล้วรองด้วยเนื้อฟิล์มใสอมฟ้าจาง ๆ ทั้งแผ่น (texture มี alpha — material ต้อง transparent)
+const FILM = { r: 232, g: 240, b: 244, a: 0.14 }
+function inkOnClearFilm(ctx: CanvasRenderingContext2D, underbase: boolean) {
+  const { width: w, height: h } = ctx.canvas
+  const img = ctx.getImageData(0, 0, w, h)
+  const d = img.data
+  for (let i = 0; i < d.length; i += 4) {
+    let a = d[i + 3] / 255
+    if (!underbase && a > 0) {
+      const lum = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255
+      a *= 1 - 0.88 * lum
+    }
+    const fa = FILM.a * (1 - a)
+    const out = a + fa
+    if (out <= 0) continue
+    d[i] = (d[i] * a + FILM.r * fa) / out
+    d[i + 1] = (d[i + 1] * a + FILM.g * fa) / out
+    d[i + 2] = (d[i + 2] * a + FILM.b * fa) / out
+    d[i + 3] = out * 255
+  }
+  ctx.putImageData(img, 0, 0)
+}
+
 // วาดสีวัสดุ + องค์ประกอบทั้งหมดลงผ้าใบขนาดเท่าแผ่นคลี่ แล้วใช้เป็น texture ผืนเดียวของทุกแผง
 // เพราะ UV ของทุกแผงอ้างพิกัดแผ่นคลี่ร่วมกัน (ดู uv ใน FoldedModel) องค์ประกอบจึงพาด
 // ข้ามรอยพับได้ถูกต้องเหมือนพิมพ์ลงแผ่นจริงแล้วค่อยพับ
@@ -73,11 +98,15 @@ function useSheetTexture(
     fillImage,
     // ไม่มีทั้งลาย สีพื้น และรูปพื้น → ใช้สีวัสดุตรง ๆ ไม่ต้องมี texture
     enabled: decos.length > 0 || !!fillColor || !!fillImage,
-    deps: [fillColor, fillImage, mat.color, dieline],
+    deps: [fillColor, fillImage, mat.color, mat.id, dieline],
     draw: (ctx, s, imgOf) => {
       // พื้นสีวัสดุก่อน (ช่องว่าง/ขอบ) แล้วทับด้วยสีพื้นแพ็กเกจเฉพาะพื้นที่แผงจริง
-      ctx.fillStyle = mat.color
-      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+      // ฟิล์มใส: เริ่มจากโปร่งใส — ใส่เนื้อฟิล์มทีหลังใน inkOnClearFilm
+      if (mat.clear) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+      else {
+        ctx.fillStyle = mat.color
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+      }
       // รูปพื้นมาก่อน (ถ้ามี) ไม่งั้นใช้สีพื้นทึบ — แล้วค่อยลายทับ
       const fimg = fillImage ? imgOf(fillImage.src) : undefined
       try {
@@ -96,6 +125,7 @@ function useSheetTexture(
           console.warn('วาดองค์ประกอบลง texture ไม่สำเร็จ (ข้ามชิ้นนี้)', e.type, err)
         }
       }
+      if (mat.clear) inkOnClearFilm(ctx, !!mat.underbase)
     },
   })
 }
@@ -203,8 +233,9 @@ function PanelMesh({ geometry, edges, matrix, mat, tex }: PanelMeshProps) {
         color={tex ? '#ffffff' : mat.color}
         roughness={mat.roughness ?? 0.8}
         metalness={mat.metalness ?? 0}
-        transparent={mat.opacity !== undefined}
-        opacity={mat.opacity ?? 1}
+        // ฟิล์มใส: ความโปร่งอยู่ใน alpha ของ texture แล้ว (ไม่มี texture = ฟิล์มเปล่า โปร่งทั้งแผ่น)
+        transparent={mat.opacity !== undefined || !!mat.clear}
+        opacity={mat.clear ? (tex ? 1 : 0.25) : (mat.opacity ?? 1)}
         side={THREE.DoubleSide}
       />
       {/* material 1 = ฝาด้านใน + ผนัง สีวัสดุล้วน ไม่พิมพ์ลาย */}
@@ -213,8 +244,8 @@ function PanelMesh({ geometry, edges, matrix, mat, tex }: PanelMeshProps) {
         color={mat.color}
         roughness={mat.roughness ?? 0.8}
         metalness={0}
-        transparent={mat.opacity !== undefined}
-        opacity={mat.opacity ?? 1}
+        transparent={mat.opacity !== undefined || !!mat.clear}
+        opacity={mat.clear ? 0.2 : (mat.opacity ?? 1)}
         side={THREE.DoubleSide}
       />
       <lineSegments geometry={edges}>
@@ -300,7 +331,13 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillIm
   // scale x=-1: พลิกให้กล้องมอง "ฝั่งพิมพ์/ด้านนอก" ตำแหน่งลาย ซ้าย-ขวา จึงตรงกับ blueprint
   return (
     <>
-      <group ref={modelRef} scale={[-1, 1, 1]} rotation={[tilt * fold, 0, 0]}>
+      {/* แผ่นแบนไม่มีรอยพับ (สติกเกอร์): ไม่มีการพับพาด้านพิมพ์หันออก — หมุน 180° รอบแกนตั้งให้ด้านพิมพ์หันหากล้อง
+          (รวมกับ scale x=-1 ได้ภาพลายอ่านถูกด้าน); เดิมกล้องเห็นด้านหลังเปล่า */}
+      <group
+        ref={modelRef}
+        scale={[-1, 1, 1]}
+        rotation={[tilt * fold, dieline.panels.every((p) => !p.hingeA) ? Math.PI : 0, 0]}
+      >
         <group position={[-cx, cy, -depth / 2]}>
           {dieline.panels.map((p, i) => (
             <PanelMesh
@@ -317,6 +354,13 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, decos, fillColor, fillIm
           ))}
         </group>
       </group>
+      {/* ฟิล์มใส: แผ่นรองสีเข้มด้านหลัง (เหมือนติดบนขวด/กระจก) — บนพื้นขาวของ viewer ลายขาว/ฟิล์มใสจะมองไม่เห็นเลย */}
+      {mat.clear && (
+        <mesh position={[0, 0, -2]}>
+          <planeGeometry args={[dieline.width * 1.35, dieline.height * 1.35]} />
+          <meshStandardMaterial color="#3e4a54" roughness={0.55} metalness={0.1} />
+        </mesh>
+      )}
       {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant={dimVariant} />}
     </>
   )

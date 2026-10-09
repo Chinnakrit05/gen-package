@@ -1600,7 +1600,7 @@ export async function renderArtworkAlpha(
   sheetH: number,
   pxPerMm: number,
   pad: number,
-): Promise<{ data: Uint8ClampedArray; w: number; h: number; pxPerMm: number; origin: Vec2 } | null> {
+): Promise<{ data: Uint8ClampedArray; w: number; h: number; pxPerMm: number; origin: Vec2; lightRatio: number } | null> {
   const visible = decos.filter((d) => !d.hidden)
   if (!visible.length) return null
   await ensureThaiFont(visible)
@@ -1632,8 +1632,18 @@ export async function renderArtworkAlpha(
   for (const e of visible) drawDeco2D(ctx, e, s, (src) => imgs.get(src))
   const rgba = ctx.getImageData(0, 0, w, h).data
   const data = new Uint8ClampedArray(w * h)
-  for (let i = 0; i < w * h; i++) data[i] = rgba[i * 4 + 3]
-  return { data, w, h, pxPerMm: s, origin: { x: -pad, y: -pad } }
+  // สัดส่วนลายที่เป็นสีอ่อน/ขาว (ความสว่าง > 0.8) — บนสติกเกอร์ใสไม่รองขาว ส่วนนี้จะจาง/ใสจนมองไม่เห็น
+  let ink = 0
+  let light = 0
+  for (let i = 0; i < w * h; i++) {
+    const a = rgba[i * 4 + 3]
+    data[i] = a
+    if (a < 128) continue
+    ink++
+    const lum = (0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2]) / 255
+    if (lum > 0.8) light++
+  }
+  return { data, w, h, pxPerMm: s, origin: { x: -pad, y: -pad }, lightRatio: ink ? light / ink : 0 }
 }
 
 // --- persistence ---

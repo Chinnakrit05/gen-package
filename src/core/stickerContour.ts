@@ -25,6 +25,9 @@ export interface StickerCut {
   offset: number // มม. — ความกว้างขอบขาว (border='white')
   sheet?: StickerSheetId // แผ่นสติกเกอร์หลายดวง (A6/A5/A4) — ไม่ใส่ = ดวงเดียว
   perSheet?: number // กำหนดจำนวนต่อแผ่น → ขนาดดวงคำนวณจากจำนวน (ไม่ใส่ = กำหนดขนาดเอง)
+  sheetW?: number // แผ่นกำหนดเอง (sheet='custom') — มม.
+  sheetH?: number
+  sheetMargin?: number // ระยะขอบแผ่นตามโรงพิมพ์ (ไม่ใส่ = 5 มม.)
 }
 export const PER_SHEET_MAX = 200
 export const DEFAULT_STICKER_CUT: StickerCut = { shape: 'rect', border: 'white', offset: 2 }
@@ -40,7 +43,10 @@ export const sameStickerCut = (a?: StickerCut, b?: StickerCut) =>
   (a ?? DEFAULT_STICKER_CUT).border === (b ?? DEFAULT_STICKER_CUT).border &&
   (a ?? DEFAULT_STICKER_CUT).offset === (b ?? DEFAULT_STICKER_CUT).offset &&
   (a ?? DEFAULT_STICKER_CUT).sheet === (b ?? DEFAULT_STICKER_CUT).sheet &&
-  (a ?? DEFAULT_STICKER_CUT).perSheet === (b ?? DEFAULT_STICKER_CUT).perSheet
+  (a ?? DEFAULT_STICKER_CUT).perSheet === (b ?? DEFAULT_STICKER_CUT).perSheet &&
+  (a ?? DEFAULT_STICKER_CUT).sheetW === (b ?? DEFAULT_STICKER_CUT).sheetW &&
+  (a ?? DEFAULT_STICKER_CUT).sheetH === (b ?? DEFAULT_STICKER_CUT).sheetH &&
+  (a ?? DEFAULT_STICKER_CUT).sheetMargin === (b ?? DEFAULT_STICKER_CUT).sheetMargin
 
 // ค่าที่ต้องเก็บลงงาน (ค่าเริ่มต้น = ไม่เก็บ)
 export const storedStickerCut = (c: StickerCut) => (sameStickerCut(c, DEFAULT_STICKER_CUT) ? undefined : c)
@@ -48,7 +54,15 @@ export const storedStickerCut = (c: StickerCut) => (sameStickerCut(c, DEFAULT_ST
 export function parseStickerCut(raw: unknown): StickerCut | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined
   const o = raw as Record<string, unknown>
-  const sheet = o.sheet === 'a6' || o.sheet === 'a5' || o.sheet === 'a4' ? o.sheet : undefined
+  const sheet =
+    o.sheet === 'a6' || o.sheet === 'a5' || o.sheet === 'a4' || o.sheet === 'a3' || o.sheet === 'custom'
+      ? o.sheet
+      : undefined
+  const num = (v: unknown, lo: number, hi: number) =>
+    Number.isFinite(Number(v)) ? Math.min(hi, Math.max(lo, Math.round(Number(v) * 2) / 2)) : undefined
+  const sheetW = sheet === 'custom' ? num(o.sheetW, 50, 1000) : undefined
+  const sheetH = sheet === 'custom' ? num(o.sheetH, 50, 1000) : undefined
+  const sheetMargin = sheet && o.sheetMargin !== undefined ? num(o.sheetMargin, 0, 30) : undefined
   if (o.shape !== 'contour' && !sheet) return undefined // ค่าเริ่มต้น (สี่เหลี่ยม ดวงเดียว) ไม่ต้องเก็บ
   const off = Number(o.offset)
   return {
@@ -61,6 +75,9 @@ export function parseStickerCut(raw: unknown): StickerCut | undefined {
     ...(sheet && Number.isFinite(Number(o.perSheet)) && Number(o.perSheet) >= 1
       ? { perSheet: Math.min(PER_SHEET_MAX, Math.round(Number(o.perSheet))) }
       : {}),
+    ...(sheetW !== undefined ? { sheetW } : {}),
+    ...(sheetH !== undefined ? { sheetH } : {}),
+    ...(sheetMargin !== undefined ? { sheetMargin } : {}),
   }
 }
 
@@ -336,6 +353,7 @@ export interface AlphaMask {
   h: number
   pxPerMm: number
   origin: Vec2 // ตำแหน่ง (มม.) ของมุมซ้ายบนพิกเซลแรก บนแผ่นคลี่
+  lightRatio?: number // สัดส่วนพิกเซลลายที่เป็นสีอ่อน/ขาว (จาก renderArtworkAlpha)
 }
 
 // เส้นตัดตามรูปจาก alpha ของลาย — คืน loop ปิด (มม. บนแผ่นคลี่) เรียงจากชิ้นใหญ่ไปเล็ก

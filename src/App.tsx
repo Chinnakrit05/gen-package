@@ -7,7 +7,7 @@ const TopBarCtx = createContext(false)
 import { LangCtx, loadLang, LANG_KEY, useT, type Lang } from './i18n'
 import { MATERIALS, getMaterial, packKind } from './core/materials'
 import { TEMPLATES, getTemplate } from './core/templates'
-import type { Dieline } from './core/types'
+import type { Dieline, Vec2 } from './core/types'
 import type { AiBoxSpec, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
 import { dielinePDFBytes } from './core/pdf'
@@ -64,6 +64,7 @@ import {
   type StickerCut,
 } from './core/stickerContour'
 import { preflightSticker, type PreflightIssue } from './core/stickerPreflight'
+import { WHITE_SPOT, traceWhiteInk, whiteInkPath } from './core/whiteInk'
 import { generateStickerContour } from './core/templates/sticker'
 import {
   SHEET_GAP,
@@ -75,12 +76,16 @@ import {
   cutBox,
   fitScaleForCount,
   layoutStickerSheet,
+  placePoint,
   placementSVG,
   sheetDieline,
   sheetsNeeded as stickerSheetsNeeded,
-  stickerSheetById,
+  CUSTOM_SHEET_MAX,
+  CUSTOM_SHEET_MIN,
+  DEFAULT_CUSTOM_SHEET,
+  SHEET_MARGIN_MAX,
+  resolveStickerSheet,
   type SheetLayout,
-  type StickerSheetId,
 } from './core/stickerSheet'
 import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
 import { generatePouch, POUCH_STYLES, type PouchStyle, type PouchAddons } from './core/pouch'
@@ -216,6 +221,10 @@ interface DimFieldProps {
 const MM_PER_IN = 25.4
 
 const fmtMm = (v: number) => String(Math.round(v * 10) / 10)
+const hexLuminance = (hex: string) => {
+  const v = (i: number) => parseInt(hex.slice(i, i + 2), 16) / 255
+  return hex.length >= 7 ? 0.299 * v(1) + 0.587 * v(3) + 0.114 * v(5) : 0
+}
 
 // ช่องจำนวนต่อแผ่น — พิมพ์อิสระ แล้วใช้ค่าเมื่อ Enter/ออกจากช่อง (กันจัดขนาดใหม่ทุกตัวอักษรที่พิมพ์)
 function PerSheetField({
@@ -681,6 +690,7 @@ function dielineSVGString(
   fillColor: string | null = null,
   fillImage: FillImage | null = null,
   sheet: { piece: Dieline; layout: SheetLayout } | null = null,
+  white: Vec2[][] | null = null,
 ): string {
   const pathsOf = (kind: 'cut' | 'crease') =>
     d.segments
@@ -737,6 +747,10 @@ function dielineSVGString(
       : ''
   }
   const guideLayer = guides ? guidesSVGLayer(guides) : ''
+  // หมึกขาวรอง (ฟิล์มใส): เลเยอร์ White ล่างสุด เติม even-odd (รูในตัวอักษรเว้นใส) — สีฟ้าอ่อนแค่ให้มองเห็นบนจอ
+  const whiteLayer = white?.length
+    ? svgLayer(WHITE_SPOT, 'fill="#8fd3f4" fill-rule="evenodd"', `    <path d="${whiteInkPath(white)}"/>`)
+    : ''
 
   const w = d.width + pad * 2
   const h = d.height + pad * 2
@@ -745,8 +759,8 @@ function dielineSVGString(
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"` +
     ` xmlns:xlink="http://www.w3.org/1999/xlink"` +
     ` width="${w}mm" height="${h}mm" viewBox="${-pad} ${-pad} ${w} ${h}">\n` +
-    `<!-- สเกลจริง 1:1 หน่วย mm | fill = สีพื้น | artwork = ลายพิมพ์ | cut = เส้นตัด (แดง) | crease = เส้นพับ (เขียวประ) | guides = เผื่อตัด/ปลอดภัย | dims = เส้นบอกขนาด (ห้ามใช้ผลิต) -->\n` +
-    `${fillLayer}${artLayer}${cutLayer}${creaseLayer}${guideLayer}${dimLayer}</svg>\n`
+    `<!-- สเกลจริง 1:1 หน่วย mm | White = หมึกขาวรอง (ฟิล์มใส) | fill = สีพื้น | artwork = ลายพิมพ์ | cut = เส้นตัด (แดง) | crease = เส้นพับ (เขียวประ) | guides = เผื่อตัด/ปลอดภัย | dims = เส้นบอกขนาด (ห้ามใช้ผลิต) -->\n` +
+    `${whiteLayer}${fillLayer}${artLayer}${cutLayer}${creaseLayer}${guideLayer}${dimLayer}</svg>\n`
   )
 }
 
@@ -1475,18 +1489,28 @@ export default function App({
             art: stickerArt,
             sheet: { w: dieline.width, h: dieline.height },
             contour: !!stickerLoops,
+            clearNoWhite:
+              mat.clear && !mat.underbase ? { lightFill: !!fillColor && hexLuminance(fillColor) > 0.8 } : undefined,
           })
         : [],
-    [isSticker, dieline, stickerArt, stickerLoops],
+    [isSticker, dieline, stickerArt, stickerLoops, mat.clear, mat.underbase, fillColor],
   )
   // แผ่นสติกเกอร์หลายดวง: ออกแบบดวงเดียว ระบบเรียงซ้ำเต็มแผ่น (ไฟล์ส่งออกเป็นทั้งแผ่น)
-  const stickerSheet = isSticker ? stickerSheetById(stickerCut.sheet) : undefined
+  // memo: แผ่นกำหนดเองสร้าง object ใหม่ทุกครั้ง — ถ้าไม่ memo พรีวิว/ภาพย่อจะคำนวณซ้ำไม่จบ
+  const stickerSheet = useMemo(
+    () =>
+      isSticker
+        ? resolveStickerSheet({ sheet: stickerCut.sheet, sheetW: stickerCut.sheetW, sheetH: stickerCut.sheetH })
+        : undefined,
+    [isSticker, stickerCut.sheet, stickerCut.sheetW, stickerCut.sheetH],
+  )
+  const sheetMargin = stickerCut.sheetMargin ?? SHEET_MARGIN
   const sheetLayout = useMemo(
     () =>
       stickerSheet && dieline
-        ? layoutStickerSheet(cutBox(dieline), stickerSheet, SHEET_MARGIN, SHEET_GAP, stickerCut.perSheet)
+        ? layoutStickerSheet(cutBox(dieline), stickerSheet, sheetMargin, SHEET_GAP, stickerCut.perSheet)
         : null,
-    [stickerSheet, dieline, stickerCut.perSheet],
+    [stickerSheet, dieline, sheetMargin, stickerCut.perSheet],
   )
   const sheetOut = useMemo(
     () => (sheetLayout && sheetLayout.count > 0 && dieline ? { piece: dieline, layout: sheetLayout } : null),
@@ -1497,18 +1521,34 @@ export default function App({
     () => (sheetOut ? sheetDieline(sheetOut.piece, sheetOut.layout) : dieline),
     [sheetOut, dieline],
   )
+  // หมึกขาวรองสำหรับไฟล์ส่งออก (สติกเกอร์ฟิล์มใสรองขาว): สีพื้น/รูปพื้นพิมพ์เต็มดวง → ขาวเต็มรูปทรงดวง,
+  // ไม่มีพื้น → ตามรูปทรงลาย (เว้นรูในตัวอักษร) — แผ่นหลายดวงวางซ้ำตามตำแหน่งแต่ละดวง
+  const whiteInkForExport = async (): Promise<Vec2[][] | null> => {
+    if (!isSticker || !mat.underbase || !dieline) return null
+    let loops: Vec2[][]
+    if (fillColor || fillImage) loops = dieline.panels.map((p) => p.outline)
+    else {
+      const s = Math.max(4, Math.min(10, Math.sqrt(4e6 / (dieline.width * dieline.height))))
+      const m = await renderArtworkAlpha(decos, dieline.width, dieline.height, s, 0)
+      if (!m) return null
+      loops = traceWhiteInk(m)
+    }
+    if (sheetOut) loops = sheetOut.layout.placements.flatMap((pl) => loops.map((l) => l.map((q) => placePoint(pl, q))))
+    return loops.length ? loops : null
+  }
+
   // กำหนดจำนวนต่อแผ่น: ขนาดดวงถูกล็อกตามจำนวน (ช่อง W/H แก้เองไม่ได้)
   const perSheetLocked = isSticker && !!stickerCut.sheet && !!stickerCut.perSheet
   // ย่อ/ขยายดวง (แผ่นออกแบบ + ลายทั้งชุด) ให้ได้ n ดวงต่อแผ่นที่ขนาดใหญ่สุด — คืน false ถ้าใส่ไม่ครบ
-  const fitStickerToCount = (n: number, sheetId: StickerSheetId | undefined = stickerCut.sheet): boolean => {
-    const sh = stickerSheetById(sheetId)
+  const fitStickerToCount = (n: number, cut: StickerCut = stickerCut): boolean => {
+    const sh = resolveStickerSheet(cut)
     if (!sh || !dieline || n < 1) return false
     const box = cutBox(dieline)
     // ไดคัทตามรูป: ขอบขาวกว้างคงที่ไม่ย่อตามลาย (ไม่มีขอบขาว = ตัดเข้าเนื้อ → ติดลบ); สี่เหลี่ยม = 0
     const edge = stickerLoops ? (stickerCut.border === 'white' ? stickerCut.offset : -NO_BORDER_INSET) : 0
     const art = { w: box.x1 - box.x0 - 2 * edge, h: box.y1 - box.y0 - 2 * edge }
     // ไดคัทตามรูป: เส้นตัดถูก trace ใหม่หลังย่อลาย (raster/เกลี่ยเส้น คลาด ~0.2 มม.) → เผื่อ 0.6 มม. ต่อดวง
-    const k0 = fitScaleForCount(n, art, edge, sh, SHEET_MARGIN, SHEET_GAP, stickerLoops ? 0.6 : 0)
+    const k0 = fitScaleForCount(n, art, edge, sh, cut.sheetMargin ?? SHEET_MARGIN, SHEET_GAP, stickerLoops ? 0.6 : 0)
     if (!k0) return false
     const k = Math.min(k0, 250 / W, 300 / H)
     const nW = Math.floor(W * k * 10) / 10 // ปัดลง 0.1 มม. — ไม่เกินช่องที่คำนวณไว้
@@ -1520,9 +1560,11 @@ export default function App({
     return true
   }
   const [perSheetErr, setPerSheetErr] = useState(false)
-  const setPerSheet = (n: number | undefined, sheetId: StickerSheetId | undefined = stickerCut.sheet) => {
-    setStickerCut({ ...stickerCut, sheet: sheetId, perSheet: n })
-    setPerSheetErr(n ? !fitStickerToCount(n, sheetId) : false)
+  // เปลี่ยนค่าตั้งแผ่น — ถ้าอยู่โหมดกำหนดจำนวน จัดขนาดดวงใหม่ตามแผ่น/ขอบ/จำนวนล่าสุดทันที
+  const updateSheet = (patch: Partial<StickerCut>) => {
+    const next = { ...stickerCut, ...patch }
+    setStickerCut(next)
+    setPerSheetErr(next.sheet && next.perSheet ? !fitStickerToCount(next.perSheet, next) : false)
   }
 
   // ภาพย่อลายดวงเดียว (ความละเอียดต่ำ) สำหรับพรีวิวแผ่น
@@ -2041,11 +2083,12 @@ export default function App({
     URL.revokeObjectURL(url)
   }
 
-  const downloadSVG = () => {
+  const downloadSVG = async () => {
     if (!dieline) return
+    const white = await whiteInkForExport()
     // แผ่นหลายดวง: ไม่ใส่เส้นเผื่อตัด 3 มม. ของดวงเดียว (ดวงเรียงชิดกันตามกติกาเว้น 2 มม. อยู่แล้ว)
     saveFile(
-      dielineSVGString(exportDieline, showDims, decos, sheetOut ? null : guides, fillColor, fillImage, sheetOut),
+      dielineSVGString(exportDieline, showDims, decos, sheetOut ? null : guides, fillColor, fillImage, sheetOut, white),
       'image/svg+xml',
       'svg',
     )
@@ -2099,7 +2142,14 @@ export default function App({
       art = { jpeg, w: canvas.width, h: canvas.height }
     }
     saveFile(
-      dielinePDFBytes(exportDieline, showDims, art, sheetOut ? null : guides, fillImage ? null : fillColor),
+      dielinePDFBytes(
+        exportDieline,
+        showDims,
+        art,
+        sheetOut ? null : guides,
+        fillImage ? null : fillColor,
+        await whiteInkForExport(),
+      ),
       'application/pdf',
       'pdf',
     )
@@ -3172,7 +3222,7 @@ export default function App({
                   className={!stickerCut.sheet ? 'active' : ''}
                   aria-pressed={!stickerCut.sheet}
                   disabled={aiBusy}
-                  onClick={() => setStickerCut({ ...stickerCut, sheet: undefined, perSheet: undefined })}
+                  onClick={() => updateSheet({ sheet: undefined, perSheet: undefined })}
                 >
                   {t('ดวงเดียว', 'Single')}
                 </button>
@@ -3183,16 +3233,70 @@ export default function App({
                     className={stickerCut.sheet === sh.id ? 'active' : ''}
                     aria-pressed={stickerCut.sheet === sh.id}
                     disabled={aiBusy}
-                    onClick={() =>
-                      stickerCut.perSheet
-                        ? setPerSheet(stickerCut.perSheet, sh.id as StickerSheetId)
-                        : setStickerCut({ ...stickerCut, sheet: sh.id as StickerSheetId })
-                    }
+                    onClick={() => updateSheet({ sheet: sh.id })}
                   >
                     {sh.nameTh}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  className={stickerCut.sheet === 'custom' ? 'active' : ''}
+                  aria-pressed={stickerCut.sheet === 'custom'}
+                  disabled={aiBusy}
+                  onClick={() => updateSheet({ sheet: 'custom' })}
+                >
+                  {t('กำหนดเอง', 'Custom')}
+                </button>
               </div>
+              {stickerCut.sheet === 'custom' && (
+                <>
+                  <DimField
+                    imperial={imperial}
+                    label={t('กว้างแผ่น', 'Sheet width')}
+                    value={stickerCut.sheetW ?? DEFAULT_CUSTOM_SHEET.w}
+                    min={CUSTOM_SHEET_MIN}
+                    max={CUSTOM_SHEET_MAX}
+                    disabled={aiBusy}
+                    onChange={(v) => updateSheet({ sheetW: v })}
+                  />
+                  <DimField
+                    imperial={imperial}
+                    label={t('ยาวแผ่น', 'Sheet height')}
+                    value={stickerCut.sheetH ?? DEFAULT_CUSTOM_SHEET.h}
+                    min={CUSTOM_SHEET_MIN}
+                    max={CUSTOM_SHEET_MAX}
+                    disabled={aiBusy}
+                    onChange={(v) => updateSheet({ sheetH: v })}
+                  />
+                  <div className="sheet-presets">
+                    {[
+                      { label: 'SRA3', w: 320, h: 450 },
+                      { label: 'SRA4', w: 225, h: 320 },
+                      { label: '13×19″', w: 330, h: 483 },
+                    ].map((pz) => (
+                      <button
+                        key={pz.label}
+                        type="button"
+                        disabled={aiBusy}
+                        onClick={() => updateSheet({ sheetW: pz.w, sheetH: pz.h })}
+                      >
+                        {pz.label} <span>{pz.w}×{pz.h}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {stickerCut.sheet && (
+                <DimField
+                  imperial={imperial}
+                  label={t('ขอบแผ่น (ตามโรงพิมพ์)', 'Sheet margin (per printer)')}
+                  value={sheetMargin}
+                  min={0}
+                  max={SHEET_MARGIN_MAX}
+                  disabled={aiBusy}
+                  onChange={(v) => updateSheet({ sheetMargin: v === SHEET_MARGIN ? undefined : v })}
+                />
+              )}
               {sheetLayout && (
                 <>
                   <div className="unit-toggle sticker-seg" role="group" aria-label={t('วิธีกำหนด', 'Sizing')}>
@@ -3201,10 +3305,7 @@ export default function App({
                       className={!stickerCut.perSheet ? 'active' : ''}
                       aria-pressed={!stickerCut.perSheet}
                       disabled={aiBusy}
-                      onClick={() => {
-                        setStickerCut({ ...stickerCut, perSheet: undefined })
-                        setPerSheetErr(false)
-                      }}
+                      onClick={() => updateSheet({ perSheet: undefined })}
                     >
                       {t('กำหนดขนาด', 'Set size')}
                     </button>
@@ -3213,7 +3314,7 @@ export default function App({
                       className={stickerCut.perSheet ? 'active' : ''}
                       aria-pressed={!!stickerCut.perSheet}
                       disabled={aiBusy}
-                      onClick={() => setPerSheet(Math.max(1, sheetLayout.count || 1))}
+                      onClick={() => updateSheet({ perSheet: Math.max(1, sheetLayout.count || 1) })}
                     >
                       {t('กำหนดจำนวน', 'Set count')}
                     </button>
@@ -3222,7 +3323,7 @@ export default function App({
                     <PerSheetField
                       value={stickerCut.perSheet}
                       disabled={aiBusy}
-                      onCommit={(n) => setPerSheet(n)}
+                      onCommit={(n) => updateSheet({ perSheet: n })}
                       label={t('จำนวนต่อแผ่น', 'Stickers per sheet')}
                       unit={t('ดวง', 'pcs')}
                     />
@@ -3241,7 +3342,7 @@ export default function App({
                         `ตอนนี้ได้ ${sheetLayout.count} จาก ${stickerCut.perSheet} ดวง (ลายถูกแก้หลังจัดขนาด) — `,
                         `Currently ${sheetLayout.count} of ${stickerCut.perSheet} fit (artwork changed after sizing) — `,
                       )}
-                      <button type="button" className="link-btn" onClick={() => setPerSheet(stickerCut.perSheet)}>
+                      <button type="button" className="link-btn" onClick={() => updateSheet({})}>
                         {t('จัดขนาดใหม่', 'Resize again')}
                       </button>
                     </div>
@@ -3258,8 +3359,8 @@ export default function App({
               ) : sheetLayout.count === 0 ? (
                 <div className="sticker-issues has-err" role="alert">
                   {t(
-                    `ดวงใหญ่เกินแผ่น ${sheetLayout.sheet.nameTh} (${sheetLayout.sheet.w}×${sheetLayout.sheet.h} มม. เว้นขอบ ${SHEET_MARGIN} มม.) — ลดขนาดสติกเกอร์หรือเลือกแผ่นใหญ่ขึ้น`,
-                    `Sticker is larger than ${sheetLayout.sheet.nameTh} (${sheetLayout.sheet.w}×${sheetLayout.sheet.h} mm, ${SHEET_MARGIN} mm margin) — shrink it or pick a bigger sheet`,
+                    `ดวงใหญ่เกินแผ่น ${sheetLayout.sheet.nameTh} (${sheetLayout.sheet.w}×${sheetLayout.sheet.h} มม. เว้นขอบ ${sheetMargin} มม.) — ลดขนาดสติกเกอร์ ลดขอบแผ่น หรือเลือกแผ่นใหญ่ขึ้น`,
+                    `Sticker is larger than ${sheetLayout.sheet.nameTh} (${sheetLayout.sheet.w}×${sheetLayout.sheet.h} mm, ${sheetMargin} mm margin) — shrink it, reduce the margin or pick a bigger sheet`,
                   )}
                 </div>
               ) : (
@@ -3281,23 +3382,31 @@ export default function App({
                     <span>
                       {t('ดวงละ', 'each')} {fmtMm(cutBox(dieline).x1 - cutBox(dieline).x0)}×
                       {fmtMm(cutBox(dieline).y1 - cutBox(dieline).y0)} {t('มม.', 'mm')} · {sheetLayout.cols}×{sheetLayout.rows}
-                      {sheetLayout.rotated ? t(' · หมุน 90°', ' · rotated 90°') : ''} ·{' '}
-                      {t(
-                        `A3 1 แผ่น = ${sheetLayout.sheet.perA3} แผ่น = ${sheetLayout.count * sheetLayout.sheet.perA3} ดวง`,
-                        `1 A3 = ${sheetLayout.sheet.perA3} sheets = ${sheetLayout.count * sheetLayout.sheet.perA3} stickers`,
-                      )}
+                      {sheetLayout.rotated ? t(' · หมุน 90°', ' · rotated 90°') : ''}
+                      {sheetLayout.sheet.perA3 > 1 &&
+                        ' · ' +
+                          t(
+                            `A3 1 แผ่น = ${sheetLayout.sheet.perA3} แผ่น = ${sheetLayout.count * sheetLayout.sheet.perA3} ดวง`,
+                            `1 A3 = ${sheetLayout.sheet.perA3} sheets = ${sheetLayout.count * sheetLayout.sheet.perA3} stickers`,
+                          )}
                     </span>
                     <span>
                       {t(
-                        `สั่ง ${qty.toLocaleString('th-TH')} ดวง → ${stickerSheetsNeeded(qty, sheetLayout.count).toLocaleString('th-TH')} แผ่น ${sheetLayout.sheet.nameTh} (≈ ${Math.ceil(stickerSheetsNeeded(qty, sheetLayout.count) / sheetLayout.sheet.perA3).toLocaleString('th-TH')} แผ่น A3)`,
-                        `${qty.toLocaleString('en-US')} stickers → ${stickerSheetsNeeded(qty, sheetLayout.count).toLocaleString('en-US')} ${sheetLayout.sheet.nameTh} sheets (≈ ${Math.ceil(stickerSheetsNeeded(qty, sheetLayout.count) / sheetLayout.sheet.perA3).toLocaleString('en-US')} A3)`,
+                        `สั่ง ${qty.toLocaleString('th-TH')} ดวง → ${stickerSheetsNeeded(qty, sheetLayout.count).toLocaleString('th-TH')} แผ่น ${sheetLayout.sheet.nameTh}` +
+                          (sheetLayout.sheet.perA3 > 1
+                            ? ` (≈ ${Math.ceil(stickerSheetsNeeded(qty, sheetLayout.count) / sheetLayout.sheet.perA3).toLocaleString('th-TH')} แผ่น A3)`
+                            : ''),
+                        `${qty.toLocaleString('en-US')} stickers → ${stickerSheetsNeeded(qty, sheetLayout.count).toLocaleString('en-US')} ${sheetLayout.sheet.nameTh} sheets` +
+                          (sheetLayout.sheet.perA3 > 1
+                            ? ` (≈ ${Math.ceil(stickerSheetsNeeded(qty, sheetLayout.count) / sheetLayout.sheet.perA3).toLocaleString('en-US')} A3)`
+                            : ''),
                       )}
                     </span>
                   </div>
                   <p className="hint">
                     {t(
-                      `เส้นตัดแต่ละดวงห่างกัน ${SHEET_GAP} มม. · ห่างขอบแผ่น ${SHEET_MARGIN} มม. · ไฟล์ PDF/SVG/DXF ที่ดาวน์โหลดเป็นทั้งแผ่น`,
-                      `Cut lines ${SHEET_GAP} mm apart · ${SHEET_MARGIN} mm from the sheet edge · PDF/SVG/DXF downloads contain the whole sheet`,
+                      `เส้นตัดแต่ละดวงห่างกัน ${SHEET_GAP} มม. · ห่างขอบแผ่น ${sheetMargin} มม. · ไฟล์ PDF/SVG/DXF ที่ดาวน์โหลดเป็นทั้งแผ่น`,
+                      `Cut lines ${SHEET_GAP} mm apart · ${sheetMargin} mm from the sheet edge · PDF/SVG/DXF downloads contain the whole sheet`,
                     )}
                   </p>
                 </>
@@ -4841,6 +4950,22 @@ export default function App({
                   </label>
                 </div>
                 {isSticker && <StickerIssues issues={stickerIssues} />}
+                {isSticker && mat.underbase && (
+                  <p className="hint">
+                    {t(
+                      `PDF/SVG มีเลเยอร์ "${WHITE_SPOT}" (หมึกขาวรอง) ให้อัตโนมัติ — ${fillColor || fillImage ? 'เต็มรูปทรงดวง เพราะมีสีพื้น' : 'ตามรูปทรงลาย เว้นรูในตัวอักษรให้ใส'}; PDF ใช้สี spot ชื่อ ${WHITE_SPOT} (แสดงเป็นฟ้าอ่อนบนจอ)`,
+                      `PDF/SVG include a "${WHITE_SPOT}" layer (white underbase) automatically — ${fillColor || fillImage ? 'covering the whole sticker because of the background colour' : 'following the artwork, leaving letter counters clear'}; the PDF uses a spot colour named ${WHITE_SPOT} (shown light blue on screen)`,
+                    )}
+                  </p>
+                )}
+                {isSticker && mat.clear && !mat.underbase && (
+                  <p className="hint">
+                    {t(
+                      'ฟิล์มใสไม่มีหมึกขาว — ส่วนที่เป็นสีขาวในงานจะใส และสีอ่อนจะจาง (ดูตัวอย่างได้ในมุมมอง 3D)',
+                      'Clear film without white ink — white areas print transparent and light colours fade (see the 3D view)',
+                    )}
+                  </p>
+                )}
                 {sheetOut && (
                   <p className="hint">
                     {t(
@@ -5157,6 +5282,7 @@ export default function App({
                 toolsExtra={proofToggle}
                 lowResDpi={lowResMap}
                 fillLowDpi={fillLowDpi}
+                clearFilm={isSticker && !!mat.clear}
               />
               <span className="bp-legend">
                 <i className="sw-cut" /> เส้นตัด

@@ -79,6 +79,21 @@ describe('preflightSticker', () => {
     expect(codes([rr(0, 0, 60, 60)], undefined, false)).not.toContain('edge')
   })
 
+  it('ฟิล์มใสไม่รองขาว: ลายสีอ่อนมาก หรือสีพื้นอ่อน → เตือน; สีเข้ม/รองขาว → ไม่เตือน', () => {
+    const a = art(15, 15, 45, 45)
+    const run = (lightRatio: number, lightFill = false, clear = true) =>
+      preflightSticker({
+        loops: [cut],
+        art: { ...a, lightRatio },
+        sheet: { w: 60, h: 60 },
+        clearNoWhite: clear ? { lightFill } : undefined,
+      }).map((i) => i.code)
+    expect(run(0.6)).toContain('clear-light')
+    expect(run(0.05)).not.toContain('clear-light')
+    expect(run(0.05, true)).toContain('clear-light')
+    expect(run(0.9, false, false)).not.toContain('clear-light') // ไม่ใช่ฟิล์มใส/รองขาวแล้ว
+  })
+
   it('หลายจุดรหัสเดียวกันรวมเป็นรายการเดียว', () => {
     const r = preflightSticker({
       loops: [sq(5, 5, 20, 20), sq(30, 30, 45, 45)],

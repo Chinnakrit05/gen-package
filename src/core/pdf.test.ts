@@ -147,3 +147,30 @@ describe('pdf: เลเยอร์เสริม', () => {
     expect(/[\d.]+ [\d.]+ [\d.]+ rg\b/.test(s)).toBe(false) // ไม่มีเติม DeviceRGB
   })
 })
+
+describe('pdf: เลเยอร์หมึกขาวรอง (สติกเกอร์ฟิล์มใส)', () => {
+  const d = TEMPLATES.find((t) => t.id === 'sticker')!.generate({ W: 60, D: 60, H: 40, handle: false }, getMaterial('sticker-pp-clear-white'))
+  const ring = (cx: number, cy: number, r: number) =>
+    Array.from({ length: 24 }, (_, i) => ({ x: cx + r * Math.cos((i / 24) * Math.PI * 2), y: cy + r * Math.sin((i / 24) * Math.PI * 2) }))
+  const white = [ring(30, 20, 12), ring(30, 20, 5)] // วงนอก + รูใน (even-odd)
+
+  it('มีสี spot White + เลเยอร์ White + เติม even-odd และ xref ยังถูกต้อง', () => {
+    for (const art of [undefined, { jpeg: fakeJpeg(), w: 4, h: 4 }]) {
+      const s = dec(dielinePDFBytes(d, true, art, null, '#ff0000', white))
+      expect(s).toContain('/Separation /White /DeviceCMYK')
+      expect(s).toContain('/Name (White)')
+      expect(s).toContain('/OCw')
+      expect(s).toContain('f*')
+      expect(s.indexOf('/OC /OCw')).toBeLessThan(s.indexOf('/OC /OCf')) // ขาวอยู่ล่างสุด ใต้สีพื้น
+      const x = xrefOffsetsOk(s)
+      expect(x.detail).toBe('')
+      expect((s.match(/BDC/g) ?? []).length).toBe((s.match(/EMC/g) ?? []).length)
+    }
+  })
+
+  it('ไม่มีขาว → ไม่มี colorspace/เลเยอร์เพิ่ม', () => {
+    const s = dec(dielinePDFBytes(d, false, undefined, null, null, []))
+    expect(s).not.toContain('/Separation')
+    expect(s).not.toContain('(White)')
+  })
+})

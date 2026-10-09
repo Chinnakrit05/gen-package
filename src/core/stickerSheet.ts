@@ -7,20 +7,41 @@ import { P, fmt } from './templates/shared'
 // ออกแบบดวงเดียว แล้วระบบเรียงซ้ำเต็มแผ่นเอง — เส้นตัดห่างกัน ≥2 มม. + ขอบแผ่น, หมุน 90° ถ้าได้จำนวนมากกว่า
 // ทั้งหมด pure: ใช้ร่วมกันทั้งพรีวิว / PDF / SVG / DXF จึงตรงกันทุกไฟล์
 
-export type StickerSheetId = 'a6' | 'a5' | 'a4'
+export type StickerSheetId = 'a6' | 'a5' | 'a4' | 'a3' | 'custom'
 export interface StickerSheet {
   id: StickerSheetId
   nameTh: string
   w: number
   h: number
-  perA3: number // ตัดจาก A3 ได้กี่แผ่น
+  perA3: number // ตัดจาก A3 ได้กี่แผ่น (0 = ใหญ่กว่า A3 / ไม่เกี่ยว)
 }
 export const STICKER_SHEETS: StickerSheet[] = [
   { id: 'a6', nameTh: 'A6', w: 105, h: 148, perA3: 8 },
   { id: 'a5', nameTh: 'A5', w: 148, h: 210, perA3: 4 },
   { id: 'a4', nameTh: 'A4', w: 210, h: 297, perA3: 2 },
+  { id: 'a3', nameTh: 'A3', w: 297, h: 420, perA3: 1 },
 ]
 export const stickerSheetById = (id?: string) => STICKER_SHEETS.find((s) => s.id === id)
+
+// แผ่นกำหนดเอง (เช่น SRA3 ของโรงพิมพ์) — ขอบเขตขนาด
+export const CUSTOM_SHEET_MIN = 50
+export const CUSTOM_SHEET_MAX = 1000
+export const DEFAULT_CUSTOM_SHEET = { w: 320, h: 450 } // SRA3
+export const SHEET_MARGIN_MAX = 30
+
+// ตัดแผ่นขนาด w×h จาก A3 ได้กี่แผ่น (ตั้ง/หมุน) — 0 ถ้าใหญ่กว่า A3
+export function perA3Of(w: number, h: number): number {
+  const fit = (a: number, b: number) => Math.floor(297 / a) * Math.floor(420 / b)
+  return Math.max(fit(w, h), fit(h, w))
+}
+
+// แผ่นที่เลือกจากค่าตั้งของงาน (มาตรฐาน หรือกำหนดเองพร้อมขนาด)
+export function resolveStickerSheet(c: { sheet?: StickerSheetId; sheetW?: number; sheetH?: number }): StickerSheet | undefined {
+  if (c.sheet !== 'custom') return stickerSheetById(c.sheet)
+  const w = c.sheetW ?? DEFAULT_CUSTOM_SHEET.w
+  const h = c.sheetH ?? DEFAULT_CUSTOM_SHEET.h
+  return { id: 'custom', nameTh: `${fmt(w)}×${fmt(h)}`, w, h, perA3: perA3Of(w, h) }
+}
 
 export const SHEET_MARGIN = 5 // มม. — ระยะจากขอบแผ่นถึงเส้นตัดดวงนอกสุด (กันตัดแผ่นแล้วโดนดวง/จับลอกได้)
 export const SHEET_GAP = STICKER_RULES.minGap // ระยะระหว่างเส้นตัดของดวงที่ติดกัน

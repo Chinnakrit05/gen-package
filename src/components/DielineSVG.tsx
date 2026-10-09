@@ -299,6 +299,7 @@ export const DielineSVG = memo(function DielineSVG({
   toolsExtra,
   lowResDpi,
   fillLowDpi,
+  clearFilm = false,
 }: {
   dieline: Dieline
   showDims: boolean
@@ -327,6 +328,7 @@ export const DielineSVG = memo(function DielineSVG({
   toolsExtra?: React.ReactNode // ปุ่มเพิ่มจากภายนอก ต่อท้ายแถบเครื่องมือซ้ายบน (เลื่อนลงตามแถบเมื่อเลือกชิ้น)
   lowResDpi?: Map<string, number> // id รูปที่ความละเอียดต่ำ → dpi (ป้ายเตือนบนรูป; ไม่ติดไปไฟล์ส่งออก)
   fillLowDpi?: number | null // รูปพื้นความละเอียดต่ำ → dpi
+  clearFilm?: boolean // วัสดุฟิล์มใส: ลายตารางหมากรุกใต้แผง = ส่วนที่ไม่มีลายจะใส (พรีวิวเท่านั้น)
 }) {
   const [showRuler, setShowRuler] = useState(false)
   const t = useT()
@@ -1150,6 +1152,20 @@ export const DielineSVG = memo(function DielineSVG({
     >
       {/* rotor: หมุนเนื้อหาทั้งหมดรอบจุดกึ่งกลางแผ่น (พิกัดแผ่นคลี่ไม่เปลี่ยน — toSheet ถอดหมุนให้) */}
       <g transform={rot ? `rotate(${rot} ${dieline.width / 2} ${dieline.height / 2})` : undefined}>
+      {clearFilm && (
+        <g className="clear-film" pointerEvents="none">
+          <defs>
+            <pattern id="bp-clear" width={4} height={4} patternUnits="userSpaceOnUse">
+              <rect width={4} height={4} fill="#ffffff" />
+              <rect width={2} height={2} fill="#dfe6ea" />
+              <rect x={2} y={2} width={2} height={2} fill="#dfe6ea" />
+            </pattern>
+          </defs>
+          {dieline.panels.map((p, i) => (
+            <polygon key={i} points={p.outline.map((q) => `${q.x},${q.y}`).join(' ')} fill="url(#bp-clear)" />
+          ))}
+        </g>
+      )}
       {fillImage ? (
         <g className="fill" pointerEvents="none" opacity={fillImage.opacity ?? 1}>
           <defs>

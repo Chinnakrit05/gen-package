@@ -11,6 +11,7 @@ import {
   stickerSheetById,
   sheetsNeeded,
   fitScaleForCount,
+  resolveStickerSheet,
 } from './stickerSheet'
 import { generateSticker } from './templates/sticker'
 import { pathToPolylines } from './dxf'
@@ -20,11 +21,12 @@ const a6 = stickerSheetById('a6')!
 const a5 = stickerSheetById('a5')!
 
 describe('ขนาดแผ่น', () => {
-  it('A6/A5/A4 ตรงมาตรฐาน และจำนวนต่อ A3 ถูก', () => {
+  it('A6/A5/A4/A3 ตรงมาตรฐาน และจำนวนต่อ A3 ถูก', () => {
     expect(STICKER_SHEETS.map((s) => [s.id, s.w, s.h, s.perA3])).toEqual([
       ['a6', 105, 148, 8],
       ['a5', 148, 210, 4],
       ['a4', 210, 297, 2],
+      ['a3', 297, 420, 1],
     ])
   })
 })
@@ -164,5 +166,32 @@ describe('fitScaleForCount (กำหนดจำนวนต่อแผ่น 
 
   it('ขอบขาวใหญ่จนเล็กแค่ไหนก็ใส่ไม่ครบ → null', () => {
     expect(fitScaleForCount(200, { w: 10, h: 10 }, 8, a6)).toBeNull()
+  })
+})
+
+describe('แผ่น A3 / กำหนดเอง', () => {
+  it('A3 อยู่ในชุดมาตรฐาน', () => {
+    expect(stickerSheetById('a3')).toMatchObject({ w: 297, h: 420, perA3: 1 })
+  })
+
+  it('กำหนดเอง: ใช้ขนาดที่ตั้ง (ค่าเริ่มต้น SRA3) และคำนวณจำนวนต่อ A3', () => {
+    expect(resolveStickerSheet({ sheet: 'custom' })).toMatchObject({ w: 320, h: 450, perA3: 0 })
+    expect(resolveStickerSheet({ sheet: 'custom', sheetW: 148, sheetH: 210 })).toMatchObject({ perA3: 4 })
+    expect(resolveStickerSheet({ sheet: 'custom', sheetW: 148, sheetH: 105 })).toMatchObject({ perA3: 8 })
+    expect(resolveStickerSheet({ sheet: 'a6', sheetW: 999 })).toMatchObject({ w: 105, h: 148 })
+    expect(resolveStickerSheet({})).toBeUndefined()
+  })
+
+  it('ระยะขอบแผ่นที่ตั้งเอง: เรียงดวงห่างขอบตามค่านั้น', () => {
+    const box = { x0: 0, y0: 0, x1: 40, y1: 40 }
+    expect(layoutStickerSheet(box, a6, 5).count).toBe(6) // 2×3
+    expect(layoutStickerSheet(box, a6, 1).count).toBe(6)
+    expect(layoutStickerSheet(box, a6, 12).count).toBe(3) // ขอบกว้างขึ้น → 1×3
+    const L = layoutStickerSheet(box, a6, 12)
+    for (const pl of L.placements) {
+      const p = placePoint(pl, { x: 0, y: 0 })
+      expect(p.x).toBeGreaterThanOrEqual(12 - 1e-9)
+      expect(p.y).toBeGreaterThanOrEqual(12 - 1e-9)
+    }
   })
 })

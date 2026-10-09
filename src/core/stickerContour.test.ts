@@ -156,5 +156,12 @@ describe('parseStickerCut', () => {
     expect(parseStickerCut({ shape: 'rect', sheet: 'a5', perSheet: 7.6 })?.perSheet).toBe(8)
     expect(parseStickerCut({ shape: 'rect', sheet: 'a5', perSheet: 9999 })?.perSheet).toBe(200)
     expect(parseStickerCut({ shape: 'contour', perSheet: 8 })?.perSheet).toBeUndefined()
+    // แผ่นกำหนดเอง + ขอบแผ่น: clamp ช่วงที่รับได้; ขนาดแผ่นเก็บเฉพาะเมื่อเป็นกำหนดเอง
+    expect(parseStickerCut({ shape: 'rect', sheet: 'custom', sheetW: 320, sheetH: 9999, sheetMargin: 3 })).toEqual({
+      shape: 'rect', border: 'white', offset: 2, sheet: 'custom', sheetW: 320, sheetH: 1000, sheetMargin: 3,
+    })
+    expect(parseStickerCut({ shape: 'rect', sheet: 'a3', sheetW: 100, sheetMargin: -4 })).toEqual({
+      shape: 'rect', border: 'white', offset: 2, sheet: 'a3', sheetMargin: 0,
+    })
   })
 })
