@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { generateVessel } from './vessel'
+import { getMaterial } from './materials'
 import { boxVolumeMl, pouchVolumeMl, vesselVolumeMl, tubeVolumeMl, formatCapacity } from './capacity'
 import type { Vec2 } from './types'
 
@@ -47,10 +49,14 @@ describe('capacity: ภาชนะหมุน (โปรไฟล์)', () => 
 
 describe('capacity: หลอดครีม', () => {
   it('คืนค่าบวกและเพิ่มตามความสูง/ความกว้าง', () => {
-    const a = tubeVolumeMl(40, 150, 8, 18)
-    const b = tubeVolumeMl(50, 180, 10, 18)
+    const tube = (W: number, H: number) => generateVessel({ W, D: 20, H, handle: false }, getMaterial('tube-laminate')).tube!
+    const a = tubeVolumeMl(tube(40, 150))
+    const b = tubeVolumeMl(tube(50, 180))
     expect(a).toBeGreaterThan(0)
     expect(b).toBeGreaterThan(a)
+    // หลอด ⌀40 ยาว 150 จริงจุราว 100–130 มล. (ท่อกลมเต็มความยาวจะได้ ~170)
+    expect(a).toBeGreaterThan(90)
+    expect(a).toBeLessThan(140)
   })
 })
 

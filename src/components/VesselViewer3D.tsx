@@ -5,7 +5,7 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
-import type { Vessel } from '../core/vessel'
+import { tubeSection, type Vessel } from '../core/vessel'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
 import { SceneLighting, type LightMode } from './SceneLighting'
@@ -96,43 +96,94 @@ function VesselModel({
     [vessel],
   )
 
-  // หลอดครีม: ลำตัว loft หน้าตัดค่อย ๆ บีบ — width (x) คงเกือบเต็ม, depth (z) ยุบจาก R → ครึ่งความหนาซีล
-  // ได้ front กว้างแบน + side เป็นลิ่ม (สามเหลี่ยม) + ยอดเป็นตะเข็บซีลแบน เหมือนหลอดครีมจริง
-  const tubeBodyGeo = useMemo(() => {
-    if (!tube) return null
-    const { R, rcap, capTop, sealThick } = tube
-    const top = vessel.H
-    // width (แกน x): บานจากคอ rcap (ก้น) → กว้างสุด R ที่ยอด (ตะเข็บซีล) = ทรง trapezoid กว้างบน
-    const aOf = (v: number) => rcap + (R - rcap) * Math.pow(v, 0.6)
-    // depth (แกน z): เรียวเป็นลิ่มคมจากคอ rcap → เกือบเป็นจุดที่ยอด (side view = สามเหลี่ยมคม)
-    const bOf = (v: number) => (rcap - sealThick / 2) * Math.pow(1 - v, 1.4) + sealThick / 2
-    const NV = 28
-    const NU = 64
-    const stride = NU + 1
-    const pos: number[] = []
-    const idx: number[] = []
-    for (let iv = 0; iv <= NV; iv++) {
-      const v = iv / NV
-      const y = capTop + v * (top - capTop)
-      const a = aOf(v)
-      const b = bOf(v)
-      for (let i = 0; i <= NU; i++) {
-        const th = (i / NU) * Math.PI * 2
-        pos.push(a * Math.cos(th), y, b * Math.sin(th))
+  // หลอดครีม: ไหล่ + ลำตัว (ท่อบีบแบน เส้นรอบวงคงที่) ด้วย tubeSection ชุดเดียวกับความจุ
+  // คอลัมน์แบ่งตามความยาวผิวจริง เริ่มกลางหลัง (แนวรอยต่อท่อ laminate) → ซ้าย → กลางหน้า → ขวา → กลางหลัง
+  // ลายจึงอ่านจากซ้ายไปขวาบนหน้าหลอด และไม่ยืดตรงขอบที่ถูกบีบแบน
+  const tubeRing = (a: number, b: number, NU: number): [number, number][] => {
+    const M = 256
+    const th: number[] = []
+    const cum = [0]
+    for (let i = 0; i <= M; i++) {
+      th.push((3 * Math.PI) / 2 - (2 * Math.PI * i) / M)
+      if (i) {
+        const t0 = th[i - 1]
+        const t1 = th[i]
+        cum.push(cum[i - 1] + Math.hypot(a * (Math.cos(t1) - Math.cos(t0)), b * (Math.sin(t1) - Math.sin(t0))))
       }
     }
-    for (let iv = 0; iv < NV; iv++) {
+    const L = cum[M]
+    const out: [number, number][] = []
+    let j = 0
+    for (let k = 0; k <= NU; k++) {
+      const target = (L * k) / NU
+      while (j < M - 1 && cum[j + 1] < target) j++
+      const t = cum[j + 1] > cum[j] ? Math.min(1, (target - cum[j]) / (cum[j + 1] - cum[j])) : 0
+      const ang = th[j] + (th[j + 1] - th[j]) * t
+      out.push([a * Math.cos(ang), b * Math.sin(ang)])
+    }
+    return out
+  }
+  const loftTube = (ys: number[], grow: number, withUv: boolean) => {
+    const NU = 96
+    const stride = NU + 1
+    const pos: number[] = []
+    const uv: number[] = []
+    const idx: number[] = []
+    ys.forEach((y) => {
+      const { a, b } = tubeSection(tube!, y)
+      for (const [k, [x, z]] of tubeRing(a + grow, b + grow, NU).entries()) {
+        pos.push(x, y, z)
+        if (withUv) uv.push(k / NU, (y - ys[0]) / (ys[ys.length - 1] - ys[0] || 1))
+      }
+    })
+    for (let iv = 0; iv < ys.length - 1; iv++) {
       for (let i = 0; i < NU; i++) {
         const a0 = iv * stride + i
         const b0 = (iv + 1) * stride + i
         idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1)
       }
     }
-    // ปิดตะเข็บซีลบนสุด (เส้นแบน) ด้วยพัดจากจุดกึ่งกลาง
-    const center = pos.length / 3
-    pos.push(0, top, 0)
-    const topStart = NV * stride
-    for (let i = 0; i < NU; i++) idx.push(topStart + i, center, topStart + i + 1)
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    if (withUv) g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+    g.setIndex(idx)
+    g.computeVertexNormals()
+    return g
+  }
+  const range = (y0: number, y1: number, n: number) => Array.from({ length: n + 1 }, (_, i) => y0 + ((y1 - y0) * i) / n)
+
+  const tubeBodyGeo = useMemo(() => {
+    if (!tube) return null
+    return loftTube([...range(tube.capTop, tube.bodyY0, 8), ...range(tube.bodyY0, tube.sealY0, 48).slice(1)], 0, false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tube])
+
+  // ตะเข็บซีลบน: แถบแบนกว้าง πR มีลอนกดแนวตั้ง (crimp) ทั้งสองหน้า + ขอบบน
+  const tubeSealGeo = useMemo(() => {
+    if (!tube) return null
+    const a = (Math.PI * tube.R) / 2
+    const half = tube.sealThick / 2
+    const y0 = tube.sealY0
+    const y1 = vessel.H
+    const pitch = 1.2
+    const NX = Math.max(60, Math.round((2 * a) / (pitch / 4)))
+    const pos: number[] = []
+    const idx: number[] = []
+    for (const side of [1, -1]) {
+      const start = pos.length / 3
+      for (const y of [y0, y1]) {
+        for (let k = 0; k <= NX; k++) {
+          const x = -a + (2 * a * k) / NX
+          const ridge = 0.18 * (0.5 + 0.5 * Math.cos((2 * Math.PI * x) / pitch))
+          pos.push(x, y, side * (half + ridge))
+        }
+      }
+      for (let k = 0; k < NX; k++) {
+        const q = start + k
+        if (side > 0) idx.push(q, q + 1, q + NX + 1, q + 1, q + NX + 2, q + NX + 1)
+        else idx.push(q, q + NX + 1, q + 1, q + 1, q + NX + 1, q + NX + 2)
+      }
+    }
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
     g.setIndex(idx)
@@ -140,93 +191,34 @@ function VesselModel({
     return g
   }, [tube, vessel.H])
 
-  // หลอดครีม: ฝาเกลียว (ชิ้นแยก สีต่างจากตัวหลอด) — ทรงกระบอกที่ก้น มีร่องเกลียวตั้งรอบฝา
-  // (รัศมีกระเพื่อมตาม θ) ร่องจางหายไปช่วงบนที่ชนกับไหล่/ลำตัว ให้รอยต่อเนียน
+  // ฝา flip-top: ทรงกระบอกกว้างเกือบเท่าท่อ ขอบล่างมน (ตั้งบนฝา) + ร่องแบ่งฝาพับ/ฐาน
   const tubeCapGeo = useMemo(() => {
     if (!tube) return null
-    const { rcap, capTop } = tube
-    const capR = rcap
-    const nRibs = 34 // จำนวนร่องเกลียวรอบฝา
-    const ribAmp = Math.min(0.6, capR * 0.09)
-    const NU = 136
-    const NV = 10
-    const stride = NU + 1
-    const pos: number[] = []
-    const idx: number[] = []
-    // ร่องเกลียว: รัศมีกระเพื่อมตามมุม; คงร่องเกือบทั้งฝา แล้วจางช่วงบนสุด (v>0.78) ให้ชนลำตัวเนียน
-    const rAt = (th: number, v: number) => {
-      const fade = v < 0.78 ? 1 : (1 - v) / 0.22
-      return capR + ribAmp * fade * 0.5 * (1 + Math.cos(th * nRibs))
-    }
-    for (let iv = 0; iv <= NV; iv++) {
-      const v = iv / NV
-      const y = v * capTop
-      for (let i = 0; i <= NU; i++) {
-        const th = (i / NU) * Math.PI * 2
-        const r = rAt(th, v)
-        pos.push(r * Math.cos(th), y, r * Math.sin(th))
-      }
-    }
-    for (let iv = 0; iv < NV; iv++) {
-      for (let i = 0; i < NU; i++) {
-        const a0 = iv * stride + i
-        const b0 = (iv + 1) * stride + i
-        idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1)
-      }
-    }
-    // ปิดก้นฝา (พัดจากจุดกึ่งกลางที่ y=0)
-    const cBot = pos.length / 3
-    pos.push(0, 0, 0)
-    for (let i = 0; i < NU; i++) idx.push(i, cBot, i + 1)
-    const g = new THREE.BufferGeometry()
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
-    g.setIndex(idx)
-    g.computeVertexNormals()
-    return g
+    const { rcap: r, capTop: h } = tube
+    const bev = Math.min(1.2, r * 0.08)
+    const g0 = h * 0.34 // ร่องรอยแยกฝาพับ (นับจากก้น)
+    const pts = [
+      new THREE.Vector2(0, 0),
+      new THREE.Vector2(r - bev, 0),
+      new THREE.Vector2(r - bev * 0.3, bev * 0.3),
+      new THREE.Vector2(r, bev),
+      new THREE.Vector2(r, g0 - 0.5),
+      new THREE.Vector2(r - 0.35, g0),
+      new THREE.Vector2(r, g0 + 0.5),
+      new THREE.Vector2(r, h - 0.6),
+      new THREE.Vector2(r * 0.985, h),
+      new THREE.Vector2(0, h),
+    ]
+    return new THREE.LatheGeometry(pts, 72)
   }, [tube])
 
-  // ฉลาก: หลอดครีมใช้เปลือก loft หุ้มตามผิวลำตัวในช่วง band; ภาชนะอื่นใช้ทรงกระบอก
+  // ฉลาก: หลอดครีมใช้เปลือก loft หุ้มตามผิวลำตัวในช่วงพิมพ์; ภาชนะอื่นใช้ทรงกระบอก
   const labelH = vessel.labelY1 - vessel.labelY0
   const labelGeo = useMemo(() => {
-    if (tube) {
-      const { R, rcap, capTop, sealThick } = tube
-      const top = vessel.H
-      const aOf = (v: number) => rcap + (R - rcap) * Math.pow(v, 0.6) + 0.3
-      const bOf = (v: number) => (rcap - sealThick / 2) * Math.pow(1 - v, 1.4) + sealThick / 2 + 0.3
-      const NV = 20
-      const NU = 64
-      const stride = NU + 1
-      const pos: number[] = []
-      const uv: number[] = []
-      const idx: number[] = []
-      for (let iv = 0; iv <= NV; iv++) {
-        const f = iv / NV
-        const y = vessel.labelY0 + f * (vessel.labelY1 - vessel.labelY0)
-        const v = (y - capTop) / (top - capTop)
-        const a = aOf(v)
-        const b = bOf(v)
-        for (let i = 0; i <= NU; i++) {
-          const th = (i / NU) * Math.PI * 2
-          pos.push(a * Math.cos(th), y, b * Math.sin(th))
-          uv.push(i / NU, f)
-        }
-      }
-      for (let iv = 0; iv < NV; iv++) {
-        for (let i = 0; i < NU; i++) {
-          const a0 = iv * stride + i
-          const b0 = (iv + 1) * stride + i
-          idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1)
-        }
-      }
-      const g = new THREE.BufferGeometry()
-      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
-      g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
-      g.setIndex(idx)
-      g.computeVertexNormals()
-      return g
-    }
+    if (tube) return loftTube(range(vessel.labelY0, vessel.labelY1, 40), 0.25, true)
     // ลอยเหนือผิว 0.3 มม. กัน z-fighting กับตัวภาชนะ
     return new THREE.CylinderGeometry(vessel.labelR + 0.3, vessel.labelR + 0.3, labelH, 64, 1, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tube, vessel, labelH])
 
   useEffect(
@@ -235,12 +227,13 @@ function VesselModel({
       labelGeo.dispose()
       tubeBodyGeo?.dispose()
       tubeCapGeo?.dispose()
+      tubeSealGeo?.dispose()
     },
-    [body, labelGeo, tubeBodyGeo, tubeCapGeo],
+    [body, labelGeo, tubeBodyGeo, tubeCapGeo, tubeSealGeo],
   )
 
-  // สีฝาหลอด — แยกจากตัวหลอดให้เห็นว่าเป็นคนละชิ้น (พลาสติกเงากว่า)
-  const CAP_COLOR = '#b9b5ac'
+  // สีฝาหลอด flip-top — พลาสติกขาวเงา แยกจากตัวหลอด
+  const CAP_COLOR = '#f1f1ef'
 
   const modelRef = useRef<THREE.Group>(null)
 
@@ -269,6 +262,18 @@ function VesselModel({
       {isTube && tubeCapGeo && (
         <mesh geometry={tubeCapGeo}>
           <meshStandardMaterial color={CAP_COLOR} roughness={0.32} metalness={0.05} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      {isTube && tube && (
+        // ร่องจับเปิดฝาพับ (thumb notch) ด้านหน้าที่แนวร่องฝา
+        <mesh position={[0, tube.capTop * 0.34, tube.rcap - 0.15]}>
+          <boxGeometry args={[tube.rcap * 0.5, tube.capTop * 0.16, 0.6]} />
+          <meshStandardMaterial color="#dcdcd8" roughness={0.4} metalness={0} />
+        </mesh>
+      )}
+      {isTube && tubeSealGeo && (
+        <mesh geometry={tubeSealGeo}>
+          <meshStandardMaterial color={mat.color} roughness={0.35} metalness={0} side={THREE.DoubleSide} />
         </mesh>
       )}
       {/* ฉลาก: หลอด = เปลือก loft ตามผิว (วาง y จริง); ภาชนะอื่น = ทรงกระบอกจัดกึ่งกลาง band หมุนรอยต่อไปหลัง */}

@@ -1616,7 +1616,7 @@ export default function App({
     if (kind === 'pouch' && pouch) return pouchVolumeMl(W, H, pouch.depth3D, pouchStyle)
     if (kind === 'vessel' && vessel)
       return isTube && vessel.tube
-        ? tubeVolumeMl(W, H, vessel.tube.rcap, vessel.tube.capTop)
+        ? tubeVolumeMl(vessel.tube)
         : vesselVolumeMl(vessel.profile)
     if (kind === 'box') return boxVolumeMl(W, D, H)
     return null

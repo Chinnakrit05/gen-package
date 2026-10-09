@@ -1,4 +1,5 @@
 import type { Vec2 } from './types'
+import { tubeSection, type TubeShape } from './vessel'
 import { FLAT_SEAL, pouchWidthFactor, pouchDepthFactor, pouchSectionArea, type PouchStyle } from './pouch'
 
 // ความจุโดยประมาณ (มล.) ของบรรจุภัณฑ์ — ประเมินจากปริมาตรใช้งานด้านใน
@@ -46,12 +47,18 @@ export function vesselVolumeMl(profile: Vec2[]): number {
   return (v3 / 1000) * 0.8
 }
 
-// หลอดครีม: ลำตัวเป็นวงรีกว้าง ~W/2 ลึกเรียวจากคอ (rcap) → แบนที่ปลายซีล; ประเมินความลึกเฉลี่ย
-export function tubeVolumeMl(W: number, H: number, rcap: number, capTop: number): number {
-  const a = W / 2
-  const bAvg = rcap * 0.45
-  const bodyH = Math.max(0, H - capTop)
-  return ((Math.PI * a * bAvg * bodyH) / 1000) * 0.9
+// หลอดครีม: อินทิเกรตพื้นที่หน้าตัดวงรีของท่อบีบแบน (tubeSection ชุดเดียวกับ 3D) จากไหล่ถึงซีล
+export function tubeVolumeMl(t: TubeShape): number {
+  const N = 64
+  let v3 = 0
+  const y0 = t.capTop
+  const y1 = t.sealY0
+  for (let i = 0; i < N; i++) {
+    const y = y0 + ((i + 0.5) / N) * (y1 - y0)
+    const { a, b } = tubeSection(t, y)
+    v3 += Math.PI * a * b * ((y1 - y0) / N)
+  }
+  return (v3 / 1000) * 0.9 // เผื่อ headspace
 }
 
 // ข้อความแสดงผล: เมตริก = มล./ลิตร; imperial = fl oz / แกลลอน (US)
