@@ -108,7 +108,7 @@ export const TEMPLATES: BoxTemplate[] = [
   },
   {
     id: 'fefco-0217',
-    nameTh: 'กล่องหูหิ้วบนก้นล็อก (FEFCO 0217)',
+    nameTh: 'กล่องหูหิ้วทรงจั่ว (FEFCO 0217)',
     detail: 'เค้ก/เบเกอรี่ · ของฝากถือกลับ · ชุดของขวัญ',
     defaults: { W: 300, D: 150, H: 180 },
     tilt: 0,
