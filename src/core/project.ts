@@ -4,6 +4,7 @@ import { parseDecos, parseFillImage, type Deco, type FillImage } from './artwork
 import { LABEL_STYLES, type LabelStyle } from './vessel'
 import { POUCH_STYLES, type PouchStyle, type PouchAddons } from './pouch'
 import { parseVents, type VentConfig } from './vents'
+import { parseStickerCut, type StickerCut } from './stickerContour'
 import type { CurrentSpec } from './ai'
 
 // โมเดลข้อมูลของ "งาน" หนึ่งชิ้น + ตัว parse ที่ตรวจ/ซ่อมข้อมูลจาก localStorage หรือไฟล์ที่นำเข้า
@@ -54,6 +55,7 @@ export interface Project {
   zipper?: boolean // ซิปล็อก + รอยฉีก (เฉพาะโหมดถุง) — เก็บเฉพาะเมื่อ true
   pouchAddons?: PouchAddons // ออปชันเสริมถุง (รูแขวน/วาล์ว/tin-tie) — เก็บเฉพาะที่เปิด
   vents?: VentConfig // รูระบายอากาศบนผนังกล่อง (เฉพาะกล่องพับ) — เก็บเฉพาะเมื่อเปิด
+  stickerCut?: StickerCut // สติกเกอร์: ไดคัทตามรูป — เก็บเฉพาะเมื่อไม่ใช่สี่เหลี่ยม (ค่าเริ่มต้น)
   decos: Deco[]
   history: DesignVersion[]
   histIdx: number
@@ -145,6 +147,7 @@ export function parseProject(v: unknown, idx: number): Project | null {
     zipper: o.zipper === true ? true : undefined,
     pouchAddons: parsePouchAddons(o.pouchAddons),
     vents: parseVents(o.vents),
+    stickerCut: parseStickerCut(o.stickerCut),
     decos: parseDecos(o.decos, o.artwork),
     history,
     histIdx: clampIdx(o.histIdx, history.length),

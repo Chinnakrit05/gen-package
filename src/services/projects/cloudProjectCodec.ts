@@ -176,6 +176,7 @@ export async function dehydrateProject(input: DehydrateProjectInput): Promise<De
     fillColor: project.fillColor,
     ...(fillImage !== undefined ? { fillImage: fillImage as unknown as Record<string, unknown> | null } : {}),
     ...(project.labelStyle ? { labelStyle: project.labelStyle } : {}),
+    ...(project.stickerCut ? { stickerCut: structuredClone(project.stickerCut) as unknown as Record<string, unknown> } : {}),
     ...(project.pouchStyle ? { pouchStyle: project.pouchStyle } : {}),
     ...(project.zipper !== undefined ? { zipper: project.zipper } : {}),
     ...(project.pouchAddons

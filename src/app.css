@@ -4006,3 +4006,63 @@ aside .art-actions .file-pick:only-child {
   margin: 5px 0 0;
   padding-left: 18px;
 }
+
+/* สติกเกอร์: ปุ่มเลือกรูปทรงไดคัท/ขอบ (เต็มความกว้างแผง) + ผลตรวจไฟล์ตามข้อจำกัดผลิต */
+.sticker-seg {
+  display: flex;
+  width: 100%;
+}
+.sticker-seg button {
+  flex: 1;
+}
+.sticker-issues {
+  margin: 6px 0 10px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid rgba(196, 120, 0, 0.4);
+  background: rgba(230, 150, 0, 0.08);
+  color: #8a5300;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.sticker-issues.has-err {
+  border-color: rgba(198, 40, 40, 0.35);
+  background: rgba(198, 40, 40, 0.07);
+  color: #b3261e;
+}
+.sticker-issues ul {
+  margin: 5px 0 0;
+  padding-left: 18px;
+}
+.sticker-issues li.warn {
+  color: #8a5300;
+}
+.sticker-ok {
+  margin: 6px 0 10px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  border: 1px solid rgba(46, 125, 50, 0.35);
+  background: rgba(46, 125, 50, 0.07);
+  color: #2e7d32;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.sticker-ok span {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+:root[data-theme='dark'] .sticker-issues {
+  color: #f0b45a;
+}
+:root[data-theme='dark'] .sticker-issues.has-err,
+:root[data-theme='dark'] .sticker-issues li.error {
+  color: #ff8a80;
+}
+:root[data-theme='dark'] .sticker-issues li.warn {
+  color: #f0b45a;
+}
+:root[data-theme='dark'] .sticker-ok {
+  color: #81c784;
+}

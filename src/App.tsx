@@ -4,7 +4,7 @@ import { LogOut } from 'lucide-react'
 
 // true เมื่อ DimField อยู่ในแถบปรับแต่งด้านบน (Canva-style) → เปลี่ยนสไลเดอร์เป็นปุ่ม+dropdown อัตโนมัติ
 const TopBarCtx = createContext(false)
-import { LangCtx, loadLang, LANG_KEY, type Lang } from './i18n'
+import { LangCtx, loadLang, LANG_KEY, useT, type Lang } from './i18n'
 import { MATERIALS, getMaterial, packKind } from './core/materials'
 import { TEMPLATES, getTemplate } from './core/templates'
 import type { Dieline } from './core/types'
@@ -40,6 +40,7 @@ import {
   fillSVGLayer,
   fillImageSVGLayer,
   renderArtworkCanvas,
+  renderArtworkAlpha,
   makeNutritionEl,
   FRAMES,
   framePath,
@@ -50,6 +51,18 @@ import {
   type NutriRow,
 } from './core/artwork'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
+import {
+  DEFAULT_STICKER_CUT,
+  NO_BORDER_INSET,
+  STICKER_OFFSET_MAX,
+  STICKER_OFFSET_MIN,
+  STICKER_RULES,
+  sameStickerCut,
+  type AlphaMask,
+  type StickerCut,
+} from './core/stickerContour'
+import { preflightSticker, type PreflightIssue } from './core/stickerPreflight'
+import { generateStickerContour } from './core/templates/sticker'
 import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
 import { generatePouch, POUCH_STYLES, type PouchStyle, type PouchAddons } from './core/pouch'
 import { boxVolumeMl, pouchVolumeMl, vesselVolumeMl, tubeVolumeMl, formatCapacity } from './core/capacity'
@@ -105,6 +118,7 @@ import type { Dim3D } from './components/DimBadge3D'
 import type { LightMode } from './components/SceneLighting'
 import { useSoftProof } from './components/useSoftProof'
 import { useImageDpi } from './components/useImageDpi'
+import { useStickerContour } from './components/useStickerContour'
 import { GOOD_DPI, LOW_DPI, imageDrawMm, pixelsNeeded } from './core/imageDpi'
 import { CMYK_PROOF_PROFILE } from './core/cmykProofLut'
 import { PromptBar } from './components/PromptBar'
@@ -181,6 +195,41 @@ interface DimFieldProps {
 }
 
 const MM_PER_IN = 25.4
+
+// ผลตรวจไฟล์สติกเกอร์ — error (ต้องแก้ก่อนส่งผลิต) / warn (ควรแก้) + สรุปกติกาเมื่อผ่านหมด
+function StickerIssues({ issues }: { issues: PreflightIssue[] }) {
+  const t = useT()
+  if (!issues.length) {
+    return (
+      <div className="sticker-ok" role="status">
+        ✓ {t('ไฟล์ผ่านข้อกำหนดไดคัท', 'Meets die-cut rules')}
+        <span>
+          {t(
+            `เส้นตัดห่างลาย ≥${STICKER_RULES.minBorder} มม. หรือเผื่อสี ≥${STICKER_RULES.minBleed} มม. · ระยะระหว่างเส้นตัด ≥${STICKER_RULES.minGap} มม. · ช่องเจาะ ≥${STICKER_RULES.minHole} มม. · ไม่มีมุมหักศอก`,
+            `Cut ≥${STICKER_RULES.minBorder} mm from art or bleed ≥${STICKER_RULES.minBleed} mm · cuts ≥${STICKER_RULES.minGap} mm apart · holes ≥${STICKER_RULES.minHole} mm · no sharp corners`,
+          )}
+        </span>
+      </div>
+    )
+  }
+  const errs = issues.filter((i) => i.level === 'error').length
+  return (
+    <div className={`sticker-issues${errs ? ' has-err' : ''}`} role="alert">
+      <b>
+        {errs
+          ? t(`⛔ ต้องแก้ก่อนส่งผลิต ${errs} ข้อ`, `⛔ ${errs} issue(s) to fix before production`)
+          : t('⚠ ควรตรวจก่อนส่งผลิต', '⚠ Check before production')}
+      </b>
+      <ul>
+        {issues.map((i) => (
+          <li key={i.code} className={i.level}>
+            {t(i.th, i.en)}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 
 function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange, pop: popProp, icon, imperial = false }: DimFieldProps) {
   // ค่า state จริงเป็น มม. เสมอ (เรขาคณิตใช้ มม.) — โหมดนิ้วแค่แปลงตอนแสดง/ป้อน
@@ -637,6 +686,7 @@ interface EditSnapshot {
   zipper: boolean
   pouchAddons: PouchAddons
   vents: VentConfig
+  stickerCut: StickerCut
   decos: Deco[]
 }
 
@@ -655,6 +705,7 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.zipper === b.zipper &&
   a.pouchAddons === b.pouchAddons &&
   a.vents === b.vents &&
+  sameStickerCut(a.stickerCut, b.stickerCut) &&
   a.decos === b.decos
 
 const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
@@ -931,6 +982,8 @@ export default function App({
   const [zipper, setZipper] = useState<boolean>(initialActive.zipper ?? false)
   const [pouchAddons, setPouchAddons] = useState<PouchAddons>(initialActive.pouchAddons ?? {})
   const [vents, setVents] = useState<VentConfig>(initialActive.vents ?? DEFAULT_VENTS)
+  // สติกเกอร์: รูปทรงไดคัท (สี่เหลี่ยมมุมมน / ตามรูป) + ขอบขาว
+  const [stickerCut, setStickerCut] = useState<StickerCut>(initialActive.stickerCut ?? DEFAULT_STICKER_CUT)
   // ธีมสว่าง/มืด — เก็บใน localStorage, ตั้ง data-theme บน <html> (canvas/3D คงขาวเสมอ)
   const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark')
   useEffect(() => {
@@ -1244,21 +1297,60 @@ export default function App({
         : null,
     [W, D, H, handle, mat, kind, pouchStyle, zipper, pouchAddons],
   )
+  // สติกเกอร์: alpha ของลาย (ไม่รวมสีพื้น) — ใช้ทั้งไดคัทตามรูปและตรวจไฟล์ตามข้อจำกัดผลิต
+  // หน่วงหลังแก้ลาย/ขนาด (raster + distance transform หนัก ไม่ควรทำทุกครั้งที่ state ขยับ)
+  const [stickerArt, setStickerArt] = useState<AlphaMask | null>(null)
+  useEffect(() => {
+    if (!isSticker) {
+      setStickerArt(null)
+      return
+    }
+    let alive = true
+    const pad = 3 // มม. รอบแผ่น — เห็นสีที่เลยเส้นตัดออกไป (เช็คระยะเผื่อสี)
+    const tm = setTimeout(async () => {
+      // ความละเอียดปรับตามขนาดแผ่น (คุมจำนวนพิกเซล ~1.5 ล้าน) — 3–8 px/มม.
+      const s = Math.max(3, Math.min(8, Math.sqrt(1.5e6 / ((W + 2 * pad) * (H + 2 * pad)))))
+      const m = await renderArtworkAlpha(decos, W, H, s, pad)
+      if (alive) setStickerArt(m)
+    }, 250)
+    return () => {
+      alive = false
+      clearTimeout(tm)
+    }
+  }, [isSticker, decos, W, H])
+  // ไดคัทตามรูป: คำนวณใน Web Worker (หนักเกินจะทำบน main thread)
+  const { loops: stickerLoops, status: contourStatus } = useStickerContour(isSticker, stickerCut, stickerArt, W, H)
   const dieline = useMemo(
     () =>
       kind === 'box'
-        ? applyVents(
-            template.generate({ W, D, H, handle }, mat),
-            template.supportsVents ? vents : undefined,
-          )
+        ? isSticker && stickerLoops
+          ? generateStickerContour(stickerLoops, W, H)
+          : applyVents(
+              template.generate({ W, D, H, handle }, mat),
+              template.supportsVents ? vents : undefined,
+            )
         : kind === 'vessel'
           ? vessel!.label
           : pouch!.label,
-    [W, D, H, handle, mat, template, vessel, pouch, kind, vents],
+    [W, D, H, handle, mat, template, vessel, pouch, kind, vents, isSticker, stickerLoops],
   )
+  // ไดคัทตามรูปไม่ใช้เส้นเผื่อตัด 3 มม. แบบกล่อง — สติกเกอร์ใช้กติกาเผื่อสี/ระยะห่างของตัวเอง (ตรวจด้านล่าง)
   const guides = useMemo(
-    () => (showGuides && dieline ? computeGuides(dieline.panels) : null),
-    [showGuides, dieline],
+    () => (showGuides && dieline && !(isSticker && stickerLoops) ? computeGuides(dieline.panels) : null),
+    [showGuides, dieline, isSticker, stickerLoops],
+  )
+  // ตรวจไฟล์สติกเกอร์ตามข้อจำกัดการผลิตไดคัท (ระยะจากเส้นตัด/เผื่อสี/ระยะห่าง/ช่องเจาะ/มุมแหลม)
+  const stickerIssues = useMemo<PreflightIssue[]>(
+    () =>
+      isSticker && dieline
+        ? preflightSticker({
+            loops: dieline.panels.map((p) => p.outline),
+            art: stickerArt,
+            sheet: { w: dieline.width, h: dieline.height },
+            contour: !!stickerLoops,
+          })
+        : [],
+    [isSticker, dieline, stickerArt, stickerLoops],
   )
 
   // ความจุโดยประมาณ (มล.) ตามชนิดบรรจุภัณฑ์ — การ์ด/สติกเกอร์เป็นแผ่นแบน ไม่มีความจุ
@@ -1300,6 +1392,7 @@ export default function App({
               && Boolean(p.zipper) === zipper
               && samePouchAddons(p.pouchAddons, pouchAddons)
               && sameVents(p.vents, vents)
+              && sameStickerCut(p.stickerCut, stickerCut)
               && p.decos === decos
               && p.history === history
               && p.histIdx === histIdx
@@ -1315,6 +1408,7 @@ export default function App({
                     zipper,
                     pouchAddons,
                     vents,
+                    stickerCut: stickerCut.shape === 'contour' ? stickerCut : undefined,
                     decos,
                     history,
                     histIdx,
@@ -1325,7 +1419,7 @@ export default function App({
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
 
   // local demo เขียน localStorage; cloud ส่ง active project เข้า durable IndexedDB/save queue
   useEffect(() => {
@@ -1409,6 +1503,7 @@ export default function App({
     zipper,
     pouchAddons,
     vents,
+    stickerCut,
     decos,
   })
 
@@ -1431,7 +1526,7 @@ export default function App({
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, decos])
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -1449,6 +1544,7 @@ export default function App({
     setZipper(s.zipper ?? false)
     setPouchAddons(s.pouchAddons ?? {})
     setVents(s.vents ?? DEFAULT_VENTS)
+    setStickerCut(s.stickerCut ?? DEFAULT_STICKER_CUT)
     setDecos(s.decos)
     setSelectedIds([])
   }
@@ -1540,11 +1636,12 @@ export default function App({
           && Boolean(p.zipper) === zipper
           && samePouchAddons(p.pouchAddons, pouchAddons)
           && sameVents(p.vents, vents)
+          && sameStickerCut(p.stickerCut, stickerCut)
           && p.decos === decos
           && p.history === history
           && p.histIdx === histIdx
             ? p
-            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, decos, history, histIdx, updatedAt: Date.now() }
+            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut: stickerCut.shape === 'contour' ? stickerCut : undefined, decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -1564,6 +1661,7 @@ export default function App({
     setZipper(p.zipper ?? false)
     setPouchAddons(p.pouchAddons ?? {})
     setVents(p.vents ?? DEFAULT_VENTS)
+    setStickerCut(p.stickerCut ?? DEFAULT_STICKER_CUT)
     setDecos(p.decos)
     setSelectedIds([])
     setHistory(p.history)
@@ -2750,6 +2848,92 @@ export default function App({
               <p className="hint">
                 ฉลากพันรอบตัว — เลือกว่าคลุมช่วงความสูงแค่ไหน ความสูงฉลากในไฟล์ปรับตามนี้
               </p>
+            </Group>
+          )}
+
+          {isSticker && (
+            <Group title={t('ไดคัท', 'Die cut')} open={groups.label} onToggle={() => toggleGroup('label')}>
+              <div className="unit-toggle sticker-seg" role="group" aria-label={t('รูปทรงไดคัท', 'Cut shape')}>
+                <button
+                  type="button"
+                  className={stickerCut.shape === 'rect' ? 'active' : ''}
+                  aria-pressed={stickerCut.shape === 'rect'}
+                  disabled={aiBusy}
+                  onClick={() => setStickerCut({ ...stickerCut, shape: 'rect' })}
+                >
+                  {t('สี่เหลี่ยมมุมมน', 'Rounded rect')}
+                </button>
+                <button
+                  type="button"
+                  className={stickerCut.shape === 'contour' ? 'active' : ''}
+                  aria-pressed={stickerCut.shape === 'contour'}
+                  disabled={aiBusy}
+                  onClick={() => setStickerCut({ ...stickerCut, shape: 'contour' })}
+                >
+                  {t('ตามรูป', 'Follow artwork')}
+                </button>
+              </div>
+              {stickerCut.shape === 'contour' && (
+                <>
+                  <div className="unit-toggle sticker-seg" role="group" aria-label={t('ขอบ', 'Border')}>
+                    <button
+                      type="button"
+                      className={stickerCut.border === 'white' ? 'active' : ''}
+                      aria-pressed={stickerCut.border === 'white'}
+                      disabled={aiBusy}
+                      onClick={() => setStickerCut({ ...stickerCut, border: 'white' })}
+                    >
+                      {t('มีขอบขาว', 'White border')}
+                    </button>
+                    <button
+                      type="button"
+                      className={stickerCut.border === 'none' ? 'active' : ''}
+                      aria-pressed={stickerCut.border === 'none'}
+                      disabled={aiBusy}
+                      onClick={() => setStickerCut({ ...stickerCut, border: 'none' })}
+                    >
+                      {t('ไม่มีขอบขาว', 'No border')}
+                    </button>
+                  </div>
+                  {stickerCut.border === 'white' && (
+                    <DimField
+                      imperial={imperial}
+                      label={t('ความกว้างขอบขาว', 'Border width')}
+                      value={stickerCut.offset}
+                      min={STICKER_OFFSET_MIN}
+                      max={STICKER_OFFSET_MAX}
+                      disabled={aiBusy}
+                      onChange={(v) => setStickerCut({ ...stickerCut, offset: v })}
+                    />
+                  )}
+                  <p className="hint">
+                    {contourStatus === 'no-art'
+                      ? t(
+                          'ยังไม่มีลายบนแผ่น — วางรูป (แนะนำ PNG พื้นใส) หรือข้อความในแท็บตกแต่ง ระบบจะสร้างเส้นตัดตามรูปให้เอง ระหว่างนี้ใช้สี่เหลี่ยมไปก่อน',
+                          'No artwork yet — add an image (transparent PNG works best) or text in Decorate and the cut line will follow it; a rectangle is used meanwhile',
+                        )
+                      : contourStatus === 'pending'
+                        ? t('กำลังสร้างเส้นตัดตามรูป…', 'Tracing the cut line…')
+                        : contourStatus === 'empty'
+                          ? stickerCut.border === 'none'
+                            ? t(
+                                `ลายบางเกินไปสำหรับแบบไม่มีขอบขาว — ตัดเข้าเนื้อ ${NO_BORDER_INSET} มม. แล้วไม่เหลือชิ้นที่ตัดได้ (เส้นที่บางกว่า ~2 มม. หายหมด) ลองใช้แบบมีขอบขาว หรือขยาย/หนาลาย`,
+                                `Artwork too thin for no-border — after cutting ${NO_BORDER_INSET} mm inside nothing is left (strokes under ~2 mm vanish); use a white border or enlarge/thicken the art`,
+                              )
+                            : t('ลายเล็กเกินไป ไม่พบชิ้นที่ตัดได้ — ขยายลาย', 'Artwork too small to cut — enlarge it')
+                          : stickerCut.border === 'white'
+                        ? t(
+                            `เส้นตัดห่างขอบลาย ${stickerCut.offset} มม. รอบตัว (ขั้นต่ำ ${STICKER_RULES.minBorder} มม.) มุมโค้งมนให้ตัดสวย`,
+                            `Cut runs ${stickerCut.offset} mm outside the artwork (min ${STICKER_RULES.minBorder} mm), corners rounded`,
+                          )
+                        : t(
+                            `ตัดเข้าในเนื้อลาย ${NO_BORDER_INSET} มม. — สีจึงเลยเส้นตัดออกไปพอดีเงื่อนไขเผื่อสี ≥${STICKER_RULES.minBleed} มม. (ส่วนที่บางกว่า 2 มม. อาจหาย)`,
+                            `Cut sits ${NO_BORDER_INSET} mm inside the artwork so colour runs past it (bleed ≥${STICKER_RULES.minBleed} mm); parts thinner than 2 mm may drop out`,
+                          )}
+                  </p>
+                </>
+              )}
+              <StickerIssues issues={stickerIssues} />
             </Group>
           )}
 
@@ -4280,6 +4464,7 @@ export default function App({
                     เส้นเผื่อตัด / ปลอดภัย
                   </label>
                 </div>
+                {isSticker && <StickerIssues issues={stickerIssues} />}
                 {imgDpi.low.length > 0 && (
                   <div className="lowres-warn" role="alert">
                     <b>⚠ รูปความละเอียดต่ำ {imgDpi.low.length} ชิ้น</b> — พิมพ์ออกมาอาจแตก/เบลอ (แนะนำ ≥ {GOOD_DPI} dpi)

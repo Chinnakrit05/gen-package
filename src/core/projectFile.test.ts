@@ -40,6 +40,19 @@ describe('projectFile: round-trip', () => {
     expect(res.warnings).toEqual([])
   })
 
+  it('สติกเกอร์ไดคัทตามรูป: เก็บเฉพาะเมื่อไม่ใช่ค่าเริ่มต้น และอ่านกลับได้ครบ', () => {
+    const p = sampleProject()
+    p.live = { template: 'sticker', materialId: 'sticker-vinyl', W: 60, D: 60, H: 60, handle: false }
+    p.stickerCut = { shape: 'contour', border: 'none', offset: 2.5 }
+    const res = parseProjectFile(serializeProject(p))
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.project.stickerCut).toEqual({ shape: 'contour', border: 'none', offset: 2.5 })
+
+    p.stickerCut = { shape: 'rect', border: 'white', offset: 2 }
+    expect(JSON.parse(serializeProject(p)).project.stickerCut).toBeUndefined()
+  })
+
   it('นำเข้าได้ id ใหม่เสมอ (กันชนกับงานที่เปิดอยู่)', () => {
     const p = sampleProject()
     const res = parseProjectFile(serializeProject(p))

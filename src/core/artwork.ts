@@ -1567,6 +1567,50 @@ export async function renderArtworkCanvas(
   return canvas
 }
 
+// alpha ของลาย (ไม่รวมสีพื้น/รูปพื้น) สำหรับไดคัทตามรูปและตรวจไฟล์สติกเกอร์ — พื้นใส มีขอบเผื่อ pad มม.
+// รอบแผ่น (เห็นสีที่เลยเส้นตัดออกไป); ใช้ตัววาดชุดเดียวกับไฟล์ส่งออก (drawDeco2D) จึงตรงกับที่พิมพ์จริง
+export async function renderArtworkAlpha(
+  decos: Deco[],
+  sheetW: number,
+  sheetH: number,
+  pxPerMm: number,
+  pad: number,
+): Promise<{ data: Uint8ClampedArray; w: number; h: number; pxPerMm: number; origin: Vec2 } | null> {
+  const visible = decos.filter((d) => !d.hidden)
+  if (!visible.length) return null
+  await ensureThaiFont(visible)
+  const s = pxPerMm
+  const w = Math.max(1, Math.round((sheetW + 2 * pad) * s))
+  const h = Math.max(1, Math.round((sheetH + 2 * pad) * s))
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return null
+  const srcs = [...new Set(visible.filter((d) => d.type === 'image').map((d) => (d as { src: string }).src))]
+  const imgs = new Map<string, HTMLImageElement>()
+  await Promise.all(
+    srcs.map(
+      (src) =>
+        new Promise<void>((res) => {
+          const im = new Image()
+          im.onload = () => {
+            imgs.set(src, im)
+            res()
+          }
+          im.onerror = () => res()
+          im.src = src
+        }),
+    ),
+  )
+  ctx.translate(pad * s, pad * s)
+  for (const e of visible) drawDeco2D(ctx, e, s, (src) => imgs.get(src))
+  const rgba = ctx.getImageData(0, 0, w, h).data
+  const data = new Uint8ClampedArray(w * h)
+  for (let i = 0; i < w * h; i++) data[i] = rgba[i * 4 + 3]
+  return { data, w, h, pxPerMm: s, origin: { x: -pad, y: -pad } }
+}
+
 // --- persistence ---
 function parseBase(
   o: Record<string, unknown>,
