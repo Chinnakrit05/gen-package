@@ -119,11 +119,27 @@ export function computeGuides(panels: Panel[]): Guides {
     safe.push(offsetPolygon(o, SAFE_MM))
 
     const out = offsetPolygon(o, -BLEED_MM)
-    for (let i = 0; i < o.length; i++) {
+    const n = o.length
+    const isOuter = (i: number) => (count.get(edgeKey(o[i % n], o[(i + 1) % n])) ?? 0) <= 1
+    // ปลายขอบนอกที่ต่อกับขอบใน (รอยพับ/ขอบร่วม): เลื่อนตั้งฉากจากขอบนี้แทน miter กับขอบใน
+    // — มุมแหลมระหว่างขอบนอกกับขอบร่วม (เช่นฐานหน้าจั่วที่แยกแผงจากผนัง) จะ miter ยื่นเกิน bleed หลายเท่า
+    const square = (a: Vec2, b: Vec2, at: Vec2): Vec2 => {
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+      const nx = (b.y - a.y) / len
+      const ny = -(b.x - a.x) / len
+      // ทิศออกนอก = ฝั่งเดียวกับจุด miter ที่ offsetPolygon ให้มา
+      const mid = out[o.indexOf(at)]
+      const sgn = (mid.x - at.x) * nx + (mid.y - at.y) * ny >= 0 ? 1 : -1
+      return { x: at.x + sgn * BLEED_MM * nx, y: at.y + sgn * BLEED_MM * ny }
+    }
+    for (let i = 0; i < n; i++) {
       // วาด bleed เฉพาะขอบนอก (ไม่มีแผงอื่นใช้ร่วม)
-      if ((count.get(edgeKey(o[i], o[(i + 1) % o.length])) ?? 0) <= 1) {
-        bleed.push([out[i], out[(i + 1) % out.length]])
-      }
+      if (!isOuter(i)) continue
+      const a = o[i]
+      const b = o[(i + 1) % n]
+      const pa = isOuter(i - 1 + n) ? out[i] : square(a, b, a)
+      const pb = isOuter(i + 1) ? out[(i + 1) % n] : square(a, b, b)
+      bleed.push([pa, pb])
     }
   }
   return { safe, bleed }

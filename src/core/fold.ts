@@ -62,6 +62,12 @@ function tuckAngle(p: Panel, lid: Panel | undefined, progress: number, lidProgre
   return Math.sign(fa) * psi
 }
 
+// ปริมาณงอของ Panel.flex ตามความคืบหน้าของ stage ที่ผูกไว้: ค่อย ๆ งอเต็มที่ช่วงต้น ค้างไว้
+// แล้วคืนตัวช่วงท้ายสุด (ตอนแผงที่สอดผ่านเข้าที่แล้ว) — 0 ทั้งก่อนและหลัง stage นั้น
+function flexAmount(u: number): number {
+  return Math.max(0, Math.min(1, u / 0.2, (1 - u) / 0.02))
+}
+
 // คำนวณ transform ของทุก panel ที่ค่าการพับ fold ∈ [0,1]
 // แต่ละ panel หมุนรอบเส้น crease ของตัวเอง (นิยามในพิกัดแผ่นคลี่)
 // แล้วส่งผ่าน transform ของ panel แม่แบบลูกโซ่
@@ -90,6 +96,7 @@ export function computeMatrices(panels: Panel[], fold: number): Map<string, Matr
         // ถ้าใช้ progress เดิม ลิ้นจะเบียดผนังหน้าเกินความหนาชั้นช่วงที่ไถลลง
         progress = Math.min(1, (theta * 180) / Math.PI / p.foldAngle)
       }
+      if (p.flex) theta += (p.flex.angle * Math.PI * flexAmount(stageProgress(windows, p.flex.stage, fold))) / 180
       const local = new Matrix4()
         .makeTranslation(a.x, a.y, a.z)
         .multiply(new Matrix4().makeRotationAxis(axis, theta))
