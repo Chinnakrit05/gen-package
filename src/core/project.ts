@@ -80,9 +80,10 @@ export function parseSpec(s: unknown): CurrentSpec | null {
   return {
     template,
     materialId,
-    W: clamp(W, 30, 250),
+    // สติกเกอร์เล็กได้ถึง 10 มม. (แผ่นหลายดวง) — กล่อง/งานอื่นขั้นต่ำ 30
+    W: clamp(W, template === 'sticker' ? 10 : 30, 250),
     D: clamp(D, 20, 150),
-    H: clamp(H, 30, 300),
+    H: clamp(H, template === 'sticker' ? 10 : 30, 300),
     handle: o.handle === true,
   }
 }

@@ -10,6 +10,7 @@ import {
   sheetDieline,
   stickerSheetById,
   sheetsNeeded,
+  fitScaleForCount,
 } from './stickerSheet'
 import { generateSticker } from './templates/sticker'
 import { pathToPolylines } from './dxf'
@@ -117,5 +118,51 @@ describe('placePath / sheetDieline', () => {
     expect(s.segments).toHaveLength(L.count)
     const issues = preflightSticker({ loops: s.panels.map((p) => p.outline), sheet: { w: s.width, h: s.height } })
     expect(issues.map((i) => i.code)).not.toContain('gap')
+  })
+})
+
+describe('fitScaleForCount (กำหนดจำนวนต่อแผ่น → ขนาดดวง)', () => {
+  const fitted = (n: number, art: { w: number; h: number }, edge: number, sheet = a6) => {
+    const k = fitScaleForCount(n, art, edge, sheet)!
+    const box = (kk: number) => ({ x0: 0, y0: 0, x1: art.w * kk + 2 * edge, y1: art.h * kk + 2 * edge })
+    return { k, count: layoutStickerSheet(box(k), sheet).count, bigger: layoutStickerSheet(box(k * 1.01), sheet).count }
+  }
+
+  it('สี่เหลี่ยมจัตุรัส 8 ดวงบน A6 → ~33 มม. (2×4) และใหญ่กว่านี้ใส่ไม่ครบ', () => {
+    const r = fitted(8, { w: 60, h: 60 }, 0)
+    expect(r.count).toBeGreaterThanOrEqual(8)
+    expect(r.bigger).toBeLessThan(8)
+    expect(60 * r.k).toBeCloseTo(33, 0)
+  })
+
+  it('ทุกจำนวน 1–40 ได้ครบตามที่ขอ และเป็นขนาดใหญ่สุด', () => {
+    for (let n = 1; n <= 40; n++) {
+      const r = fitted(n, { w: 50, h: 30 }, 0)
+      expect(r.count).toBeGreaterThanOrEqual(n)
+      expect(r.bigger).toBeLessThan(n)
+    }
+  })
+
+  it('ขอบขาวไม่ย่อตามลาย: ลาย×k + 2·ขอบ ต้องพอดีช่อง', () => {
+    const r = fitted(6, { w: 40, h: 20 }, 2.5)
+    expect(r.count).toBeGreaterThanOrEqual(6)
+    expect(r.bigger).toBeLessThan(6)
+  })
+
+  it('จำนวนต่อแผ่นจำกัดตำแหน่งวางไม่เกินที่ขอ (แถวสุดท้ายไม่เต็มได้)', () => {
+    const k = fitScaleForCount(7, { w: 60, h: 60 }, 0, a6)!
+    const L = layoutStickerSheet({ x0: 0, y0: 0, x1: 60 * k, y1: 60 * k }, a6, SHEET_MARGIN, SHEET_GAP, 7)
+    expect(L.count).toBe(7)
+  })
+
+  it('เผื่อ slack: ดวงที่ใหญ่ขึ้นตามเศษที่เผื่อไว้ยังใส่ได้ครบ', () => {
+    const art = { w: 40, h: 14 }
+    const k = fitScaleForCount(20, art, 2, a6, SHEET_MARGIN, SHEET_GAP, 0.6)!
+    const grown = { x0: 0, y0: 0, x1: art.w * k + 4 + 0.5, y1: art.h * k + 4 + 0.5 }
+    expect(layoutStickerSheet(grown, a6).count).toBeGreaterThanOrEqual(20)
+  })
+
+  it('ขอบขาวใหญ่จนเล็กแค่ไหนก็ใส่ไม่ครบ → null', () => {
+    expect(fitScaleForCount(200, { w: 10, h: 10 }, 8, a6)).toBeNull()
   })
 })

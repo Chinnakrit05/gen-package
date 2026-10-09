@@ -4089,3 +4089,38 @@ aside .art-actions .file-pick:only-child {
   color: var(--text);
   font-size: 14px;
 }
+
+/* แผ่นสติกเกอร์: ช่องจำนวนต่อแผ่น + ปุ่มลิงก์ในข้อความเตือน */
+.per-sheet {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.per-sheet span:first-child {
+  flex: 1;
+}
+.per-sheet input {
+  width: 72px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface-solid);
+  color: var(--text);
+  font: inherit;
+  text-align: right;
+}
+.link-btn {
+  display: inline;
+  width: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

@@ -1,5 +1,6 @@
 import type { Dieline, Panel, Segment, Vec2 } from './types'
 import { STICKER_RULES } from './stickerContour'
+export { PER_SHEET_MAX } from './stickerContour'
 import { P, fmt } from './templates/shared'
 
 // แผ่นสติกเกอร์หลายดวง (sticker sheet แบบโรงพิมพ์ดิจิทัล เช่น Lalapix: A6 = 8 แผ่น/A3, A5 = 4 แผ่น/A3)
@@ -23,6 +24,7 @@ export const stickerSheetById = (id?: string) => STICKER_SHEETS.find((s) => s.id
 
 export const SHEET_MARGIN = 5 // มม. — ระยะจากขอบแผ่นถึงเส้นตัดดวงนอกสุด (กันตัดแผ่นแล้วโดนดวง/จับลอกได้)
 export const SHEET_GAP = STICKER_RULES.minGap // ระยะระหว่างเส้นตัดของดวงที่ติดกัน
+export const STICKER_MIN_SIZE = 10 // มม. — สติกเกอร์เล็กสุด (กล่องใช้ 30)
 
 export interface Box {
   x0: number
@@ -69,6 +71,7 @@ export function layoutStickerSheet(
   sheet: StickerSheet,
   margin = SHEET_MARGIN,
   gap = SHEET_GAP,
+  limit?: number, // กำหนดจำนวนต่อแผ่น: วางไม่เกินเท่านี้ (แถวสุดท้ายอาจไม่เต็ม)
 ): SheetLayout {
   const pw = box.x1 - box.x0
   const ph = box.y1 - box.y0
@@ -99,7 +102,40 @@ export function layoutStickerSheet(
       )
     }
   }
+  if (limit !== undefined && placements.length > limit) placements.length = Math.max(0, limit)
   return { sheet, cols, rows, rotated, count: placements.length, placements }
+}
+
+// กำหนดจำนวนต่อแผ่น → ตัวคูณขนาด k ที่ใหญ่สุดที่ยังได้ ≥ n ดวง (คงสัดส่วนลาย)
+// กรอบเส้นตัดหลังย่อ/ขยาย = ลาย×k + 2·edge — edge = ขอบขาว (ไม่ย่อตามลาย) หรือติดลบเมื่อตัดเข้าเนื้อ;
+// สี่เหลี่ยมเต็มแผ่นออกแบบใช้ edge = 0. คืน null เมื่อเล็กแค่ไหนก็ใส่ไม่ครบ
+export function fitScaleForCount(
+  n: number,
+  art: { w: number; h: number },
+  edge: number,
+  sheet: StickerSheet,
+  margin = SHEET_MARGIN,
+  gap = SHEET_GAP,
+  slack = 0, // มม. เผื่อต่อดวง — ไดคัทตามรูปคำนวณเส้นตัดใหม่หลังย่อ/ขยาย คลาดได้ ±0.2 มม.
+): number | null {
+  if (n < 1 || art.w <= 0 || art.h <= 0) return null
+  const fits = (k: number) =>
+    layoutStickerSheet(
+      { x0: 0, y0: 0, x1: art.w * k + 2 * edge + slack, y1: art.h * k + 2 * edge + slack },
+      sheet,
+      margin,
+      gap,
+    )
+      .count >= n
+  let lo = 0
+  let hi = (Math.max(sheet.w, sheet.h) * 2) / Math.min(art.w, art.h)
+  if (!fits(1e-6)) return null
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2
+    if (fits(mid)) lo = mid
+    else hi = mid
+  }
+  return lo * 0.999 // เผื่อเศษทศนิยม/เส้นตัดที่คำนวณใหม่ต่างเล็กน้อย
 }
 
 // แปลงพิกัดทุกจุดใน path (M/L/Q/A/Z แบบ absolute ที่ generator ของเราใช้) ด้วย placement

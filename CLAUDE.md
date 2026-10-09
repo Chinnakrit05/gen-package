@@ -33,7 +33,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `src/core/stickerContour.ts` + `stickerPreflight.ts` (pure) — สติกเกอร์ 'ไดคัทตามรูป' + ตรวจไฟล์ตามข้อจำกัดผลิต
   (อิงเงื่อนไขโรงพิมพ์สติกเกอร์ไดคัท เช่น Lalapix: `STICKER_RULES` ห่างเส้นตัด/เผื่อสี ≥1 มม., ระหว่างเส้นตัด ≥2, ช่องเจาะ ≥2, รัศมีโค้ง ≥0.5):
   alpha ของลาย (`renderArtworkAlpha`, ไม่รวมสีพื้น) → อุดรู → ขยาย (มีขอบขาว) หรือหดเข้าเนื้อ 1 มม. (ไม่มีขอบขาว = สีเลยเส้นตัดเอง)
-  → closing/opening ลบมุม → เบลอแล้วเดินเส้นที่ 0.5 (marching squares) → ลดจุด + Chaikin; ห้ามเดินเส้นบน mask ขาวดำตรง ๆ
+  → closing/opening ลบมุม → อุดรูอีกรอบ (ลบมุมเชื่อมช่องแคบปิดเป็นโพรง) → เบลอแล้วเดินเส้นที่ 0.5 (marching squares) → ลดจุด + Chaikin; ห้ามเดินเส้นบน mask ขาวดำตรง ๆ
   (ได้ขั้นบันไดพิกเซลที่ตัวตรวจเองจับเป็นมุมหักศอก — เทสต์ `contour ที่ N px/มม. ผ่านกติกามุมโค้ง` กันไว้)
   คำนวณใน Web Worker (`stickerContour.worker.ts` ผ่าน `useStickerContour`) เพราะ distance transform หนักหลายร้อย ms;
   ตั้งค่า `Project.stickerCut` เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (`storedStickerCut`; thread แบบเดียวกับ `vents`, PROJECT_FILE_VERSION 9)
@@ -41,6 +41,10 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   `layoutStickerSheet` เรียงซ้ำจากกรอบเส้นตัด (`cutBox`, ไม่ใช่แผ่นออกแบบ) เว้น 2 มม./ขอบ 5 มม. หมุน 90° ถ้าได้มากกว่า;
   `placePoint`/`placePath`/`placementSVG` = transform ชุดเดียวกันทุกที่ (พรีวิว/SVG/PDF/DXF) → `sheetDieline` ใช้ส่งออก;
   ลายต่อดวงคลิป `artClipBox` (กรอบเส้นตัด + ครึ่งระยะห่าง = เผื่อสี 1 มม.); blueprint ยังแก้ไขดวงเดียว
+  โหมดกำหนดจำนวน (`stickerCut.perSheet`): `fitScaleForCount` binary search ตัวคูณขนาดใหญ่สุดที่ได้ ≥ n ดวง
+  (ลาย×k + 2·ขอบขาว — ขอบขาวไม่ย่อตาม; ตามรูปเผื่อ 0.6 มม. เพราะ trace เส้นใหม่คลาดได้) แล้ว `scaleDecos` + ตั้ง W/H
+  (ล็อกช่อง W/H); แก้ลายทีหลังไม่ย่อเองอัตโนมัติ — โชว์ "ได้ X จาก N" + ปุ่มจัดขนาดใหม่. สติกเกอร์เล็กสุด 10 มม.
+  (`parseSpec` clamp ตาม template) — กล่องยัง 30
 - `src/core/imposition.ts` — คำนวณ yield ต่อแผ่น (pure): `computeImposition` วางกริด step&repeat เทียบชิ้นตั้ง/หมุน 90° เลือกจำนวนมากสุด + `sheetsNeeded` (ปัดขึ้น) + `SHEET_PRESETS` แผ่นมาตรฐานไทย; UI อยู่แท็บ "ส่งออก" ผูกกับช่องจำนวน (state ephemeral ไม่เก็บลง project)
 - `src/core/snap.ts` — logic ดูด artwork เข้าแนวขณะลาก (pure): `snapTargets` สร้างเส้นเป้าหมายจากกึ่งกลางแผ่น/ขอบ-กึ่งกลางแผง/ขอบ-กึ่งกลางชิ้นอื่น, `applySnap` ดูดขอบ-กึ่งกลางชิ้นเข้าเส้นใกล้สุดในระยะ threshold (แปลงจาก 6px ตามซูม); กด Alt ค้างระหว่างลาก = ปิด snap
 - `src/components/PromptBar.tsx` + `src/core/ai.ts` — AI layer ฝั่ง client; แนบรูปอ้างอิงได้ (ย่อเป็น JPEG ≤1024px ฝั่ง client → base64; backend api ส่งเป็น image block, backend cli เขียนไฟล์ tmp ให้ Claude เปิดอ่านเองแล้วลบทิ้ง)

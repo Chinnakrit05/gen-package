@@ -1567,6 +1567,31 @@ export async function renderArtworkCanvas(
   return canvas
 }
 
+// ย่อ/ขยายลายทั้งชุดรอบจุด (0,0) ของแผ่นด้วยตัวคูณ k — ตำแหน่ง ขนาดกรอบ ตัวอักษร เส้นขอบ มุมโค้ง
+// (ตารางโภชนาการคิดขนาดตัวอักษรจากความกว้างเอง จึงคูณแค่ w) — ใช้ตอนขนาดสติกเกอร์ถูกกำหนดจากจำนวนต่อแผ่น
+export function scaleDecos(decos: Deco[], k: number): Deco[] {
+  return decos.map((e): Deco => {
+    const base = { x: e.x * k, y: e.y * k }
+    switch (e.type) {
+      case 'image':
+        return { ...e, ...base, w: e.w * k, h: e.h * k, ...(e.radius !== undefined ? { radius: e.radius * k } : {}) }
+      case 'text':
+        return {
+          ...e,
+          ...base,
+          size: e.size * k,
+          w: e.w * k,
+          ...(e.strokeW !== undefined ? { strokeW: e.strokeW * k } : {}),
+        }
+      case 'shape':
+      case 'path':
+        return { ...e, ...base, w: e.w * k, h: e.h * k, strokeW: e.strokeW * k }
+      case 'nutrition':
+        return { ...e, ...base, w: e.w * k }
+    }
+  })
+}
+
 // alpha ของลาย (ไม่รวมสีพื้น/รูปพื้น) สำหรับไดคัทตามรูปและตรวจไฟล์สติกเกอร์ — พื้นใส มีขอบเผื่อ pad มม.
 // รอบแผ่น (เห็นสีที่เลยเส้นตัดออกไป); ใช้ตัววาดชุดเดียวกับไฟล์ส่งออก (drawDeco2D) จึงตรงกับที่พิมพ์จริง
 export async function renderArtworkAlpha(

@@ -80,6 +80,18 @@ describe('contourFromAlpha', () => {
     expect(contourFromAlpha(maskOf(ring), 2)).toHaveLength(1)
   })
 
+  it('ช่องแคบที่ถูกปิดตอนลบมุม ไม่กลายเป็นรูตัดด้านใน (เช่นหัวตัวอักษรที่เกือบปิด)', () => {
+    // วงแหวนหนา 4 มม. มีช่องเปิดกว้าง 1.5 มม. — ขอบขาว+ลบมุมจะเชื่อมช่องปิด เกิดโพรงด้านใน
+    const C = (x: number, y: number) => {
+      const r = Math.hypot(x - 30, y - 30)
+      return r >= 10 && r <= 14 && !(Math.abs(y - 30) < 0.75 && x > 30)
+    }
+    for (const off of [2, 1]) {
+      const loops = contourFromAlpha(maskOf(C), off)
+      expect(loops).toHaveLength(1)
+    }
+  })
+
   it('มุมเว้าแหลม (รูปตัว L) ถูกลบมุมเป็นโค้ง — ไม่มีจุดหักศอก', () => {
     const L = (x: number, y: number) => (x > 10 && x < 50 && y > 10 && y < 25) || (x > 10 && x < 25 && y > 10 && y < 50)
     const [l] = contourFromAlpha(maskOf(L), 2)
@@ -140,5 +152,9 @@ describe('parseStickerCut', () => {
     // แผ่นหลายดวงเก็บได้แม้เป็นสี่เหลี่ยม; ค่าแผ่นแปลก ๆ ทิ้ง
     expect(parseStickerCut({ shape: 'rect', sheet: 'a6' })).toEqual({ shape: 'rect', border: 'white', offset: 2, sheet: 'a6' })
     expect(parseStickerCut({ shape: 'rect', sheet: 'b9' })).toBeUndefined()
+    // จำนวนต่อแผ่น: ปัดเป็นจำนวนเต็ม จำกัดเพดาน และเก็บเฉพาะเมื่อมีแผ่น
+    expect(parseStickerCut({ shape: 'rect', sheet: 'a5', perSheet: 7.6 })?.perSheet).toBe(8)
+    expect(parseStickerCut({ shape: 'rect', sheet: 'a5', perSheet: 9999 })?.perSheet).toBe(200)
+    expect(parseStickerCut({ shape: 'contour', perSheet: 8 })?.perSheet).toBeUndefined()
   })
 })

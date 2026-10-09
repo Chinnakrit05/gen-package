@@ -24,7 +24,9 @@ export interface StickerCut {
   border: StickerBorder // contour เท่านั้น: มีขอบขาว (ตัดนอกชิ้นงาน) / ไม่มีขอบขาว (ตัดชิดชิ้นงาน)
   offset: number // มม. — ความกว้างขอบขาว (border='white')
   sheet?: StickerSheetId // แผ่นสติกเกอร์หลายดวง (A6/A5/A4) — ไม่ใส่ = ดวงเดียว
+  perSheet?: number // กำหนดจำนวนต่อแผ่น → ขนาดดวงคำนวณจากจำนวน (ไม่ใส่ = กำหนดขนาดเอง)
 }
+export const PER_SHEET_MAX = 200
 export const DEFAULT_STICKER_CUT: StickerCut = { shape: 'rect', border: 'white', offset: 2 }
 export const STICKER_OFFSET_MIN = STICKER_RULES.minBorder
 export const STICKER_OFFSET_MAX = 8
@@ -37,7 +39,8 @@ export const sameStickerCut = (a?: StickerCut, b?: StickerCut) =>
   (a ?? DEFAULT_STICKER_CUT).shape === (b ?? DEFAULT_STICKER_CUT).shape &&
   (a ?? DEFAULT_STICKER_CUT).border === (b ?? DEFAULT_STICKER_CUT).border &&
   (a ?? DEFAULT_STICKER_CUT).offset === (b ?? DEFAULT_STICKER_CUT).offset &&
-  (a ?? DEFAULT_STICKER_CUT).sheet === (b ?? DEFAULT_STICKER_CUT).sheet
+  (a ?? DEFAULT_STICKER_CUT).sheet === (b ?? DEFAULT_STICKER_CUT).sheet &&
+  (a ?? DEFAULT_STICKER_CUT).perSheet === (b ?? DEFAULT_STICKER_CUT).perSheet
 
 // ค่าที่ต้องเก็บลงงาน (ค่าเริ่มต้น = ไม่เก็บ)
 export const storedStickerCut = (c: StickerCut) => (sameStickerCut(c, DEFAULT_STICKER_CUT) ? undefined : c)
@@ -55,6 +58,9 @@ export function parseStickerCut(raw: unknown): StickerCut | undefined {
       ? Math.min(STICKER_OFFSET_MAX, Math.max(STICKER_OFFSET_MIN, Math.round(off * 2) / 2))
       : DEFAULT_STICKER_CUT.offset,
     ...(sheet ? { sheet } : {}),
+    ...(sheet && Number.isFinite(Number(o.perSheet)) && Number(o.perSheet) >= 1
+      ? { perSheet: Math.min(PER_SHEET_MAX, Math.round(Number(o.perSheet))) }
+      : {}),
   }
 }
 
@@ -355,11 +361,17 @@ export function contourFromAlpha(
     mask = dilate(erode(mask, w, h, rpx), w, h, rpx)
     mask = erode(dilate(mask, w, h, rpx), w, h, rpx)
   }
+  // อุดรูอีกรอบ: การขยาย/ลบมุมเชื่อมช่องแคบปิด (เช่นหัวตัวอักษรที่เกือบปิด) เกิดโพรงใหม่ที่ไม่ใช่รูในลาย
+  mask = fillHoles(mask, w, h)
   // เบลอ mask เล็กน้อยแล้วเดินเส้นที่ระดับ 0.5 → ขอบ sub-pixel ไม่เป็นขั้นบันไดตามพิกเซล
   // (เบลอสมมาตร ขอบตรงไม่เลื่อน; มุมนูนถูกมนไปแล้วจากขั้นตอนก่อน จึงไม่เสียรูป)
   const field = gaussianBlur(mask, w, h, Math.max(0.8, 0.12 * s))
   const minArea = (opts.minArea ?? 4) * s * s // ทิ้งเศษชิ้นเล็กกว่า ~4 มม.²
-  return marchingSquares(field, w, h, 0.5)
+  const all = marchingSquares(field, w, h, 0.5)
+  // marching squares เดินเส้นนอกกับเส้นรูคนละทิศ → เก็บเฉพาะทิศเดียวกับชิ้นใหญ่สุด (= เส้นนอก)
+  const outerSign = Math.sign(loopArea(all.reduce((a, b) => (Math.abs(loopArea(b)) > Math.abs(loopArea(a)) ? b : a), all[0] ?? [])))
+  return all
+    .filter((l) => Math.sign(loopArea(l)) === outerSign)
     .filter((l) => Math.abs(loopArea(l)) >= minArea)
     .sort((a, b) => Math.abs(loopArea(b)) - Math.abs(loopArea(a)))
     .map((l) =>
