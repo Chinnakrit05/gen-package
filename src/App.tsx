@@ -10,6 +10,7 @@ import { TEMPLATES, getTemplate } from './core/templates'
 import type { Dieline, Vec2 } from './core/types'
 import type { AiBoxSpec, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
+import { dimTextSize } from './core/templates/shared'
 import { dielinePDFBytes } from './core/pdf'
 import { specSheetPDFBytes } from './core/specSheet'
 import {
@@ -726,17 +727,20 @@ function dielineSVGString(
   let pad = 5
   if (withDims) {
     pad = 26
+    const fs = dimTextSize(d.width, d.height)
+    const tk = fs * 0.42
+    const gap = fs / 3
     const marks = d.dims
       .map((m) => {
         const vert = Math.abs(m.a.x - m.b.x) < 0.001
         const mx = (m.a.x + m.b.x) / 2
         const my = (m.a.y + m.b.y) / 2
         const ticks = vert
-          ? `<line x1="${m.a.x - 2.5}" y1="${m.a.y}" x2="${m.a.x + 2.5}" y2="${m.a.y}"/><line x1="${m.b.x - 2.5}" y1="${m.b.y}" x2="${m.b.x + 2.5}" y2="${m.b.y}"/>`
-          : `<line x1="${m.a.x}" y1="${m.a.y - 2.5}" x2="${m.a.x}" y2="${m.a.y + 2.5}"/><line x1="${m.b.x}" y1="${m.b.y - 2.5}" x2="${m.b.x}" y2="${m.b.y + 2.5}"/>`
+          ? `<line x1="${m.a.x - tk}" y1="${m.a.y}" x2="${m.a.x + tk}" y2="${m.a.y}"/><line x1="${m.b.x - tk}" y1="${m.b.y}" x2="${m.b.x + tk}" y2="${m.b.y}"/>`
+          : `<line x1="${m.a.x}" y1="${m.a.y - tk}" x2="${m.a.x}" y2="${m.a.y + tk}"/><line x1="${m.b.x}" y1="${m.b.y - tk}" x2="${m.b.x}" y2="${m.b.y + tk}"/>`
         const label = vert
-          ? `<text x="${mx}" y="${my}" transform="rotate(-90 ${mx} ${my})" dy="-2" text-anchor="middle" fill="#1b6ea8" font-size="6" stroke="none">${m.label}</text>`
-          : `<text x="${mx}" y="${my - 2}" text-anchor="middle" fill="#1b6ea8" font-size="6" stroke="none">${m.label}</text>`
+          ? `<text x="${mx}" y="${my}" transform="rotate(-90 ${mx} ${my})" dy="${-gap}" text-anchor="middle" fill="#1b6ea8" font-size="${fs}" stroke="none">${m.label}</text>`
+          : `<text x="${mx}" y="${my - gap}" text-anchor="middle" fill="#1b6ea8" font-size="${fs}" stroke="none">${m.label}</text>`
         return `    <line x1="${m.a.x}" y1="${m.a.y}" x2="${m.b.x}" y2="${m.b.y}"/>${ticks}${label}`
       })
       .join('\n')

@@ -72,6 +72,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - เปลี่ยนเวอร์ชัน dependency แล้วต้องลบ `node_modules/.vite` แล้วรีสตาร์ท dev server ไม่งั้น pre-bundle เก่าค้าง
 - พิกัดแผ่นคลี่: x ขวา y ลง หน่วย mm; แปลงเป็น 3D ที่ (x, -y, 0)
 - ฟอนต์ไทย self-host ผ่าน `@fontsource/*` (import ใน main.tsx, ไม่พึ่ง Google CDN); ข้อความเลือกได้หลายฟอนต์ (registry `FONTS` ใน artwork.ts: noto/sarabun/prompt/kanit) + น้ำหนัก 400/700 — เพิ่มฟอนต์ใหม่ต้องทำ 3 จุด: import css ใน main.tsx, เพิ่มใน `FONTS`, และ `ensureThaiFont` โหลดให้; ก่อน rasterize ลง canvas (renderArtworkCanvas/ใบสเปก) ต้อง `await ensureThaiFont()` เพราะ fontsource โหลด subset ต่อน้ำหนักแบบ lazy — ถ้าไม่รอ canvas จะ fallback ทำให้ไทยในไฟล์ export เพี้ยน
+- ขนาดตัวอักษรป้ายบอกขนาด = `dimTextSize` (ตามขนาดแผ่น 3.5–6 มม.) ใช้ร่วม blueprint/SVG/PDF — อย่าใส่ fontSize ตายตัว (แผ่นเล็กตัวเลขล้น)
 - ตัวเลขบน blueprint คือระยะ score จริง (บวกเผื่อความหนาแล้ว) จึงใหญ่กว่าค่าที่ผู้ใช้ตั้งเล็กน้อย — ตั้งใจ ไม่ใช่บั๊ก
 - แผนเฟสเดิม (FEFCO 0427, sleeve, export PDF/DXF, โลโก้/ข้อความ, ขวด revolve + ฉลาก) เสร็จครบแล้ว
 - ชนิดงาน (packKind ใน materials.ts) แยก 3 path จากวัสดุ: `box` (foldable) / `vessel` (revolve) /
@@ -83,7 +84,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ความหมายขนาด: W = ⌀ตัว, D = ⌀ปาก/คอ, H = สูง (template ถูกละเลย); `isVessel` = !foldable && form≠pouch
 - วัสดุถุงฟิล์ม (pouch-foil/pouch-kraft/pouch-clear, form==='pouch') → `src/core/pouch.ts`:
   ถุงฟิล์ม — (1) dieline แผ่นฟิล์มแบน (ข้างจีบ/ก้นแบน: [หน้า][หลัง][ลิ้นกาว]; pillow: [ครีบ][หลังซ้าย][หน้า][หลังขวา][ครีบ];
-  ซองแบน 3 ด้าน: แผงหน้า+หลังแยก ซีล ⊔ (ซ้าย-ล่าง-ขวา `FLAT_SEAL`) ปากบนเปิดไว้บรรจุ — 3D `flatZ`/`flatAt` ซีลแบนรอบ 4 ด้าน กลางพองบาง,
+  ซองแบน 3 ด้าน: แผงหน้า+หลังแยก ซีล ⊔ (ซ้าย-ล่าง-ขวา `FLAT_SEAL` 5 มม.) ปากบนเปิดไว้บรรจุ — 3D `flatZ`/`flatAt` ซีลแบนรอบ 4 ด้าน กลางพองบาง,
   ความจุซองแบนใช้สูตรปริมาตรซองแบนตอนบรรจุเต็ม (ไม่ใช่ความหนาที่แสดงใน 3D);
   doypack: แผงหน้า+หลังแยก ดูด้านล่าง) เป็น
   Dieline ปกติ ไหลผ่าน artwork/export/CMYK/ใบสเปกได้เลย (2) ทรง 3D ใน PouchViewer3D = พื้นผิว loft

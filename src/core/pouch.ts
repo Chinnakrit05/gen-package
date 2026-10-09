@@ -26,7 +26,7 @@ export const POUCH_STYLES: { id: PouchStyle; nameTh: string; detail: string }[] 
 
 export const POUCH_SIDE_SEAL = 6 // ริมซีล/ลิ้นทากาวข้าง (มม.)
 export const POUCH_TOP_SEAL = 10 // ริมซีลปากบน (มม.)
-export const FLAT_SEAL = 8 // ซีลรอบซองแบน 3 ด้าน (ซ้าย/ขวา/ล่าง + ปากบนหลังบรรจุ) กว้างเท่ากัน (มม.)
+export const FLAT_SEAL = 5 // ซีลรอบซองแบน 3 ด้าน (ซ้าย/ขวา/ล่าง + ปากบนหลังบรรจุ) กว้างเท่ากัน (มม.) — ซองเล็กใช้ 5 มม. ตามงานจริง
 export const POUCH_FIN_SEAL = 8 // ครีบซีลหลังกลาง (fin seal) ของซองหลังกลาง — ลิ้นแต่ละข้างของแผ่น (มม.)
 export const BRICK_SEAL = 20 // แถบซีลบน/ล่างของซองข้างจีบ (มม.)
 export const POUCH_ZIP_INSET = 18 // ระยะจากปากบนลงมาถึงแนวซิปล็อก (มม.)
@@ -255,7 +255,7 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
           { a: P(0, filmH + 12), b: P(W, filmH + 12), label: `${wLabel} ${fmt(W)}` },
           { a: P(W + pss, filmH + 12), b: P(2 * W - pss, filmH + 12), label: `พื้นที่บรรจุ ${fmt(W - 2 * pss)}` },
           { a: P(2 * W - pss, filmH + 12), b: P(2 * W, filmH + 12), label: `ซีล ${fmt(pss)}` },
-          { a: P(width + 12, 0), b: P(width + 12, st), label: `ซีลบน (หลังบรรจุ) ${fmt(st)}` },
+          { a: P(width + 12, 0), b: P(width + 12, st), label: `ซีลบน ${fmt(st)}` },
           { a: P(width + 12, st), b: P(width + 12, st + H), label: `สูง ${fmt(H)}` },
           { a: P(width + 12, st + H), b: P(width + 12, filmH), label: `ซีลล่าง ${fmt(sb)}` },
         ]
@@ -608,7 +608,7 @@ export function doypackAt(
 // --- ทรง 3D ซองแบน 3 ด้าน ---
 // แผงหน้า/หลังแบนซีลรอบ 4 ด้าน (ปากบนซีลหลังบรรจุ) ตรงกลางพองบาง ๆ เป็นหมอนแบน: z = d·f(u)·f(v)
 // (f = 1 − |t|^n ขอบช่วงพองชันจำกัด → สันคมที่แนวซีล, มุมช่วงพองมนเองจากผลคูณ)
-export const FLAT_BULGE = 2.4
+export const FLAT_BULGE = 4 // พองเต็มเกือบถึงแนวซีล (ขอบลาดสั้น) → ซีลดูแคบเท่าที่ซีลจริง
 const flatF = (t: number) => (Math.abs(t) >= 1 ? 0 : 1 - Math.abs(t) ** FLAT_BULGE)
 // ผิวหน้า (z ≥ FIN) ที่พิกัดฟิล์มของแผง u ∈ [0,W] (ซ้าย→ขวา), v ∈ [0,PH] (บน→ล่าง)
 export function flatZ(p: Pick<Pouch, 'W' | 'depth3D'> & { label: { height: number } }, u: number, v: number): number {

@@ -31,6 +31,7 @@ import {
 } from './pouch'
 import { getMaterial } from './materials'
 import { dielinePDFBytes } from './pdf'
+import { dimTextSize } from './templates/shared'
 import { computeGuides } from './guides'
 
 const mat = getMaterial('pouch-foil')
@@ -117,7 +118,7 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
     }))
     expect(p.label.dims.some((d) => d.label.includes('ก้น'))).toBe(false)
     expect(p.label.dims.some((d) => d.label.includes('กว้างซอง'))).toBe(true)
-    expect(p.label.dims.some((d) => d.label.includes('หลังบรรจุ'))).toBe(true)
+    expect(p.label.dims.some((d) => d.label === `ซีลบน ${FLAT_SEAL}`)).toBe(true) // ปากบนซีลหลังบรรจุ (ไม่มีเส้นบน dieline)
     expect(p.depth3D).toBeGreaterThan(0) // ยังพองบาง ๆ ใน 3D
     expect(2 * p.depth3D).toBeLessThan(W * 0.12) // ซองแบนบางกว่าซองขนมชัดเจน
   })
@@ -460,5 +461,14 @@ describe('pouch: ทรง 3D ซองข้างจีบ (brick) แบบ�
     expect(q.shoulderH).toBeGreaterThanOrEqual(0)
     expect(q.bodyH).toBeGreaterThanOrEqual(60 * 0.4)
     expect(Number.isFinite(q.topY)).toBe(true)
+  })
+})
+
+describe('ป้ายบอกขนาดย่อตามขนาดแผ่น', () => {
+  it('แผ่นเล็ก (ซอง) ตัวเล็กลง ไม่ล้นรูป; แผ่นใหญ่ (กล่อง) คง 6 มม.; มีขั้นต่ำให้อ่านได้', () => {
+    const sachet = generatePouch({ W: 80, D: 50, H: 120 }, mat, { style: 'flat' }).label
+    expect(dimTextSize(sachet.width, sachet.height)).toBeLessThan(4.5)
+    expect(dimTextSize(500, 400)).toBe(6)
+    expect(dimTextSize(40, 40)).toBe(3.5)
   })
 })

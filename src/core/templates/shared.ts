@@ -61,6 +61,10 @@ export function obroundPts(
   ]
 }
 
+// ขนาดตัวอักษรป้ายบอกขนาด (มม.) ตามขนาดแผ่น — แผ่นเล็ก (ซอง/สติกเกอร์) ตัวเล็กลงตามสัดส่วน
+// ไม่ให้ตัวเลขใหญ่ล้นรูป; แผ่นใหญ่ (กล่อง ≥ ~270 มม.) คงเดิม 6 มม. — ใช้ร่วม blueprint/SVG/PDF
+export const dimTextSize = (w: number, h: number) => Math.max(3.5, Math.min(6, Math.max(w, h) * 0.026))
+
 export function roundedRectPts(x0: number, y0: number, x1: number, y1: number, r: number): Vec2[] {
   return [
     P(x0 + r, y0),

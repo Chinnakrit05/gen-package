@@ -3,6 +3,7 @@ import type { Dieline, DimMark } from '../core/types'
 import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imageMaskSVG, imageDrawAttrs, imageCoverRect, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, TEXT_STROKE_MUL, textShadowSVG, textShadowId, isCurvedText, curvedGlyphs, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type ImageEl, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
+import { dimTextSize } from '../core/templates/shared'
 import { useT } from '../i18n'
 
 const DIM_COLOR = '#1b6ea8'
@@ -46,8 +47,10 @@ function dimLabel(label: string, imperial: boolean): string {
   return label.replace(/\d+(\.\d+)?/g, (m) => String(Math.round((Number(m) / 25.4) * 100) / 100))
 }
 
-function Dim({ d, imperial = false }: { d: DimMark; imperial?: boolean }) {
+function Dim({ d, imperial = false, fs = 6 }: { d: DimMark; imperial?: boolean; fs?: number }) {
   const label = dimLabel(d.label, imperial)
+  const tick = fs * 0.42 // ขีดปลาย/ระยะห่างข้อความ ย่อตามขนาดตัวอักษร
+  const gap = fs / 3
   const vert = Math.abs(d.a.x - d.b.x) < 0.001
   const mx = (d.a.x + d.b.x) / 2
   const my = (d.a.y + d.b.y) / 2
@@ -56,26 +59,26 @@ function Dim({ d, imperial = false }: { d: DimMark; imperial?: boolean }) {
       <line x1={d.a.x} y1={d.a.y} x2={d.b.x} y2={d.b.y} vectorEffect="non-scaling-stroke" />
       {vert ? (
         <>
-          <line x1={d.a.x - 2.5} y1={d.a.y} x2={d.a.x + 2.5} y2={d.a.y} vectorEffect="non-scaling-stroke" />
-          <line x1={d.b.x - 2.5} y1={d.b.y} x2={d.b.x + 2.5} y2={d.b.y} vectorEffect="non-scaling-stroke" />
+          <line x1={d.a.x - tick} y1={d.a.y} x2={d.a.x + tick} y2={d.a.y} vectorEffect="non-scaling-stroke" />
+          <line x1={d.b.x - tick} y1={d.b.y} x2={d.b.x + tick} y2={d.b.y} vectorEffect="non-scaling-stroke" />
           <text
             x={mx}
             y={my}
             transform={`rotate(-90 ${mx} ${my})`}
-            dy={-2}
+            dy={-gap}
             textAnchor="middle"
             stroke="none"
             fill={DIM_COLOR}
-            fontSize={6}
+            fontSize={fs}
           >
             {label}
           </text>
         </>
       ) : (
         <>
-          <line x1={d.a.x} y1={d.a.y - 2.5} x2={d.a.x} y2={d.a.y + 2.5} vectorEffect="non-scaling-stroke" />
-          <line x1={d.b.x} y1={d.b.y - 2.5} x2={d.b.x} y2={d.b.y + 2.5} vectorEffect="non-scaling-stroke" />
-          <text x={mx} y={my - 2} textAnchor="middle" stroke="none" fill={DIM_COLOR} fontSize={6}>
+          <line x1={d.a.x} y1={d.a.y - tick} x2={d.a.x} y2={d.a.y + tick} vectorEffect="non-scaling-stroke" />
+          <line x1={d.b.x} y1={d.b.y - tick} x2={d.b.x} y2={d.b.y + tick} vectorEffect="non-scaling-stroke" />
+          <text x={mx} y={my - gap} textAnchor="middle" stroke="none" fill={DIM_COLOR} fontSize={fs}>
             {label}
           </text>
         </>
@@ -1595,7 +1598,10 @@ export const DielineSVG = memo(function DielineSVG({
         ),
       )}
 
-      {showDims && dieline.dims.map((d, i) => <Dim key={i} d={d} imperial={imperial} />)}
+      {showDims &&
+        dieline.dims.map((d, i) => (
+          <Dim key={i} d={d} imperial={imperial} fs={dimTextSize(dieline.width, dieline.height)} />
+        ))}
 
       {/* ป้ายกำกับหน้า (เช่น หน้า/หลัง ของนามบัตร) — โชว์เสมอในพรีวิว ไม่เข้าไฟล์ผลิต */}
       {dieline.captions?.map((c, i) => (

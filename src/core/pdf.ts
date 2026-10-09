@@ -1,6 +1,7 @@
 import type { Dieline, Vec2 } from './types'
 import { pathToPolylines } from './dxf'
 import type { Guides } from './guides'
+import { dimTextSize } from './templates/shared'
 
 // Export dieline เป็น PDF สเกล 1:1 สำหรับพิมพ์ตรวจและส่งโรงงาน
 //
@@ -101,7 +102,9 @@ export function dielinePDFBytes(
   let dimsBody = ''
   if (withDims) {
     const parts: string[] = []
-    const size = 6
+    const size = dimTextSize(d.width, d.height)
+    const tk = size * 0.42
+    const gap = size / 3
     for (const m of d.dims) {
       const vert = Math.abs(m.a.x - m.b.x) < 0.001
       const ax = tx(m.a.x)
@@ -111,11 +114,11 @@ export function dielinePDFBytes(
       parts.push(`${n(ax)} ${n(ay)} m\n${n(bx)} ${n(by)} l`)
       // ขีดปลายทั้งสองข้าง ตั้งฉากกับเส้นบอกขนาด
       if (vert) {
-        parts.push(`${n(ax - 2.5)} ${n(ay)} m\n${n(ax + 2.5)} ${n(ay)} l`)
-        parts.push(`${n(bx - 2.5)} ${n(by)} m\n${n(bx + 2.5)} ${n(by)} l`)
+        parts.push(`${n(ax - tk)} ${n(ay)} m\n${n(ax + tk)} ${n(ay)} l`)
+        parts.push(`${n(bx - tk)} ${n(by)} m\n${n(bx + tk)} ${n(by)} l`)
       } else {
-        parts.push(`${n(ax)} ${n(ay - 2.5)} m\n${n(ax)} ${n(ay + 2.5)} l`)
-        parts.push(`${n(bx)} ${n(by - 2.5)} m\n${n(bx)} ${n(by + 2.5)} l`)
+        parts.push(`${n(ax)} ${n(ay - tk)} m\n${n(ax)} ${n(ay + tk)} l`)
+        parts.push(`${n(bx)} ${n(by - tk)} m\n${n(bx)} ${n(by + tk)} l`)
       }
     }
     const strokes = parts.length ? parts.join('\n') + '\nS' : ''
@@ -128,9 +131,9 @@ export function dielinePDFBytes(
         const half = textWidth(m.label, size) / 2
         // แนวตั้งหมุนข้อความ 90° ให้อ่านจากล่างขึ้นบน (เมทริกซ์ 0 1 -1 0)
         const tm = vert
-          ? `0 1 -1 0 ${n(mx - 2)} ${n(my - half)} Tm`
-          : `1 0 0 1 ${n(mx - half)} ${n(my + 2)} Tm`
-        return `BT\n/F1 ${size} Tf\n${tm}\n${pdfStr(m.label)} Tj\nET`
+          ? `0 1 -1 0 ${n(mx - gap)} ${n(my - half)} Tm`
+          : `1 0 0 1 ${n(mx - half)} ${n(my + gap)} Tm`
+        return `BT\n/F1 ${n(size)} Tf\n${tm}\n${pdfStr(m.label)} Tj\nET`
       })
       .join('\n')
 
