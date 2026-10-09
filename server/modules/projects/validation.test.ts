@@ -34,6 +34,28 @@ describe('cloud project validation', () => {
     }).success).toBe(false)
   })
 
+  it('accepts sticker cut/sheet settings, small stickers and pouch zipper positions the editor saves', () => {
+    const sticker = {
+      ...validDocument(),
+      live: { ...validDocument().live, template: 'sticker', materialId: 'sticker-pp', W: 12, H: 12 },
+      stickerCut: { shape: 'contour', border: 'white', offset: 2, sheet: 'custom', perSheet: 24, sheetW: 320, sheetH: 450, sheetMargin: 3 },
+    }
+    expect(cloudProjectDocumentSchema.safeParse(sticker).success).toBe(true)
+    expect(cloudProjectDocumentSchema.safeParse({
+      ...validDocument(),
+      live: { ...validDocument().live, W: 12 },
+    }).success).toBe(false) // กล่องยังขั้นต่ำ 30
+    expect(cloudProjectDocumentSchema.safeParse({
+      ...sticker,
+      stickerCut: { ...sticker.stickerCut, hidden: true },
+    }).success).toBe(false)
+    expect(cloudProjectDocumentSchema.safeParse({
+      ...validDocument(),
+      zipper: true,
+      pouchAddons: { valve: true, zipAt: 40, tearAt: 22 },
+    }).success).toBe(true)
+  })
+
   it('requires immutable asset IDs instead of browser image URLs', () => {
     expect(cloudProjectDocumentSchema.safeParse({
       ...validDocument(),

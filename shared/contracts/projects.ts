@@ -15,7 +15,8 @@ export interface CloudProjectDocumentV1 {
   labelStyle?: string
   pouchStyle?: string
   zipper?: boolean
-  pouchAddons?: Record<string, boolean>
+  pouchAddons?: Record<string, boolean | number>
+  stickerCut?: Record<string, unknown>
   decos: Record<string, unknown>[]
   history: Record<string, unknown>[]
   histIdx: number

@@ -103,9 +103,12 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   และแม็พ UV ไปยังแถบซีลล่างเต็มความยาว. รูปแบบถุงอื่นยังใช้ `POUCH_TOP_SEAL` 10 มม.
   ออปชันเสริม `PouchAddons` = { hangHole (รูแขวน euro-hole, ตัดจริง), valve (วาล์วกาแฟ marker+จาน 3D),
   tinTie (ที่รัดปาก แถบ 3D) } — ตำแหน่งใช้ค่าคงที่ร่วม dieline/3D (`VALVE_V`/`TINTIE_INSET`/`valveR`)
+  ตำแหน่งซิป/รอยบาก: `pouchAddons.zipAt`/`tearAt` (มม. จากขอบบน, ไม่ใส่ = ซิป 18 มม. ใต้ซีล + รอยบากอัตโนมัติเหนือซิป `TEAR_GAP`)
+  ผ่าน `pouchZipLayout` ชุดเดียวทั้ง dieline/3D; หลักผลิตตรวจใน `pouchPreflight.ts` (รอยบากพ้นซีล → เหนือซิป → ซิปไม่ทับวาล์ว/จุก/ก้นจีบ)
+  — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
-  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 5); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 10); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° (แผ่นม้วน FEFCO 0427) ได้สันโค้งจาก `rollBeads` ใน fold.ts — ทรงกระบอกบาง
   รัศมี = ครึ่งของระยะสองชั้น เรนเดอร์เป็น `Bead` ใน Viewer3D โตตามการพับเอง; fold อื่นที่ใช้
   foldAngle ±180 จะได้สันนี้อัตโนมัติ (ปัจจุบันมีแค่ roll)

@@ -88,7 +88,15 @@ import {
   type SheetLayout,
 } from './core/stickerSheet'
 import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
-import { generatePouch, POUCH_STYLES, type PouchStyle, type PouchAddons } from './core/pouch'
+import {
+  generatePouch,
+  POUCH_STYLES,
+  TEAR_GAP,
+  ZIP_AT_MAX,
+  type PouchStyle,
+  type PouchAddons,
+} from './core/pouch'
+import { pouchZipIssues } from './core/pouchPreflight'
 import { boxVolumeMl, pouchVolumeMl, vesselVolumeMl, tubeVolumeMl, formatCapacity } from './core/capacity'
 import {
   applyVents,
@@ -316,8 +324,17 @@ function StickerSheetPreview({
 }
 
 // ผลตรวจไฟล์สติกเกอร์ — error (ต้องแก้ก่อนส่งผลิต) / warn (ควรแก้) + สรุปกติกาเมื่อผ่านหมด
-function StickerIssues({ issues }: { issues: PreflightIssue[] }) {
+type IssueItem = Pick<PreflightIssue, 'level' | 'th' | 'en'> & { code: string }
+
+function StickerIssues({ issues, okText }: { issues: IssueItem[]; okText?: [string, string] }) {
   const t = useT()
+  if (!issues.length && okText) {
+    return (
+      <div className="sticker-ok" role="status">
+        ✓ {t(okText[0], okText[1])}
+      </div>
+    )
+  }
   if (!issues.length) {
     return (
       <div className="sticker-ok" role="status">
@@ -861,6 +878,8 @@ const samePouchAddons = (a: PouchAddons | undefined, b: PouchAddons | undefined)
   Boolean(a?.hangHole) === Boolean(b?.hangHole)
   && Boolean(a?.valve) === Boolean(b?.valve)
   && Boolean(a?.tinTie) === Boolean(b?.tinTie)
+  && a?.zipAt === b?.zipAt
+  && a?.tearAt === b?.tearAt
 
 // เทียบรูระบายอากาศ — ไม่เปิดทั้งคู่ = เท่ากัน (undefined = ปิด); เปิดทั้งคู่ค่อยเทียบค่า
 const sameVents = (a: VentConfig | undefined, b: VentConfig | undefined) => {
@@ -1438,6 +1457,7 @@ export default function App({
         : null,
     [W, D, H, handle, mat, kind, pouchStyle, zipper, pouchAddons],
   )
+  const zipIssues = useMemo(() => (pouch ? pouchZipIssues(pouch) : []), [pouch])
   // สติกเกอร์: alpha ของลาย (ไม่รวมสีพื้น) — ใช้ทั้งไดคัทตามรูปและตรวจไฟล์ตามข้อจำกัดผลิต
   // หน่วงหลังแก้ลาย/ขนาด (raster + distance transform หนัก ไม่ควรทำทุกครั้งที่ state ขยับ)
   const [stickerArt, setStickerArt] = useState<AlphaMask | null>(null)
@@ -3599,6 +3619,66 @@ export default function App({
                   />
                   {t('ซิปล็อก + รอยฉีก (เปิด-ปิดซ้ำได้)', 'Zip-lock + tear notch (reclosable)')}
                 </label>
+                {zipper && pouch?.zipY !== undefined && pouch.tearY !== undefined && (
+                  <div className="zip-pos" style={{ margin: '6px 0 4px 24px' }}>
+                    <DimField
+                      imperial={imperial}
+                      label={t('ซิปห่างขอบบน', 'Zipper from top')}
+                      value={pouch.zipY}
+                      min={pouch.frontRect.y + 1}
+                      max={Math.min(ZIP_AT_MAX, pouch.frontRect.y + H - 1)}
+                      disabled={aiBusy}
+                      onChange={(v) => setPouchAddons((a) => ({ ...a, zipAt: v }))}
+                    />
+                    <label className="check" style={{ marginTop: 6 }}>
+                      <input
+                        type="checkbox"
+                        checked={pouchAddons.tearAt === undefined}
+                        disabled={aiBusy}
+                        onChange={(e) =>
+                          setPouchAddons((a) => {
+                            const { tearAt: _old, ...rest } = a
+                            return e.target.checked ? rest : { ...rest, tearAt: pouch.tearY }
+                          })
+                        }
+                      />
+                      {t(`วางรอยฉีกอัตโนมัติ (เหนือซิป ${TEAR_GAP} มม.)`, `Place tear notch automatically (${TEAR_GAP} mm above zipper)`)}
+                    </label>
+                    {pouchAddons.tearAt !== undefined && (
+                      <DimField
+                        imperial={imperial}
+                        label={t('รอยฉีกห่างขอบบน', 'Tear notch from top')}
+                        value={pouch.tearY}
+                        min={3}
+                        max={Math.min(ZIP_AT_MAX, pouch.frontRect.y + H - 3)}
+                        disabled={aiBusy}
+                        onChange={(v) => setPouchAddons((a) => ({ ...a, tearAt: v }))}
+                      />
+                    )}
+                    {(pouchAddons.zipAt !== undefined || pouchAddons.tearAt !== undefined) && (
+                      <button
+                        type="button"
+                        className="link-btn"
+                        disabled={aiBusy}
+                        onClick={() =>
+                          setPouchAddons((a) => {
+                            const { zipAt: _z, tearAt: _t, ...rest } = a
+                            return rest
+                          })
+                        }
+                      >
+                        {t('คืนค่าตำแหน่งเริ่มต้น', 'Reset to default position')}
+                      </button>
+                    )}
+                    <p className="hint">
+                      {t(
+                        `วัดจากขอบบนถุง: ซีลบน ${fmtMm(pouch.frontRect.y)} มม. → รอยฉีก (ต้องพ้นซีล) → ซิป; ทั่วไปรอยฉีก ~12–20 มม. ซิป ~25–40 มม. (มีรูแขวน/ถุงใหญ่ลงได้ถึง ~50) — ยืนยันกับโรงพิมพ์อีกครั้ง`,
+                        `Measured from the top edge: top seal ${fmtMm(pouch.frontRect.y)} mm → tear notch (below the seal) → zipper; typically notch ~12–20 mm, zipper ~25–40 mm (down to ~50 with a hang hole/large bags) — confirm with your converter`,
+                      )}
+                    </p>
+                    <StickerIssues issues={zipIssues} okText={['ตำแหน่งซิป/รอยฉีกผ่านหลักการผลิต', 'Zipper/tear position meets production rules']} />
+                  </div>
+                )}
                 <label className="check" style={{ marginTop: 8 }}>
                   <input
                     type="checkbox"
@@ -4950,6 +5030,7 @@ export default function App({
                   </label>
                 </div>
                 {isSticker && <StickerIssues issues={stickerIssues} />}
+                {kind === 'pouch' && zipIssues.length > 0 && <StickerIssues issues={zipIssues} />}
                 {isSticker && mat.underbase && (
                   <p className="hint">
                     {t(

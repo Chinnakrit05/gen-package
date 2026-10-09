@@ -49,6 +49,7 @@ export interface Pouch {
   backRectL?: { x: number; y: number; w: number; h: number }
   zipper: boolean // มีซิปล็อก + รอยฉีกไหม
   zipY?: number // พิกัดแผ่นคลี่ y ของแนวซิป (เมื่อ zipper=true) — ใช้วางแถบซิปใน 3D
+  tearY?: number // พิกัดแผ่นคลี่ y ของรอยบากฉีก (เมื่อ zipper=true)
   hangHole: boolean // รูแขวน (euro-hole) ที่ริมซีลบน
   valve: boolean // วาล์วระบายแก๊ส (กาแฟ) บนหน้าถุง
   tinTie: boolean // ที่รัดปาก (tin-tie) ใกล้ปากถุง
@@ -59,6 +60,35 @@ export interface PouchAddons {
   hangHole?: boolean
   valve?: boolean
   tinTie?: boolean
+  // ตำแหน่งซิป/รอยบาก (มม. จากขอบบนถุง) — ไม่ใส่ = ค่าเริ่มต้น/อัตโนมัติ; ใช้เมื่อเปิดซิปล็อก
+  zipAt?: number
+  tearAt?: number
+}
+
+// ซิปล็อก + รอยบากฉีก (มม.): แนวซิปกว้างรวมปีก ~10 (±ZIP_HALF); รอยบากอัตโนมัติอยู่เหนือซิป TEAR_GAP
+// ลำดับจากขอบบน: ซีลบน → รอยบาก (ต้องพ้นซีล ไม่งั้นฉีกแล้วถุงไม่เปิด) → ซิป (ฉีกแล้วเหลือซิปไว้ปิดซ้ำ)
+export const ZIP_HALF = 5
+export const TEAR_GAP = 8
+export const TEAR_SEAL_GAP = 3 // รอยบากควรต่ำกว่าแนวซีลบนอย่างน้อยเท่านี้
+export const ZIP_AT_MAX = 300
+export const zipAtDefault = (st: number, H: number) => st + Math.min(POUCH_ZIP_INSET, H * 0.5)
+// รอยบากอัตโนมัติ: เหนือซิป TEAR_GAP; ถ้าซิปชิดซีลจนไม่พอ → กึ่งกลางระหว่างซีลกับซิป
+export const tearAtAuto = (st: number, zipY: number) =>
+  zipY - TEAR_GAP >= st + TEAR_SEAL_GAP ? zipY - TEAR_GAP : (st + zipY) / 2
+
+// ตำแหน่งจริงบน dieline (จำกัดให้วาดได้: ซิปอยู่ในลำตัว, รอยบากอยู่บนแผ่น) — ความถูกต้องเชิงผลิตตรวจใน pouchPreflight
+export function pouchZipLayout(st: number, H: number, addons: PouchAddons = {}): { zipY: number; tearY: number } {
+  const zipY = Math.min(st + H - 1, Math.max(st + 1, addons.zipAt ?? zipAtDefault(st, H)))
+  const tearY = Math.min(st + H - 3, Math.max(3, addons.tearAt ?? tearAtAuto(st, zipY)))
+  return { zipY, tearY }
+}
+
+// ตำแหน่ง marker ร่วม dieline/ตรวจไฟล์
+export const HANG_HOLE_R = 4
+export const hangHoleY = (st: number) => Math.min(st * 0.5, st - HANG_HOLE_R - 1)
+export const spoutMarker = (W: number, st: number) => {
+  const r = Math.min(W, 90) * 0.09
+  return { r, cy: st + r + 3 }
 }
 
 export interface PouchOpts {
@@ -107,8 +137,10 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
       : gus || boxp
         ? gVal / 2
         : (gVal / 2) * POUCH_DEPTH_SCALE
-  // แนวซิปอยู่ใต้ปากบน แต่ต้องไม่ต่ำเกินครึ่งลำตัว (ถุงเตี้ยมาก ๆ)
-  const zipY = zipper ? st + Math.min(POUCH_ZIP_INSET, H * 0.5) : undefined
+  // แนวซิป/รอยบาก: ผู้ใช้กำหนดได้ (มม. จากขอบบน) ไม่งั้นซิปใต้ปากบน 18 มม. (ไม่ต่ำเกินครึ่งลำตัว)
+  const zl = zipper ? pouchZipLayout(st, H, opts.addons) : undefined
+  const zipY = zl?.zipY
+  const tearY = zl?.tearY
 
   // แผ่นฟิล์มแบน: [หน้า][…จีบ…][หลัง][…จีบ…][ลิ้นทากาว ss]; แนวตั้ง = ริมบน + ลำตัว + ก้น/ริมล่าง
   // แยกลิ้นกาวเป็นแผงต่างหาก (ขอบร่วม x=Wp เป็นรอยต่อ ไม่ใช่ขอบนอก) เหมือน dieline ฉลาก
@@ -163,9 +195,8 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
 
   if (spout) {
     // จุกที่กลางปากหน้า — วงกลม marker (ตำแหน่งเชื่อมจุก) + ป้าย
-    const sr = Math.min(W, 90) * 0.09
+    const { r: sr, cy } = spoutMarker(W, st)
     const cx = fcx
-    const cy = st + sr + 3
     segments.push(crease(circlePath(cx, cy, sr)))
     dims.push({ a: P(cx - sr, cy - sr - 6), b: P(cx + sr, cy - sr - 6), label: `จุก ⌀${fmt(2 * sr)}` })
   }
@@ -176,8 +207,8 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const tinTie = addons.tinTie === true
   if (hangHole) {
     // รูแขวน (euro-hole) กลางริมซีลบน — เจาะจริง (cut) ให้เครื่องปั๊มตัด
-    const hr = 4
-    segments.push(cut(circlePath(fcx, Math.min(st * 0.5, st - hr - 1), hr)))
+    const hr = HANG_HOLE_R
+    segments.push(cut(circlePath(fcx, hangHoleY(st), hr)))
     dims.push({ a: P(fcx - hr, 0), b: P(fcx + hr, 0), label: `รูแขวน ⌀${fmt(2 * hr)}` })
   }
   if (valve) {
@@ -194,14 +225,16 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     dims.push({ a: P(0, ty + 3), b: P(Wp, ty + 3), label: 'ที่รัดปาก (tin-tie)' })
   }
 
-  if (zipper && zipY !== undefined) {
-    // แนวซิปล็อกพาดขวางหน้า+หลัง + รอยฉีก (V) ที่ขอบซีลสองข้าง เหนือซิปเล็กน้อยเพื่อฉีกเปิด
+  if (zipper && zipY !== undefined && tearY !== undefined) {
+    // แนวซิปล็อกพาดขวางหน้า+หลัง + รอยฉีก (V) ที่ขอบซีลสองข้าง เหนือซิปเพื่อฉีกเปิดแล้วเหลือซิปไว้ปิดซ้ำ
     segments.push(crease(`M 0 ${zipY} L ${Wp} ${zipY}`))
-    const tearY = zipY - 4
     const nz = 4 // ความลึกรอยฉีก
     segments.push(cut(`M 0 ${tearY - 2.5} L ${nz} ${tearY} L 0 ${tearY + 2.5}`)) // ขอบซ้าย (ริมกาว)
     segments.push(cut(`M ${width} ${tearY - 2.5} L ${width - nz} ${tearY} L ${width} ${tearY + 2.5}`)) // ขอบขวา
-    dims.push({ a: P(0, zipY), b: P(Wp, zipY), label: 'ซิปล็อก + รอยฉีก' })
+    dims.push(
+      { a: P(0, zipY), b: P(Wp, zipY), label: `ซิปล็อก ${fmt(zipY)} · รอยฉีก ${fmt(tearY)} (จากขอบบน)` },
+      { a: P(-12, 0), b: P(-12, zipY), label: `ซิป ${fmt(zipY)}` },
+    )
   }
 
   return {
@@ -222,6 +255,7 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     ...(backSeam ? { backRectL: { x: 0, y: st, w: W / 2, h: H } } : {}),
     zipper,
     zipY,
+    tearY,
     hangHole,
     valve,
     tinTie,

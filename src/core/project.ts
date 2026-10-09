@@ -2,7 +2,7 @@ import { MATERIALS } from './materials'
 import { TEMPLATES } from './templates'
 import { parseDecos, parseFillImage, type Deco, type FillImage } from './artwork'
 import { LABEL_STYLES, type LabelStyle } from './vessel'
-import { POUCH_STYLES, type PouchStyle, type PouchAddons } from './pouch'
+import { POUCH_STYLES, ZIP_AT_MAX, type PouchStyle, type PouchAddons } from './pouch'
 import { parseVents, type VentConfig } from './vents'
 import { parseStickerCut, type StickerCut } from './stickerContour'
 import type { CurrentSpec } from './ai'
@@ -53,7 +53,7 @@ export interface Project {
   labelStyle?: LabelStyle // รูปแบบฉลาก (เฉพาะโหมดภาชนะ) — ไม่ใส่ = 'body'
   pouchStyle?: PouchStyle // รูปแบบถุง (เฉพาะโหมดถุง) — ไม่ใส่ = 'stand'
   zipper?: boolean // ซิปล็อก + รอยฉีก (เฉพาะโหมดถุง) — เก็บเฉพาะเมื่อ true
-  pouchAddons?: PouchAddons // ออปชันเสริมถุง (รูแขวน/วาล์ว/tin-tie) — เก็บเฉพาะที่เปิด
+  pouchAddons?: PouchAddons // ออปชันเสริมถุง (รูแขวน/วาล์ว/tin-tie) — เก็บเฉพาะที่เปิด + ตำแหน่งซิป/รอยบากที่ตั้งเอง
   vents?: VentConfig // รูระบายอากาศบนผนังกล่อง (เฉพาะกล่องพับ) — เก็บเฉพาะเมื่อเปิด
   stickerCut?: StickerCut // สติกเกอร์: ไดคัทตามรูป — เก็บเฉพาะเมื่อไม่ใช่สี่เหลี่ยม (ค่าเริ่มต้น)
   decos: Deco[]
@@ -126,6 +126,13 @@ function parsePouchAddons(v: unknown): PouchAddons | undefined {
   if (o.hangHole === true) a.hangHole = true
   if (o.valve === true) a.valve = true
   if (o.tinTie === true) a.tinTie = true
+  // ตำแหน่งซิป/รอยบาก (มม. จากขอบบน) — ปัดครึ่งมม. จำกัดช่วงกันค่าเพี้ยน
+  const mm = (v: unknown) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.min(ZIP_AT_MAX, Math.max(1, Math.round(v * 2) / 2)) : undefined
+  const zipAt = mm(o.zipAt)
+  const tearAt = mm(o.tearAt)
+  if (zipAt !== undefined) a.zipAt = zipAt
+  if (tearAt !== undefined) a.tearAt = tearAt
   return Object.keys(a).length ? a : undefined
 }
 

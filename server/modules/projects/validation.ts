@@ -143,11 +143,17 @@ const decoSchema = z.discriminatedUnion('type', [
 const currentSpecSchema = z.object({
   template: z.string().refine((value) => TEMPLATES.some((template) => template.id === value), 'unknown template'),
   materialId: z.string().refine((value) => MATERIALS.some((material) => material.id === value), 'unknown material'),
-  W: finite.min(30).max(250),
+  // สติกเกอร์เล็กได้ถึง 10 มม. (แผ่นหลายดวง) — งานอื่นขั้นต่ำ 30 (ตรงกับ parseSpec ฝั่ง client)
+  W: finite.min(10).max(250),
   D: finite.min(20).max(150),
-  H: finite.min(30).max(300),
+  H: finite.min(10).max(300),
   handle: z.boolean(),
-}).strict()
+}).strict().superRefine((spec, context) => {
+  if (spec.template === 'sticker') return
+  for (const key of ['W', 'H'] as const) {
+    if (spec[key] < 30) context.addIssue({ code: 'custom', path: [key], message: `${key} ต้องไม่น้อยกว่า 30` })
+  }
+})
 
 const aiInfoSchema = z.object({
   assumptions: z.array(z.string().max(300)).max(50),
@@ -184,6 +190,18 @@ export const cloudProjectDocumentSchema = z.object({
     hangHole: optionalTrue,
     valve: optionalTrue,
     tinTie: optionalTrue,
+    zipAt: finite.min(0).max(1000).optional(),
+    tearAt: finite.min(0).max(1000).optional(),
+  }).strict().optional(),
+  stickerCut: z.object({
+    shape: z.enum(['rect', 'contour']),
+    border: z.enum(['white', 'none']),
+    offset: finite.min(0).max(50),
+    sheet: z.enum(['a6', 'a5', 'a4', 'a3', 'custom']).optional(),
+    perSheet: z.number().int().min(1).max(1000).optional(),
+    sheetW: finite.min(0).max(5000).optional(),
+    sheetH: finite.min(0).max(5000).optional(),
+    sheetMargin: finite.min(0).max(100).optional(),
   }).strict().optional(),
   decos: z.array(decoSchema).max(500),
   history: z.array(historySchema).max(30),
