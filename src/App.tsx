@@ -58,11 +58,26 @@ import {
   STICKER_OFFSET_MIN,
   STICKER_RULES,
   sameStickerCut,
+  storedStickerCut,
   type AlphaMask,
   type StickerCut,
 } from './core/stickerContour'
 import { preflightSticker, type PreflightIssue } from './core/stickerPreflight'
 import { generateStickerContour } from './core/templates/sticker'
+import {
+  SHEET_GAP,
+  SHEET_MARGIN,
+  STICKER_SHEETS,
+  artClipBox,
+  cutBox,
+  layoutStickerSheet,
+  placementSVG,
+  sheetDieline,
+  sheetsNeeded as stickerSheetsNeeded,
+  stickerSheetById,
+  type SheetLayout,
+  type StickerSheetId,
+} from './core/stickerSheet'
 import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
 import { generatePouch, POUCH_STYLES, type PouchStyle, type PouchAddons } from './core/pouch'
 import { boxVolumeMl, pouchVolumeMl, vesselVolumeMl, tubeVolumeMl, formatCapacity } from './core/capacity'
@@ -195,6 +210,47 @@ interface DimFieldProps {
 }
 
 const MM_PER_IN = 25.4
+
+// พรีวิวแผ่นสติกเกอร์: กรอบแผ่น + ลายแต่ละดวง (ภาพย่อ คลิปกรอบเส้นตัด+เผื่อสี) + เส้นตัดทุกดวง
+function StickerSheetPreview({
+  layout,
+  sheetDieline: sd,
+  piece,
+  thumb,
+  fillColor,
+}: {
+  layout: SheetLayout
+  sheetDieline: Dieline
+  piece: Dieline
+  thumb: string | null
+  fillColor: string | null
+}) {
+  const c = artClipBox(cutBox(piece))
+  const { w, h } = layout.sheet
+  return (
+    <svg className="sheet-preview" viewBox={`-2 -2 ${w + 4} ${h + 4}`} role="img" aria-label={`${layout.sheet.nameTh} ${layout.count}`}>
+      <defs>
+        <clipPath id="sheet-pv-clip">
+          <rect x={c.x0} y={c.y0} width={c.x1 - c.x0} height={c.y1 - c.y0} />
+        </clipPath>
+      </defs>
+      <rect x={0} y={0} width={w} height={h} fill="#fff" stroke="#9aa5ad" strokeWidth={0.6} />
+      {fillColor &&
+        sd.panels.map((p) => (
+          <polygon key={p.id} points={p.outline.map((q) => `${q.x},${q.y}`).join(' ')} fill={fillColor} />
+        ))}
+      {thumb &&
+        layout.placements.map((pl, i) => (
+          <g key={i} transform={placementSVG(pl)}>
+            <image href={thumb} x={0} y={0} width={piece.width} height={piece.height} clipPath="url(#sheet-pv-clip)" />
+          </g>
+        ))}
+      {sd.segments.map((sg, i) => (
+        <path key={i} d={sg.d} fill="none" stroke="#e30613" strokeWidth={0.45} />
+      ))}
+    </svg>
+  )
+}
 
 // ผลตรวจไฟล์สติกเกอร์ — error (ต้องแก้ก่อนส่งผลิต) / warn (ควรแก้) + สรุปกติกาเมื่อผ่านหมด
 function StickerIssues({ issues }: { issues: PreflightIssue[] }) {
@@ -570,6 +626,7 @@ function dielineSVGString(
   guides: Guides | null = null,
   fillColor: string | null = null,
   fillImage: FillImage | null = null,
+  sheet: { piece: Dieline; layout: SheetLayout } | null = null,
 ): string {
   const pathsOf = (kind: 'cut' | 'crease') =>
     d.segments
@@ -607,8 +664,24 @@ function dielineSVGString(
 
   // สีพื้นอยู่ล่างสุด แล้วลาย แล้วเส้น cut/crease โชว์ทับเป็นไกด์ — ตรงกับที่เห็นบนจอ
   // รูปพื้น (ถ้ามี) มาก่อนสีพื้น — ครอปตามแผงจริงเหมือนกัน
-  const fillLayer = fillImage ? fillImageSVGLayer(d, fillImage) : fillSVGLayer(d, fillColor)
-  const artLayer = svgArtworkLayer(decos)
+  let fillLayer = fillImage ? fillImageSVGLayer(d, fillImage) : fillSVGLayer(d, fillColor)
+  let artLayer = svgArtworkLayer(decos)
+  if (sheet) {
+    // แผ่นหลายดวง: สีพื้น+ลายของดวงเดียวเก็บใน defs แล้ววางซ้ำตามตำแหน่ง (คลิปกรอบเส้นตัด + เผื่อสี)
+    const piece = sheet.piece
+    const one =
+      (fillImage ? fillImageSVGLayer(piece, fillImage) : fillSVGLayer(piece, fillColor)) + svgArtworkLayer(decos)
+    const c = artClipBox(cutBox(piece))
+    const uses = sheet.layout.placements
+      .map((pl) => `    <g transform="${placementSVG(pl)}"><use href="#sticker-one" xlink:href="#sticker-one" clip-path="url(#sticker-clip)"/></g>`)
+      .join('\n')
+    fillLayer = ''
+    artLayer = one
+      ? `  <defs>\n    <clipPath id="sticker-clip"><rect x="${c.x0}" y="${c.y0}" width="${c.x1 - c.x0}" height="${c.y1 - c.y0}"/></clipPath>\n` +
+        `    <g id="sticker-one">\n${one}    </g>\n  </defs>\n` +
+        svgLayer('artwork', '', uses)
+      : ''
+  }
   const guideLayer = guides ? guidesSVGLayer(guides) : ''
 
   const w = d.width + pad * 2
@@ -1352,6 +1425,39 @@ export default function App({
         : [],
     [isSticker, dieline, stickerArt, stickerLoops],
   )
+  // แผ่นสติกเกอร์หลายดวง: ออกแบบดวงเดียว ระบบเรียงซ้ำเต็มแผ่น (ไฟล์ส่งออกเป็นทั้งแผ่น)
+  const stickerSheet = isSticker ? stickerSheetById(stickerCut.sheet) : undefined
+  const sheetLayout = useMemo(
+    () => (stickerSheet && dieline ? layoutStickerSheet(cutBox(dieline), stickerSheet) : null),
+    [stickerSheet, dieline],
+  )
+  const sheetOut = useMemo(
+    () => (sheetLayout && sheetLayout.count > 0 && dieline ? { piece: dieline, layout: sheetLayout } : null),
+    [sheetLayout, dieline],
+  )
+  // dieline ที่ใช้ส่งออก (ทั้งแผ่นเมื่อเลือกแผ่นหลายดวง)
+  const exportDieline = useMemo(
+    () => (sheetOut ? sheetDieline(sheetOut.piece, sheetOut.layout) : dieline),
+    [sheetOut, dieline],
+  )
+  // ภาพย่อลายดวงเดียว (ความละเอียดต่ำ) สำหรับพรีวิวแผ่น
+  const [stickerThumb, setStickerThumb] = useState<string | null>(null)
+  useEffect(() => {
+    if (!sheetOut) {
+      setStickerThumb(null)
+      return
+    }
+    let alive = true
+    const tm = setTimeout(async () => {
+      const base = fillImage ? { dieline: sheetOut.piece, fillImage } : null
+      const c = await renderArtworkCanvas(decos, sheetOut.piece.width, sheetOut.piece.height, 96, base)
+      if (alive) setStickerThumb(c ? c.toDataURL('image/png') : null)
+    }, 300)
+    return () => {
+      alive = false
+      clearTimeout(tm)
+    }
+  }, [sheetOut, decos, fillImage])
 
   // ความจุโดยประมาณ (มล.) ตามชนิดบรรจุภัณฑ์ — การ์ด/สติกเกอร์เป็นแผ่นแบน ไม่มีความจุ
   const capacityMl = useMemo(() => {
@@ -1408,7 +1514,7 @@ export default function App({
                     zipper,
                     pouchAddons,
                     vents,
-                    stickerCut: stickerCut.shape === 'contour' ? stickerCut : undefined,
+                    stickerCut: storedStickerCut(stickerCut),
                     decos,
                     history,
                     histIdx,
@@ -1641,7 +1747,7 @@ export default function App({
           && p.history === history
           && p.histIdx === histIdx
             ? p
-            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut: stickerCut.shape === 'contour' ? stickerCut : undefined, decos, history, histIdx, updatedAt: Date.now() }
+            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -1851,13 +1957,18 @@ export default function App({
 
   const downloadSVG = () => {
     if (!dieline) return
-    saveFile(dielineSVGString(dieline, showDims, decos, guides, fillColor, fillImage), 'image/svg+xml', 'svg')
+    // แผ่นหลายดวง: ไม่ใส่เส้นเผื่อตัด 3 มม. ของดวงเดียว (ดวงเรียงชิดกันตามกติกาเว้น 2 มม. อยู่แล้ว)
+    saveFile(
+      dielineSVGString(exportDieline, showDims, decos, sheetOut ? null : guides, fillColor, fillImage, sheetOut),
+      'image/svg+xml',
+      'svg',
+    )
   }
 
   // DXF คือไฟล์ที่โรงทำมีดไดคัทใช้จริง — มีแต่เลเยอร์ CUT/CREASE ไม่มีเส้นบอกขนาด
   const downloadDXF = () => {
     if (!dieline) return
-    saveFile(dielineDXFString(dieline), 'application/dxf', 'dxf')
+    saveFile(dielineDXFString(exportDieline), 'application/dxf', 'dxf')
   }
 
   // PDF สเกล 1:1 สำหรับพิมพ์ตรวจ/ส่งโรงงาน — เลเยอร์ปิด-เปิดได้ใน Acrobat
@@ -1867,7 +1978,33 @@ export default function App({
     let art
     // รูปพื้น (ถ้ามี) baked เข้า raster เป็นชั้นล่างสุด — จึงไม่ต้องวาดสีพื้น vector ซ้ำ
     const base = fillImage ? { dieline, fillImage } : null
-    const canvas = await renderArtworkCanvas(decos, dieline.width, dieline.height, 300, base)
+    let canvas = await renderArtworkCanvas(decos, dieline.width, dieline.height, 300, base)
+    if (canvas && sheetOut) {
+      // แผ่นหลายดวง: วางภาพลายดวงเดียวซ้ำตามตำแหน่ง (หมุนตามแผน) คลิปกรอบเส้นตัด + เผื่อสี
+      const sc = 300 / 25.4
+      const { layout, piece } = sheetOut
+      const sheetC = document.createElement('canvas')
+      sheetC.width = Math.round(layout.sheet.w * sc)
+      sheetC.height = Math.round(layout.sheet.h * sc)
+      const ctx = sheetC.getContext('2d')
+      if (ctx) {
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, sheetC.width, sheetC.height)
+        const c = artClipBox(cutBox(piece))
+        for (const pl of layout.placements) {
+          ctx.save()
+          ctx.scale(sc, sc)
+          ctx.translate(pl.tx, pl.ty)
+          if (pl.rot) ctx.rotate(Math.PI / 2)
+          ctx.beginPath()
+          ctx.rect(c.x0, c.y0, c.x1 - c.x0, c.y1 - c.y0)
+          ctx.clip()
+          ctx.drawImage(canvas, 0, 0, piece.width, piece.height)
+          ctx.restore()
+        }
+        canvas = sheetC
+      }
+    }
     if (canvas) {
       const b64 = canvas.toDataURL('image/jpeg', 0.92).split(',')[1]
       const bin = atob(b64)
@@ -1875,7 +2012,11 @@ export default function App({
       for (let i = 0; i < bin.length; i++) jpeg[i] = bin.charCodeAt(i)
       art = { jpeg, w: canvas.width, h: canvas.height }
     }
-    saveFile(dielinePDFBytes(dieline, showDims, art, guides, fillImage ? null : fillColor), 'application/pdf', 'pdf')
+    saveFile(
+      dielinePDFBytes(exportDieline, showDims, art, sheetOut ? null : guides, fillImage ? null : fillColor),
+      'application/pdf',
+      'pdf',
+    )
   }
 
   // เลือกได้หลายชิ้น — เมื่อเลือกชิ้นเดียวจึงโชว์แผงแก้ไขรายชิ้น; หลายชิ้นโชว์แผงหลายชิ้น
@@ -2934,6 +3075,87 @@ export default function App({
                 </>
               )}
               <StickerIssues issues={stickerIssues} />
+            </Group>
+          )}
+
+          {isSticker && (
+            <Group title={t('แผ่นสติกเกอร์', 'Sticker sheet')} open={groups.label} onToggle={() => toggleGroup('label')}>
+              <div className="unit-toggle sticker-seg" role="group" aria-label={t('ขนาดแผ่น', 'Sheet size')}>
+                <button
+                  type="button"
+                  className={!stickerCut.sheet ? 'active' : ''}
+                  aria-pressed={!stickerCut.sheet}
+                  disabled={aiBusy}
+                  onClick={() => setStickerCut({ ...stickerCut, sheet: undefined })}
+                >
+                  {t('ดวงเดียว', 'Single')}
+                </button>
+                {STICKER_SHEETS.map((sh) => (
+                  <button
+                    key={sh.id}
+                    type="button"
+                    className={stickerCut.sheet === sh.id ? 'active' : ''}
+                    aria-pressed={stickerCut.sheet === sh.id}
+                    disabled={aiBusy}
+                    onClick={() => setStickerCut({ ...stickerCut, sheet: sh.id as StickerSheetId })}
+                  >
+                    {sh.nameTh}
+                  </button>
+                ))}
+              </div>
+              {!sheetLayout ? (
+                <p className="hint">
+                  {t(
+                    'เลือกขนาดแผ่นเพื่อเรียงสติกเกอร์ดวงนี้ซ้ำเต็มแผ่นอัตโนมัติ (แบบแผ่นสติกเกอร์ไดคัท) — ไฟล์ส่งออกจะเป็นทั้งแผ่น',
+                    'Pick a sheet size to repeat this sticker across a kiss-cut sheet automatically — exports become the whole sheet',
+                  )}
+                </p>
+              ) : sheetLayout.count === 0 ? (
+                <div className="sticker-issues has-err" role="alert">
+                  {t(
+                    `ดวงใหญ่เกินแผ่น ${sheetLayout.sheet.nameTh} (${sheetLayout.sheet.w}×${sheetLayout.sheet.h} มม. เว้นขอบ ${SHEET_MARGIN} มม.) — ลดขนาดสติกเกอร์หรือเลือกแผ่นใหญ่ขึ้น`,
+                    `Sticker is larger than ${sheetLayout.sheet.nameTh} (${sheetLayout.sheet.w}×${sheetLayout.sheet.h} mm, ${SHEET_MARGIN} mm margin) — shrink it or pick a bigger sheet`,
+                  )}
+                </div>
+              ) : (
+                <>
+                  <StickerSheetPreview
+                    layout={sheetLayout}
+                    sheetDieline={exportDieline}
+                    piece={dieline}
+                    thumb={stickerThumb}
+                    fillColor={fillImage ? null : fillColor}
+                  />
+                  <div className="sheet-stats">
+                    <b>
+                      {t(
+                        `${sheetLayout.count} ดวง/แผ่น ${sheetLayout.sheet.nameTh}`,
+                        `${sheetLayout.count} per ${sheetLayout.sheet.nameTh} sheet`,
+                      )}
+                    </b>
+                    <span>
+                      {sheetLayout.cols}×{sheetLayout.rows}
+                      {sheetLayout.rotated ? t(' · หมุน 90°', ' · rotated 90°') : ''} ·{' '}
+                      {t(
+                        `A3 1 แผ่น = ${sheetLayout.sheet.perA3} แผ่น = ${sheetLayout.count * sheetLayout.sheet.perA3} ดวง`,
+                        `1 A3 = ${sheetLayout.sheet.perA3} sheets = ${sheetLayout.count * sheetLayout.sheet.perA3} stickers`,
+                      )}
+                    </span>
+                    <span>
+                      {t(
+                        `สั่ง ${qty.toLocaleString('th-TH')} ดวง → ${stickerSheetsNeeded(qty, sheetLayout.count).toLocaleString('th-TH')} แผ่น ${sheetLayout.sheet.nameTh} (≈ ${Math.ceil(stickerSheetsNeeded(qty, sheetLayout.count) / sheetLayout.sheet.perA3).toLocaleString('th-TH')} แผ่น A3)`,
+                        `${qty.toLocaleString('en-US')} stickers → ${stickerSheetsNeeded(qty, sheetLayout.count).toLocaleString('en-US')} ${sheetLayout.sheet.nameTh} sheets (≈ ${Math.ceil(stickerSheetsNeeded(qty, sheetLayout.count) / sheetLayout.sheet.perA3).toLocaleString('en-US')} A3)`,
+                      )}
+                    </span>
+                  </div>
+                  <p className="hint">
+                    {t(
+                      `เส้นตัดแต่ละดวงห่างกัน ${SHEET_GAP} มม. · ห่างขอบแผ่น ${SHEET_MARGIN} มม. · ไฟล์ PDF/SVG/DXF ที่ดาวน์โหลดเป็นทั้งแผ่น`,
+                      `Cut lines ${SHEET_GAP} mm apart · ${SHEET_MARGIN} mm from the sheet edge · PDF/SVG/DXF downloads contain the whole sheet`,
+                    )}
+                  </p>
+                </>
+              )}
             </Group>
           )}
 
@@ -4465,6 +4687,14 @@ export default function App({
                   </label>
                 </div>
                 {isSticker && <StickerIssues issues={stickerIssues} />}
+                {sheetOut && (
+                  <p className="hint">
+                    {t(
+                      `ไฟล์ที่ดาวน์โหลดเป็นแผ่น ${sheetOut.layout.sheet.nameTh} (${sheetOut.layout.sheet.w}×${sheetOut.layout.sheet.h} มม.) เรียง ${sheetOut.layout.count} ดวง`,
+                      `Downloads contain the whole ${sheetOut.layout.sheet.nameTh} sheet (${sheetOut.layout.sheet.w}×${sheetOut.layout.sheet.h} mm) with ${sheetOut.layout.count} stickers`,
+                    )}
+                  </p>
+                )}
                 {imgDpi.low.length > 0 && (
                   <div className="lowres-warn" role="alert">
                     <b>⚠ รูปความละเอียดต่ำ {imgDpi.low.length} ชิ้น</b> — พิมพ์ออกมาอาจแตก/เบลอ (แนะนำ ≥ {GOOD_DPI} dpi)

@@ -1,4 +1,5 @@
 import type { Vec2 } from './types'
+import type { StickerSheetId } from './stickerSheet'
 
 // ไดคัทตามรูป (contour cut) ของสติกเกอร์ — แทนขั้นตอนเตรียมไฟล์ใน Illustrator ที่โรงพิมพ์สติกเกอร์สอน
 // (ทำเงาดำของชิ้นงาน → Image Trace → Offset Path ≥1 มม. แบบ Round → ลบจุดเกิน/เกลี่ยเส้นให้เรียบ)
@@ -22,6 +23,7 @@ export interface StickerCut {
   shape: StickerShape
   border: StickerBorder // contour เท่านั้น: มีขอบขาว (ตัดนอกชิ้นงาน) / ไม่มีขอบขาว (ตัดชิดชิ้นงาน)
   offset: number // มม. — ความกว้างขอบขาว (border='white')
+  sheet?: StickerSheetId // แผ่นสติกเกอร์หลายดวง (A6/A5/A4) — ไม่ใส่ = ดวงเดียว
 }
 export const DEFAULT_STICKER_CUT: StickerCut = { shape: 'rect', border: 'white', offset: 2 }
 export const STICKER_OFFSET_MIN = STICKER_RULES.minBorder
@@ -34,19 +36,25 @@ export const CORNER_ROUND = 1.2
 export const sameStickerCut = (a?: StickerCut, b?: StickerCut) =>
   (a ?? DEFAULT_STICKER_CUT).shape === (b ?? DEFAULT_STICKER_CUT).shape &&
   (a ?? DEFAULT_STICKER_CUT).border === (b ?? DEFAULT_STICKER_CUT).border &&
-  (a ?? DEFAULT_STICKER_CUT).offset === (b ?? DEFAULT_STICKER_CUT).offset
+  (a ?? DEFAULT_STICKER_CUT).offset === (b ?? DEFAULT_STICKER_CUT).offset &&
+  (a ?? DEFAULT_STICKER_CUT).sheet === (b ?? DEFAULT_STICKER_CUT).sheet
+
+// ค่าที่ต้องเก็บลงงาน (ค่าเริ่มต้น = ไม่เก็บ)
+export const storedStickerCut = (c: StickerCut) => (sameStickerCut(c, DEFAULT_STICKER_CUT) ? undefined : c)
 
 export function parseStickerCut(raw: unknown): StickerCut | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined
   const o = raw as Record<string, unknown>
-  if (o.shape !== 'contour') return undefined // ค่าเริ่มต้น (สี่เหลี่ยมมุมมน) ไม่ต้องเก็บ
+  const sheet = o.sheet === 'a6' || o.sheet === 'a5' || o.sheet === 'a4' ? o.sheet : undefined
+  if (o.shape !== 'contour' && !sheet) return undefined // ค่าเริ่มต้น (สี่เหลี่ยม ดวงเดียว) ไม่ต้องเก็บ
   const off = Number(o.offset)
   return {
-    shape: 'contour',
+    shape: o.shape === 'contour' ? 'contour' : 'rect',
     border: o.border === 'none' ? 'none' : 'white',
     offset: Number.isFinite(off)
       ? Math.min(STICKER_OFFSET_MAX, Math.max(STICKER_OFFSET_MIN, Math.round(off * 2) / 2))
       : DEFAULT_STICKER_CUT.offset,
+    ...(sheet ? { sheet } : {}),
   }
 }
 

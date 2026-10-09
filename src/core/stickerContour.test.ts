@@ -137,5 +137,8 @@ describe('parseStickerCut', () => {
       offset: 1,
     })
     expect(parseStickerCut({ shape: 'contour', border: 'none', offset: 'x' })?.border).toBe('none')
+    // แผ่นหลายดวงเก็บได้แม้เป็นสี่เหลี่ยม; ค่าแผ่นแปลก ๆ ทิ้ง
+    expect(parseStickerCut({ shape: 'rect', sheet: 'a6' })).toEqual({ shape: 'rect', border: 'white', offset: 2, sheet: 'a6' })
+    expect(parseStickerCut({ shape: 'rect', sheet: 'b9' })).toBeUndefined()
   })
 })
