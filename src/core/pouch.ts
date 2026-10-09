@@ -28,6 +28,8 @@ export const POUCH_SIDE_SEAL = 6 // ริมซีล/ลิ้นทากา�
 export const POUCH_TOP_SEAL = 10 // ริมซีลปากบน (มม.)
 export const FLAT_SEAL = 3 // ซีลรอบซองแบน 3 ด้าน (ซ้าย/ขวา/ล่าง + ปากบนหลังบรรจุ) กว้างเท่ากัน (มม.)
 // ซองแบนมีรูแขวน: ซีลบน 3 มม. ใส่รูไม่ได้ → ขยายเป็นหัวซองกว้างพอเจาะรู (รู ⌀8 + ขอบ 2 มม. บน-ล่าง)
+export const DOYPACK_SEAL = 3 // ซีลข้างถุงตั้ง (มม.)
+export const DOYPACK_TOP_SEAL = 5 // ซีลบนถุงตั้ง (มม.) — แคบสุดที่ยังให้รอยฉีกพ้นซีลก่อนถึงซิป
 export const POUCH_FIN_SEAL = 8 // ครีบซีลหลังกลาง (fin seal) ของซองหลังกลาง — ลิ้นแต่ละข้างของแผ่น (มม.)
 export const BRICK_SEAL = 20 // แถบซีลบน/ล่างของซองข้างจีบ (มม.)
 export const POUCH_ZIP_INSET = 18 // ระยะจากปากบนลงมาถึงแนวซิปล็อก (มม.)
@@ -50,6 +52,7 @@ export interface Pouch {
   // → 3D ได้หน้าต่อเนื่องสะอาด ไม่มีรอยต่อที่ขอบข้าง; backRectL = ครึ่งซ้ายของหลัง
   backSeam: boolean
   backRectL?: { x: number; y: number; w: number; h: number }
+  sideSeal: number // ซีลข้างบนแผง (แผงแยก: doypack/ซองแบน) หรือลิ้นกาว (มม.)
   zipper: boolean // มีซิปล็อก + รอยฉีกไหม
   zipY?: number // พิกัดแผ่นคลี่ y ของแนวซิป (เมื่อ zipper=true) — ใช้วางแถบซิปใน 3D
   tearY?: number // พิกัดแผ่นคลี่ y ของรอยบากฉีก (เมื่อ zipper=true)
@@ -136,10 +139,13 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const fx = backSeam ? pf + W / 2 : 0 // จุดเริ่มพื้นที่พิมพ์หน้าบนแผ่นฟิล์ม
   const fcx = fx + W / 2 // จุดกึ่งกลางหน้า (ใช้วาง marker จุก/วาล์ว/รูแขวน)
   const ss = POUCH_SIDE_SEAL
-  const flatHeader = flat && opts.addons?.hangHole === true ? FLAT_HANG_HEADER : FLAT_SEAL
-  const st = gus ? BRICK_SEAL : flat ? flatHeader : POUCH_TOP_SEAL
+  const hung = opts.addons?.hangHole === true
+  const flatHeader = flat && hung ? FLAT_HANG_HEADER : FLAT_SEAL
+  // ถุงตั้ง: ซีลบนแคบ 5 มม. (รอยฉีกยังพ้นซีลได้) — มีรูแขวน → หัวถุงกว้างพอเจาะรู
+  const standTop = hung ? Math.max(DOYPACK_TOP_SEAL, FLAT_HANG_HEADER) : DOYPACK_TOP_SEAL
+  const st = gus ? BRICK_SEAL : flat ? flatHeader : style === 'stand' ? standTop : POUCH_TOP_SEAL
   const sb = gus ? BRICK_SEAL : flat ? FLAT_SEAL : pillow ? POUCH_TOP_SEAL : 0 // ไม่มีก้น → ใช้ริมซีลล่างแทน
-  const pss = flat ? FLAT_SEAL : ss // ซีลข้างบนแผง (แบบแผงแยก)
+  const pss = flat ? FLAT_SEAL : style === 'stand' ? DOYPACK_SEAL : ss // ซีลข้างบนแผง (แบบแผงแยก)
   // doypack: แต่ละแผงยาวลงไปครึ่งก้น (ก้น gusset พับ W สอดระหว่างหน้า-หลัง สูง D/2)
   const filmH = st + H + (doy ? gVal / 2 : bottomGusset) + sb
   // ความกว้างพิมพ์ = หน้า + หลัง + จีบข้างสองด้าน (ไม่มีจีบ → 2W)
@@ -194,8 +200,8 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     const sag = DOYPACK_BOTTOM_SAG * (gVal / 2)
     if (!spout) segments.push(cut(`M ${W} 0 L ${W} ${filmH}`)) // แผงหน้า/หลังแยกกัน
     for (const x0 of [0, W]) {
-      const l = x0 + ss
-      const r = x0 + W - ss
+      const l = x0 + pss
+      const r = x0 + W - pss
       segments.push(
         crease(`M ${l} 0 L ${l} ${filmH}`),
         crease(`M ${r} 0 L ${r} ${filmH}`),
@@ -247,8 +253,8 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const dims: DimMark[] = doy
     ? [
         { a: P(0, filmH + 12), b: P(W, filmH + 12), label: `${wLabel} ${fmt(W)}` },
-        { a: P(W + ss, filmH + 12), b: P(2 * W - ss, filmH + 12), label: `พื้นที่บรรจุ ${fmt(W - 2 * ss)}` },
-        { a: P(2 * W - ss, filmH + 12), b: P(2 * W, filmH + 12), label: `ซีลข้าง ${fmt(ss)}` },
+        { a: P(W + pss, filmH + 12), b: P(2 * W - pss, filmH + 12), label: `พื้นที่บรรจุ ${fmt(W - 2 * pss)}` },
+        { a: P(2 * W - pss, filmH + 12), b: P(2 * W, filmH + 12), label: `ซีลข้าง ${fmt(pss)}` },
         { a: P(width + 12, 0), b: P(width + 12, st), label: `ซีลบน ${fmt(st)}` },
         { a: P(width + 12, st), b: P(width + 12, st + H), label: `สูง ${fmt(H)}` },
         { a: P(width + 12, st + H), b: P(width + 12, filmH), label: `ก้น ${fmt(gVal / 2)} (ลึก ${fmt(gVal)})` },
@@ -360,6 +366,7 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
       : { x: W + sideGusset, y: st, w: W, h: H },
     backSeam,
     ...(backSeam ? { backRectL: { x: pf, y: st, w: W / 2, h: H } } : {}),
+    sideSeal: pss,
     zipper,
     zipY,
     tearY,
@@ -480,7 +487,7 @@ export const doypackCorner = (W: number, PH: number) => ({ rx: Math.min(W * 0.07
 // ช่วงพอง (พื้น → ปลายแหลมใต้ซิป) → ปากบีบแบน (ซิปแข็งหนีบปากไว้) → ซีลบน
 // ซีลข้างแบนกว้าง POUCH_SIDE_SEAL ตลอดความสูง ตรงเกือบดิ่ง (ดึงเข้าเล็กน้อยตามความพอง) มุมล่างมน
 export function doypackRows(
-  p: Pick<Pouch, 'W' | 'depth3D' | 'frontRect' | 'zipper' | 'zipY'> & { label: { height: number } },
+  p: Pick<Pouch, 'W' | 'depth3D' | 'frontRect' | 'zipper' | 'zipY'> & { label: { height: number }; sideSeal?: number },
   n = 56,
   nFin = 3,
 ): DoypackRow[] {
@@ -491,7 +498,7 @@ export function doypackRows(
   // ปลายช่วงพอง: ใต้ปีกซิป (ซิปหนีบปากแบน) ไม่มีซิป → ถึงซีลบน
   const tipY =
     p.zipper && p.zipY !== undefined ? Math.max(Hi * 0.5, Math.min(Hi, PH - p.zipY - ZIP_HALF)) : Hi
-  const ss = POUCH_SIDE_SEAL
+  const ss = p.sideSeal ?? POUCH_SIDE_SEAL
   const Wi = W - 2 * ss
   const { rx, ry } = doypackCorner(W, PH)
   const fOf = (y: number) => (y >= tipY ? 0 : pouchDepthFactor(y / tipY, 'stand'))

@@ -21,7 +21,6 @@ import {
   sectionZ,
   type DoypackRow,
   DOYPACK_FIN,
-  POUCH_SIDE_SEAL,
   POUCH_FIN_SEAL,
   pillowRows,
   FLAT_SEAL,
@@ -267,7 +266,7 @@ export function buildPouchGeometry(pouch: Pouch) {
     // แต่ละแผงแม็พทั้งแผงของ dieline (รวมแถบซีล) → ลายบนซีลก็ขึ้น; ความกว้างช่วงพองแก้ให้ความยาวโค้ง = ฟิล์มจริง
     if (style === 'stand' || style === 'spout') {
       const rows = style === 'spout' ? spoutRows(pouch) : doypackRows(pouch)
-      const ss = POUCH_SIDE_SEAL
+      const ss = pouch.sideSeal
       const Wi = W - 2 * ss
       const NI = 40
       // คอลัมน์ตามพิกัดฟิล์มของแผง (0..W): ขอบ, แนวซีลข้าง, ช่วงพองแบ่งเท่าตามความยาวฟิล์ม

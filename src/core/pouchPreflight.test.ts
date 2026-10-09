@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { generatePouch, pouchZipLayout, POUCH_TOP_SEAL, TEAR_GAP, type PouchAddons, type PouchStyle } from './pouch'
+import { generatePouch, pouchZipLayout, DOYPACK_TOP_SEAL, POUCH_TOP_SEAL, TEAR_GAP, type PouchAddons, type PouchStyle } from './pouch'
 import { pouchZipIssues } from './pouchPreflight'
 import { getMaterial } from './materials'
 import { parseProject } from './project'
@@ -36,8 +36,8 @@ describe('pouchZipLayout', () => {
     expect(p.tearY).toBe(22)
     const ds = p.label.segments.map((s) => s.d)
     // doypack: แนวซิปต่อแผงระหว่างซีลข้าง + รอยบากที่ซีลข้างทั้ง 4 ขอบของสองแผง
-    expect(ds).toContain('M 6 40 L 114 40')
-    expect(ds).toContain('M 126 40 L 234 40')
+    expect(ds).toContain('M 3 40 L 117 40') // ถุงตั้ง: ซีลข้าง 3 มม.
+    expect(ds).toContain('M 123 40 L 237 40')
     expect(ds).toContain('M 0 19.5 L 4 22 L 0 24.5')
     expect(ds).toContain('M 120 19.5 L 116 22 L 120 24.5')
     expect(ds).toContain('M 120 19.5 L 124 22 L 120 24.5')
@@ -57,8 +57,8 @@ describe('pouchZipIssues', () => {
   })
 
   it('รอยฉีกในซีลบน → error; ชิดซีล → warn', () => {
-    expect(codes({ zipAt: 40, tearAt: 8 })).toContain('tear-in-seal')
-    expect(codes({ zipAt: 40, tearAt: 11 })).toContain('tear-near-seal')
+    expect(codes({ zipAt: 40, tearAt: 4 })).toContain('tear-in-seal') // ถุงตั้ง: ซีลบน 5 มม.
+    expect(codes({ zipAt: 40, tearAt: 6 })).toContain('tear-near-seal')
     expect(codes({ zipAt: 40, tearAt: 20 })).toEqual([])
   })
 
@@ -69,8 +69,9 @@ describe('pouchZipIssues', () => {
   })
 
   it('ซิปชิดซีลจนไม่มีที่ให้รอยฉีก → error เดียวที่บอกตรงสาเหตุ', () => {
-    expect(codes({ zipAt: 18 })).toEqual(['zip-near-seal'])
-    expect(codes({ zipAt: 21 })).not.toContain('zip-near-seal')
+    expect(codes({ zipAt: 12 })).toEqual(['zip-near-seal']) // ซีลบน 5 → ต้อง ≥ 5+3+8 = 16
+    expect(codes({ zipAt: 18 }, 'gusset')).toContain('zip-near-seal') // ซองข้างจีบ ซีลบน 20
+    expect(codes({ zipAt: 16 })).toEqual([])
   })
 
   it('ซิปต่ำกว่าครึ่งถุง → warn; ลงถึงก้นจีบ → error', () => {
@@ -81,7 +82,7 @@ describe('pouchZipIssues', () => {
   })
 
   it('ซิปทับวาล์ว/จุก → error, ทับที่รัดปาก → warn', () => {
-    const vy = POUCH_TOP_SEAL + (1 - 0.72) * size.H
+    const vy = DOYPACK_TOP_SEAL + (1 - 0.72) * size.H
     expect(codes({ valve: true, zipAt: vy })).toContain('zip-valve')
     expect(codes({ valve: true, zipAt: 25 })).not.toContain('zip-valve')
     // ถุงเล็ก 80×120: ซิปค่าเริ่มต้นชิดวาล์ว → เตือน (ไม่ใช่ error)

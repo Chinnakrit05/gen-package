@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { buildPouchGeometry, getPouchSealColor } from './PouchViewer3D'
-import { generatePouch, DOYPACK_FIN, FLAT_SEAL, POUCH_FIN_SEAL, POUCH_SIDE_SEAL, type PouchStyle } from '../core/pouch'
+import { generatePouch, DOYPACK_FIN, FLAT_SEAL, POUCH_FIN_SEAL, type PouchStyle } from '../core/pouch'
 import { getMaterial } from '../core/materials'
 
 describe('brick pouch seal color', () => {
@@ -199,7 +199,7 @@ describe.each<PouchStyle>(['stand', 'spout'])('doypack geometry (%s)', (style) =
     for (const v of printed(geometry)) {
       const x = (uv.getX(v) * pouch.label.width) % size.W
       const y = uv.getY(v) * pouch.label.height
-      const inSideSeal = x < POUCH_SIDE_SEAL - 1e-3 || x > size.W - POUCH_SIDE_SEAL + 1e-3
+      const inSideSeal = x < pouch.sideSeal - 1e-3 || x > size.W - pouch.sideSeal + 1e-3
       const inTopSeal = y < pouch.frontRect.y - 1e-3
       if (!inSideSeal && !inTopSeal) continue
       expect(Math.abs(position.getZ(v))).toBeCloseTo(DOYPACK_FIN, 4)

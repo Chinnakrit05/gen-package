@@ -19,6 +19,8 @@ import {
   isPouch,
   POUCH_SIDE_SEAL,
   POUCH_TOP_SEAL,
+  DOYPACK_SEAL,
+  DOYPACK_TOP_SEAL,
   POUCH_FIN_SEAL,
   pillowRows,
   ellipsePerimeter,
@@ -52,16 +54,17 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
       H = 180
     const p = generatePouch({ W, D, H }, mat)
     expect(p.label.width).toBe(2 * W) // ซีลข้างอยู่ในแผง ไม่มีลิ้นกาว
-    expect(p.label.height).toBe(POUCH_TOP_SEAL + H + D / 2)
+    expect(p.label.height).toBe(DOYPACK_TOP_SEAL + H + D / 2)
     expect(p.gusset).toBe(D)
     expect(p.backSeam).toBe(false)
-    expect(p.frontRect).toEqual({ x: 0, y: POUCH_TOP_SEAL, w: W, h: H })
-    expect(p.backRect).toEqual({ x: W, y: POUCH_TOP_SEAL, w: W, h: H })
+    expect(p.frontRect).toEqual({ x: 0, y: DOYPACK_TOP_SEAL, w: W, h: H })
+    expect(p.backRect).toEqual({ x: W, y: DOYPACK_TOP_SEAL, w: W, h: H })
+    expect(p.sideSeal).toBe(DOYPACK_SEAL) // ซีลข้าง 3 มม.
     expect(p.backRectL).toBeUndefined()
     const ds = p.label.segments.map((s) => s.d)
     // แผงแยกด้วยเส้นตัดกลาง, ซีลข้างทั้งสองแผง, ซีลก้นโค้งลงกลางแผง
     expect(p.label.segments).toContainEqual({ kind: 'cut', d: `M ${W} 0 L ${W} ${p.label.height}` })
-    for (const x of [POUCH_SIDE_SEAL, W - POUCH_SIDE_SEAL, W + POUCH_SIDE_SEAL, 2 * W - POUCH_SIDE_SEAL]) {
+    for (const x of [DOYPACK_SEAL, W - DOYPACK_SEAL, W + DOYPACK_SEAL, 2 * W - DOYPACK_SEAL]) {
       expect(ds).toContain(`M ${x} 0 L ${x} ${p.label.height}`)
     }
     expect(ds.filter((d) => d.includes(' Q ')).length).toBe(2)
@@ -90,7 +93,7 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
   it('ใส่ซิป → เพิ่มแนวซิป (crease) + รอยฉีกสองข้าง (cut) + zipY อยู่ใต้ปากบน', () => {
     const p = generatePouch({ W: 120, D: 70, H: 180 }, mat, { zipper: true })
     expect(p.zipper).toBe(true)
-    expect(p.zipY).toBe(POUCH_TOP_SEAL + 18) // inset 18 (H สูงพอ)
+    expect(p.zipY).toBe(DOYPACK_TOP_SEAL + 18) // inset 18 (H สูงพอ)
     expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(14) // +แนวซิปแผงละเส้น
     expect(p.label.segments.filter((s) => s.kind === 'cut').length).toBe(6) // +รอยฉีกซีลข้างทั้ง 4 ขอบ
     expect(p.label.dims.some((d) => d.label.includes('ซิป'))).toBe(true)
@@ -98,7 +101,7 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
 
   it('ถุงเตี้ยมาก: แนวซิปไม่ต่ำกว่าครึ่งลำตัว', () => {
     const p = generatePouch({ W: 120, D: 70, H: 20 }, mat, { zipper: true }) // H เล็ก → inset ถูกจำกัด
-    expect(p.zipY! - POUCH_TOP_SEAL).toBeLessThanOrEqual(10) // ≤ H*0.5
+    expect(p.zipY! - DOYPACK_TOP_SEAL).toBeLessThanOrEqual(10) // ≤ H*0.5
   })
 
   it('ซองแบน 3 ด้าน (flat): แผงหน้า/หลังแยก ซีลซ้าย-ล่าง-ขวา (⊔) ต่อแผง ปากบนเปิดไว้บรรจุ', () => {
@@ -334,10 +337,10 @@ describe('pouch: ทรง 3D ถุงตั้ง (doypack)', () => {
   })
 
   it('ซีลข้างแบนกว้างเท่า dieline ตรงเกือบดิ่ง; มุมก้นมนเข้า; ฐานลึกเต็มตั้งได้', () => {
-    const Wi2 = p.W / 2 - POUCH_SIDE_SEAL
+    const Wi2 = p.W / 2 - DOYPACK_SEAL
     const { ry } = doypackCorner(p.W, PH)
     for (const r of rows) {
-      expect(r.a - r.ai).toBeCloseTo(POUCH_SIDE_SEAL, 9)
+      expect(r.a - r.ai).toBeCloseTo(DOYPACK_SEAL, 9)
       expect(doypackZ(r, r.ai + 1)).toBe(DOYPACK_FIN) // ซีลข้างแบน
       expect(doypackZ(r, 0)).toBeCloseTo(r.b, 9)
       if (r.y >= ry) expect(r.ai).toBeGreaterThanOrEqual(Wi2 * 0.95 - 1e-9) // ซีลแข็ง ไม่หดตามความพอง
