@@ -1,5 +1,5 @@
 import type { Vec2 } from './types'
-import { pouchWidthFactor, pouchDepthFactor, type PouchStyle } from './pouch'
+import { pouchWidthFactor, pouchDepthFactor, pouchSectionArea, type PouchStyle } from './pouch'
 
 // ความจุโดยประมาณ (มล.) ของบรรจุภัณฑ์ — ประเมินจากปริมาตรใช้งานด้านใน
 // (หัก headspace/ผนัง/คอ คร่าว ๆ) เพื่อบอกผู้ใช้ว่าใส่สินค้าได้ราวเท่าไร
@@ -10,17 +10,17 @@ export function boxVolumeMl(W: number, D: number, H: number): number {
   return ((W * D * H) / 1000) * 0.95
 }
 
-// ถุงฟิล์ม: อินทิเกรตพื้นที่หน้าตัดตามความสูง (วงรี หรือ สี่เหลี่ยมมุมมน brick/box)
+// ถุงฟิล์ม: อินทิเกรตพื้นที่หน้าตัดตามความสูง (วงรี / เลนส์ doypack / สี่เหลี่ยมมุมมน brick/box)
 // ใช้โปรไฟล์กว้าง/ลึกชุดเดียวกับที่เรนเดอร์ 3D จึงสอดคล้องกับทรงจริง
 export function pouchVolumeMl(W: number, H: number, depth3D: number, style: PouchStyle): number {
-  const boxy = style === 'gusset' || style === 'box'
+  const k = pouchSectionArea(style)
   const N = 48
   let v3 = 0
   for (let i = 0; i < N; i++) {
     const v = (i + 0.5) / N
     const a = (W / 2) * pouchWidthFactor(v, style) // ครึ่งกว้าง
     const b = depth3D * pouchDepthFactor(v, style) // ครึ่งลึก
-    const area = boxy ? 4 * a * b * 0.9 : Math.PI * a * b // สี่เหลี่ยมมุมมน vs วงรี
+    const area = k * a * b
     v3 += area * (H / N)
   }
   return (v3 / 1000) * 0.9 // เผื่อ headspace

@@ -13,6 +13,10 @@ import {
   pouchDepthFactor,
   pouchWidthFactor,
   pouchSection,
+  doypackRows,
+  doypackAt,
+  lensZ,
+  type DoypackRow,
   valveR,
   VALVE_V,
   TINTIE_INSET,
@@ -249,6 +253,94 @@ export function buildPouchGeometry(pouch: Pouch) {
       return geoB
     }
 
+    // ───────── doypack (stand/spout): หน้าตัดเลนส์ ตะเข็บข้างคม + แถบซีลบนแบน ─────────
+    // แต่ละแผงฟิล์มเป็นกริดแยก (จุดซ้ำที่ตะเข็บ/รอยต่อ) → ขอบตะเข็บคมไม่ถูกเกลี่ย normal, UV ไม่กระโดด
+    // UV แนวนอนตามความยาวส่วนโค้งของเลนส์ต่อแถว → ลายหน้าไม่ยืดกลาง/หดขอบ
+    if (style === 'stand' || style === 'spout') {
+      const rows = doypackRows(pouch)
+      const fx = frontRect.x
+      // แผง: ช่วง u (x = a·u), ด้าน (+1 หน้า / −1 หลัง), ช่วง dieline x
+      const panes: { u0: number; u1: number; side: number; d0: number; d1: number; n: number }[] = backSeam
+        ? [
+            { u0: 1, u1: -1, side: 1, d0: fx + W, d1: fx, n: 40 }, // หน้า: ขวา→ซ้าย (อ่านถูกจาก +Z)
+            { u0: -1, u1: 0, side: -1, d0: fx, d1: 0, n: 20 }, // หลังซ้าย: สันข้าง→รอยต่อกลางหลัง
+            { u0: 0, u1: 1, side: -1, d0: 2 * W, d1: fx + W, n: 20 }, // หลังขวา: รอยต่อ→สันข้าง
+          ]
+        : [
+            { u0: 1, u1: -1, side: 1, d0: fx + W, d1: fx, n: 40 },
+            { u0: -1, u1: 1, side: -1, d0: backRect.x + W, d1: backRect.x, n: 40 },
+          ]
+      const M = 160
+      const ringOf = (r: DoypackRow, pane: (typeof panes)[number]) => {
+        // ความยาวส่วนโค้งสะสมตามเลนส์ แล้วแบ่งเท่า ๆ กันตามความยาว
+        const pts: [number, number][] = []
+        const cum = [0]
+        for (let i = 0; i <= M; i++) {
+          const u = pane.u0 + ((pane.u1 - pane.u0) * i) / M
+          pts.push([r.a * u, pane.side * r.b * lensZ(u)])
+          if (i) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]))
+        }
+        const out: [number, number][] = []
+        let j = 0
+        for (let k = 0; k <= pane.n; k++) {
+          const L = (cum[M] * k) / pane.n
+          while (j < M - 1 && cum[j + 1] < L) j++
+          const t = cum[j + 1] > cum[j] ? Math.min(1, (L - cum[j]) / (cum[j + 1] - cum[j])) : 0
+          out.push([pts[j][0] + (pts[j + 1][0] - pts[j][0]) * t, pts[j][1] + (pts[j + 1][1] - pts[j][1]) * t])
+        }
+        return out
+      }
+      for (const pane of panes) {
+        const start = pos.length / 3
+        const cols = pane.n + 1
+        for (const r of rows) {
+          ringOf(r, pane).forEach(([x, z], k) => {
+            pos.push(x, r.y, z)
+            uv.push((pane.d0 + ((pane.d1 - pane.d0) * k) / pane.n) / dw, r.dly / dh)
+          })
+        }
+        for (let iv = 0; iv < rows.length - 1; iv++) {
+          for (let k = 0; k < pane.n; k++) {
+            const q = start + iv * cols + k
+            // หน้า (u ลดลง) กับหลัง (u เพิ่ม) วนทิศเดียวกันรอบแกนตั้ง → normal ชี้ออกทั้งคู่
+            idx.push(q, q + cols, q + 1, q + 1, q + cols, q + cols + 1)
+          }
+        }
+      }
+      const sideCount = idx.length
+      // ฝาก้น (เลนส์แบนบนพื้น) + ปลายแถบซีลบน: จุดซ้ำแยกจากผิวข้าง → ขอบก้นคม ไม่เกลี่ยแสง
+      const capRing = (rowIdx: number, flip: boolean) => {
+        const r = rows[rowIdx]
+        const ring: [number, number][] = []
+        for (const pane of panes) {
+          const pts = ringOf(r, pane)
+          ring.push(...(ring.length ? pts.slice(1) : pts))
+        }
+        const center = pos.length / 3
+        pos.push(0, r.y, 0)
+        uv.push((fx + W / 2) / dw, r.dly / dh)
+        for (const [x, z] of ring) {
+          pos.push(x, r.y, z)
+          uv.push((fx + W / 2) / dw, r.dly / dh)
+        }
+        for (let k = 0; k < ring.length - 1; k++) {
+          const p0 = center + 1 + k
+          if (flip) idx.push(center, p0 + 1, p0)
+          else idx.push(center, p0, p0 + 1)
+        }
+      }
+      capRing(0, false)
+      capRing(rows.length - 1, true)
+      const geoD = new THREE.BufferGeometry()
+      geoD.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+      geoD.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+      geoD.setIndex(idx)
+      geoD.addGroup(0, sideCount, 0)
+      geoD.addGroup(sideCount, idx.length - sideCount, 1)
+      geoD.computeVertexNormals()
+      return geoD
+    }
+
     const ringVert = (v: number, theta: number, dly: number) => {
       // brick/box: ลำตัวทรงอิฐ (หน้า-หลังแบน) + ปากบน(และก้น brick) บีบเป็น "ตะเข็บซีลแบน (fin)"
       // ความลึกยุบตาม pouchDepthFactor → ได้ครีบซีล; กว้างคอดเล็กน้อยที่ปลายซีลตาม pouchWidthFactor
@@ -410,7 +502,39 @@ function PouchModel({
 
   // brick: ทรงตามความยาวฟิล์ม (ไหล่เอียง) → ซิป/วาล์ว/tin-tie วางตามระยะบน dieline ผ่าน brickAt
   const brick = useMemo(() => (pouch.style === 'gusset' ? brickShape(pouch) : null), [pouch])
+  // doypack: แถวโปรไฟล์ชุดเดียวกับผิว → ซิป/วาล์ว/tin-tie วางตามพิกัด dieline ผ่าน doypackAt
+  const doy = useMemo(
+    () => (pouch.style === 'stand' || pouch.style === 'spout' ? doypackRows(pouch) : null),
+    [pouch],
+  )
+  const topY = brick ? brick.topY : doy ? doy[doy.length - 1].y : pouch.H
   const zipBand = useMemo(() => {
+    if (doy && pouch.zipper && pouch.zipY !== undefined) {
+      // แถบซิปพาดรอบหน้าตัดเลนส์ ดันออกจากผิว ~0.6 มม. ตามแนวซิปบน dieline
+      const NU = 96
+      const pos: number[] = []
+      const idx: number[] = []
+      const NR = 4
+      for (let i = 0; i <= NR; i++) {
+        const r = doypackAt(doy, pouch.zipY - 2.5 + (5 * i) / NR)
+        for (let iu = 0; iu <= NU; iu++) {
+          const th = (iu / NU) * Math.PI * 2
+          const c = Math.cos(th)
+          pos.push((r.a + 0.4) * c, r.y, Math.sign(Math.sin(th)) * (r.b + 0.6) * lensZ(c))
+        }
+      }
+      for (let i = 0; i < NR; i++) {
+        for (let iu = 0; iu < NU; iu++) {
+          const p = i * (NU + 1) + iu
+          idx.push(p, p + NU + 1, p + 1, p + 1, p + NU + 1, p + NU + 2)
+        }
+      }
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+      geo.setIndex(idx)
+      geo.computeVertexNormals()
+      return geo
+    }
     if (!brick || !pouch.zipper || pouch.zipY === undefined) return null
     // แถบซิป = loft บาง ๆ ตามหน้าตัดจริง (โค้งตามไหล่) ดันออกจากผิว 0.6 มม.
     const dl0 = pouch.zipY - pouch.frontRect.y
@@ -438,12 +562,12 @@ function PouchModel({
     geo.setIndex(idx)
     geo.computeVertexNormals()
     return geo
-  }, [brick, pouch])
+  }, [brick, doy, pouch])
   useEffect(() => () => zipBand?.dispose(), [zipBand])
 
   // แถบซิปล็อก: วงรีบาง ๆ พาดรอบใกล้ปาก ที่ระดับความสูงเดียวกับแนวซิปบน dieline
   let zip: { y: number; ax: number; bz: number } | null = null
-  if (!brick && pouch.zipper && pouch.zipY !== undefined) {
+  if (!brick && !doy && pouch.zipper && pouch.zipY !== undefined) {
     const vzip = Math.min(0.98, Math.max(0.02, 1 - (pouch.zipY - pouch.frontRect.y) / pouch.H))
     zip = {
       y: vzip * pouch.H,
@@ -465,14 +589,22 @@ function PouchModel({
   const ttZ = pouch.depth3D * pouchDepthFactor(ttV, pouch.style)
   const ttW = pouch.W * pouchWidthFactor(ttV, pouch.style) * 0.9
   // brick: จุดบนหน้า (y, ผิว z, มุมเอียงไหล่) ที่ระยะบน dieline เดียวกับ marker
-  const bValve = brick ? brickAt(brick, (1 - VALVE_V) * pouch.H) : null
-  const bTie = brick ? brickAt(brick, TINTIE_INSET + 3) : null
+  const bValve = brick
+    ? brickAt(brick, (1 - VALVE_V) * pouch.H)
+    : doy
+      ? doypackAt(doy, pouch.frontRect.y + (1 - VALVE_V) * pouch.H)
+      : null
+  const bTie = brick
+    ? brickAt(brick, TINTIE_INSET + 3)
+    : doy
+      ? doypackAt(doy, pouch.frontRect.y + TINTIE_INSET + 3)
+      : null
 
   const modelRef = useRef<THREE.Group>(null)
 
   return (
     <>
-    <group ref={modelRef} position={[0, -(brick ? brick.topY : pouch.H) / 2, 0]}>
+    <group ref={modelRef} position={[0, -topY / 2, 0]}>
       <mesh geometry={geo}>
         {/* material 0 = ผิวข้าง (พิมพ์ลาย) */}
         <meshStandardMaterial
@@ -509,7 +641,7 @@ function PouchModel({
         </mesh>
       )}
       {pouch.spout && (
-        <group position={[0, pouch.H, 0]}>
+        <group position={[0, topY, 0]}>
           {/* คอจุก */}
           <mesh position={[0, neckH / 2, 0]}>
             <cylinderGeometry args={[spoutR, spoutR, neckH, 24]} />

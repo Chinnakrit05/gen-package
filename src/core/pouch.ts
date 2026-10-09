@@ -238,7 +238,8 @@ const smooth = (t: number) => {
 const lerpS = (a: number, b: number, t: number) => a + (b - a) * smooth(t)
 
 // ครึ่งความลึก (สัดส่วนของ depth3D) ตามรูปแบบ:
-// - stand: ก้นตั้ง 0.82 → พุงป่อง 1.0 (v~0.4) → เรียวขึ้นปาก → ซีลแบน 0.05 (ก้นกว้างเพื่อยืน)
+// - stand/spout (doypack): ก้นกว้างตั้งได้ 0.9 → หนาสุดใกล้ก้น (v≈0.12) → เรียวเกือบตรงขึ้นไปจนแบนที่ปาก
+//   (มองด้านข้างเป็นหยดน้ำผอมสูง ไม่ใช่หมอนพองกลาง)
 // - flat: วงรีสมมาตร ซีลแบนทั้งบน-ล่าง (v→0/1 ≈ 0) พองสุดกลางลำตัว — ซองแบนไม่ตั้ง
 export function pouchDepthFactor(v: number, style: PouchStyle = 'stand'): number {
   if (style === 'flat' || style === 'pillow') return Math.max(0.04, Math.sin(Math.PI * clamp01(v)) ** 0.6)
@@ -249,10 +250,10 @@ export function pouchDepthFactor(v: number, style: PouchStyle = 'stand'): number
     if (v > 0.9) return lerpS(1.0, 0.12, (v - 0.9) / 0.1)
     return 1.0
   }
-  // stand / spout: ก้นตั้ง → พุงป่อง → เรียวขึ้นปาก → ซีลแบน
-  if (v < 0.4) return lerpS(0.82, 1.0, v / 0.4)
-  if (v < 0.85) return lerpS(1.0, 0.35, (v - 0.4) / 0.45)
-  return lerpS(0.35, 0.05, (v - 0.85) / 0.15)
+  // stand / spout: ก้นตั้ง → หนาสุดใกล้ก้น → เรียวขึ้น (ผสมเส้นตรง+โค้งโดม) → แบนที่ปากซีล
+  if (v < DOYPACK_PEAK) return lerpS(0.9, 1.0, v / DOYPACK_PEAK)
+  const t = clamp01((v - DOYPACK_PEAK) / (1 - DOYPACK_PEAK))
+  return 0.5 * (1 - t) + 0.5 * Math.cos((t * Math.PI) / 2) ** 1.3
 }
 
 // ครึ่งความกว้าง (สัดส่วนของ W/2): เต็มเกือบตลอด คอดเล็กน้อยที่ปลาย
@@ -263,12 +264,14 @@ export function pouchWidthFactor(v: number, style: PouchStyle = 'stand'): number
     if (v > 0.94) return lerpS(1.0, 0.85, (v - 0.94) / 0.06)
     return 1.0
   }
+  // doypack: ปากซีลกว้างเต็ม (มุมก้นมนคิดเป็นมม. ใน doypackRows)
+  if (style === 'stand' || style === 'spout') return 1.0
   if (v < 0.06) return lerpS(0.9, 1.0, v / 0.06)
   if (v > 0.9) return lerpS(1.0, 0.82, (v - 0.9) / 0.1)
   return 1.0
 }
 
-// รูปหน้าตัดรอบวงที่มุม theta: วงรี (stand/flat/pillow/spout) หรือสี่เหลี่ยมมน superellipse (gusset/box)
+// รูปหน้าตัดรอบวงที่มุม theta: วงรี (flat/pillow), เลนส์ขอบคม (stand/spout) หรือสี่เหลี่ยมมน superellipse (gusset/box)
 // คืนสัดส่วน (cx, cz) ∈ [-1,1] ก่อนคูณครึ่งกว้าง/ครึ่งลึก
 export function pouchSection(theta: number, style: PouchStyle = 'stand'): { cx: number; cz: number } {
   const c = Math.cos(theta)
@@ -278,7 +281,78 @@ export function pouchSection(theta: number, style: PouchStyle = 'stand'): { cx: 
     const e = 0.5
     return { cx: Math.sign(c) * Math.abs(c) ** e, cz: Math.sign(s) * Math.abs(s) ** e }
   }
+  if (style === 'stand' || style === 'spout') return { cx: c, cz: Math.sign(s) * lensZ(c) }
   return { cx: c, cz: s }
+}
+
+// พื้นที่หน้าตัด ÷ (ครึ่งกว้าง × ครึ่งลึก): วงรี π, เลนส์ 4·P/(P+1), สี่เหลี่ยมมน ~3.6
+export function pouchSectionArea(style: PouchStyle): number {
+  if (style === 'gusset' || style === 'box') return 3.6
+  if (style === 'stand' || style === 'spout') return (4 * DOYPACK_LENS) / (DOYPACK_LENS + 1)
+  return Math.PI
+}
+
+// --- ทรง 3D ถุงตั้ง (doypack) แบบถุงซิปตั้งได้ทั่วไป ---
+// หน้าตัดเป็น "เลนส์" ฟิล์มหน้า-หลังประกบกันเป็นตะเข็บคมสองข้าง (ไม่ใช่วงรีมน), หนาสุดใกล้ก้น
+// แล้วเรียวขึ้นจนแบนที่ปาก + แถบซีลบนแบนกว้างเต็ม (ครีบ = แถบซีลบนของ dieline), ก้นแบนรูปเลนส์ มุมล่างมน
+export const DOYPACK_LENS = 2.4 // เลขชี้กำลังเลนส์: z = 1 − |u|^P (มาก = หน้าอิ่มเต็ม ขอบยังคม)
+export const DOYPACK_PEAK = 0.12 // ระดับ v ที่หนาสุด (ใกล้ก้น)
+export const DOYPACK_FIN = 0.35 // ครึ่งความหนาแถบซีลบน (ฟิล์มสองชั้นประกบ)
+export const lensZ = (u: number) => Math.max(0, 1 - Math.min(1, Math.abs(u)) ** DOYPACK_LENS)
+
+export interface DoypackRow {
+  y: number // ความสูงจากพื้น
+  a: number // ครึ่งกว้าง (ตะเข็บข้างอยู่ที่ x=±a)
+  b: number // ครึ่งลึกที่กึ่งกลางหน้า
+  dly: number // พิกัด dieline แนวตั้ง (ลำตัว [st..st+H], ครีบ [0..st])
+}
+
+// มุมก้นมน (มม.): ตะเข็บข้างโค้งเข้าหาก้นที่ซีลกับก้น gusset
+export const doypackCorner = (W: number, H: number) => Math.min(W * 0.08, H * 0.1)
+
+export function doypackRows(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect'>, n = 56, nFin = 3): DoypackRow[] {
+  const { W, H, depth3D } = p
+  const st = p.frontRect.y
+  const rcx = doypackCorner(W, H)
+  const rcy = rcx * 1.3
+  const aOf = (y: number) => {
+    if (y >= rcy) return W / 2
+    const t = 1 - y / rcy
+    return W / 2 - rcx * (1 - Math.sqrt(1 - t * t))
+  }
+  const bOf = (y: number) => Math.max(DOYPACK_FIN, depth3D * pouchDepthFactor(y / H, 'stand'))
+  // แถวถี่ใกล้ก้น (มุมมน + ช่วงหนาสุด)
+  const ys = Array.from({ length: n + 1 }, (_, i) => H * (i / n) ** 1.25)
+  // UV แนวตั้งตามความยาวผิวกลางหน้า → ลายไม่ยืดตรงช่วงเรียว
+  const cum = [0]
+  for (let i = 1; i <= n; i++) cum.push(cum[i - 1] + Math.hypot(ys[i] - ys[i - 1], bOf(ys[i]) - bOf(ys[i - 1])))
+  const total = cum[n] || 1
+  const rows: DoypackRow[] = ys.map((y, i) => ({ y, a: aOf(y), b: bOf(y), dly: st + (1 - cum[i] / total) * H }))
+  for (let i = 1; i <= nFin; i++) {
+    const t = i / nFin
+    rows.push({ y: H + t * st, a: W / 2, b: DOYPACK_FIN, dly: (1 - t) * st })
+  }
+  return rows
+}
+
+// จุดบนเส้นกึ่งกลางหน้าที่พิกัด dieline แนวตั้ง dl — ใช้วางซิป/วาล์ว/tin-tie ให้ตรง marker;
+// tilt = มุมเอียงผิวจากแนวดิ่ง (ผิวเรียวเอนไปด้านหลังเมื่อสูงขึ้น)
+export function doypackAt(rows: DoypackRow[], dl: number): { y: number; a: number; b: number; tilt: number } {
+  for (let i = 1; i < rows.length; i++) {
+    const r0 = rows[i - 1]
+    const r1 = rows[i]
+    if (dl <= r0.dly && dl >= r1.dly) {
+      const t = r0.dly === r1.dly ? 0 : (r0.dly - dl) / (r0.dly - r1.dly)
+      return {
+        y: r0.y + (r1.y - r0.y) * t,
+        a: r0.a + (r1.a - r0.a) * t,
+        b: r0.b + (r1.b - r0.b) * t,
+        tilt: Math.atan2(r0.b - r1.b, r1.y - r0.y),
+      }
+    }
+  }
+  const r = dl > rows[0].dly ? rows[0] : rows[rows.length - 1]
+  return { y: r.y, a: r.a, b: r.b, tilt: 0 }
 }
 
 // --- ทรง 3D ซองข้างจีบ (brick) แบบถุงกาแฟ/ถุงข้าวสุญญากาศ ---

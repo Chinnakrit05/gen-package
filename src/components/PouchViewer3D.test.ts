@@ -141,3 +141,66 @@ describe.each([
     geometry.dispose()
   })
 })
+
+describe.each<PouchStyle>(['stand', 'spout'])('doypack geometry (%s)', (style) => {
+  const size = { W: 120, D: 60, H: 180 }
+  const pouch = generatePouch(size, getMaterial('pouch-foil'), { style })
+
+  it('stays within the pouch footprint, stands on y=0 and reaches the top seal', () => {
+    const geometry = buildPouchGeometry(pouch)
+    geometry.computeBoundingBox()
+    const box = geometry.boundingBox!
+    expect(box.min.y).toBeCloseTo(0, 6)
+    expect(box.max.y).toBeCloseTo(size.H + pouch.frontRect.y, 6)
+    expect(box.max.x).toBeLessThanOrEqual(size.W / 2 + 1e-6)
+    expect(box.max.z).toBeLessThanOrEqual(pouch.depth3D + 1e-6)
+    geometry.dispose()
+  })
+
+  it('front skin faces +Z and covers the whole front print area', () => {
+    const geometry = buildPouchGeometry(pouch)
+    const uv = geometry.getAttribute('uv')
+    const normal = geometry.getAttribute('normal')
+    const position = geometry.getAttribute('position')
+    const printGroup = geometry.groups.find((group) => group.materialIndex === 0)!
+    const index = geometry.getIndex()!
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    for (let i = printGroup.start; i < printGroup.start + printGroup.count; i++) {
+      const v = index.getX(i)
+      const x = uv.getX(v) * pouch.label.width
+      const y = uv.getY(v) * pouch.label.height
+      if (x < pouch.frontRect.x - 1e-3 || x > pouch.frontRect.x + size.W + 1e-3) continue
+      if (position.getZ(v) < -1e-6) continue
+      minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y)
+      // กลางหน้าช่วงลำตัว: normal ชี้ออกหน้า (+Z)
+      if (Math.abs(position.getX(v)) < 10 && position.getY(v) > 20 && position.getY(v) < size.H * 0.8) {
+        expect(normal.getZ(v)).toBeGreaterThan(0.5)
+      }
+    }
+    expect(minX).toBeCloseTo(pouch.frontRect.x, 4)
+    expect(maxX).toBeCloseTo(pouch.frontRect.x + size.W, 4)
+    expect(minY).toBeCloseTo(0, 4) // แถบซีลบนมีลาย
+    expect(maxY).toBeCloseTo(pouch.frontRect.y + size.H, 4)
+    geometry.dispose()
+  })
+
+  it('keeps the side seams sharp: front and back skins meet at depth 0 with separate normals', () => {
+    const geometry = buildPouchGeometry(pouch)
+    const position = geometry.getAttribute('position')
+    const normal = geometry.getAttribute('normal')
+    let seams = 0
+    for (let i = 0; i < position.count; i++) {
+      const y = position.getY(i)
+      if (y < 30 || y > size.H * 0.7) continue
+      if (Math.abs(Math.abs(position.getX(i)) - size.W / 2) > 1e-6) continue
+      expect(Math.abs(position.getZ(i))).toBeLessThan(1e-6)
+      // normal ที่ตะเข็บเอียงไปด้านหน้าหรือหลังชัดเจน (ไม่ถูกเกลี่ยรวมเป็นแนวข้าง)
+      if (normal.getY(i) > -0.9) {
+        expect(Math.abs(normal.getZ(i))).toBeGreaterThan(0.3)
+        seams++
+      }
+    }
+    expect(seams).toBeGreaterThan(0)
+    geometry.dispose()
+  })
+})

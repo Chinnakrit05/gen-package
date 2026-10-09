@@ -8,6 +8,14 @@ import {
   pouchDepthFactor,
   pouchWidthFactor,
   pouchSection,
+  pouchSectionArea,
+  lensZ,
+  doypackRows,
+  doypackAt,
+  doypackCorner,
+  DOYPACK_FIN,
+  DOYPACK_LENS,
+  DOYPACK_PEAK,
   isPouch,
   POUCH_SIDE_SEAL,
   POUCH_TOP_SEAL,
@@ -172,21 +180,43 @@ describe('pouch: หน้าตัด 3D (ยืนได้/พุงป่อ
     expect(pouchDepthFactor(1)).toBeLessThan(0.15) // ปากซีลแบน
   })
 
-  it('พุงป่องสุดช่วงกลางล่าง มากกว่าก้นและปาก', () => {
-    const belly = pouchDepthFactor(0.4)
-    expect(belly).toBeGreaterThan(pouchDepthFactor(0))
-    expect(belly).toBeGreaterThan(pouchDepthFactor(0.95))
-    expect(belly).toBeCloseTo(1, 5)
+  it('doypack: หนาสุดใกล้ก้น แล้วเรียวลงต่อเนื่องจนแบนที่ปาก (ไม่ใช่หมอนพองกลาง)', () => {
+    const peak = pouchDepthFactor(DOYPACK_PEAK)
+    expect(peak).toBeCloseTo(1, 5)
+    expect(peak).toBeGreaterThan(pouchDepthFactor(0))
+    let prev = peak
+    for (let v = DOYPACK_PEAK + 0.05; v <= 1.0001; v += 0.05) {
+      const d = pouchDepthFactor(v)
+      expect(d).toBeLessThan(prev)
+      prev = d
+    }
+    expect(pouchDepthFactor(0.5)).toBeLessThan(0.7) // กลางถุงบางกว่าก้นชัดเจน
+    expect(pouchDepthFactor(0.5, 'spout')).toBe(pouchDepthFactor(0.5))
   })
 
-  it('ครึ่งความกว้างอยู่ในช่วง (0,1] คอดเล็กน้อยที่ปลาย', () => {
-    for (const v of [0, 0.2, 0.5, 0.8, 1]) {
-      const a = pouchWidthFactor(v)
-      expect(a).toBeGreaterThan(0)
-      expect(a).toBeLessThanOrEqual(1)
+  it('ครึ่งความกว้างอยู่ในช่วง (0,1]; doypack กว้างเต็มถึงปากซีล, ซองแบนคอดที่ปลาย', () => {
+    for (const style of ['stand', 'flat', 'pillow'] as const) {
+      for (const v of [0, 0.2, 0.5, 0.8, 1]) {
+        const a = pouchWidthFactor(v, style)
+        expect(a).toBeGreaterThan(0)
+        expect(a).toBeLessThanOrEqual(1)
+      }
     }
-    expect(pouchWidthFactor(0.5)).toBe(1)
-    expect(pouchWidthFactor(1)).toBeLessThan(1) // ปากคอดเข้าซีล
+    expect(pouchWidthFactor(1)).toBe(1) // doypack: แถบซีลบนกว้างเต็ม
+    expect(pouchWidthFactor(1, 'flat')).toBeLessThan(1)
+  })
+
+  it('doypack: หน้าตัดเลนส์ — ตะเข็บข้างคม (ความลึกเป็น 0 ที่ขอบ) หน้าอิ่มกว่าเลนส์พาราโบลา', () => {
+    expect(pouchSection(0, 'stand').cz).toBe(0)
+    expect(pouchSection(Math.PI, 'stand').cz).toBeCloseTo(0, 10)
+    expect(pouchSection(Math.PI / 2, 'stand').cz).toBeCloseTo(1, 10)
+    expect(pouchSection(-Math.PI / 2, 'stand').cz).toBeCloseTo(-1, 10)
+    // ความชันที่ตะเข็บจำกัด (มุมคม) ไม่ตั้งฉากแบบวงรี: lensZ(1−ε)/ε → P
+    const e = 1e-4
+    expect(lensZ(1 - e) / e).toBeCloseTo(DOYPACK_LENS, 2)
+    expect(lensZ(0.5)).toBeGreaterThan(1 - 0.5 ** 2)
+    expect(pouchSectionArea('stand')).toBeLessThan(Math.PI)
+    expect(pouchSectionArea('stand')).toBeGreaterThan(8 / 3) // > เลนส์พาราโบลา
   })
 
   it('ซองแบน (flat): วงรีสมมาตร ซีลแบนทั้งบน-ล่าง พองสุดกลาง', () => {
@@ -202,6 +232,48 @@ describe('pouch: หน้าตัด 3D (ยืนได้/พุงป่อ
     const box = pouchSection(Math.PI / 4, 'gusset')
     const ell = pouchSection(Math.PI / 4, 'stand')
     expect(Math.abs(box.cx)).toBeGreaterThan(Math.abs(ell.cx))
+  })
+})
+
+describe('pouch: ทรง 3D ถุงตั้ง (doypack)', () => {
+  const p = generatePouch({ W: 120, D: 60, H: 180 }, mat, { style: 'stand', zipper: true })
+  const rows = doypackRows(p)
+  const st = p.frontRect.y
+
+  it('แถบซีลบนแบนกว้างเต็ม = แถบซีลบน dieline [0..st] เหนือลำตัว', () => {
+    const fin = rows.filter((r) => r.y > p.H)
+    expect(fin.length).toBeGreaterThan(0)
+    for (const r of fin) {
+      expect(r.a).toBe(p.W / 2)
+      expect(r.b).toBe(DOYPACK_FIN)
+      expect(r.dly).toBeLessThanOrEqual(st + 1e-9)
+    }
+    expect(rows[rows.length - 1].y).toBeCloseTo(p.H + st, 9)
+    expect(rows[rows.length - 1].dly).toBeCloseTo(0, 9)
+  })
+
+  it('ลำตัวแม็พแผงหน้าเต็มความสูง และ dly ลดลงต่อเนื่องจากก้นถึงปลายซีล', () => {
+    expect(rows[0].y).toBe(0)
+    expect(rows[0].dly).toBeCloseTo(st + p.H, 9)
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i].y).toBeGreaterThan(rows[i - 1].y)
+      expect(rows[i].dly).toBeLessThan(rows[i - 1].dly)
+    }
+  })
+
+  it('ก้นแบนตั้งได้ มุมล่างมนเข้า แต่ลำตัวเหนือมุมกว้างเต็ม', () => {
+    expect(rows[0].b).toBeGreaterThan(p.depth3D * 0.8) // ก้นลึก → ยืนได้
+    expect(rows[0].a).toBeCloseTo(p.W / 2 - doypackCorner(p.W, p.H), 9)
+    const mid = rows.find((r) => r.y > p.H * 0.3)!
+    expect(mid.a).toBe(p.W / 2)
+  })
+
+  it('doypackAt: แนวซิปบน dieline ตกที่ผิวหน้าใกล้ปาก ผิวเอนไปหลัง', () => {
+    const z = doypackAt(rows, p.zipY!)
+    expect(z.y).toBeGreaterThan(p.H * 0.8)
+    expect(z.y).toBeLessThan(p.H)
+    expect(z.tilt).toBeGreaterThan(0)
+    expect(z.b).toBeLessThan(rows[0].b)
   })
 })
 
