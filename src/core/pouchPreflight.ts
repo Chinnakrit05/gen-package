@@ -85,8 +85,9 @@ export function pouchZipIssues(p: Pouch): PouchIssue[] {
     )
   }
   // ซิปต่ำเกิน / ลงไปถึงก้นจีบ
-  // ถุงมีก้น gusset: ก้นพับขึ้นมาซีลติดข้างถุงราวครึ่งความลึกก้น → ช่วงนั้นซีลซิปไม่ได้
-  const bottomZone = p.style === 'stand' || p.style === 'spout' || p.style === 'box' ? p.gusset / 2 : 0
+  // ก้น gusset สอดระหว่างหน้า-หลังถึงแนวบนของก้น → ช่วงนั้นซีลซิปไม่ได้
+  // doypack: แผงยาวลงไปครึ่งก้นแล้ว แนวบนของก้น = ใต้ลำตัว; box: ก้นอยู่ใต้ลำตัวแต่จีบพับขึ้นมา D/2
+  const bottomZone = p.style === 'box' ? p.gusset / 2 : 0
   if (zipY + ZIP_HALF > st + H - bottomZone) {
     add(
       'zip-bottom',

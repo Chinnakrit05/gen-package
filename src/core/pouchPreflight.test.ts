@@ -35,8 +35,13 @@ describe('pouchZipLayout', () => {
     expect(p.zipY).toBe(40)
     expect(p.tearY).toBe(22)
     const ds = p.label.segments.map((s) => s.d)
-    expect(ds).toContain(`M 0 40 L ${2 * size.W} 40`)
+    // doypack: แนวซิปต่อแผงระหว่างซีลข้าง + รอยบากที่ซีลข้างทั้ง 4 ขอบของสองแผง
+    expect(ds).toContain('M 6 40 L 114 40')
+    expect(ds).toContain('M 126 40 L 234 40')
     expect(ds).toContain('M 0 19.5 L 4 22 L 0 24.5')
+    expect(ds).toContain('M 120 19.5 L 116 22 L 120 24.5')
+    expect(ds).toContain('M 120 19.5 L 124 22 L 120 24.5')
+    expect(ds).toContain('M 240 19.5 L 236 22 L 240 24.5')
   })
 })
 
@@ -70,7 +75,9 @@ describe('pouchZipIssues', () => {
 
   it('ซิปต่ำกว่าครึ่งถุง → warn; ลงถึงก้นจีบ → error', () => {
     expect(codes({ zipAt: 110 })).toContain('zip-low')
-    expect(codes({ zipAt: 175 })).toContain('zip-bottom') // ก้นจีบกินขึ้นมา D/2 = 30 มม.
+    expect(codes({ zipAt: 186 })).toContain('zip-bottom') // ปีกซิปเลยแนวบนของก้น gusset (ซีล 10 + สูง 180)
+    expect(codes({ zipAt: 100 }, 'box')).not.toContain('zip-bottom')
+    expect(codes({ zipAt: 170 }, 'box')).toContain('zip-bottom') // box: ก้นจีบกินขึ้นมา D/2 = 30 มม.
   })
 
   it('ซิปทับวาล์ว/จุก → error, ทับที่รัดปาก → warn', () => {

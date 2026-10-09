@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { buildPouchGeometry, getPouchSealColor } from './PouchViewer3D'
-import { generatePouch, type PouchStyle } from '../core/pouch'
+import { generatePouch, DOYPACK_FIN, POUCH_SIDE_SEAL, type PouchStyle } from '../core/pouch'
 import { getMaterial } from '../core/materials'
 
 describe('brick pouch seal color', () => {
@@ -145,62 +145,66 @@ describe.each([
 describe.each<PouchStyle>(['stand', 'spout'])('doypack geometry (%s)', (style) => {
   const size = { W: 120, D: 60, H: 180 }
   const pouch = generatePouch(size, getMaterial('pouch-foil'), { style })
+  const PH = pouch.label.height
+  const printed = (geometry: THREE.BufferGeometry) => {
+    const group = geometry.groups.find((g) => g.materialIndex === 0)!
+    const index = geometry.getIndex()!
+    const set = new Set<number>()
+    for (let i = group.start; i < group.start + group.count; i++) set.add(index.getX(i))
+    return [...set]
+  }
 
-  it('stays within the pouch footprint, stands on y=0 and reaches the top seal', () => {
+  it('stands on y=0, reaches the top edge of the panel and stays within the bag width', () => {
     const geometry = buildPouchGeometry(pouch)
     geometry.computeBoundingBox()
     const box = geometry.boundingBox!
     expect(box.min.y).toBeCloseTo(0, 6)
-    expect(box.max.y).toBeCloseTo(size.H + pouch.frontRect.y, 6)
-    expect(box.max.x).toBeLessThanOrEqual(size.W / 2 + 1e-6)
-    expect(box.max.z).toBeLessThanOrEqual(pouch.depth3D + 1e-6)
+    expect(box.max.y).toBeCloseTo(PH, 4) // ทั้งแผงรวมครึ่งก้น
+    expect(box.max.x).toBeLessThanOrEqual(size.W / 2 + 1e-4)
+    expect(box.max.z).toBeLessThanOrEqual(pouch.depth3D + DOYPACK_FIN + 1e-4)
     geometry.dispose()
   })
 
-  it('front skin faces +Z and covers the whole front print area', () => {
+  it('maps each whole dieline panel (seals included) onto its own face; front faces +Z', () => {
     const geometry = buildPouchGeometry(pouch)
     const uv = geometry.getAttribute('uv')
     const normal = geometry.getAttribute('normal')
     const position = geometry.getAttribute('position')
-    const printGroup = geometry.groups.find((group) => group.materialIndex === 0)!
-    const index = geometry.getIndex()!
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-    for (let i = printGroup.start; i < printGroup.start + printGroup.count; i++) {
-      const v = index.getX(i)
+    const ext = { f: [Infinity, -Infinity, Infinity, -Infinity], b: [Infinity, -Infinity, Infinity, -Infinity] }
+    for (const v of printed(geometry)) {
       const x = uv.getX(v) * pouch.label.width
       const y = uv.getY(v) * pouch.label.height
-      if (x < pouch.frontRect.x - 1e-3 || x > pouch.frontRect.x + size.W + 1e-3) continue
-      if (position.getZ(v) < -1e-6) continue
-      minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y)
-      // กลางหน้าช่วงลำตัว: normal ชี้ออกหน้า (+Z)
-      if (Math.abs(position.getX(v)) < 10 && position.getY(v) > 20 && position.getY(v) < size.H * 0.8) {
-        expect(normal.getZ(v)).toBeGreaterThan(0.5)
+      const e = position.getZ(v) > 0 ? ext.f : ext.b
+      e[0] = Math.min(e[0], x); e[1] = Math.max(e[1], x); e[2] = Math.min(e[2], y); e[3] = Math.max(e[3], y)
+      if (Math.abs(position.getX(v)) < 10 && position.getY(v) > 20 && position.getY(v) < PH * 0.7) {
+        expect(Math.sign(normal.getZ(v))).toBe(Math.sign(position.getZ(v)))
+        expect(Math.abs(normal.getZ(v))).toBeGreaterThan(0.5)
       }
     }
-    expect(minX).toBeCloseTo(pouch.frontRect.x, 4)
-    expect(maxX).toBeCloseTo(pouch.frontRect.x + size.W, 4)
-    expect(minY).toBeCloseTo(0, 4) // แถบซีลบนมีลาย
-    expect(maxY).toBeCloseTo(pouch.frontRect.y + size.H, 4)
+    for (const [e, x0] of [[ext.f, 0], [ext.b, size.W]] as const) {
+      expect(e[0]).toBeCloseTo(x0, 3)
+      expect(e[1]).toBeCloseTo(x0 + size.W, 3)
+      expect(e[2]).toBeCloseTo(0, 3)
+      expect(e[3]).toBeCloseTo(PH, 3)
+    }
     geometry.dispose()
   })
 
-  it('keeps the side seams sharp: front and back skins meet at depth 0 with separate normals', () => {
+  it('keeps the side seals and top seal flat (film pressed together), like the dieline seal strips', () => {
     const geometry = buildPouchGeometry(pouch)
+    const uv = geometry.getAttribute('uv')
     const position = geometry.getAttribute('position')
-    const normal = geometry.getAttribute('normal')
-    let seams = 0
-    for (let i = 0; i < position.count; i++) {
-      const y = position.getY(i)
-      if (y < 30 || y > size.H * 0.7) continue
-      if (Math.abs(Math.abs(position.getX(i)) - size.W / 2) > 1e-6) continue
-      expect(Math.abs(position.getZ(i))).toBeLessThan(1e-6)
-      // normal ที่ตะเข็บเอียงไปด้านหน้าหรือหลังชัดเจน (ไม่ถูกเกลี่ยรวมเป็นแนวข้าง)
-      if (normal.getY(i) > -0.9) {
-        expect(Math.abs(normal.getZ(i))).toBeGreaterThan(0.3)
-        seams++
-      }
+    let seal = 0
+    for (const v of printed(geometry)) {
+      const x = (uv.getX(v) * pouch.label.width) % size.W
+      const y = uv.getY(v) * pouch.label.height
+      const inSideSeal = x < POUCH_SIDE_SEAL - 1e-3 || x > size.W - POUCH_SIDE_SEAL + 1e-3
+      const inTopSeal = y < pouch.frontRect.y - 1e-3
+      if (!inSideSeal && !inTopSeal) continue
+      expect(Math.abs(position.getZ(v))).toBeCloseTo(DOYPACK_FIN, 4)
+      seal++
     }
-    expect(seams).toBeGreaterThan(0)
+    expect(seal).toBeGreaterThan(0)
     geometry.dispose()
   })
 })
