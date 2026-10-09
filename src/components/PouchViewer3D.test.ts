@@ -190,7 +190,8 @@ describe.each<PouchStyle>(['stand', 'spout'])('doypack geometry (%s)', (style) =
     geometry.dispose()
   })
 
-  it('keeps the side seals and top seal flat (film pressed together), like the dieline seal strips', () => {
+  // ถุงมีจุก: ปากค้ำด้วยเรือจุก + ซีลข้างแยกเป็น Λ เหนือก้น — ตรวจแยกใน pouch.test (spoutRows)
+  it.skipIf(style === 'spout')('keeps the side seals and top seal flat (film pressed together), like the dieline seal strips', () => {
     const geometry = buildPouchGeometry(pouch)
     const uv = geometry.getAttribute('uv')
     const position = geometry.getAttribute('position')

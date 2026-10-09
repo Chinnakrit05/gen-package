@@ -1,5 +1,5 @@
 import type { BoxParams, Dieline, DimMark, Material, Panel, Segment } from './types'
-import { P, fmt, rect } from './templates/shared'
+import { P, fmt, rect, roundedRectPath, roundedRectPts } from './templates/shared'
 
 // ถุงฟิล์มซีลขอบ : วัสดุกลุ่ม form==='pouch' — มีหลายรูปแบบ (PouchStyle)
 //
@@ -87,9 +87,10 @@ export function pouchZipLayout(st: number, H: number, addons: PouchAddons = {}):
 // ตำแหน่ง marker ร่วม dieline/ตรวจไฟล์
 export const HANG_HOLE_R = 4
 export const hangHoleY = (st: number) => Math.min(st * 0.5, st - HANG_HOLE_R - 1)
+// จุก (spout): r = รัศมีคอจุก; "เรือ" (ส่วนเชื่อม) กว้าง bw สอดลงจากขอบบนลึก bh ระหว่างฟิล์มสองชั้น
 export const spoutMarker = (W: number, st: number) => {
-  const r = Math.min(W, 90) * 0.09
-  return { r, cy: st + r + 3 }
+  const r = Math.min(W, 90) * 0.1
+  return { r, bw: 3.8 * r, bh: st + 1.6 * r }
 }
 
 export interface PouchOpts {
@@ -152,10 +153,12 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
 
   // แผ่นฟิล์มแบน: [หน้า][…จีบ…][หลัง][…จีบ…][ลิ้นทากาว ss]; แนวตั้ง = ริมบน + ลำตัว + ก้น/ริมล่าง
   // แยกลิ้นกาวเป็นแผงต่างหาก (ขอบร่วม x=Wp เป็นรอยต่อ ไม่ใช่ขอบนอก) เหมือน dieline ฉลาก
+  const panelRect = (x0: number) =>
+    spout ? roundedRectPts(x0, 0, x0 + W, filmH, SPOUT_CORNER_R) : rect(x0, 0, x0 + W, filmH)
   const panels: Panel[] = doy
     ? [
-        { id: 'front', parentId: null, outline: rect(0, 0, W, filmH), stage: 0 },
-        { id: 'back', parentId: 'front', outline: rect(W, 0, 2 * W, filmH), stage: 0 },
+        { id: 'front', parentId: null, outline: panelRect(0), stage: 0 },
+        { id: 'back', parentId: 'front', outline: panelRect(W), stage: 0 },
       ]
     : pillow
       ? [
@@ -173,13 +176,16 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const vfold = (x: number) => crease(`M ${x} 0 L ${x} ${filmH}`)
   const circlePath = (cx: number, cy: number, r: number) =>
     `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`
-  const segments: Segment[] = [cut(`M 0 0 L ${width} 0 L ${width} ${filmH} L 0 ${filmH} Z`)]
+  // ถุงมีจุก: แผงหน้า/หลังไดคัทมุมมน (รัศมี = ซีลข้าง) — ตัดแยกสองชิ้น ไม่ใช่สี่เหลี่ยมรวม
+  const segments: Segment[] = spout
+    ? [0, W].map((x0) => cut(roundedRectPath(x0, 0, x0 + W, filmH, SPOUT_CORNER_R)))
+    : [cut(`M 0 0 L ${width} 0 L ${width} ${filmH} L 0 ${filmH} Z`)]
   if (doy) {
     // ต่อแผง [x0, x0+W]: เส้นซีลข้างสองด้านตลอดความสูง, ซีลบนระหว่างซีลข้าง,
     // ซีลก้นโค้ง (จากแนวบนของ gusset ที่ซีลข้าง โค้งลงกลางแผง) + แนวพับ gusset ช่วงซีลข้าง
     const fold = st + H
     const sag = DOYPACK_BOTTOM_SAG * (gVal / 2)
-    segments.push(cut(`M ${W} 0 L ${W} ${filmH}`)) // แผงหน้า/หลังแยกกัน
+    if (!spout) segments.push(cut(`M ${W} 0 L ${W} ${filmH}`)) // แผงหน้า/หลังแยกกัน
     for (const x0 of [0, W]) {
       const l = x0 + ss
       const r = x0 + W - ss
@@ -259,11 +265,14 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   }
 
   if (spout) {
-    // จุกที่กลางปากหน้า — วงกลม marker (ตำแหน่งเชื่อมจุก) + ป้าย
-    const { r: sr, cy } = spoutMarker(W, st)
-    const cx = fcx
-    segments.push(crease(circlePath(cx, cy, sr)))
-    dims.push({ a: P(cx - sr, cy - sr - 6), b: P(cx + sr, cy - sr - 6), label: `จุก ⌀${fmt(2 * sr)}` })
+    // จุกกลางขอบบน: แนวเชื่อม "เรือ" ของจุกบนทั้งสองแผง (เรือสอดระหว่างฟิล์มสองชั้นจากขอบบน) + ป้าย
+    const { r: sr, bw, bh } = spoutMarker(W, st)
+    for (const cx of [fcx, W + W / 2]) {
+      const l = cx - bw / 2
+      const r = cx + bw / 2
+      segments.push(crease(`M ${l} 0 L ${l} ${bh * 0.55} Q ${l} ${bh} ${cx} ${bh} Q ${r} ${bh} ${r} ${bh * 0.55} L ${r} 0`))
+    }
+    dims.push({ a: P(fcx - bw / 2, bh + 6), b: P(fcx + bw / 2, bh + 6), label: `จุก ⌀${fmt(2 * sr)}` })
   }
 
   const addons = opts.addons ?? {}
@@ -407,6 +416,8 @@ export const DOYPACK_LENS = 2.4 // เลขชี้กำลังเลนส
 export const DOYPACK_BULLET = 2.8 // เลขชี้กำลังโปรไฟล์ด้านข้าง 1 − v^n (มาก = อิ่มนานแล้วค่อยบีบที่ปาก)
 export const DOYPACK_PULL = 0.05 // ซีลข้างถูกดึงเข้าได้สูงสุดเท่านี้ของครึ่งกว้าง ตอนพองเต็ม (ซีลแข็ง ไม่หดตามความยาวโค้ง)
 export const DOYPACK_FIN = 0.35 // ครึ่งความหนาแถบซีลบน (ฟิล์มสองชั้นประกบ)
+export const SPOUT_CORNER_R = POUCH_SIDE_SEAL // มุมไดคัทมนของถุงมีจุก (≤ ซีลข้าง → ตัดเฉพาะเนื้อซีล ไม่กินช่วงพอง)
+export const SPOUT_SHOULDER = 0.2 // สัดส่วนความสูงช่วงไหล่ที่ฟิล์มรวบเข้าหาเรือจุก
 export const DOYPACK_BOTTOM_SAG = 0.7 // ซีลก้นโค้งลงกลางแผง = สัดส่วนของครึ่งก้น (round-bottom)
 export const lensZ = (u: number) => Math.max(0, 1 - Math.min(1, Math.abs(u)) ** DOYPACK_LENS)
 
@@ -416,6 +427,26 @@ export interface DoypackRow {
   ai: number // ครึ่งกว้างช่วงพอง (ระหว่างซีลข้าง) — ซีลข้างแบนกว้าง a−ai
   b: number // ผิวหน้าที่กึ่งกลาง (z) รวมความหนาซีล DOYPACK_FIN
   dly: number // พิกัด dieline แนวตั้ง (ขอบล่างแผง = ความสูงแผง, ขอบบน = 0)
+  cut?: number // ถุงมีจุก: ระยะที่มุมไดคัทมนกินขอบแผงเข้ามาที่แถวนี้ (ฟิล์ม u < cut ถูกตัดทิ้ง)
+  e?: number // ถุงมีจุก: ซีลข้างแยกออกหน้า-หลังเหนือก้น gusset (รูป Λ มองด้านข้าง)
+  flat?: number // ฟิล์มแบนรอบช่วงพอง (ไหล่ที่รวบเข้าหาเรือจุก — ฟิล์มไม่หด จึงเหลือเป็นแผ่นแบน)
+  rib?: number // ร่องเกลียวเรือจุกดันฟิล์มนูน (มม.) ที่แถวนี้ ภายในครึ่งกว้าง ribW
+  ribW?: number
+}
+
+// ความยาวโค้งหน้าเดียวของเลนส์ครึ่งกว้าง ai ลึก d
+export function lensArc(ai: number, d: number, n = 64): number {
+  let L = 0
+  let px = -ai
+  let pz = 0
+  for (let i = 1; i <= n; i++) {
+    const x = -ai + (2 * ai * i) / n
+    const z = d * lensZ(x / ai)
+    L += Math.hypot(x - px, z - pz)
+    px = x
+    pz = z
+  }
+  return L
 }
 
 // มุมก้นมน (มม.): ตะเข็บข้างโค้งเข้าหาก้น (ซีลก้นโค้ง + ก้น gusset ดึงมุมเข้า) — มองจากหน้าเป็นมุมมน
@@ -464,8 +495,70 @@ export function doypackRows(
 }
 
 // ผิวหน้า (z ≥ 0) ที่ x ของแถว: ซีลข้างแบน = DOYPACK_FIN, ช่วงพองเป็นเลนส์
-export const doypackZ = (r: Pick<DoypackRow, 'ai' | 'b'>, x: number) =>
-  Math.abs(x) >= r.ai ? DOYPACK_FIN : DOYPACK_FIN + (r.b - DOYPACK_FIN) * lensZ(x / r.ai)
+// หน้าตัดช่วงพอง (0..1) ที่ u = x/ai: เลนส์ขอบคม (ตะเข็บ) — ช่วงไหล่ถุงมีจุกที่ฟิล์มแบนล้อม (flat > 0)
+// ค่อย ๆ เปลี่ยนเป็นโปรไฟล์ขอบลาด (1−u²)² ให้ไหล่รวบเข้าหาเรือจุกแบบนุ่ม ไม่เป็นสันคมเหมือนขวด
+export const sectionZ = (r: Pick<DoypackRow, 'flat' | 'ai'>, u: number) => {
+  const w = r.flat ? Math.min(1, r.flat / Math.max(1e-6, r.ai * 0.6)) : 0
+  const uu = Math.min(1, Math.abs(u))
+  return w ? (1 - w) * lensZ(uu) + w * (1 - uu * uu) ** 2 : lensZ(uu)
+}
+
+export const doypackZ = (r: Pick<DoypackRow, 'ai' | 'b' | 'e' | 'rib' | 'ribW' | 'flat'>, x: number) => {
+  const base = DOYPACK_FIN + (r.e ?? 0)
+  const rib = r.rib && r.ribW && Math.abs(x) < r.ribW ? r.rib * lensZ(x / r.ribW) : 0
+  return (Math.abs(x) >= r.ai ? base : base + (r.b - base) * sectionZ(r, x / r.ai)) + rib
+}
+
+// ถุงมีจุก (spout pouch): doypack มุมมน + จุกกลางขอบบน — ฟิล์มช่วงไหล่รวบเข้าหา "เรือ" ของจุก (ปากไม่บีบแบน
+// เพราะเรือค้ำไว้), ก้น gusset ทำให้ซีลข้างช่วงล่างแยกหน้า-หลังเป็นรูป Λ, มุมไดคัทมนทั้งสี่มุม
+export function spoutRows(
+  p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect'> & { label: { height: number } },
+  n = 72,
+): DoypackRow[] {
+  const { W, depth3D } = p
+  const st = p.frontRect.y
+  const PH = p.label.height
+  const ss = POUCH_SIDE_SEAL
+  const Wi = W - 2 * ss
+  const sm = spoutMarker(W, st)
+  const boatHalf = sm.bw / 2
+  const boatT = sm.r * 0.9 // ครึ่งความหนาเรือจุก
+  const hg = Math.max(0, PH - st - p.H) * 0.9 // ความสูงก้น gusset (ครึ่งก้นบนแผง)
+  const eMax = 0.45 * depth3D
+  const ys0 = PH * (1 - SPOUT_SHOULDER)
+  const Ht = PH * 1.05
+  const dBody = (y: number) => depth3D * pouchDepthFactor(y / Ht, 'stand')
+  const aiBody = (y: number) => (Wi / 2) * (1 - DOYPACK_PULL * (dBody(y) / depth3D))
+  const rc = SPOUT_CORNER_R
+  const cutAt = (y: number) => {
+    const t = y < rc ? 1 - y / rc : y > PH - rc ? (y - (PH - rc)) / rc : 0
+    return rc * (1 - Math.sqrt(Math.max(0, 1 - t * t)))
+  }
+  const ys = Array.from({ length: n + 1 }, (_, i) => (PH * (1 - Math.cos((Math.PI * i) / n))) / 2)
+  const raw = ys.map((y) => {
+    let ai = aiBody(y)
+    let d = dBody(y)
+    if (y > ys0) {
+      const tt = (y - ys0) / (PH - ys0)
+      // ความกว้างช่วงพองคงไว้นานแล้วค่อยรวบเข้าหาเรือใกล้ขอบบน (ไม่เป็นไหล่ขวด); ความลึกลดตามเร็วกว่าเล็กน้อย
+      const ta = smooth(tt ** 1.6)
+      const td = smooth(tt)
+      ai = aiBody(ys0) + (boatHalf - aiBody(ys0)) * ta
+      d = dBody(ys0) + (boatT - dBody(ys0)) * td
+    }
+    const e = y < hg ? eMax * (1 - y / hg) ** 1.6 : 0
+    const flat = Math.max(0, (Wi - lensArc(ai, d)) / 2)
+    const cut = cutAt(y)
+    // ร่องเกลียวเรือจุกใต้ฟิล์ม: นูนเป็นลอน 3 ลอนช่วงเรือ
+    const fromTop = PH - y
+    const rib = fromTop < sm.bh ? 0.6 * (0.5 - 0.5 * Math.cos((2 * Math.PI * fromTop) / (sm.bh / 3))) : 0
+    return { y, ai, a: ai + flat + ss - cut, b: DOYPACK_FIN + Math.max(d, e), cut, e, flat, rib, ribW: boatHalf * 0.8 }
+  })
+  const cum = [0]
+  for (let i = 1; i < raw.length; i++) cum.push(cum[i - 1] + Math.hypot(raw[i].y - raw[i - 1].y, raw[i].b - raw[i - 1].b))
+  const total = cum[cum.length - 1] || 1
+  return raw.map((r, i) => ({ ...r, dly: PH * (1 - cum[i] / total) }))
+}
 
 // จุดบนเส้นกึ่งกลางหน้าที่พิกัด dieline แนวตั้ง dl — ใช้วางซิป/วาล์ว/tin-tie ให้ตรง marker;
 // tilt = มุมเอียงผิวจากแนวดิ่ง (ผิวเรียวเอนไปด้านหลังเมื่อสูงขึ้น)

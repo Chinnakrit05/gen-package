@@ -14,9 +14,11 @@ import {
   pouchWidthFactor,
   pouchSection,
   doypackRows,
+  spoutRows,
+  spoutMarker,
   doypackAt,
   doypackZ,
-  lensZ,
+  sectionZ,
   type DoypackRow,
   DOYPACK_FIN,
   POUCH_SIDE_SEAL,
@@ -261,7 +263,7 @@ export function buildPouchGeometry(pouch: Pouch) {
     // ───────── doypack (stand/spout): แผงหน้า-หลังแยก ซีลข้าง/ซีลบนแบน + ช่วงพองหน้าตัดเลนส์ ─────────
     // แต่ละแผงแม็พทั้งแผงของ dieline (รวมแถบซีล) → ลายบนซีลก็ขึ้น; ความกว้างช่วงพองแก้ให้ความยาวโค้ง = ฟิล์มจริง
     if (style === 'stand' || style === 'spout') {
-      const rows = doypackRows(pouch)
+      const rows = style === 'spout' ? spoutRows(pouch) : doypackRows(pouch)
       const ss = POUCH_SIDE_SEAL
       const Wi = W - 2 * ss
       const NI = 40
@@ -270,17 +272,33 @@ export function buildPouchGeometry(pouch: Pouch) {
       const M = 160
       // x ของผิวหน้าที่พิกัดฟิล์ม u (ซ้าย→ขวาเมื่อมองจากหน้า) — ช่วงพองกลับค่าจากความยาวโค้งเลนส์
       const xsOf = (r: DoypackRow) => {
-        const d = r.b - DOYPACK_FIN
+        const d = r.b - DOYPACK_FIN - (r.e ?? 0)
         const px: number[] = []
         const cum = [0]
         for (let i = 0; i <= M; i++) {
           const x = -r.ai + (2 * r.ai * i) / M
           px.push(x)
-          if (i) cum.push(cum[i - 1] + Math.hypot(x - px[i - 1], d * (lensZ(x / r.ai) - lensZ(px[i - 1] / r.ai))))
+          if (i) cum.push(cum[i - 1] + Math.hypot(x - px[i - 1], d * (sectionZ(r, x / r.ai) - sectionZ(r, px[i - 1] / r.ai))))
         }
         const L = cum[M] || 1
+        const flat = r.flat ?? 0
+        const inner = r.ai + flat
         let j = 0
-        return us.map((u) => {
+        return us.map((u0) => {
+          if (r.cut !== undefined) {
+            // ถุงมีจุก: ฟิล์มแม็พ 1:1 — ขอบที่มุมมนตัดทิ้ง (u < cut), ฟิล์มแบนรอบช่วงพอง (ไหล่รวบเข้าหาเรือ)
+            const u = Math.min(W - r.cut, Math.max(r.cut, u0))
+            if (u <= ss) return -(inner + ss - u)
+            if (u >= W - ss) return inner + (u - (W - ss))
+            const sf = u - ss
+            if (sf <= flat) return -inner + sf
+            if (sf >= Wi - flat) return r.ai + (sf - (Wi - flat))
+            const tg = ((sf - flat) / (Wi - 2 * flat)) * L
+            while (j < M - 1 && cum[j + 1] < tg) j++
+            const tt = cum[j + 1] > cum[j] ? Math.min(1, (tg - cum[j]) / (cum[j + 1] - cum[j])) : 0
+            return px[j] + (px[j + 1] - px[j]) * tt
+          }
+          const u = u0
           if (u <= ss) return -r.a + u * ((r.a - r.ai) / ss)
           if (u >= W - ss) return r.ai + (u - (W - ss)) * ((r.a - r.ai) / ss)
           const target = ((u - ss) / Wi) * L
@@ -322,10 +340,17 @@ export function buildPouchGeometry(pouch: Pouch) {
         idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3)
       }
       const last = rows.length - 1
+      // จุดกลางขอบข้าง: ปกติอยู่บนขอบ (z=0); ช่วงซีลแยกเป็น Λ เหนือก้น gusset → จีบก้นพับเข้าเป็นร่อง V
+      const mid = (side: number, iv: number): [number, number, number] => {
+        const r = rows[iv]
+        return [side * (r.a - 1.2 * (r.e ?? 0)), r.y, 0]
+      }
       for (let iv = 0; iv < last; iv++) {
-        // ซ้าย: หน้า col 0 กับหลัง col สุดท้าย (x=−a ทั้งคู่); ขวา: หน้า col สุดท้ายกับหลัง col 0
-        quad(P(1, iv, 0), P(-1, iv, cols - 1), P(-1, iv + 1, cols - 1), P(1, iv + 1, 0))
-        quad(P(-1, iv, 0), P(1, iv, cols - 1), P(1, iv + 1, cols - 1), P(-1, iv + 1, 0))
+        // ซ้าย: หน้า col 0 → กลาง → หลัง col สุดท้าย (x=−a ทั้งคู่); ขวา: หน้า col สุดท้าย → กลาง → หลัง col 0
+        quad(P(1, iv, 0), mid(-1, iv), mid(-1, iv + 1), P(1, iv + 1, 0))
+        quad(mid(-1, iv), P(-1, iv, cols - 1), P(-1, iv + 1, cols - 1), mid(-1, iv + 1))
+        quad(P(-1, iv, 0), mid(1, iv), mid(1, iv + 1), P(-1, iv + 1, 0))
+        quad(mid(1, iv), P(1, iv, cols - 1), P(1, iv + 1, cols - 1), mid(1, iv + 1))
       }
       for (let k = 0; k < cols - 1; k++) {
         quad(P(1, last, k), P(1, last, k + 1), P(-1, last, cols - 2 - k), P(-1, last, cols - 1 - k))
@@ -334,7 +359,12 @@ export function buildPouchGeometry(pouch: Pouch) {
       const center = pos.length / 3
       pos.push(0, 0, 0)
       uv.push(0, 0)
-      const ring = [...Array.from({ length: cols }, (_, k) => P(1, 0, k)), ...Array.from({ length: cols }, (_, k) => P(-1, 0, k))]
+      const ring = [
+        ...Array.from({ length: cols }, (_, k) => P(1, 0, k)),
+        mid(1, 0),
+        ...Array.from({ length: cols }, (_, k) => P(-1, 0, k)),
+        mid(-1, 0),
+      ]
       for (const v of ring) {
         pos.push(...v)
         uv.push(0, 0)
@@ -617,7 +647,7 @@ function PouchModel({
   const brick = useMemo(() => (pouch.style === 'gusset' ? brickShape(pouch) : null), [pouch])
   // doypack: แถวโปรไฟล์ชุดเดียวกับผิว → ซิป/วาล์ว/tin-tie วางตามพิกัด dieline ผ่าน doypackAt
   const doy = useMemo(
-    () => (pouch.style === 'stand' || pouch.style === 'spout' ? doypackRows(pouch) : null),
+    () => (pouch.style === 'spout' ? spoutRows(pouch) : pouch.style === 'stand' ? doypackRows(pouch) : null),
     [pouch],
   )
   const pil = useMemo(() => (pouch.style === 'pillow' ? pillowRows(pouch) : null), [pouch])
@@ -695,10 +725,12 @@ function PouchModel({
     }
   }
 
-  // จุก + ฝาเกลียว ที่ปากบน (spout pouch)
-  const spoutR = Math.min(pouch.W, 90) * 0.09
-  const neckH = pouch.H * 0.08
-  const capH = neckH * 0.6
+  // จุก + ฝาเกลียว ที่ปากบน (spout pouch): คอสั้นมีเกลียว → ปีกรอง (flange) → ฝาหยักกันลื่น — ขนาดตาม marker บน dieline
+  const spoutR = spoutMarker(pouch.W, pouch.frontRect.y).r
+  const neckH = spoutR * 0.9
+  const capH = spoutR * 2
+  const capR = spoutR * 1.35
+  const knurls = 30
 
   // วาล์วกาแฟ: จานกลมนูนบนหน้าถุงส่วนบน (z = ผิวหน้าที่ระดับ VALVE_V)
   const valveZ = pouch.depth3D * pouchDepthFactor(VALVE_V, pouch.style)
@@ -723,7 +755,8 @@ function PouchModel({
 
   return (
     <>
-    <group ref={modelRef} position={[0, -topY / 2, 0]}>
+    {/* จัดกึ่งกลางรวมจุก+ฝา ให้กล้องเห็นทั้งชิ้น */}
+    <group ref={modelRef} position={[0, -(topY + (pouch.spout ? neckH + spoutR * 0.24 + capH : 0)) / 2, 0]}>
       <mesh geometry={geo}>
         {/* material 0 = ผิวข้าง (พิมพ์ลาย) */}
         <meshStandardMaterial
@@ -761,16 +794,40 @@ function PouchModel({
       )}
       {pouch.spout && (
         <group position={[0, topY, 0]}>
-          {/* คอจุก */}
+          {/* คอจุก + เกลียว 2 เส้น */}
           <mesh position={[0, neckH / 2, 0]}>
-            <cylinderGeometry args={[spoutR, spoutR, neckH, 24]} />
-            <meshStandardMaterial color="#d6cfbf" roughness={0.45} metalness={0} />
+            <cylinderGeometry args={[spoutR, spoutR, neckH, 32]} />
+            <meshStandardMaterial color="#e9e9e9" roughness={0.35} metalness={0} />
           </mesh>
-          {/* ฝาเกลียว */}
-          <mesh position={[0, neckH + capH / 2, 0]}>
-            <cylinderGeometry args={[spoutR * 1.4, spoutR * 1.4, capH, 24]} />
-            <meshStandardMaterial color="#b7ae99" roughness={0.5} metalness={0} />
+          {[0.3, 0.65].map((f) => (
+            <mesh key={f} position={[0, neckH * f, 0]} rotation={[Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[spoutR, spoutR * 0.07, 8, 40]} />
+              <meshStandardMaterial color="#e2e2e2" roughness={0.35} metalness={0} />
+            </mesh>
+          ))}
+          {/* ปีกรองใต้ฝา (tamper ring) */}
+          <mesh position={[0, neckH + spoutR * 0.12, 0]}>
+            <cylinderGeometry args={[capR * 1.04, capR * 1.04, spoutR * 0.24, 40]} />
+            <meshStandardMaterial color="#f0f0f0" roughness={0.4} metalness={0} />
           </mesh>
+          {/* ฝาเกลียว + ร่องหยักรอบฝา */}
+          <mesh position={[0, neckH + spoutR * 0.24 + capH / 2, 0]}>
+            <cylinderGeometry args={[capR, capR, capH, 48]} />
+            <meshStandardMaterial color="#f5f5f5" roughness={0.4} metalness={0} />
+          </mesh>
+          {Array.from({ length: knurls }, (_, k) => {
+            const a = (2 * Math.PI * k) / knurls
+            return (
+              <mesh
+                key={k}
+                position={[Math.cos(a) * capR, neckH + spoutR * 0.24 + capH * 0.55, Math.sin(a) * capR]}
+                rotation={[0, -a, 0]}
+              >
+                <boxGeometry args={[spoutR * 0.12, capH * 0.8, spoutR * 0.12]} />
+                <meshStandardMaterial color="#ececec" roughness={0.45} metalness={0} />
+              </mesh>
+            )
+          })}
         </group>
       )}
       {pouch.valve && (

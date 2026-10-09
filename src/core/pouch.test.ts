@@ -22,6 +22,9 @@ import {
   POUCH_FIN_SEAL,
   pillowRows,
   ellipsePerimeter,
+  spoutRows,
+  spoutMarker,
+  SPOUT_CORNER_R,
 } from './pouch'
 import { getMaterial } from './materials'
 import { dielinePDFBytes } from './pdf'
@@ -327,6 +330,50 @@ describe('pouch: ทรง 3D ถุงตั้ง (doypack)', () => {
     const rs = doypackRows(q)
     const below = rs.filter((r) => r.y < q.label.height - q.frontRect.y - 15)
     expect(below[below.length - 1].b).toBeGreaterThan(DOYPACK_FIN + 1)
+  })
+})
+
+describe('pouch: ถุงมีจุก (spout pouch)', () => {
+  const p = generatePouch({ W: 110, D: 60, H: 170 }, mat, { style: 'spout' })
+  const rows = spoutRows(p)
+  const PH = p.label.height
+  const sm = spoutMarker(p.W, p.frontRect.y)
+  const Wi2 = p.W / 2 - POUCH_SIDE_SEAL
+
+  it('dieline: แผงหน้า/หลังไดคัทมุมมนแยกสองชิ้น + แนวเชื่อมเรือจุกกลางขอบบนทั้งสองแผง', () => {
+    const cuts = p.label.segments.filter((q) => q.kind === 'cut')
+    expect(cuts).toHaveLength(2)
+    for (const c of cuts) expect(c.d).toContain(' A ')
+    const boats = p.label.segments.filter((q) => q.kind === 'crease' && q.d.startsWith('M ') && q.d.includes(' Q ') && q.d.endsWith(' 0'))
+    expect(boats).toHaveLength(2)
+    expect(p.label.panels.every((q) => q.outline.length > 4)).toBe(true) // มุมมน
+  })
+
+  it('3D: ปากค้ำเปิดด้วยเรือจุก (ไม่บีบแบน) — แถวบนสุดกว้างเท่าเรือ หนาเท่าเรือ', () => {
+    const top = rows[rows.length - 1]
+    expect(top.y).toBeCloseTo(PH, 9)
+    expect(top.ai).toBeCloseTo(sm.bw / 2, 6)
+    expect(top.b).toBeCloseTo(DOYPACK_FIN + sm.r * 0.9, 6)
+    expect(top.dly).toBeCloseTo(0, 9)
+    expect(rows[0].dly).toBeCloseTo(PH, 9)
+  })
+
+  it('3D: พองเต็มกว้างเกือบถึงบน (รวบเข้าหาจุกเฉพาะช่วงไหล่ใกล้ขอบบน)', () => {
+    for (const r of rows.filter((q) => q.y > 10 && q.y < PH * 0.75)) expect(r.ai).toBeGreaterThan(Wi2 * 0.9)
+  })
+
+  it('3D: ซีลข้างแยกหน้า-หลังเป็นรูป Λ เหนือก้น gusset แล้วแนบกันช่วงบน', () => {
+    expect(rows[0].e!).toBeGreaterThan(p.depth3D * 0.3)
+    expect(doypackZ(rows[0], rows[0].ai + 1)).toBeGreaterThan(DOYPACK_FIN + p.depth3D * 0.3)
+    for (const r of rows.filter((q) => q.y > PH * 0.3)) expect(r.e).toBe(0)
+    for (const r of rows) expect(r.b).toBeLessThanOrEqual(DOYPACK_FIN + p.depth3D + 1e-9)
+  })
+
+  it('3D: มุมไดคัทมนตัดขอบแผงเฉพาะแถวบน/ล่าง ไม่กินช่วงพอง (≤ ซีลข้าง)', () => {
+    expect(rows[0].cut).toBeCloseTo(SPOUT_CORNER_R, 6)
+    expect(rows[rows.length - 1].cut).toBeCloseTo(SPOUT_CORNER_R, 6)
+    expect(rows.find((r) => r.y > PH / 2)!.cut).toBe(0)
+    expect(SPOUT_CORNER_R).toBeLessThanOrEqual(POUCH_SIDE_SEAL)
   })
 })
 

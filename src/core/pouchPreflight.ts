@@ -148,7 +148,7 @@ export function pouchZipIssues(p: Pouch): PouchIssue[] {
   }
   if (p.spout) {
     const s = spoutMarker(p.W, st)
-    if (overlap(zip0, zip1, s.cy - s.r - 2, s.cy + s.r + 2)) {
+    if (overlap(zip0, zip1, 0, s.bh + 2)) {
       add(
         'zip-spout',
         'error',
