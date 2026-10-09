@@ -28,6 +28,9 @@ import {
   FLAT_SEAL,
   flatZ,
   flatAt,
+  FLAT_HANG_HEADER,
+  hangHoleY,
+  HANG_HOLE_R,
 } from './pouch'
 import { getMaterial } from './materials'
 import { dielinePDFBytes } from './pdf'
@@ -470,5 +473,23 @@ describe('ป้ายบอกขนาดย่อตามขนาดแผ�
     expect(dimTextSize(sachet.width, sachet.height)).toBeLessThan(4.5)
     expect(dimTextSize(500, 400)).toBe(6)
     expect(dimTextSize(40, 40)).toBe(3.5)
+  })
+})
+
+describe('ซองแบน: ซีล 3 มม. + หัวซองเมื่อมีรูแขวน', () => {
+  it('ซีลรอบ 3 มม.; เปิดรูแขวน → ซีลบนขยายเป็นหัวซองให้รูอยู่ในซีลทั้งวง', () => {
+    expect(FLAT_SEAL).toBe(3)
+    const plain = generatePouch({ W: 80, D: 50, H: 120 }, mat, { style: 'flat' })
+    expect(plain.frontRect.y).toBe(3)
+    expect(plain.label.height).toBe(3 + 120 + 3)
+    const hung = generatePouch({ W: 80, D: 50, H: 120 }, mat, { style: 'flat', addons: { hangHole: true } })
+    const st = hung.frontRect.y
+    expect(st).toBe(FLAT_HANG_HEADER)
+    const hy = hangHoleY(st)
+    expect(hy - HANG_HOLE_R).toBeGreaterThan(0) // รูไม่ทะลุขอบบน
+    expect(hy + HANG_HOLE_R).toBeLessThan(st) // รูอยู่ในซีลบนทั้งวง
+    // 3D: หัวซองแบนตลอดถึงแนวซีล แล้วค่อยพอง
+    expect(flatZ(hung, 40, st - 0.5)).toBe(DOYPACK_FIN)
+    expect(flatZ(hung, 40, st + 20)).toBeGreaterThan(DOYPACK_FIN)
   })
 })

@@ -26,7 +26,8 @@ export const POUCH_STYLES: { id: PouchStyle; nameTh: string; detail: string }[] 
 
 export const POUCH_SIDE_SEAL = 6 // ริมซีล/ลิ้นทากาวข้าง (มม.)
 export const POUCH_TOP_SEAL = 10 // ริมซีลปากบน (มม.)
-export const FLAT_SEAL = 5 // ซีลรอบซองแบน 3 ด้าน (ซ้าย/ขวา/ล่าง + ปากบนหลังบรรจุ) กว้างเท่ากัน (มม.) — ซองเล็กใช้ 5 มม. ตามงานจริง
+export const FLAT_SEAL = 3 // ซีลรอบซองแบน 3 ด้าน (ซ้าย/ขวา/ล่าง + ปากบนหลังบรรจุ) กว้างเท่ากัน (มม.)
+// ซองแบนมีรูแขวน: ซีลบน 3 มม. ใส่รูไม่ได้ → ขยายเป็นหัวซองกว้างพอเจาะรู (รู ⌀8 + ขอบ 2 มม. บน-ล่าง)
 export const POUCH_FIN_SEAL = 8 // ครีบซีลหลังกลาง (fin seal) ของซองหลังกลาง — ลิ้นแต่ละข้างของแผ่น (มม.)
 export const BRICK_SEAL = 20 // แถบซีลบน/ล่างของซองข้างจีบ (มม.)
 export const POUCH_ZIP_INSET = 18 // ระยะจากปากบนลงมาถึงแนวซิปล็อก (มม.)
@@ -87,6 +88,7 @@ export function pouchZipLayout(st: number, H: number, addons: PouchAddons = {}):
 
 // ตำแหน่ง marker ร่วม dieline/ตรวจไฟล์
 export const HANG_HOLE_R = 4
+export const FLAT_HANG_HEADER = 2 * HANG_HOLE_R + 4 // หัวซองแบนเมื่อมีรูแขวน (มม.)
 export const hangHoleY = (st: number) => Math.min(st * 0.5, st - HANG_HOLE_R - 1)
 // จุก (spout): r = รัศมีคอจุก; "เรือ" (ส่วนเชื่อม) กว้าง bw สอดลงจากขอบบนลึก bh ระหว่างฟิล์มสองชั้น
 export const spoutMarker = (W: number, st: number) => {
@@ -134,7 +136,8 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const fx = backSeam ? pf + W / 2 : 0 // จุดเริ่มพื้นที่พิมพ์หน้าบนแผ่นฟิล์ม
   const fcx = fx + W / 2 // จุดกึ่งกลางหน้า (ใช้วาง marker จุก/วาล์ว/รูแขวน)
   const ss = POUCH_SIDE_SEAL
-  const st = gus ? BRICK_SEAL : flat ? FLAT_SEAL : POUCH_TOP_SEAL
+  const flatHeader = flat && opts.addons?.hangHole === true ? FLAT_HANG_HEADER : FLAT_SEAL
+  const st = gus ? BRICK_SEAL : flat ? flatHeader : POUCH_TOP_SEAL
   const sb = gus ? BRICK_SEAL : flat ? FLAT_SEAL : pillow ? POUCH_TOP_SEAL : 0 // ไม่มีก้น → ใช้ริมซีลล่างแทน
   const pss = flat ? FLAT_SEAL : ss // ซีลข้างบนแผง (แบบแผงแยก)
   // doypack: แต่ละแผงยาวลงไปครึ่งก้น (ก้น gusset พับ W สอดระหว่างหน้า-หลัง สูง D/2)
@@ -611,14 +614,20 @@ export function doypackAt(
 export const FLAT_BULGE = 4 // พองเต็มเกือบถึงแนวซีล (ขอบลาดสั้น) → ซีลดูแคบเท่าที่ซีลจริง
 const flatF = (t: number) => (Math.abs(t) >= 1 ? 0 : 1 - Math.abs(t) ** FLAT_BULGE)
 // ผิวหน้า (z ≥ FIN) ที่พิกัดฟิล์มของแผง u ∈ [0,W] (ซ้าย→ขวา), v ∈ [0,PH] (บน→ล่าง)
-export function flatZ(p: Pick<Pouch, 'W' | 'depth3D'> & { label: { height: number } }, u: number, v: number): number {
+export function flatZ(
+  p: Pick<Pouch, 'W' | 'depth3D' | 'frontRect'> & { label: { height: number } },
+  u: number,
+  v: number,
+): number {
   const PH = p.label.height
+  const st = p.frontRect.y // ซีลบน (กว้างขึ้นเป็นหัวซองเมื่อมีรูแขวน)
   const hx = p.W / 2 - FLAT_SEAL
-  const hy = PH / 2 - FLAT_SEAL
-  return DOYPACK_FIN + p.depth3D * flatF((u - p.W / 2) / hx) * flatF((v - PH / 2) / hy)
+  const cy = (st + PH - FLAT_SEAL) / 2
+  const hy = (PH - FLAT_SEAL - st) / 2
+  return DOYPACK_FIN + p.depth3D * flatF((u - p.W / 2) / hx) * flatF((v - cy) / hy)
 }
 // จุดกลางหน้าที่พิกัด dieline แนวตั้ง dl (y จากพื้น, ผิว z, มุมเอียง) — วางวาล์ว/tin-tie
-export function flatAt(p: Pick<Pouch, 'W' | 'depth3D'> & { label: { height: number } }, dl: number) {
+export function flatAt(p: Pick<Pouch, 'W' | 'depth3D' | 'frontRect'> & { label: { height: number } }, dl: number) {
   const PH = p.label.height
   const b = flatZ(p, p.W / 2, dl)
   return { y: PH - dl, b, tilt: Math.atan2(b - flatZ(p, p.W / 2, dl - 1), 1) }
