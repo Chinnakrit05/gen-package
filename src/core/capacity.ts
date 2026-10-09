@@ -1,5 +1,5 @@
 import type { Vec2 } from './types'
-import { pouchWidthFactor, pouchDepthFactor, pouchSectionArea, type PouchStyle } from './pouch'
+import { FLAT_SEAL, pouchWidthFactor, pouchDepthFactor, pouchSectionArea, type PouchStyle } from './pouch'
 
 // ความจุโดยประมาณ (มล.) ของบรรจุภัณฑ์ — ประเมินจากปริมาตรใช้งานด้านใน
 // (หัก headspace/ผนัง/คอ คร่าว ๆ) เพื่อบอกผู้ใช้ว่าใส่สินค้าได้ราวเท่าไร
@@ -13,6 +13,14 @@ export function boxVolumeMl(W: number, D: number, H: number): number {
 // ถุงฟิล์ม: อินทิเกรตพื้นที่หน้าตัดตามความสูง (วงรี / เลนส์ doypack / สี่เหลี่ยมมุมมน brick/box)
 // ใช้โปรไฟล์กว้าง/ลึกชุดเดียวกับที่เรนเดอร์ 3D จึงสอดคล้องกับทรงจริง
 export function pouchVolumeMl(W: number, H: number, depth3D: number, style: PouchStyle): number {
+  if (style === 'flat') {
+    // ซองแบน: ทรง 3D แสดงตอนพองบาง ๆ แต่ความจุจริงคือตอนบรรจุเต็ม — ใช้สูตรปริมาตรซองแบน (Baginsky):
+    // V ≈ w³·(l/(π·w) − 0.142·(1 − 10^(−l/w))) บนขนาดในแนวซีล แล้วเผื่อ headspace
+    const w = Math.max(1, W - 2 * FLAT_SEAL)
+    const l = Math.max(1, H)
+    const v3 = w ** 3 * (l / (Math.PI * w) - 0.142 * (1 - 10 ** (-l / w)))
+    return (Math.max(0, v3) / 1000) * 0.8
+  }
   const k = pouchSectionArea(style)
   const N = 48
   let v3 = 0

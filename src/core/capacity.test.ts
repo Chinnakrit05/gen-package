@@ -19,6 +19,13 @@ describe('capacity: ถุงฟิล์ม', () => {
     expect(small).toBeGreaterThan(0)
     expect(big).toBeGreaterThan(small)
   })
+  it('ซองแบน: ความจุตอนบรรจุเต็มตามสูตรซองแบน — ไม่ขึ้นกับความหนาที่แสดงใน 3D', () => {
+    // 80×120 (ในแนวซีล 64×120): สูตรซองแบน ≈ 120 มล. × 0.8 ≈ 96 มล.
+    expect(pouchVolumeMl(80, 120, 3.6, 'flat')).toBeGreaterThan(90)
+    expect(pouchVolumeMl(80, 120, 3.6, 'flat')).toBeLessThan(100)
+    expect(pouchVolumeMl(80, 120, 3.6, 'flat')).toBe(pouchVolumeMl(80, 120, 20, 'flat'))
+  })
+
   it('box (ก้นแบน) จุมากกว่า flat (ซองแบน) ที่ขนาดเท่ากัน', () => {
     expect(pouchVolumeMl(100, 150, 25, 'box')).toBeGreaterThan(pouchVolumeMl(100, 150, 25, 'flat'))
   })

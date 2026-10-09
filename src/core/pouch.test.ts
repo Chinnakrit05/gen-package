@@ -25,6 +25,9 @@ import {
   spoutRows,
   spoutMarker,
   SPOUT_CORNER_R,
+  FLAT_SEAL,
+  flatZ,
+  flatAt,
 } from './pouch'
 import { getMaterial } from './materials'
 import { dielinePDFBytes } from './pdf'
@@ -94,19 +97,43 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
     expect(p.zipY! - POUCH_TOP_SEAL).toBeLessThanOrEqual(10) // ≤ H*0.5
   })
 
-  it('รูปแบบซองแบน (flat): ไม่มีก้น — สูงแผ่น = ริมบน+ตัว+ริมล่าง, ไม่มีเส้นพับกลางก้น', () => {
+  it('ซองแบน 3 ด้าน (flat): แผงหน้า/หลังแยก ซีลซ้าย-ล่าง-ขวา (⊔) ต่อแผง ปากบนเปิดไว้บรรจุ', () => {
     const W = 100,
       D = 70,
       H = 140
     const p = generatePouch({ W, D, H }, mat, { style: 'flat' })
     expect(p.style).toBe('flat')
     expect(p.gusset).toBe(0) // ไม่มีก้น (ไม่ใช้ D)
-    expect(p.label.height).toBe(POUCH_TOP_SEAL + H + POUCH_TOP_SEAL) // ริมบน + ตัว + ริมล่าง
-    // ซองแบน = crease 4 เส้น (สันข้าง/กาว/ซีลบน/ซีลล่าง) ไม่มีพับกลางก้น
-    expect(p.label.segments.filter((s) => s.kind === 'crease').length).toBe(4)
+    expect(p.label.width).toBe(2 * W) // ไม่มีลิ้นกาว
+    expect(p.label.height).toBe(FLAT_SEAL + H + FLAT_SEAL)
+    expect(p.label.panels.map((q) => q.id)).toEqual(['front', 'back'])
+    expect(p.label.segments).toContainEqual({ kind: 'cut', d: `M ${W} 0 L ${W} ${p.label.height}` })
+    const seals = p.label.segments.filter((q) => q.kind === 'crease')
+    expect(seals.map((q) => q.d)).toEqual([0, W].map((x0) => {
+      const l = x0 + FLAT_SEAL
+      const r = x0 + W - FLAT_SEAL
+      const yb = p.label.height - FLAT_SEAL
+      return `M ${l} 0 L ${l} ${yb} L ${r} ${yb} L ${r} 0` // ⊔: เริ่ม/จบที่ขอบบน (ยังไม่ซีลปาก)
+    }))
     expect(p.label.dims.some((d) => d.label.includes('ก้น'))).toBe(false)
     expect(p.label.dims.some((d) => d.label.includes('กว้างซอง'))).toBe(true)
+    expect(p.label.dims.some((d) => d.label.includes('หลังบรรจุ'))).toBe(true)
     expect(p.depth3D).toBeGreaterThan(0) // ยังพองบาง ๆ ใน 3D
+    expect(2 * p.depth3D).toBeLessThan(W * 0.12) // ซองแบนบางกว่าซองขนมชัดเจน
+  })
+
+  it('ซองแบน 3D: ซีลรอบ 4 ด้านแบน, กลางพองสูงสุดตรงกลาง, ลดลงต่อเนื่องถึงแนวซีล', () => {
+    const p = generatePouch({ W: 100, D: 70, H: 140 }, mat, { style: 'flat' })
+    const PH = p.label.height
+    expect(flatZ(p, 2, PH / 2)).toBe(DOYPACK_FIN) // ซีลข้าง
+    expect(flatZ(p, 50, 3)).toBe(DOYPACK_FIN) // ซีลบน
+    expect(flatZ(p, 50, PH - 3)).toBe(DOYPACK_FIN) // ซีลล่าง
+    expect(flatZ(p, 50, PH / 2)).toBeCloseTo(DOYPACK_FIN + p.depth3D, 9)
+    expect(flatZ(p, 30, PH / 2)).toBeLessThan(flatZ(p, 50, PH / 2))
+    expect(flatZ(p, 50, PH / 4)).toBeLessThan(flatZ(p, 50, PH / 2))
+    const at = flatAt(p, PH / 4)
+    expect(at.y).toBeCloseTo(PH * 0.75, 9)
+    expect(at.tilt).toBeGreaterThan(0) // ครึ่งบนผิวเอนไปหลังเมื่อสูงขึ้น
   })
 
   it('ค่าเริ่มต้น (ไม่ระบุ opts) = ถุงตั้ง', () => {

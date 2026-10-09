@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { buildPouchGeometry, getPouchSealColor } from './PouchViewer3D'
-import { generatePouch, DOYPACK_FIN, POUCH_FIN_SEAL, POUCH_SIDE_SEAL, type PouchStyle } from '../core/pouch'
+import { generatePouch, DOYPACK_FIN, FLAT_SEAL, POUCH_FIN_SEAL, POUCH_SIDE_SEAL, type PouchStyle } from '../core/pouch'
 import { getMaterial } from '../core/materials'
 
 describe('brick pouch seal color', () => {
@@ -244,6 +244,37 @@ describe('pillow geometry', () => {
       if (x > fx + 1 && x < fx + size.W - 1 && y > 0) expect(position.getZ(i)).toBeGreaterThan(0)
       if (y < st - 1e-3 && x > fx && x < fx + size.W) expect(Math.abs(position.getZ(i))).toBeLessThan(DOYPACK_FIN + 1e-4)
     }
+    geometry.dispose()
+  })
+})
+
+describe('flat 3-side-seal geometry', () => {
+  const size = { W: 100, D: 60, H: 150 }
+  const pouch = generatePouch(size, getMaterial('pouch-foil'), { style: 'flat' })
+  const PH = pouch.label.height
+
+  it('maps each whole panel to its own face with flat seals on all four edges', () => {
+    const geometry = buildPouchGeometry(pouch)
+    const uv = geometry.getAttribute('uv')
+    const position = geometry.getAttribute('position')
+    const group = geometry.groups.find((g) => g.materialIndex === 0)!
+    const index = geometry.getIndex()!
+    let seal = 0
+    for (let i = group.start; i < group.start + group.count; i++) {
+      const v = index.getX(i)
+      const x = uv.getX(v) * pouch.label.width
+      const y = uv.getY(v) * pouch.label.height
+      const local = x % size.W
+      expect(Math.sign(position.getZ(v))).toBe(x < size.W - 1e-3 ? 1 : x > size.W + 1e-3 ? -1 : Math.sign(position.getZ(v)))
+      if (local < FLAT_SEAL - 1e-3 || local > size.W - FLAT_SEAL + 1e-3 || y < FLAT_SEAL - 1e-3 || y > PH - FLAT_SEAL + 1e-3) {
+        expect(Math.abs(position.getZ(v))).toBeCloseTo(DOYPACK_FIN, 4)
+        seal++
+      }
+    }
+    expect(seal).toBeGreaterThan(0)
+    geometry.computeBoundingBox()
+    expect(geometry.boundingBox!.max.y).toBeCloseTo(PH, 4)
+    expect(geometry.boundingBox!.max.x).toBeCloseTo(size.W / 2, 4)
     geometry.dispose()
   })
 })

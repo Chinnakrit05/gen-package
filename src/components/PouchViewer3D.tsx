@@ -24,6 +24,9 @@ import {
   POUCH_SIDE_SEAL,
   POUCH_FIN_SEAL,
   pillowRows,
+  FLAT_SEAL,
+  flatZ,
+  flatAt,
   valveR,
   VALVE_V,
   TINTIE_INSET,
@@ -384,6 +387,62 @@ export function buildPouchGeometry(pouch: Pouch) {
       return geoD
     }
 
+    // ───────── ซองแบน 3 ด้าน: แผงหน้า/หลังแยก ซีลแบนรอบ 4 ด้าน ตรงกลางพองบาง (flatZ) ─────────
+    if (style === 'flat') {
+      const PH = label.height
+      const st = frontRect.y
+      const sb = PH - st - H
+      const NI = 40
+      const us = [0, FLAT_SEAL, ...Array.from({ length: NI - 1 }, (_, k) => FLAT_SEAL + ((W - 2 * FLAT_SEAL) * (k + 1)) / NI), W - FLAT_SEAL, W]
+      const NJ = 60
+      const vs = [0, st, ...Array.from({ length: NJ - 1 }, (_, k) => st + (H * (k + 1)) / NJ), PH - sb, PH]
+      const cols = us.length
+      const P = (side: number, j: number, k: number): [number, number, number] => [
+        side * (us[k] - W / 2),
+        PH - vs[j],
+        side * flatZ(pouch, us[k], vs[j]),
+      ]
+      for (const side of [1, -1]) {
+        const start = pos.length / 3
+        vs.forEach((v, j) => {
+          us.forEach((u, k) => {
+            pos.push(...P(side, j, k))
+            uv.push((side > 0 ? u : W + u) / dw, v / dh)
+          })
+        })
+        for (let j = 0; j < vs.length - 1; j++) {
+          for (let k = 0; k < cols - 1; k++) {
+            const q = start + j * cols + k
+            idx.push(q, q + cols, q + 1, q + 1, q + cols, q + cols + 1)
+          }
+        }
+      }
+      const sideCount = idx.length
+      // ขอบซีลรอบ 4 ด้าน (หนา 2·FIN) — หน้า col k คู่กับหลัง col (cols−1−k) ที่ x เดียวกัน
+      const quad = (a: number[], b: number[], c: number[], d: number[]) => {
+        const i0 = pos.length / 3
+        pos.push(...a, ...b, ...c, ...d)
+        for (let k = 0; k < 4; k++) uv.push(0, 0)
+        idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3)
+      }
+      const lastJ = vs.length - 1
+      for (let j = 0; j < lastJ; j++) {
+        quad(P(1, j, 0), P(-1, j, cols - 1), P(-1, j + 1, cols - 1), P(1, j + 1, 0))
+        quad(P(1, j, cols - 1), P(-1, j, 0), P(-1, j + 1, 0), P(1, j + 1, cols - 1))
+      }
+      for (let k = 0; k < cols - 1; k++) {
+        for (const j of [0, lastJ]) quad(P(1, j, k), P(1, j, k + 1), P(-1, j, cols - 2 - k), P(-1, j, cols - 1 - k))
+      }
+      const geoF = new THREE.BufferGeometry()
+      geoF.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+      geoF.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+      geoF.setIndex(idx)
+      geoF.addGroup(0, sideCount, 0)
+      geoF.addGroup(sideCount, idx.length - sideCount, 1)
+      geoF.computeVertexNormals()
+      return geoF
+    }
+
     // ───────── ซองหลังกลาง (pillow): หน้าตัดวงรีเส้นรอบรูปคงที่ + ซีลบน/ล่างแบน + ครีบซีลแนบหลัง ─────────
     if (style === 'pillow') {
       const rows = pillowRows(pouch)
@@ -651,7 +710,16 @@ function PouchModel({
     [pouch],
   )
   const pil = useMemo(() => (pouch.style === 'pillow' ? pillowRows(pouch) : null), [pouch])
-  const topY = brick ? brick.topY : doy ? doy[doy.length - 1].y : pil ? pil[pil.length - 1].y : pouch.H
+  const isFlat = pouch.style === 'flat'
+  const topY = brick
+    ? brick.topY
+    : doy
+      ? doy[doy.length - 1].y
+      : pil
+        ? pil[pil.length - 1].y
+        : isFlat
+          ? pouch.label.height
+          : pouch.H
   const zipBand = useMemo(() => {
     if (doy && pouch.zipper && pouch.zipY !== undefined) {
       // แถบซิปพาดรอบถุง (หน้า → ขอบ → หลัง) ดันออกจากผิว ~0.6 มม. ตามแนวซิปบน dieline
@@ -673,6 +741,35 @@ function PouchModel({
         for (let iu = 0; iu < NU; iu++) {
           const p = i * (NU + 1) + iu
           idx.push(p, p + NU + 1, p + 1, p + 1, p + NU + 1, p + NU + 2)
+        }
+      }
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+      geo.setIndex(idx)
+      geo.computeVertexNormals()
+      return geo
+    }
+    if (pouch.style === 'flat' && pouch.zipper && pouch.zipY !== undefined) {
+      // ซองแบน: แถบซิปบนผิวหน้าและหลังระหว่างซีลข้าง ดันออกจากผิว 0.5 มม.
+      const pos: number[] = []
+      const idx: number[] = []
+      const NU = 48
+      const W = pouch.W
+      const PH = pouch.label.height
+      for (const side of [1, -1]) {
+        const start = pos.length / 3
+        for (let i = 0; i <= 2; i++) {
+          const v = pouch.zipY - 2.5 + 2.5 * i
+          for (let k = 0; k <= NU; k++) {
+            const u = FLAT_SEAL + ((W - 2 * FLAT_SEAL) * k) / NU
+            pos.push(side * (u - W / 2), PH - v, side * (flatZ(pouch, u, v) + 0.5))
+          }
+        }
+        for (let i = 0; i < 2; i++) {
+          for (let k = 0; k < NU; k++) {
+            const q = start + i * (NU + 1) + k
+            idx.push(q, q + NU + 1, q + 1, q + 1, q + NU + 1, q + NU + 2)
+          }
         }
       }
       const geo = new THREE.BufferGeometry()
@@ -716,7 +813,7 @@ function PouchModel({
   if (pil && pouch.zipper && pouch.zipY !== undefined) {
     const r = doypackAt(pil, pouch.zipY)
     zip = { y: r.y, ax: r.a * 1.03, bz: r.b * 1.03 }
-  } else if (!brick && !doy && pouch.zipper && pouch.zipY !== undefined) {
+  } else if (!brick && !doy && !isFlat && pouch.zipper && pouch.zipY !== undefined) {
     const vzip = Math.min(0.98, Math.max(0.02, 1 - (pouch.zipY - pouch.frontRect.y) / pouch.H))
     zip = {
       y: vzip * pouch.H,
@@ -744,12 +841,16 @@ function PouchModel({
     ? brickAt(brick, (1 - VALVE_V) * pouch.H)
     : doy || pil
       ? doypackAt((doy ?? pil)!, pouch.frontRect.y + (1 - VALVE_V) * pouch.H)
-      : null
+      : isFlat
+        ? flatAt(pouch, pouch.frontRect.y + (1 - VALVE_V) * pouch.H)
+        : null
   const bTie = brick
     ? brickAt(brick, TINTIE_INSET + 3)
     : doy || pil
       ? doypackAt((doy ?? pil)!, pouch.frontRect.y + TINTIE_INSET + 3)
-      : null
+      : isFlat
+        ? flatAt(pouch, pouch.frontRect.y + TINTIE_INSET + 3)
+        : null
 
   const modelRef = useRef<THREE.Group>(null)
 
