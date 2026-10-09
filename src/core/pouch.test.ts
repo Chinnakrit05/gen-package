@@ -19,6 +19,9 @@ import {
   isPouch,
   POUCH_SIDE_SEAL,
   POUCH_TOP_SEAL,
+  POUCH_FIN_SEAL,
+  pillowRows,
+  ellipsePerimeter,
 } from './pouch'
 import { getMaterial } from './materials'
 import { dielinePDFBytes } from './pdf'
@@ -120,8 +123,33 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
     const p = generatePouch({ W: 100, D: 70, H: 150 }, mat, { style: 'pillow' })
     expect(p.stands).toBe(false)
     expect(p.gusset).toBe(0)
-    expect(p.label.width).toBe(2 * 100 + POUCH_SIDE_SEAL) // ไม่มีจีบข้าง
+    // [ครีบ][หลังซ้าย W/2][หน้า W][หลังขวา W/2][ครีบ] — ครีบสองปลายประกบกันกลางหลัง
+    expect(p.label.width).toBe(2 * 100 + 2 * POUCH_FIN_SEAL)
+    expect(p.label.height).toBe(POUCH_TOP_SEAL + 150 + POUCH_TOP_SEAL)
+    expect(p.frontRect.x).toBe(POUCH_FIN_SEAL + 50)
+    expect(p.label.panels.map((q) => q.id)).toEqual(['fin-l', 'film', 'fin-r'])
+    const ds = p.label.segments.map((q) => q.d)
+    for (const x of [POUCH_FIN_SEAL, POUCH_FIN_SEAL + 50, POUCH_FIN_SEAL + 150, POUCH_FIN_SEAL + 200]) {
+      expect(ds).toContain(`M ${x} 0 L ${x} ${p.label.height}`) // แนวครีบ 2 + สันพับข้าง 2
+    }
     expect(p.depth3D).toBeGreaterThan(generatePouch({ W: 100, D: 70, H: 150 }, mat, { style: 'flat' }).depth3D)
+    expect(p.depth3D * 2).toBeLessThan(100 * 0.3) // พองนุ่ม ไม่อ้วนเป็นหมอน
+  })
+
+  it('pillow 3D: เส้นรอบหน้าตัด = ฟิล์ม 2W ทุกระดับ → ข้างเว้าเข้าตรงที่พอง; ซีลบน/ล่างแบนเต็มกว้าง; ด้านข้างแหลมหาซีล', () => {
+    const p = generatePouch({ W: 120, D: 70, H: 160 }, mat, { style: 'pillow' })
+    const rows = pillowRows(p)
+    for (const r of rows) expect(Math.abs(ellipsePerimeter(r.a, r.b) - 240)).toBeLessThan(1) // ซีลแบนชน a=W/2 (สูตร Ramanujan คลาด <0.4%)
+    const mid = rows.reduce((m, r) => (r.b > m.b ? r : m))
+    expect(mid.a).toBeLessThan(rows[0].a) // ข้างเว้า
+    expect(rows[0].b).toBe(DOYPACK_FIN)
+    expect(rows[rows.length - 1].b).toBe(DOYPACK_FIN)
+    expect(rows[0].a).toBeCloseTo(60, 0)
+    expect(pouchDepthFactor(0.25, 'pillow')).toBeGreaterThan(0.7) // อิ่มเร็ว
+    expect(pouchDepthFactor(0, 'pillow')).toBe(0) // แหลมที่ซีล
+    expect(rows[rows.length - 1].y).toBe(p.label.height)
+    expect(rows[0].dly).toBe(p.label.height)
+    expect(rows[rows.length - 1].dly).toBe(0)
   })
 
   it('ถุงมีจุก (spout): ตั้งได้เหมือน doypack + spout=true + มีป้ายจุก', () => {

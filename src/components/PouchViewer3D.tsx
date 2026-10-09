@@ -20,6 +20,8 @@ import {
   type DoypackRow,
   DOYPACK_FIN,
   POUCH_SIDE_SEAL,
+  POUCH_FIN_SEAL,
+  pillowRows,
   valveR,
   VALVE_V,
   TINTIE_INSET,
@@ -352,6 +354,106 @@ export function buildPouchGeometry(pouch: Pouch) {
       return geoD
     }
 
+    // ───────── ซองหลังกลาง (pillow): หน้าตัดวงรีเส้นรอบรูปคงที่ + ซีลบน/ล่างแบน + ครีบซีลแนบหลัง ─────────
+    if (style === 'pillow') {
+      const rows = pillowRows(pouch)
+      const pf = POUCH_FIN_SEAL
+      const fx = frontRect.x
+      const M = 360
+      // จุดบนวงรีที่ระยะฟิล์ม s (0 = สันพับขวา → หน้า → สันพับซ้าย (W) → หลัง → กลางหลัง (1.5W) → สันขวา (2W))
+      const ringAt = (r: DoypackRow) => {
+        const th: number[] = [0]
+        const cum = [0]
+        for (let i = 1; i <= M; i++) {
+          const t0 = (2 * Math.PI * (i - 1)) / M
+          const t1 = (2 * Math.PI * i) / M
+          th.push(t1)
+          cum.push(cum[i - 1] + Math.hypot(r.a * (Math.cos(t1) - Math.cos(t0)), r.b * (Math.sin(t1) - Math.sin(t0))))
+        }
+        const k = (2 * W) / cum[M]
+        let j = 0
+        return (sFilm: number): [number, number] => {
+          const target = sFilm / k
+          if (target < cum[j]) j = 0
+          while (j < M - 1 && cum[j + 1] < target) j++
+          const t = cum[j + 1] > cum[j] ? Math.min(1, (target - cum[j]) / (cum[j + 1] - cum[j])) : 0
+          const a = th[j] + (th[j + 1] - th[j]) * t
+          return [r.a * Math.cos(a), r.b * Math.sin(a)]
+        }
+      }
+      const rings = rows.map(ringAt)
+      // สองแถบ: [สันขวา → หน้า → หลังซ้ายถึงกลางหลัง] และ [กลางหลัง → หลังขวา → สันขวา] (UV กระโดดที่รอยต่อกลางหลัง)
+      const strips = [
+        { s0: 0, s1: 1.5 * W, n: 72, dl: (sf: number) => (sf <= W ? fx + W - sf : fx - (sf - W)) },
+        { s0: 1.5 * W, s1: 2 * W, n: 24, dl: (sf: number) => pf + 2 * W - (sf - 1.5 * W) },
+      ]
+      const ringPts: [number, number, number][][] = rows.map(() => [])
+      for (const st of strips) {
+        const start = pos.length / 3
+        const cols = st.n + 1
+        rows.forEach((r, iv) => {
+          for (let k = 0; k <= st.n; k++) {
+            const sf = st.s0 + ((st.s1 - st.s0) * k) / st.n
+            const [x, z] = rings[iv](sf)
+            pos.push(x, r.y, z)
+            uv.push(st.dl(sf) / dw, r.dly / dh)
+            if (k < st.n || st === strips[strips.length - 1]) ringPts[iv].push([x, r.y, z])
+          }
+        })
+        for (let iv = 0; iv < rows.length - 1; iv++) {
+          for (let k = 0; k < st.n; k++) {
+            const q = start + iv * cols + k
+            idx.push(q, q + cols, q + 1, q + 1, q + cols, q + cols + 1)
+          }
+        }
+      }
+      // ครีบซีล: ลิ้นขวา [pf+2W, 2W+2pf] ต่อจากกลางหลัง พับแนบหลังไปทางซ้าย (มองจากหลัง) ลอยจากผิว 0.3 มม.
+      const finStart = pos.length / 3
+      rows.forEach((r) => {
+        for (const [x, dl] of [
+          [0, pf + 2 * W],
+          [-pf, 2 * W + 2 * pf],
+        ] as const) {
+          const zx = r.b * Math.sqrt(Math.max(0, 1 - (x / r.a) ** 2))
+          // โคนครีบชิดผิว ปลายครีบยกเล็กน้อย (ฟิล์มสองชั้นพับทับ) → เห็นขอบครีบรับแสงแบบของจริง
+          pos.push(x, r.y, -zx - (x === 0 ? 0.3 : 1.2))
+          uv.push(dl / dw, r.dly / dh)
+        }
+      })
+      for (let iv = 0; iv < rows.length - 1; iv++) {
+        const q = finStart + iv * 2
+        idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2)
+      }
+      const sideCount = idx.length
+      // ปิดขอบซีลบน/ล่าง (หนา 2·FIN)
+      for (const [iv, flip] of [
+        [0, false],
+        [rows.length - 1, true],
+      ] as const) {
+        const center = pos.length / 3
+        pos.push(0, rows[iv].y, 0)
+        uv.push(0, 0)
+        for (const v of ringPts[iv]) {
+          pos.push(...v)
+          uv.push(0, 0)
+        }
+        const nR = ringPts[iv].length
+        for (let k = 0; k < nR - 1; k++) {
+          const p0 = center + 1 + k
+          if (flip) idx.push(center, p0 + 1, p0)
+          else idx.push(center, p0, p0 + 1)
+        }
+      }
+      const geoP = new THREE.BufferGeometry()
+      geoP.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+      geoP.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+      geoP.setIndex(idx)
+      geoP.addGroup(0, sideCount, 0)
+      geoP.addGroup(sideCount, idx.length - sideCount, 1)
+      geoP.computeVertexNormals()
+      return geoP
+    }
+
     const ringVert = (v: number, theta: number, dly: number) => {
       // brick/box: ลำตัวทรงอิฐ (หน้า-หลังแบน) + ปากบน(และก้น brick) บีบเป็น "ตะเข็บซีลแบน (fin)"
       // ความลึกยุบตาม pouchDepthFactor → ได้ครีบซีล; กว้างคอดเล็กน้อยที่ปลายซีลตาม pouchWidthFactor
@@ -518,7 +620,8 @@ function PouchModel({
     () => (pouch.style === 'stand' || pouch.style === 'spout' ? doypackRows(pouch) : null),
     [pouch],
   )
-  const topY = brick ? brick.topY : doy ? doy[doy.length - 1].y : pouch.H
+  const pil = useMemo(() => (pouch.style === 'pillow' ? pillowRows(pouch) : null), [pouch])
+  const topY = brick ? brick.topY : doy ? doy[doy.length - 1].y : pil ? pil[pil.length - 1].y : pouch.H
   const zipBand = useMemo(() => {
     if (doy && pouch.zipper && pouch.zipY !== undefined) {
       // แถบซิปพาดรอบถุง (หน้า → ขอบ → หลัง) ดันออกจากผิว ~0.6 มม. ตามแนวซิปบน dieline
@@ -580,7 +683,10 @@ function PouchModel({
 
   // แถบซิปล็อก: วงรีบาง ๆ พาดรอบใกล้ปาก ที่ระดับความสูงเดียวกับแนวซิปบน dieline
   let zip: { y: number; ax: number; bz: number } | null = null
-  if (!brick && !doy && pouch.zipper && pouch.zipY !== undefined) {
+  if (pil && pouch.zipper && pouch.zipY !== undefined) {
+    const r = doypackAt(pil, pouch.zipY)
+    zip = { y: r.y, ax: r.a * 1.03, bz: r.b * 1.03 }
+  } else if (!brick && !doy && pouch.zipper && pouch.zipY !== undefined) {
     const vzip = Math.min(0.98, Math.max(0.02, 1 - (pouch.zipY - pouch.frontRect.y) / pouch.H))
     zip = {
       y: vzip * pouch.H,
@@ -604,13 +710,13 @@ function PouchModel({
   // brick: จุดบนหน้า (y, ผิว z, มุมเอียงไหล่) ที่ระยะบน dieline เดียวกับ marker
   const bValve = brick
     ? brickAt(brick, (1 - VALVE_V) * pouch.H)
-    : doy
-      ? doypackAt(doy, pouch.frontRect.y + (1 - VALVE_V) * pouch.H)
+    : doy || pil
+      ? doypackAt((doy ?? pil)!, pouch.frontRect.y + (1 - VALVE_V) * pouch.H)
       : null
   const bTie = brick
     ? brickAt(brick, TINTIE_INSET + 3)
-    : doy
-      ? doypackAt(doy, pouch.frontRect.y + TINTIE_INSET + 3)
+    : doy || pil
+      ? doypackAt((doy ?? pil)!, pouch.frontRect.y + TINTIE_INSET + 3)
       : null
 
   const modelRef = useRef<THREE.Group>(null)

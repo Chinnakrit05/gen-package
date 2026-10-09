@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { buildPouchGeometry, getPouchSealColor } from './PouchViewer3D'
-import { generatePouch, DOYPACK_FIN, POUCH_SIDE_SEAL, type PouchStyle } from '../core/pouch'
+import { generatePouch, DOYPACK_FIN, POUCH_FIN_SEAL, POUCH_SIDE_SEAL, type PouchStyle } from '../core/pouch'
 import { getMaterial } from '../core/materials'
 
 describe('brick pouch seal color', () => {
@@ -205,6 +205,44 @@ describe.each<PouchStyle>(['stand', 'spout'])('doypack geometry (%s)', (style) =
       seal++
     }
     expect(seal).toBeGreaterThan(0)
+    geometry.dispose()
+  })
+})
+
+describe('pillow geometry', () => {
+  const size = { W: 120, D: 60, H: 160 }
+  const pouch = generatePouch(size, getMaterial('pouch-foil'), { style: 'pillow' })
+
+  it('lays the fin seal flat on the back centre, textured from the right fin flap', () => {
+    const geometry = buildPouchGeometry(pouch)
+    const uv = geometry.getAttribute('uv')
+    const position = geometry.getAttribute('position')
+    const finX0 = POUCH_FIN_SEAL + 2 * size.W
+    let fin = 0
+    for (let i = 0; i < uv.count; i++) {
+      const x = uv.getX(i) * pouch.label.width
+      if (x < finX0 + 1e-3) continue
+      fin++
+      expect(position.getZ(i)).toBeLessThan(0) // หลังถุง
+      expect(position.getX(i)).toBeLessThanOrEqual(1e-6)
+      expect(position.getX(i)).toBeGreaterThanOrEqual(-POUCH_FIN_SEAL - 1e-6)
+    }
+    expect(fin).toBeGreaterThan(0)
+    geometry.dispose()
+  })
+
+  it('maps the front panel onto +Z and keeps the top/bottom seals flat', () => {
+    const geometry = buildPouchGeometry(pouch)
+    const uv = geometry.getAttribute('uv')
+    const position = geometry.getAttribute('position')
+    const fx = pouch.frontRect.x
+    const st = pouch.frontRect.y
+    for (let i = 0; i < uv.count; i++) {
+      const x = uv.getX(i) * pouch.label.width
+      const y = uv.getY(i) * pouch.label.height
+      if (x > fx + 1 && x < fx + size.W - 1 && y > 0) expect(position.getZ(i)).toBeGreaterThan(0)
+      if (y < st - 1e-3 && x > fx && x < fx + size.W) expect(Math.abs(position.getZ(i))).toBeLessThan(DOYPACK_FIN + 1e-4)
+    }
     geometry.dispose()
   })
 })

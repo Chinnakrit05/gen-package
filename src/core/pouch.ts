@@ -26,6 +26,7 @@ export const POUCH_STYLES: { id: PouchStyle; nameTh: string; detail: string }[] 
 
 export const POUCH_SIDE_SEAL = 6 // ริมซีล/ลิ้นทากาวข้าง (มม.)
 export const POUCH_TOP_SEAL = 10 // ริมซีลปากบน (มม.)
+export const POUCH_FIN_SEAL = 8 // ครีบซีลหลังกลาง (fin seal) ของซองหลังกลาง — ลิ้นแต่ละข้างของแผ่น (มม.)
 export const BRICK_SEAL = 20 // แถบซีลบน/ล่างของซองข้างจีบ (มม.)
 export const POUCH_ZIP_INSET = 18 // ระยะจากปากบนลงมาถึงแนวซิปล็อก (มม.)
 // ตัวคูณความลึก 3D ของถุงตั้ง: ถุงจริงพองไม่เต็ม gusset — หรี่ความป่อง (หน้า-หลัง) ให้ดูแบนสมจริง
@@ -123,7 +124,10 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   // ถุงรอยต่อกลางหลัง (back-seam): หน้าเป็นผืนต่อเนื่องกลางแผ่น หลังแยกไปสองข้าง (ขอบนอกมากาวกันกลางหลัง)
   // → ใน 3D หน้าสะอาดไม่มีรอยต่อขอบข้าง; ใช้กับ stand/pillow/spout (ไม่ใช้กับซองแบน/ข้างจีบ)
   const backSeam = pillow
-  const fx = backSeam ? W / 2 : 0 // จุดเริ่มพื้นที่พิมพ์หน้าบนแผ่นฟิล์ม
+  // ซองหลังกลาง: [ลิ้นครีบ pf][หลังซ้าย W/2][หน้า W][หลังขวา W/2][ลิ้นครีบ pf] — ลิ้นสองข้างประกบกัน
+  // (ด้านในชนด้านใน) เป็นครีบกลางหลัง แล้วพับแนบหลังถุง
+  const pf = pillow ? POUCH_FIN_SEAL : 0
+  const fx = backSeam ? pf + W / 2 : 0 // จุดเริ่มพื้นที่พิมพ์หน้าบนแผ่นฟิล์ม
   const fcx = fx + W / 2 // จุดกึ่งกลางหน้า (ใช้วาง marker จุก/วาล์ว/รูแขวน)
   const ss = POUCH_SIDE_SEAL
   const st = gus ? BRICK_SEAL : POUCH_TOP_SEAL
@@ -132,12 +136,12 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const filmH = st + H + (doy ? gVal / 2 : bottomGusset) + sb
   // ความกว้างพิมพ์ = หน้า + หลัง + จีบข้างสองด้าน (ไม่มีจีบ → 2W)
   const Wp = 2 * W + 2 * sideGusset
-  const width = doy ? Wp : Wp + ss // doypack ซีลข้างอยู่ในแผงเอง ไม่มีลิ้นกาว
+  const width = doy ? Wp : pillow ? Wp + 2 * pf : Wp + ss // doypack ซีลข้างอยู่ในแผงเอง ไม่มีลิ้นกาว
   // ความลึก 3D ต่อรูปแบบ: ซองแบนบาง, หลังกลางพองนุ่ม, ทรงแท่ง=ครึ่งจีบเต็ม, ถุงตั้ง=ครึ่งก้น×สเกล
   const depth3D = flat
     ? Math.min(W, H) * 0.12
     : pillow
-      ? Math.min(W, H) * 0.28
+      ? Math.min(W, H) * 0.13 // พองนุ่ม หนารวม ~0.26W (เทียบภาพด้านข้างซองขนมจริง)
       : gus || boxp
         ? gVal / 2
         : (gVal / 2) * POUCH_DEPTH_SCALE
@@ -153,10 +157,16 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
         { id: 'front', parentId: null, outline: rect(0, 0, W, filmH), stage: 0 },
         { id: 'back', parentId: 'front', outline: rect(W, 0, 2 * W, filmH), stage: 0 },
       ]
-    : [
-        { id: 'film', parentId: null, outline: rect(0, 0, Wp, filmH), stage: 0 },
-        { id: 'glue', parentId: 'film', outline: rect(Wp, 0, width, filmH), stage: 0 },
-      ]
+    : pillow
+      ? [
+          { id: 'fin-l', parentId: 'film', outline: rect(0, 0, pf, filmH), stage: 0 },
+          { id: 'film', parentId: null, outline: rect(pf, 0, pf + Wp, filmH), stage: 0 },
+          { id: 'fin-r', parentId: 'film', outline: rect(pf + Wp, 0, width, filmH), stage: 0 },
+        ]
+      : [
+          { id: 'film', parentId: null, outline: rect(0, 0, Wp, filmH), stage: 0 },
+          { id: 'glue', parentId: 'film', outline: rect(Wp, 0, width, filmH), stage: 0 },
+        ]
 
   const cut = (d: string): Segment => ({ kind: 'cut', d })
   const crease = (d: string): Segment => ({ kind: 'crease', d })
@@ -182,6 +192,13 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
         crease(`M ${r} ${fold} L ${x0 + W} ${fold}`),
       )
     }
+  } else if (pillow) {
+    segments.push(
+      vfold(pf), // แนวครีบซีล (ซ้าย)
+      vfold(pf + Wp), // แนวครีบซีล (ขวา)
+      crease(`M 0 ${st} L ${width} ${st}`), // ซีลบน (ขวางเต็มแผ่น รวมครีบ)
+      crease(`M 0 ${st + H} L ${width} ${st + H}`), // ซีลล่าง
+    )
   } else {
     segments.push(
       vfold(Wp), // แนวทากาว/ซีลข้าง
@@ -196,8 +213,8 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     segments.push(vfold(W), vfold(W + sideGusset), vfold(2 * W + sideGusset))
     segments.push(vfold(W + sideGusset / 2), vfold(2 * W + sideGusset + sideGusset / 2)) // จีบกลาง
   } else if (backSeam) {
-    // หน้าอยู่กลาง [W/2, 3W/2] → สันพับสองข้าง; รอยต่อ (กาว) ไปรวมกันกลางหลัง
-    segments.push(vfold(W / 2), vfold(1.5 * W))
+    // หน้าอยู่กลาง → สันพับสองข้าง; ลิ้นครีบสองปลายไปประกบกันกลางหลัง
+    segments.push(vfold(pf + W / 2), vfold(pf + 1.5 * W))
   } else {
     segments.push(vfold(W)) // สันข้างเดียว แบ่งหน้า/หลัง (ซองแบน 3 ด้าน)
   }
@@ -215,11 +232,19 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
         { a: P(width + 12, st), b: P(width + 12, st + H), label: `สูง ${fmt(H)}` },
         { a: P(width + 12, st + H), b: P(width + 12, filmH), label: `ก้น ${fmt(gVal / 2)} (ลึก ${fmt(gVal)})` },
       ]
-    : [
-        { a: P(fx, filmH + 12), b: P(fx + W, filmH + 12), label: `${wLabel} ${fmt(W)}` },
-        { a: P(Wp, filmH + 12), b: P(width, filmH + 12), label: `ซีล ${fmt(ss)}` },
-        { a: P(width + 12, st), b: P(width + 12, st + H), label: `สูง ${fmt(H)}` },
-      ]
+    : pillow
+      ? [
+          { a: P(fx, filmH + 12), b: P(fx + W, filmH + 12), label: `${wLabel} ${fmt(W)}` },
+          { a: P(pf + Wp, filmH + 12), b: P(width, filmH + 12), label: `ครีบซีล ${fmt(pf)}` },
+          { a: P(width + 12, 0), b: P(width + 12, st), label: `ซีลบน ${fmt(st)}` },
+          { a: P(width + 12, st), b: P(width + 12, st + H), label: `สูง ${fmt(H)}` },
+          { a: P(width + 12, st + H), b: P(width + 12, filmH), label: `ซีลล่าง ${fmt(sb)}` },
+        ]
+      : [
+          { a: P(fx, filmH + 12), b: P(fx + W, filmH + 12), label: `${wLabel} ${fmt(W)}` },
+          { a: P(Wp, filmH + 12), b: P(width, filmH + 12), label: `ซีล ${fmt(ss)}` },
+          { a: P(width + 12, st), b: P(width + 12, st + H), label: `สูง ${fmt(H)}` },
+        ]
   if (bottomGusset > 0 && !doy) {
     dims.push({ a: P(width + 12, st + H), b: P(width + 12, filmH), label: `ก้น ${fmt(gVal)}` })
   }
@@ -298,10 +323,10 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     frontRect: { x: fx, y: st, w: W, h: H },
     // back-seam: หลังแยกซ้าย [0,W/2] + ขวา [3W/2,2W]; อื่น ๆ: หลังต่อเนื่องถัดจากหน้า(+จีบ)
     backRect: backSeam
-      ? { x: 1.5 * W, y: st, w: W / 2, h: H }
+      ? { x: pf + 1.5 * W, y: st, w: W / 2, h: H }
       : { x: W + sideGusset, y: st, w: W, h: H },
     backSeam,
-    ...(backSeam ? { backRectL: { x: 0, y: st, w: W / 2, h: H } } : {}),
+    ...(backSeam ? { backRectL: { x: pf, y: st, w: W / 2, h: H } } : {}),
     zipper,
     zipY,
     tearY,
@@ -325,7 +350,9 @@ const lerpS = (a: number, b: number, t: number) => a + (b - a) * smooth(t)
 //   (เทียบภาพด้านข้าง doypack จริง: ที่ครึ่งความสูงยังหนา ~86% ของก้น)
 // - flat: วงรีสมมาตร ซีลแบนทั้งบน-ล่าง (v→0/1 ≈ 0) พองสุดกลางลำตัว — ซองแบนไม่ตั้ง
 export function pouchDepthFactor(v: number, style: PouchStyle = 'stand'): number {
-  if (style === 'flat' || style === 'pillow') return Math.max(0.04, Math.sin(Math.PI * clamp01(v)) ** 0.6)
+  if (style === 'flat') return Math.max(0.04, Math.sin(Math.PI * clamp01(v)) ** 0.6)
+  // pillow: อิ่มช่วงกลาง แล้วแหลมเข้าหาซีลบน-ล่าง (มองด้านข้างเป็นเม็ดข้าวยาว ไม่ใช่วงรีมน)
+  if (style === 'pillow') return 1 - Math.abs(2 * clamp01(v) - 1) ** PILLOW_BULLET
   if (style === 'gusset' || style === 'box') {
     // ทรงเหลี่ยมก้นแบน: ฐานเต็ม (ยืนได้) ลำตัวเต็ม บีบเฉพาะปากบนซีล
     // (โดยประมาณ — ทรง 3D จริงของ gusset ใช้ brickShape ตามความยาวฟิล์ม)
@@ -462,6 +489,50 @@ export function doypackAt(
   }
   const r = dl > rows[0].dly ? rows[0] : rows[rows.length - 1]
   return { y: r.y, a: r.a, ai: r.ai, b: r.b, tilt: 0 }
+}
+
+// --- ทรง 3D ซองหลังกลาง (pillow) ---
+// หน้าตัดวงรี (ข้างเป็นรอยพับมน ไม่ใช่ซีล) ที่เส้นรอบรูป = ฟิล์มหน้า+หลัง 2W → พองมากตรงไหนข้างคอดเข้าตรงนั้น
+// (มองจากหน้าข้างเว้าเล็กน้อยแบบซองขนม) + ซีลบน/ล่างแบนเต็มกว้าง; ครีบซีลวางแนบหลังใน viewer
+export const PILLOW_BULLET = 2.2
+export const ellipsePerimeter = (a: number, b: number) =>
+  Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)))
+
+export function pillowRows(
+  p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect'> & { label: { height: number } },
+  n = 48,
+): DoypackRow[] {
+  const { W, H, depth3D } = p
+  const st = p.frontRect.y
+  const PH = p.label.height
+  const sb = PH - st - H
+  const halfA = (b: number) => {
+    // a ที่ทำให้เส้นรอบวงรี = 2W (ฟิล์มไม่ยืด)
+    let lo = 0.3 * W
+    let hi = W / 2
+    for (let k = 0; k < 30; k++) {
+      const mid = (lo + hi) / 2
+      if (ellipsePerimeter(mid, b) > 2 * W) hi = mid
+      else lo = mid
+    }
+    return (lo + hi) / 2
+  }
+  const bOf = (y: number) =>
+    y <= sb || y >= sb + H ? DOYPACK_FIN : DOYPACK_FIN + depth3D * pouchDepthFactor((y - sb) / H, 'pillow')
+  const body = Array.from({ length: n + 1 }, (_, i) => sb + (H * (1 - Math.cos((Math.PI * i) / n))) / 2)
+  const cum = [0]
+  for (let i = 1; i <= n; i++) cum.push(cum[i - 1] + Math.hypot(body[i] - body[i - 1], bOf(body[i]) - bOf(body[i - 1])))
+  const total = cum[n] || 1
+  const row = (y: number, dly: number): DoypackRow => {
+    const b = bOf(y)
+    const a = halfA(b)
+    return { y, a, ai: a, b, dly }
+  }
+  return [
+    row(0, PH),
+    ...body.map((y, i) => row(y, st + H * (1 - cum[i] / total))),
+    row(PH, 0),
+  ]
 }
 
 // --- ทรง 3D ซองข้างจีบ (brick) แบบถุงกาแฟ/ถุงข้าวสุญญากาศ ---
