@@ -321,8 +321,8 @@ const smooth = (t: number) => {
 const lerpS = (a: number, b: number, t: number) => a + (b - a) * smooth(t)
 
 // ครึ่งความลึก (สัดส่วนของ depth3D) ตามรูปแบบ:
-// - stand/spout (doypack): ก้นกว้างตั้งได้ 0.9 → หนาสุดใกล้ก้น (v≈0.12) → เรียวเกือบตรงขึ้นไปจนแบนที่ปาก
-//   (มองด้านข้างเป็นหยดน้ำผอมสูง ไม่ใช่หมอนพองกลาง)
+// - stand/spout (doypack): 1 − v^2.8 — หนาสุดที่ก้น ข้างนูนแบบหัวกระสุน แล้วแหลมเข้าหาปาก
+//   (เทียบภาพด้านข้าง doypack จริง: ที่ครึ่งความสูงยังหนา ~86% ของก้น)
 // - flat: วงรีสมมาตร ซีลแบนทั้งบน-ล่าง (v→0/1 ≈ 0) พองสุดกลางลำตัว — ซองแบนไม่ตั้ง
 export function pouchDepthFactor(v: number, style: PouchStyle = 'stand'): number {
   if (style === 'flat' || style === 'pillow') return Math.max(0.04, Math.sin(Math.PI * clamp01(v)) ** 0.6)
@@ -333,10 +333,8 @@ export function pouchDepthFactor(v: number, style: PouchStyle = 'stand'): number
     if (v > 0.9) return lerpS(1.0, 0.12, (v - 0.9) / 0.1)
     return 1.0
   }
-  // stand / spout: ก้นตั้ง → หนาสุดใกล้ก้น → เรียวขึ้น (ผสมเส้นตรง+โค้งโดม) → แบนที่ปากซีล
-  if (v < DOYPACK_PEAK) return lerpS(0.9, 1.0, v / DOYPACK_PEAK)
-  const t = clamp01((v - DOYPACK_PEAK) / (1 - DOYPACK_PEAK))
-  return 0.5 * (1 - t) + 0.5 * Math.cos((t * Math.PI) / 2) ** 1.3
+  // stand / spout: ทรงหัวกระสุน — หนาสุดที่ก้น (ตั้งได้เต็มฐาน) ข้างโค้งนูน แล้วบีบเป็นปลายแหลมที่ปาก
+  return 1 - clamp01(v) ** DOYPACK_BULLET
 }
 
 // ครึ่งความกว้าง (สัดส่วนของ W/2): เต็มเกือบตลอด คอดเล็กน้อยที่ปลาย
@@ -379,7 +377,8 @@ export function pouchSectionArea(style: PouchStyle): number {
 // หน้าตัดเป็น "เลนส์" ฟิล์มหน้า-หลังประกบกันเป็นตะเข็บคมสองข้าง (ไม่ใช่วงรีมน), หนาสุดใกล้ก้น
 // แล้วเรียวขึ้นจนแบนที่ปาก + แถบซีลบนแบนกว้างเต็ม (ครีบ = แถบซีลบนของ dieline), ก้นแบนรูปเลนส์ มุมล่างมน
 export const DOYPACK_LENS = 2.4 // เลขชี้กำลังเลนส์: z = 1 − |u|^P (มาก = หน้าอิ่มเต็ม ขอบยังคม)
-export const DOYPACK_PEAK = 0.12 // ระดับ v ที่หนาสุด (ใกล้ก้น)
+export const DOYPACK_BULLET = 2.8 // เลขชี้กำลังโปรไฟล์ด้านข้าง 1 − v^n (มาก = อิ่มนานแล้วค่อยบีบที่ปาก)
+export const DOYPACK_PULL = 0.05 // ซีลข้างถูกดึงเข้าได้สูงสุดเท่านี้ของครึ่งกว้าง ตอนพองเต็ม (ซีลแข็ง ไม่หดตามความยาวโค้ง)
 export const DOYPACK_FIN = 0.35 // ครึ่งความหนาแถบซีลบน (ฟิล์มสองชั้นประกบ)
 export const DOYPACK_BOTTOM_SAG = 0.7 // ซีลก้นโค้งลงกลางแผง = สัดส่วนของครึ่งก้น (round-bottom)
 export const lensZ = (u: number) => Math.max(0, 1 - Math.min(1, Math.abs(u)) ** DOYPACK_LENS)
@@ -392,58 +391,43 @@ export interface DoypackRow {
   dly: number // พิกัด dieline แนวตั้ง (ขอบล่างแผง = ความสูงแผง, ขอบบน = 0)
 }
 
-// ความยาวโค้งของเลนส์ครึ่งกว้าง ai ลึก d (หน้าเดียว) — ฟิล์มไม่ยืด → ใช้หา ai ที่ทำให้ยาวเท่าฟิล์มจริง
-export function lensArcLength(ai: number, d: number, n = 64): number {
-  let L = 0
-  let px = -ai
-  let pz = 0
-  for (let i = 1; i <= n; i++) {
-    const x = -ai + (2 * ai * i) / n
-    const z = d * lensZ(x / ai)
-    L += Math.hypot(x - px, z - pz)
-    px = x
-    pz = z
-  }
-  return L
-}
+// มุมก้นมน (มม.): ตะเข็บข้างโค้งเข้าหาก้น (ซีลก้นโค้ง + ก้น gusset ดึงมุมเข้า) — มองจากหน้าเป็นมุมมน
+export const doypackCorner = (W: number, PH: number) => ({ rx: Math.min(W * 0.07, PH * 0.08), ry: Math.min(W * 0.1, PH * 0.1) })
 
-// ครึ่งกว้างช่วงพองที่ความยาวโค้ง = ความกว้างฟิล์มระหว่างซีลข้าง (ถุงยิ่งป่องยิ่งแคบลง เหมือนของจริง)
-export function doypackInnerHalf(Wi: number, d: number): number {
-  if (d <= 1e-6) return Wi / 2
-  let lo = 0.05 * Wi
-  let hi = Wi / 2
-  for (let k = 0; k < 24; k++) {
-    const mid = (lo + hi) / 2
-    if (lensArcLength(mid, d) > Wi) hi = mid
-    else lo = mid
-  }
-  return (lo + hi) / 2
-}
-
-// แถวโปรไฟล์ doypack จากพื้น (ขอบล่างแผง) ถึงขอบบน: ช่วงพองใต้ซีลบน + ซีลบนแบน
-// ซีลข้างแบนกว้าง POUCH_SIDE_SEAL ตลอดความสูง (เหมือนแผงบน dieline)
+// แถวโปรไฟล์ doypack จากพื้น (ขอบล่างแผง) ถึงขอบบน:
+// ช่วงพอง (พื้น → ปลายแหลมใต้ซิป) → ปากบีบแบน (ซิปแข็งหนีบปากไว้) → ซีลบน
+// ซีลข้างแบนกว้าง POUCH_SIDE_SEAL ตลอดความสูง ตรงเกือบดิ่ง (ดึงเข้าเล็กน้อยตามความพอง) มุมล่างมน
 export function doypackRows(
-  p: Pick<Pouch, 'W' | 'depth3D' | 'frontRect'> & { label: { height: number } },
+  p: Pick<Pouch, 'W' | 'depth3D' | 'frontRect' | 'zipper' | 'zipY'> & { label: { height: number } },
   n = 56,
   nFin = 3,
 ): DoypackRow[] {
   const { W, depth3D } = p
   const st = p.frontRect.y
   const PH = p.label.height
-  const Hi = PH - st // ความสูงช่วงพอง (พื้น → ใต้ซีลบน)
+  const Hi = PH - st // พื้น → ใต้ซีลบน
+  // ปลายช่วงพอง: ใต้ปีกซิป (ซิปหนีบปากแบน) ไม่มีซิป → ถึงซีลบน
+  const tipY =
+    p.zipper && p.zipY !== undefined ? Math.max(Hi * 0.5, Math.min(Hi, PH - p.zipY - ZIP_HALF)) : Hi
   const ss = POUCH_SIDE_SEAL
   const Wi = W - 2 * ss
-  const dOf = (y: number) => depth3D * pouchDepthFactor(y / Hi, 'stand')
-  // แถวถี่ใกล้ก้น (ช่วงหนาสุด)
-  const ys = Array.from({ length: n + 1 }, (_, i) => Hi * (i / n) ** 1.25)
-  // UV แนวตั้งตามความยาวผิวกลางหน้า → ลายไม่ยืดตรงช่วงเรียว
+  const { rx, ry } = doypackCorner(W, PH)
+  const fOf = (y: number) => (y >= tipY ? 0 : pouchDepthFactor(y / tipY, 'stand'))
+  const pull = (y: number) => {
+    if (y >= ry) return 0
+    const t = 1 - y / ry
+    return rx * (1 - Math.sqrt(1 - t * t))
+  }
+  const ys = Array.from({ length: n + 1 }, (_, i) => tipY * (i / n) ** 1.15)
+  if (tipY < Hi - 1e-6) ys.push(tipY + (Hi - tipY) / 2, Hi)
+  // UV แนวตั้งตามความยาวผิวกลางหน้า → ลายไม่ยืดตรงช่วงโค้ง
+  const dOf = (y: number) => depth3D * fOf(y)
   const cum = [0]
-  for (let i = 1; i <= n; i++) cum.push(cum[i - 1] + Math.hypot(ys[i] - ys[i - 1], dOf(ys[i]) - dOf(ys[i - 1])))
-  const total = cum[n] || 1
+  for (let i = 1; i < ys.length; i++) cum.push(cum[i - 1] + Math.hypot(ys[i] - ys[i - 1], dOf(ys[i]) - dOf(ys[i - 1])))
+  const total = cum[cum.length - 1] || 1
   const rows: DoypackRow[] = ys.map((y, i) => {
-    const d = dOf(y)
-    const ai = doypackInnerHalf(Wi, d)
-    return { y, a: ai + ss, ai, b: DOYPACK_FIN + d, dly: PH - (cum[i] / total) * Hi }
+    const ai = (Wi / 2) * (1 - DOYPACK_PULL * fOf(y)) - pull(y)
+    return { y, a: ai + ss, ai, b: DOYPACK_FIN + dOf(y), dly: PH - (cum[i] / total) * Hi }
   })
   for (let i = 1; i <= nFin; i++) {
     const t = i / nFin

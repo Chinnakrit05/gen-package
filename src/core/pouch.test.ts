@@ -13,10 +13,9 @@ import {
   doypackRows,
   doypackAt,
   doypackZ,
-  lensArcLength,
+  doypackCorner,
   DOYPACK_FIN,
   DOYPACK_LENS,
-  DOYPACK_PEAK,
   isPouch,
   POUCH_SIDE_SEAL,
   POUCH_TOP_SEAL,
@@ -187,17 +186,19 @@ describe('pouch: หน้าตัด 3D (ยืนได้/พุงป่อ
     expect(pouchDepthFactor(1)).toBeLessThan(0.15) // ปากซีลแบน
   })
 
-  it('doypack: หนาสุดใกล้ก้น แล้วเรียวลงต่อเนื่องจนแบนที่ปาก (ไม่ใช่หมอนพองกลาง)', () => {
-    const peak = pouchDepthFactor(DOYPACK_PEAK)
-    expect(peak).toBeCloseTo(1, 5)
-    expect(peak).toBeGreaterThan(pouchDepthFactor(0))
-    let prev = peak
-    for (let v = DOYPACK_PEAK + 0.05; v <= 1.0001; v += 0.05) {
+  it('doypack: ด้านข้างทรงหัวกระสุน — หนาสุดที่ก้น ลดลงต่อเนื่อง ยังอิ่มที่ครึ่งความสูง แล้วแหลมที่ปาก', () => {
+    expect(pouchDepthFactor(0)).toBe(1)
+    let prev = 1
+    for (let v = 0.05; v <= 1.0001; v += 0.05) {
       const d = pouchDepthFactor(v)
       expect(d).toBeLessThan(prev)
       prev = d
     }
-    expect(pouchDepthFactor(0.5)).toBeLessThan(0.7) // กลางถุงบางกว่าก้นชัดเจน
+    // เทียบภาพด้านข้าง doypack จริง: ครึ่งความสูง ~86%, สามในสี่ ~57%
+    expect(pouchDepthFactor(0.5)).toBeGreaterThan(0.8)
+    expect(pouchDepthFactor(0.75)).toBeGreaterThan(0.5)
+    expect(pouchDepthFactor(0.75)).toBeLessThan(0.65)
+    expect(pouchDepthFactor(1)).toBe(0)
     expect(pouchDepthFactor(0.5, 'spout')).toBe(pouchDepthFactor(0.5))
   })
 
@@ -270,23 +271,34 @@ describe('pouch: ทรง 3D ถุงตั้ง (doypack)', () => {
     }
   })
 
-  it('ซีลข้างแบนกว้างเท่า dieline ทุกระดับ; ช่วงพองยาวโค้งเท่าฟิล์ม → ถุงป่องแคบลง', () => {
+  it('ซีลข้างแบนกว้างเท่า dieline ตรงเกือบดิ่ง; มุมก้นมนเข้า; ฐานลึกเต็มตั้งได้', () => {
+    const Wi2 = p.W / 2 - POUCH_SIDE_SEAL
+    const { ry } = doypackCorner(p.W, PH)
     for (const r of rows) {
       expect(r.a - r.ai).toBeCloseTo(POUCH_SIDE_SEAL, 9)
-      expect(lensArcLength(r.ai, r.b - DOYPACK_FIN)).toBeCloseTo(p.W - 2 * POUCH_SIDE_SEAL, 1)
       expect(doypackZ(r, r.ai + 1)).toBe(DOYPACK_FIN) // ซีลข้างแบน
       expect(doypackZ(r, 0)).toBeCloseTo(r.b, 9)
+      if (r.y >= ry) expect(r.ai).toBeGreaterThanOrEqual(Wi2 * 0.95 - 1e-9) // ซีลแข็ง ไม่หดตามความพอง
     }
-    expect(rows[0].b).toBeGreaterThan(p.depth3D * 0.8) // ก้นลึก → ยืนได้
-    expect(rows[0].a).toBeLessThan(p.W / 2) // ช่วงป่องดึงขอบเข้า
+    expect(rows[0].b).toBeCloseTo(DOYPACK_FIN + p.depth3D, 9) // หนาสุดที่ก้น
+    expect(rows[0].a).toBeLessThan(rows.find((r) => r.y >= ry)!.a) // มุมล่างมนเข้า
   })
 
-  it('doypackAt: แนวซิปบน dieline ตกที่ผิวหน้าใกล้ปาก ผิวเอนไปหลัง', () => {
+  it('doypackAt: แนวซิปบน dieline ตกใกล้ปาก — ซิปหนีบปากแบน ใต้ปีกซิปเริ่มพองและเอนไปหลัง', () => {
     const z = doypackAt(rows, p.zipY!)
     expect(z.y).toBeGreaterThan(Hi * 0.8)
     expect(z.y).toBeLessThan(Hi)
-    expect(z.tilt).toBeGreaterThan(0)
-    expect(z.b).toBeLessThan(rows[0].b)
+    expect(z.b).toBeCloseTo(DOYPACK_FIN, 9)
+    const below = doypackAt(rows, p.zipY! + 20)
+    expect(below.b).toBeGreaterThan(DOYPACK_FIN + 1)
+    expect(below.tilt).toBeGreaterThan(0)
+  })
+
+  it('ไม่มีซิป: พองขึ้นไปถึงใต้ซีลบน', () => {
+    const q = generatePouch({ W: 120, D: 60, H: 180 }, mat, { style: 'stand' })
+    const rs = doypackRows(q)
+    const below = rs.filter((r) => r.y < q.label.height - q.frontRect.y - 15)
+    expect(below[below.length - 1].b).toBeGreaterThan(DOYPACK_FIN + 1)
   })
 })
 
