@@ -1181,36 +1181,11 @@ export default function App({
     }
   }, [unit])
   const imperial = unit === 'in'
-  // แสดง/ซ่อนเส้นบอกขนาดบนมุมมอง 3D (จำค่าไว้)
-  const [showDims3d, setShowDims3d] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('packit-dims3d') !== '0'
-    } catch {
-      return true
-    }
-  })
-  useEffect(() => {
-    try {
-      localStorage.setItem('packit-dims3d', showDims3d ? '1' : '0')
-    } catch {
-      /* ปิด storage — ข้าม */
-    }
-  }, [showDims3d])
-  // แสงสด: เพิ่มไฟ + ปิด tone mapping ฟิล์มให้สีสด/สว่างขึ้นในมุมมอง 3D (จำค่าไว้; เปิดเป็นค่าเริ่มต้น)
-  const [vivid3d, setVivid3d] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('packit-vivid3d') !== '0'
-    } catch {
-      return true
-    }
-  })
-  useEffect(() => {
-    try {
-      localStorage.setItem('packit-vivid3d', vivid3d ? '1' : '0')
-    } catch {
-      /* ปิด storage — ข้าม */
-    }
-  }, [vivid3d])
+  // แสดงขนาดบนโมเดล 3D + แสงสด: ปิดทุกครั้งที่เปิดแอป/สร้างงานใหม่ (ไม่จำข้ามรอบโดยเจตนา)
+  // — ทั้งสองเพิ่มภาระเรนเดอร์ (ป้าย DOM ตามกล้องทุกเฟรม / ไฟเพิ่ม) จึงให้ผู้ใช้เปิดเองเมื่อต้องการ ลดอาการแอปหน่วง
+  const [showDims3d, setShowDims3d] = useState(false)
+  // แสงสด: เพิ่มไฟ + ปิด tone mapping ฟิล์มให้สีสด/สว่างขึ้นในมุมมอง 3D
+  const [vivid3d, setVivid3d] = useState(false)
   // รูปแบบแสงเมื่อเปิดแสงสด: 'studio' = ฟุ้งรอบด้าน (เช็กลาย) / 'threePoint' = key+fill+rim (มีมิติแบบภาพโฆษณา)
   const [lightRig3d, setLightRig3d] = useState<'studio' | 'threePoint'>(() => {
     try {
@@ -1966,6 +1941,9 @@ export default function App({
       title: 'ตั้งชื่องานใหม่',
       value: `งาน ${(cloud?.items.length ?? projects.length) + 1}`,
       onOk: (name) => {
+        // งานใหม่เริ่มมุมมอง 3D แบบเบา: ปิดป้ายขนาดและแสงสด
+        setShowDims3d(false)
+        setVivid3d(false)
         if (cloud) {
           const current = flushInto(projects).find((project) => project.id === activeId)
           if (!current) return
