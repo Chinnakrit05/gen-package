@@ -1,127 +1,138 @@
 import { describe, expect, it } from 'vitest'
-import { Quaternion, Vector3 } from 'three'
+import { Vector3 } from 'three'
 import { computeMatrices, to3D } from '../fold'
 import { getTemplate } from './index'
 import { getMaterial } from '../materials'
 import { computeGuides } from '../guides'
 import { dielineDXFString } from '../dxf'
-import type { Vec2 } from '../types'
 
-// เทสต์การพับเชิงตัวเลข: ยืนยันว่าผนัง 4 ด้านตั้งฉาก และแผงจั่วสองด้านเอียงมาชนกันที่สัน
+// กล่องหูหิ้ว (gable carry box): ท่อทากาวข้าง + ก้นล็อก + ฝาแบนผ่าร่องกลาง + หูหิ้วสองชั้น
+// + แผงปิดบนสองซีกจากผนังข้างพับทับฝา ปลายลงล็อกร่องกลาง — ตรวจตำแหน่ง 3D หลังพับเชิงตัวเลข
 const mat = getMaterial('carton-300')
 const t = mat.thickness
 const tp = getTemplate('gable')
-const Hp = 150 + t
-const d = tp.generate({ W: 120, D: 100, H: 150 }, mat)
+const box = { W: 200, D: 100, H: 120 }
+const d = tp.generate(box, mat)
 const M = computeMatrices(d.panels, 1)
+const Dp = box.D + 2 * t
 
-const centroid = (pts: Vec2[]) => {
-  const c = pts.reduce((s, p) => ({ x: s.x + p.x, y: s.y + p.y }), { x: 0, y: 0 })
-  return { x: c.x / pts.length, y: c.y / pts.length }
-}
-const world = (id: string): Vector3 => {
+const pts = (id: string): Vector3[] => {
   const p = d.panels.find((q) => q.id === id)!
-  return to3D(centroid(p.outline)).applyMatrix4(M.get(id)!)
+  return p.outline.map((v) => to3D(v).applyMatrix4(M.get(id)!))
 }
-const worldPt = (id: string, p: Vec2): Vector3 => to3D(p).applyMatrix4(M.get(id)!)
-
-const base = d.panels.find((p) => p.id === 'base')!
-const cx0 = Math.min(...base.outline.map((p) => p.x))
-const cx1 = Math.max(...base.outline.map((p) => p.x))
-const by0 = Math.min(...base.outline.map((p) => p.y))
-const by1 = Math.max(...base.outline.map((p) => p.y))
-const centerX = (cx0 + cx1) / 2
-const centerYworld = -(by0 + by1) / 2
-const gback = d.panels.find((p) => p.id === 'gable-back')!
-const gfront = d.panels.find((p) => p.id === 'gable-front')!
-// ขอบสันของแต่ละแผงจั่ว = ขอบที่ไกลจาก hinge สุด (y เล็กสุดของจั่วหลัง, y ใหญ่สุดของจั่วหน้า)
-const ridgeBack = { x: centerX, y: Math.min(...gback.outline.map((p) => p.y)) }
-const ridgeFront = { x: centerX, y: Math.max(...gfront.outline.map((p) => p.y)) }
+const bb = (id: string) => {
+  const v = pts(id)
+  return {
+    x0: Math.min(...v.map((q) => q.x)), x1: Math.max(...v.map((q) => q.x)),
+    y0: Math.min(...v.map((q) => q.y)), y1: Math.max(...v.map((q) => q.y)),
+    z0: Math.min(...v.map((q) => q.z)), z1: Math.max(...v.map((q) => q.z)),
+  }
+}
+const front = bb('front')
+const yTop = front.y1 // ระดับปากกล่อง (world y ขึ้น)
+const xL = front.x0
+const xR = front.x1
+const xC = (xL + xR) / 2
 
 describe('gable: โครงสร้าง dieline', () => {
-  it('ลงทะเบียนใน registry + มีแผงครบ (ฐาน+4ผนัง+4ลิ้น+2จั่ว = 11)', () => {
+  it('ลงทะเบียน + แผงครบ: ลำตัว 4 + ลิ้นกาว + ก้น 4 + ฝาแบน 4 ซีก + หูหิ้ว 2 + แผงปิดบน 4 ซีก + ลิ้นปลาย 4', () => {
     expect(tp.id).toBe('gable')
-    expect(d.panels).toHaveLength(11)
+    expect(tp.supportsHandle).toBe(false)
+    expect(d.panels).toHaveLength(23)
+    for (const id of ['front', 'back', 'side-left', 'side-right', 'glue', 'fin-front', 'fin-back']) {
+      expect(d.panels.some((p) => p.id === id)).toBe(true)
+    }
+    expect(d.panels.filter((p) => p.id.startsWith('cap-'))).toHaveLength(4)
+    expect(d.panels.filter((p) => p.id.startsWith('tip-'))).toHaveLength(4)
   })
-  it('แผงจั่วทั้งสองมีรูหิ้ว', () => {
-    expect(gback.holes).toHaveLength(1)
-    expect(gfront.holes).toHaveLength(1)
-  })
-  it('outline ทุกจุด finite', () => {
-    const pts = d.panels.flatMap((p) => p.outline)
-    expect(pts.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true)
+
+  it('หูหิ้วทั้งสองเจาะรูจับ + เส้นตัด/รอยพับสร้างจากแผงได้ครบ', () => {
+    expect(d.panels.find((p) => p.id === 'fin-front')!.holes).toHaveLength(1)
+    expect(d.panels.find((p) => p.id === 'fin-back')!.holes).toHaveLength(1)
+    expect(d.segments.filter((s) => s.kind === 'crease').length).toBeGreaterThanOrEqual(20)
+    expect(d.segments.filter((s) => s.kind === 'cut').length).toBeGreaterThan(10)
   })
 })
 
 describe('gable: ตำแหน่งหลังพับสุด (fold=1)', () => {
-  it('base อยู่กับที่ z=0', () => {
-    expect(Math.abs(world('base').z)).toBeLessThan(0.01)
+  it('ลำตัวเป็นกล่องปิดรอบ: ผนังหน้า z=0, หลัง z≈Dp, ข้างสองด้านที่ปลาย x', () => {
+    expect(front.z1).toBeCloseTo(0, 3)
+    const back = bb('back')
+    expect(back.z0).toBeCloseTo(Dp, 1)
+    expect(Math.min(bb('side-left').x0, bb('side-right').x0)).toBeCloseTo(xL, 1)
+    expect(Math.max(bb('side-left').x1, bb('side-right').x1)).toBeCloseTo(xR, 1)
   })
 
-  it.each([
-    ['back', 'y', -by0],
-    ['front', 'y', -by1],
-    ['left', 'x', cx0],
-    ['right', 'x', cx1],
-  ] as const)('ผนัง %s ตั้งฉาก สูง ~Hp/2', (id, axis, plane) => {
-    const v = world(id)
-    expect(Math.abs((axis === 'x' ? v.x : v.y) - plane)).toBeLessThan(0.5)
-    expect(v.z).toBeGreaterThan(Hp * 0.3)
-    expect(v.z).toBeLessThan(Hp * 0.7)
+  it('ฝาแบนสี่ซีกนอนที่ปาก ครึ่งความลึกจากผนังของตัวเอง เว้นร่องกลางตามยาว', () => {
+    for (const id of ['lid-front-a', 'lid-front-b', 'lid-back-a', 'lid-back-b']) {
+      const b = bb(id)
+      expect(b.y0).toBeCloseTo(yTop, 3)
+      expect(b.y1).toBeCloseTo(yTop, 3)
+      expect(b.z1 - b.z0).toBeCloseTo(Dp / 2 - t - 0.01, 2)
+    }
+    const fa = bb('lid-front-a')
+    const fb = bb('lid-front-b')
+    const gapX = Math.max(fb.x0 - fa.x1, fa.x0 - fb.x1)
+    expect(gapX).toBeGreaterThan(2 * t) // ร่องรับลิ้นปลายสองแผ่น
   })
 
-  it('ยอดจั่วสองด้านมาชนกันที่สัน (จุดเดียวกัน)', () => {
-    const a = worldPt('gable-back', ridgeBack)
-    const b = worldPt('gable-front', ridgeFront)
-    expect(a.distanceTo(b)).toBeLessThan(2)
+  it('หูหิ้วสองชั้นตั้งดิ่งกลางกล่อง แนบกัน รูจับตรงกัน', () => {
+    const f = bb('fin-front')
+    const b = bb('fin-back')
+    expect(f.z1 - f.z0).toBeLessThan(0.01)
+    expect(b.z1 - b.z0).toBeLessThan(0.01)
+    expect(b.z0 - f.z0).toBeCloseTo(2 * (t + 0.01), 3)
+    expect((f.z0 + b.z0) / 2).toBeCloseTo(Dp / 2, 2)
+    expect(f.y0).toBeCloseTo(yTop, 3)
+    expect(f.y1 - yTop).toBeGreaterThan(25)
+    expect(f.y1).toBeCloseTo(b.y1, 3)
+    const hole = (id: string) => {
+      const h = d.panels.find((p) => p.id === id)!.holes![0].map((v) => to3D(v).applyMatrix4(M.get(id)!))
+      return { x: h.reduce((s, v) => s + v.x, 0) / h.length, y: h.reduce((s, v) => s + v.y, 0) / h.length }
+    }
+    expect(hole('fin-front').x).toBeCloseTo(hole('fin-back').x, 2)
+    expect(hole('fin-front').y).toBeCloseTo(hole('fin-back').y, 2)
   })
 
-  it('สันอยู่เหนือผนัง (z > Hp) เหนือกึ่งกลางฐาน', () => {
-    const a = worldPt('gable-back', ridgeBack)
-    expect(a.z).toBeGreaterThan(Hp)
-    expect(Math.abs(a.x - centerX)).toBeLessThan(1)
-    expect(Math.abs(a.y - centerYworld)).toBeLessThan(2)
+  it('แผงปิดบนนอนทับบนฝาแบน (เหนือฝา) ข้างละซีกของหูหิ้ว ยาวถึงกลางกล่อง', () => {
+    for (const id of ['cap-right-a', 'cap-right-b', 'cap-left-a', 'cap-left-b']) {
+      const b = bb(id)
+      expect(b.y0).toBeGreaterThan(yTop) // อยู่บนฝา ไม่ทะลุลง
+      expect(b.y1 - yTop).toBeLessThan(2 * t + 0.5)
+      expect(b.x0).toBeGreaterThanOrEqual(xL - 0.01)
+      expect(b.x1).toBeLessThanOrEqual(xR + 0.01)
+      expect(Math.min(Math.abs(b.x0 - xC), Math.abs(b.x1 - xC))).toBeLessThan(2 * t + 1) // ถึงกลางกล่อง
+      // ไม่ทับหูหิ้ว: อยู่ฝั่งหน้าหรือฝั่งหลังของระนาบหูหิ้วทั้งแผง
+      const fz0 = bb('fin-front').z0
+      const fz1 = bb('fin-back').z0
+      expect(b.z1 <= fz0 + 0.01 || b.z0 >= fz1 - 0.01).toBe(true)
+    }
   })
 
-  it('รูหิ้วสองแผงอยู่สูงใกล้ยอด สมมาตรรอบสัน (หูหิ้วแบบบีบสองช่อง)', () => {
-    const hb = worldPt('gable-back', centroid(gback.holes![0]))
-    const hf = worldPt('gable-front', centroid(gfront.holes![0]))
-    // อยู่บนหลังคาใกล้ยอดทั้งคู่
-    expect(hb.z).toBeGreaterThan(Hp * 0.8)
-    expect(hf.z).toBeGreaterThan(Hp * 0.8)
-    // สมมาตรรอบกึ่งกลาง (จุดกึ่งกลางระหว่างสองรูอยู่เหนือกลางฐาน)
-    const mid = hb.clone().add(hf).multiplyScalar(0.5)
-    expect(Math.abs(mid.x - centerX)).toBeLessThan(1)
-    expect(Math.abs(mid.y - centerYworld)).toBeLessThan(2)
+  it('ลิ้นปลายสี่อันลงร่องกลางของฝาแบน (ใต้ระดับปาก ในแนวร่อง)', () => {
+    for (const id of ['tip-right-a', 'tip-right-b', 'tip-left-a', 'tip-left-b']) {
+      const b = bb(id)
+      expect(b.y0).toBeLessThan(yTop - 5)
+      expect(Math.abs((b.x0 + b.x1) / 2 - xC)).toBeLessThan(t + 1)
+    }
   })
-})
 
-describe('gable: ลำดับจังหวะพับ', () => {
-  const ownAngle = (id: string, fold: number) => {
-    const p = d.panels.find((q) => q.id === id)!
-    const m = computeMatrices(d.panels, fold)
-    const own = m.get(id)!.clone()
-    if (p.parentId) own.premultiply(m.get(p.parentId)!.clone().invert())
-    const q = new Quaternion().setFromRotationMatrix(own)
-    return 2 * Math.acos(Math.min(1, Math.abs(q.w)))
-  }
-  const progressAt = (id: string, fold: number) => {
-    const full = ownAngle(id, 1)
-    return full < 1e-9 ? 1 : ownAngle(id, fold) / full
-  }
-  const startsAt = (id: string) => {
-    for (let f = 0; f <= 1.0001; f += 0.01) if (progressAt(id, f) > 0.01) return f
-    return 1
-  }
+  it('ลิ้นก้นสี่อันพับเข้าปิดก้น อยู่ในรอยเท้ากล่อง', () => {
+    for (const id of ['base-front', 'base-back', 'base-left', 'base-right']) {
+      const b = bb(id)
+      expect(b.y1 - b.y0).toBeLessThan(0.01)
+      expect(b.y0).toBeLessThan(front.y0 + 4 * t + 1)
+      expect(b.x0).toBeGreaterThanOrEqual(xL - 0.01)
+      expect(b.x1).toBeLessThanOrEqual(xR + 0.01)
+      expect(b.z0).toBeGreaterThanOrEqual(-0.01)
+      expect(b.z1).toBeLessThanOrEqual(Dp + 0.01)
+    }
+  })
 
-  it('ผนังหน้า-หลังยังไม่พับจนผนังข้าง(ปีก)เก็บไปแล้วเกิน 90%', () => {
-    expect(progressAt('left', startsAt('front'))).toBeGreaterThan(0.9)
-  })
-  it('จั่วยังไม่ปิดจนผนังหน้า-หลังพับไปแล้วเกิน 80%', () => {
-    expect(progressAt('back', startsAt('gable-back'))).toBeGreaterThan(0.8)
-  })
-  it('ทุกแผงพับครบเมื่อ fold=1', () => {
-    for (const p of d.panels) expect(progressAt(p.id, 1)).toBeCloseTo(1, 6)
+  it('ลิ้นปลายงอรอไว้ก่อนแผงปิดบนเริ่มพับลง (ไม่กวาดสวนกันในร่อง)', () => {
+    const cap = d.panels.find((p) => p.id === 'cap-right-a')!
+    const tip = d.panels.find((p) => p.id === 'tip-right-a')!
+    expect(tip.stage).toBeLessThan(cap.stage)
   })
 })
 
@@ -129,7 +140,9 @@ describe('gable: เข้ากับระบบอื่น', () => {
   it('guides คำนวณได้', () => {
     const g = computeGuides(d.panels)
     expect(g.safe.length).toBeGreaterThanOrEqual(5)
+    expect(g.bleed.length).toBeGreaterThan(0)
   })
+
   it('DXF สร้างได้ไม่มี NaN', () => {
     const dxf = dielineDXFString(d)
     expect(dxf).toContain('EOF')
