@@ -25,6 +25,8 @@ export interface Panel {
   tuck?: boolean
   // ประกอบชิ้น (เช่นฝาครอบพลิกไปวางบนฐาน): หมุนทั้งชิ้นรอบแกนสมมติ ไม่ใช่รอยพับจริง — ไม่สร้างสันม้วน 180°
   assemble?: boolean
+  // เลื่อนต่ออีกจังหวะตามแกน z ท้องถิ่น (มม.) ในช่วง stage ที่กำหนด — เช่นฝาครอบพลิกมาวางบนขอบฐานแล้วค่อยสวมลง
+  slide?: { dz: number; stage: number }
 }
 
 export interface DimMark {

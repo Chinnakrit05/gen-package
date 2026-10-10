@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { computeMatrices, rollBeads, to3D } from '../fold'
 import { getTemplate } from './index'
+import { LID_SEAT } from './lidBox'
 import { getMaterial } from '../materials'
 import { dielineDXFString } from '../dxf'
 
@@ -67,9 +68,42 @@ describe('lid-box: โครงสร้างกล่องฝาครอบ'
     expect(L.x1).toBeGreaterThan(B.x1)
     expect(L.y0).toBeLessThan(B.y0)
     expect(L.y1).toBeGreaterThan(B.y1)
-    expect(L.z0).toBeCloseTo(box.H + t, 3) // ขอบฝาวางบนขอบฐาน
-    expect(L.z1).toBeCloseTo(2 * (box.H + t), 3)
+    // สวมมิด: ผิวในฝาเหนือขอบฐาน LID_SEAT ขอบฝาลงเกือบถึงพื้น — สูงรวมเท่าฐาน + ความหนาฝา
+    expect(L.z1).toBeCloseTo(box.H + 2 * t + LID_SEAT, 3)
+    expect(L.z0).toBeCloseTo(t + LID_SEAT, 3)
+    expect(L.z0).toBeLessThan(B.z1)
     expect(B.z0).toBeCloseTo(0, 3)
+  })
+
+  it('3D: พลิกเสร็จก่อน (ขอบฝาวางบนขอบฐาน) แล้วจึงสวมลงตรง ๆ — ผนังฝาไม่ทะลุผนังฐานตลอดการสวม', () => {
+    const t = mat.thickness
+    const lb = d.panels.find((p) => p.id === 'l-base')!
+    expect(lb.slide!.stage).toBeGreaterThan(lb.stage)
+    const bbAt = (f: number, pre: string) => {
+      const M = computeMatrices(d.panels, f)
+      const v = d.panels.filter((p) => p.id.startsWith(pre)).flatMap((p) => p.outline.map((q) => to3D(q).applyMatrix4(M.get(p.id)!)))
+      return {
+        x0: Math.min(...v.map((q) => q.x)), x1: Math.max(...v.map((q) => q.x)),
+        y0: Math.min(...v.map((q) => q.y)), y1: Math.max(...v.map((q) => q.y)),
+        z0: Math.min(...v.map((q) => q.z)),
+      }
+    }
+    // หาจังหวะที่ฝาเริ่มเลื่อนลง (ขอบฝาต่ำกว่าขอบฐาน): ตอนนั้นการพลิกต้องเสร็จแล้ว ฝาอยู่ตรงฐาน
+    const B = bbAt(1, 'b-')
+    let sliding = -1
+    for (let f = 0.5; f <= 1.0001; f += 0.005) {
+      const L = bbAt(f, 'l-')
+      const over = L.x0 < B.x0 && L.x1 > B.x1 && L.y0 < B.y0 && L.y1 > B.y1
+      // ฝาซ้อนเหนือรอยเท้าฐานและต่ำกว่าขอบฐาน = กำลังสวมลง → ต้องครอบรอบฐาน (ไม่ทับผนัง)
+      const overlapsXY = L.x0 < B.x1 && L.x1 > B.x0 && L.y0 < B.y1 && L.y1 > B.y0
+      if (overlapsXY && L.z0 < box.H + t - 0.5) {
+        if (sliding < 0) sliding = f
+        expect(over).toBe(true)
+      }
+    }
+    expect(sliding).toBeGreaterThan(0)
+    const before = bbAt(sliding - 0.01, 'l-')
+    expect(before.z0).toBeGreaterThan(box.H + t - 0.6) // ก่อนสวม ขอบฝาอยู่บนขอบฐาน
   })
 
   it('ฝาเริ่มพลิกหลังถาดทั้งสองพับเสร็จ (ไม่กวาดผ่านผนังที่ยังพับไม่เสร็จ)', () => {

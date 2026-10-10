@@ -79,7 +79,7 @@ function tuckAngle(p: Panel, lid: Panel | undefined, progress: number, lidProgre
 export function computeMatrices(panels: Panel[], fold: number): Map<string, Matrix4> {
   const byId = new Map(panels.map((p) => [p.id, p]))
   const cache = new Map<string, Matrix4>()
-  const stages = panels.reduce((m, p) => Math.max(m, p.stage), 0) + 1
+  const stages = panels.reduce((m, p) => Math.max(m, p.stage, p.slide?.stage ?? 0), 0) + 1
   const windows = stages >= 6 ? WINDOWS_6 : stages >= 5 ? WINDOWS_5 : WINDOWS_4
 
   const get = (id: string): Matrix4 => {
@@ -111,6 +111,9 @@ export function computeMatrices(panels: Panel[], fold: number): Map<string, Matr
     // ท้องถิ่นของ panel ซึ่งหลังพับจะชี้เข้าหากองชั้นวัสดุ — กัน z-fighting
     if (p.zOffset) {
       m.multiply(new Matrix4().makeTranslation(0, 0, p.zOffset * progress))
+    }
+    if (p.slide) {
+      m.multiply(new Matrix4().makeTranslation(0, 0, p.slide.dz * stageProgress(windows, p.slide.stage, fold)))
     }
     cache.set(id, m)
     return m

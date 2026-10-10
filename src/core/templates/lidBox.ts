@@ -4,10 +4,12 @@ import { buildTrayPiece, trayPieceSize } from './trayPiece'
 
 // กล่องฝาครอบ (FEFCO 0300 telescope) — 2 ชิ้น: ถาดฐาน + ถาดฝา ลึกเท่ากัน ฝาใหญ่กว่าเล็กน้อยให้สวมทับฐาน
 // แต่ละชิ้น = ฐาน + ผนัง 4 ด้าน + ลิ้นมุมสี่เหลี่ยมเต็มที่ผนังซ้าย-ขวา (มีร่องหลบข้างผนังหน้า-หลัง) ตามแบบ dieline มาตรฐาน
-// 3D: พับถาดทั้งสองชิ้น แล้วพลิกฝา 180° ข้ามมาวางครอบบนฐาน (ขอบฝาวางบนขอบฐาน แบบภาพปิดกล่อง)
-// — ฐานฝาเป็นแผงลูกของฐานกล่อง หมุนรอบแกนสมมติกึ่งกลางระหว่างสองชิ้น (assemble) + ยกขึ้นตาม zOffset
+// 3D: พับถาดทั้งสองชิ้น → พลิกฝา 180° ข้ามมาวางบนขอบฐาน (stage 4) → สวมลงจนมิดฐาน (stage 5, `slide`)
+// — ฐานฝาเป็นแผงลูกของฐานกล่อง หมุนรอบแกนสมมติกึ่งกลางระหว่างสองชิ้น (assemble) + ยกขึ้นตาม zOffset;
+//   ต้องพลิกเสร็จก่อนค่อยสวมลง ถ้าหมุนลงตรง ๆ ผนังฝาจะกวาดทะลุผนังฐาน (stage 3 เว้นว่างให้ได้ชุดจังหวะ 6)
 // W,D,H = ขนาดด้านในของฐาน
 export const LID_CLEAR = 0.8 // ระยะเผื่อให้ฝาสวมฐานได้ (มม.)
+export const LID_SEAT = 0.1 // ระยะผิวในฝาเหนือขอบฐานตอนสวมมิด (กัน z-fighting)
 
 export function generateLidBox(box: BoxParams, mat: Material): Dieline {
   const { W, D, H } = box
@@ -30,6 +32,7 @@ export function generateLidBox(box: BoxParams, mat: Material): Dieline {
 
   // พลิกฝา: แกนแนวตั้งกึ่งกลางระหว่างศูนย์กลางสองชิ้น → หมุน 180° แล้วศูนย์กลางฝาตกตรงศูนย์กลางฐาน
   // ยกขึ้นจนขอบฝาวางบนขอบฐาน: ผิวบนฝา = สูงผนังฐาน + สูงผนังฝา (zOffset ท้องถิ่นชี้ลงหลังพลิก → ติดลบ)
+  // แล้วสวมลง (+z ท้องถิ่น = ลงในโลก) จนผิวในฝาห่างขอบฐาน LID_SEAT → ขอบฝาลงเกือบถึงพื้น ครอบฐานมิด
   const xcB = base.w / 2
   const xcL = bx + lid.w / 2
   const xh = (xcB + xcL) / 2
@@ -43,8 +46,9 @@ export function generateLidBox(box: BoxParams, mat: Material): Dieline {
           hingeA: P(xh, 0),
           hingeB: P(xh, lid.h),
           foldAngle: 180,
-          stage: 3,
+          stage: 4,
           zOffset: -(Hpb + Hpl),
+          slide: { dz: Hpl - t - LID_SEAT, stage: 5 },
           assemble: true,
         }
       : p,
