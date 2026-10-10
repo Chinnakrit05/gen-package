@@ -2,28 +2,55 @@ import type { BoxParams, Dieline, DimMark, Material, Panel, Segment } from '../t
 import { P, fmt } from './shared'
 import { buildTrayPiece, trayPieceSize } from './trayPiece'
 
-// กล่องฝาครอบ (telescoping lid box) — ฐานถาดลึก + ฝาครอบถาดตื้นสวมทับ (2 ชิ้น)
-// แผ่นคลี่วางสองชิ้นเคียงกัน: ซ้าย = ฐาน (ผนังพับขึ้น), ขวา = ฝา (ผนังพับลง ดูเป็นฝาครอบ)
-// W,D,H = ขนาดด้านในของฐาน; ฝากว้าง/ลึกกว่าเล็กน้อยเพื่อสวมพอดี สูง ~40% ของฐาน
+// กล่องฝาครอบ (FEFCO 0300 telescope) — 2 ชิ้น: ถาดฐาน + ถาดฝา ลึกเท่ากัน ฝาใหญ่กว่าเล็กน้อยให้สวมทับฐาน
+// แต่ละชิ้น = ฐาน + ผนัง 4 ด้าน + ลิ้นมุมสี่เหลี่ยมเต็มที่ผนังซ้าย-ขวา (มีร่องหลบข้างผนังหน้า-หลัง) ตามแบบ dieline มาตรฐาน
+// 3D: พับถาดทั้งสองชิ้น แล้วพลิกฝา 180° ข้ามมาวางครอบบนฐาน (ขอบฝาวางบนขอบฐาน แบบภาพปิดกล่อง)
+// — ฐานฝาเป็นแผงลูกของฐานกล่อง หมุนรอบแกนสมมติกึ่งกลางระหว่างสองชิ้น (assemble) + ยกขึ้นตาม zOffset
+// W,D,H = ขนาดด้านในของฐาน
+export const LID_CLEAR = 0.8 // ระยะเผื่อให้ฝาสวมฐานได้ (มม.)
+
 export function generateLidBox(box: BoxParams, mat: Material): Dieline {
   const { W, D, H } = box
   const t = mat.thickness
-  const clear = 0.8 // ระยะเผื่อให้ฝาสวมฐานได้
 
-  // ฝาสวมภายนอกฐาน: ด้านในฝา = ด้านนอกฐาน + เผื่อ
-  const lidW = W + 2 * t + clear
-  const lidD = D + 2 * t + clear
-  const lidH = Math.max(10, H * 0.4)
+  // ฝาสวมภายนอกฐาน: ด้านในฝา = ด้านนอกฐาน + เผื่อ; ลึกเท่าฐาน (telescope เต็ม)
+  const lidW = W + 2 * t + LID_CLEAR
+  const lidD = D + 2 * t + LID_CLEAR
+  const lidH = H
 
   const GAP = 14
   const base = trayPieceSize(W, D, H, t)
-  const bx = base.w + GAP // จุดเริ่มชิ้นฝาตามแกน x
+  const lid = trayPieceSize(lidW, lidD, lidH, t)
+  // จัดกึ่งกลางแนวตั้งของสองชิ้นให้ตรงกัน — ฝาพลิกข้ามมาแล้วตรงฐานพอดี
+  const byOff = (lid.h - base.h) / 2
+  const bx = base.w + GAP
 
-  // ทั้งสองชิ้นผนังพับขึ้น (ถาดเปิด) — ฝาเป็นถาดตื้นกว่า; พับขึ้นเหมือนฐานเพื่อให้หน้าพิมพ์ไม่กลับด้าน
-  const basePiece = buildTrayPiece('b-', 0, 0, W, D, H, t, 1)
-  const lidPiece = buildTrayPiece('l-', bx, 0, lidW, lidD, lidH, t, 1)
+  const basePiece = buildTrayPiece('b-', 0, byOff, W, D, H, t, 1, { squareCorners: true })
+  const lidPiece = buildTrayPiece('l-', bx, 0, lidW, lidD, lidH, t, 1, { squareCorners: true })
 
-  const panels: Panel[] = [...basePiece.panels, ...lidPiece.panels]
+  // พลิกฝา: แกนแนวตั้งกึ่งกลางระหว่างศูนย์กลางสองชิ้น → หมุน 180° แล้วศูนย์กลางฝาตกตรงศูนย์กลางฐาน
+  // ยกขึ้นจนขอบฝาวางบนขอบฐาน: ผิวบนฝา = สูงผนังฐาน + สูงผนังฝา (zOffset ท้องถิ่นชี้ลงหลังพลิก → ติดลบ)
+  const xcB = base.w / 2
+  const xcL = bx + lid.w / 2
+  const xh = (xcB + xcL) / 2
+  const Hpb = H + t
+  const Hpl = lidH + t
+  const lidPanels: Panel[] = lidPiece.panels.map((p) =>
+    p.id === 'l-base'
+      ? {
+          ...p,
+          parentId: 'b-base',
+          hingeA: P(xh, 0),
+          hingeB: P(xh, lid.h),
+          foldAngle: 180,
+          stage: 3,
+          zOffset: -(Hpb + Hpl),
+          assemble: true,
+        }
+      : p,
+  )
+
+  const panels: Panel[] = [...basePiece.panels, ...lidPanels]
   const segments: Segment[] = [...basePiece.segments, ...lidPiece.segments]
 
   const width = lidPiece.bbox.x1

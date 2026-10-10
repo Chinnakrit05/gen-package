@@ -19,6 +19,8 @@ export function buildTrayPiece(
   H: number,
   t: number,
   wallDir: 1 | -1 = 1,
+  // squareCorners: ลิ้นมุมเป็นสี่เหลี่ยมเต็ม (สูงเท่าผนัง) เว้นร่องหลบสั้น ๆ ข้างผนังหน้า-หลัง — แบบ dieline กล่องฝาครอบมาตรฐาน
+  opts: { squareCorners?: boolean } = {},
 ): TrayPiece {
   const Wp = W + 2 * t
   const Dp = D + 2 * t
@@ -39,12 +41,25 @@ export function buildTrayPiece(
   const tabIn = Math.max(1.5, 2 * t + 0.5)
   const tabW = Math.max(8, Math.min(0.72 * Hp, Dp / 2 - 2))
   const tabSlant = Math.min(5, tabW * 0.45)
-  const tab = (xa: number, xb: number, y: number, d: 1 | -1): Panel['outline'] => [
-    a(xa + tabIn, y),
-    a(xa + tabIn + tabSlant, y + d * tabW),
-    a(xb - tabIn - tabSlant, y + d * tabW),
-    a(xb - tabIn, y),
-  ]
+  // ลิ้นมุมสี่เหลี่ยม: เต็มความสูงผนัง (ปลายนอกถึงขอบผนัง) เว้นร่องหลบ slot ฝั่งติดฐาน, ยื่นเกือบเท่าผนัง
+  const sq = !!opts.squareCorners
+  const slot = Math.max(1, t + 0.3)
+  const sqW = Math.max(6, Hp - t - 0.5) // ระยะยื่นตามผนังหน้า-หลัง (ไม่ชนลิ้นฝั่งตรงข้าม)
+  const tab = (xa: number, xb: number, y: number, d: 1 | -1): Panel['outline'] => {
+    if (sq) {
+      // ปลายนอก (ขอบผนังข้าง) = xa ฝั่งซ้าย / xb ฝั่งขวา; ร่องหลบอยู่ฝั่งติดฐาน
+      const left = xa === 0
+      const x0 = left ? xa : xa + slot
+      const x1 = left ? xb - slot : xb
+      return [a(x0, y), a(x0, y + d * sqW), a(x1, y + d * sqW), a(x1, y)]
+    }
+    return [
+      a(xa + tabIn, y),
+      a(xa + tabIn + tabSlant, y + d * tabW),
+      a(xb - tabIn - tabSlant, y + d * tabW),
+      a(xb - tabIn, y),
+    ]
+  }
   const r = (xa: number, ya: number, xb: number, yb: number) =>
     rect(ox + xa, oy + ya, ox + xb, oy + yb)
 
@@ -89,9 +104,21 @@ export function buildTrayPiece(
   const cut = (d: string): Segment => ({ kind: 'cut', d })
   const crease = (d: string): Segment => ({ kind: 'crease', d })
   const L = (x: number, y: number) => `${ox + x} ${oy + y}`
-  const tabCut = (xa: number, xb: number, y: number, d: 1 | -1) =>
-    `M ${L(xa, y)} L ${L(xa + tabIn, y)} L ${L(xa + tabIn + tabSlant, y + d * tabW)} ` +
-    `L ${L(xb - tabIn - tabSlant, y + d * tabW)} L ${L(xb - tabIn, y)} L ${L(xb, y)}`
+  const tabCut = (xa: number, xb: number, y: number, d: 1 | -1) => {
+    if (sq) {
+      const pts = tab(xa, xb, y, d).map((q) => `${q.x} ${q.y}`)
+      // ขอบผนังข้าง → รอบลิ้น → ร่องหลบกลับมาที่มุมฐาน
+      return `M ${L(xa, y)} L ${pts[0]} L ${pts[1]} L ${pts[2]} L ${pts[3]} L ${L(xb, y)}`
+    }
+    return (
+      `M ${L(xa, y)} L ${L(xa + tabIn, y)} L ${L(xa + tabIn + tabSlant, y + d * tabW)} ` +
+      `L ${L(xb - tabIn - tabSlant, y + d * tabW)} L ${L(xb - tabIn, y)} L ${L(xb, y)}`
+    )
+  }
+  const tabCrease = (xa: number, xb: number, y: number) => {
+    const o = tab(xa, xb, y, 1)
+    return crease(`M ${o[0].x} ${o[0].y} L ${o[3].x} ${o[3].y}`)
+  }
 
   const segments: Segment[] = [
     cut(`M ${L(cx0, 0)} L ${L(cx1, 0)}`),
@@ -110,10 +137,10 @@ export function buildTrayPiece(
     crease(`M ${L(cx0, by1)} L ${L(cx1, by1)}`),
     crease(`M ${L(cx0, by0)} L ${L(cx0, by1)}`),
     crease(`M ${L(cx1, by0)} L ${L(cx1, by1)}`),
-    crease(`M ${L(tabIn, by0)} L ${L(cx0 - tabIn, by0)}`),
-    crease(`M ${L(tabIn, by1)} L ${L(cx0 - tabIn, by1)}`),
-    crease(`M ${L(cx1 + tabIn, by0)} L ${L(w - tabIn, by0)}`),
-    crease(`M ${L(cx1 + tabIn, by1)} L ${L(w - tabIn, by1)}`),
+    tabCrease(0, cx0, by0),
+    tabCrease(0, cx0, by1),
+    tabCrease(cx1, w, by0),
+    tabCrease(cx1, w, by1),
   ]
 
   return { panels, segments, bbox: { x0: ox, y0: oy, x1: ox + w, y1: oy + h } }

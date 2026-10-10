@@ -134,7 +134,7 @@ export interface FoldBead {
 export function rollBeads(panels: Panel[], matrices: Map<string, Matrix4>): FoldBead[] {
   const out: FoldBead[] = []
   for (const p of panels) {
-    if (Math.abs(p.foldAngle ?? 0) !== 180 || !p.parentId || !p.hingeA || !p.hingeB) continue
+    if (Math.abs(p.foldAngle ?? 0) !== 180 || p.assemble || !p.parentId || !p.hingeA || !p.hingeB) continue
     const pm = matrices.get(p.parentId)
     const rm = matrices.get(p.id)
     if (!pm || !rm) continue
