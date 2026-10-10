@@ -17,6 +17,7 @@ const cases: [string, string, Partial<BoxParams>][] = [
   ['fefco-0215', 'corrugated-e', {}],
   ['mailer', 'corrugated-e', {}],
   ['fefco-0427', 'corrugated-e', {}],
+  ['rollover-mailer', 'corrugated-e', {}],
 ]
 
 const centroid3 = (p: Panel) => {

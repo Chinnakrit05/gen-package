@@ -6,5 +6,5 @@ import { rollEndLayout } from './fefco0427'
 // ฝาต่อจากผนังหลัง มีปีกข้างยาวเกือบเต็มฝา (มุมฝั่งลิ้นหน้ามน) พับลงด้านในชั้นทบ + ลิ้นหน้ามุมโค้งเสียบด้านในผนังหน้า
 // โครงเดียวกับ FEFCO 0427 (`rollEndLayout`) ต่างที่ปีกข้างฝาและผังวางฝาไว้บน (ไม่หมุน) — W,D,H = ขนาดด้านใน
 export function generateRolloverMailer(box: BoxParams, mat: Material): Dieline {
-  return rollEndLayout(box, mat, { lid: true, flap: 'long', front: 'over' })
+  return rollEndLayout(box, mat, { lid: true, flap: 'long', front: 'wide' })
 }
