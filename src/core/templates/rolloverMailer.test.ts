@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Vector3 } from 'three'
+import { Matrix4, type Vector3 } from 'three'
 import { computeMatrices, to3D, rollBeads } from '../fold'
 import { getTemplate } from './index'
 import { getMaterial } from '../materials'
@@ -130,9 +130,40 @@ describe('rollover-mailer: ตำแหน่งหลังพับสุด (
         const p = d.panels.find((q) => q.id === id)!
         for (const v of p.outline) {
           const w = to3D(v).applyMatrix4(Mf.get(id)!)
-          if (w.z < Hp - 0.5) expect((w.x - plane) * dir).toBeGreaterThan(sp - 0.01)
+          if (w.z < Hp - 0.5) expect((w.x - plane) * dir).toBeGreaterThan(sp - t / 2) // ช่วงกางหู ชั้นวัสดุสลับข้าง เหลื่อมได้ไม่เกินครึ่งความหนา
         }
       }
+    }
+  })
+
+  it('ตลอด animation ลิ้นและหูลิ้นไม่โผล่ทะลุผิวนอกฝา', () => {
+    for (let f = 0; f <= 1.0001; f += 0.005) {
+      const Mf = computeMatrices(d.panels, f)
+      const inv = new Matrix4().copy(Mf.get('lid')!).invert()
+      for (const id of ['lip', 'lip-ear-left', 'lip-ear-right']) {
+        const p = d.panels.find((q) => q.id === id)!
+        for (const v of p.outline) {
+          // แกน z ท้องถิ่นของฝาชี้เข้ากล่อง → ค่าติดลบ = อยู่เหนือผิวนอกฝา
+          expect(to3D(v).applyMatrix4(Mf.get(id)!).applyMatrix4(inv).z).toBeGreaterThan(-(2 * t + 0.1)) // เหลื่อมได้แค่ระดับชั้นวัสดุที่รอยพับ
+        }
+      }
+    }
+  })
+
+  it('หูลิ้นกางเข้าข้างในเป็นจังหวะสุดท้าย หลังฝาปิดสนิท', () => {
+    const lid = d.panels.find((p) => p.id === 'lid')!
+    for (const id of ['lip-ear-left', 'lip-ear-right']) {
+      const ear = d.panels.find((p) => p.id === id)!
+      expect(ear.refold!.stage).toBeGreaterThan(lid.stage)
+      expect(Math.max(...d.panels.map((p) => p.stage))).toBeLessThan(ear.refold!.stage)
+    }
+  })
+
+  it('ลิ้นล็อกชั้นทบเสมอผิวล่างฐาน ไม่โผล่ใต้กล่อง', () => {
+    for (const id of ['roll-left', 'roll-right']) {
+      const zs = pts(id).map((q) => q.z)
+      expect(Math.min(...zs)).toBeGreaterThan(-0.01)
+      expect(Math.min(...zs)).toBeLessThan(0.5)
     }
   })
 })

@@ -43,11 +43,11 @@ export function rollEndLayout(
 
   // สัน = ระยะผนังนอก → ชั้นทบ: ผนัง t + หูมุม t + ชั้นทบ t (+ช่องว่างเล็กน้อย) → รอยพับคู่บน dieline
   const sp = 3 * t + 0.2
-  // ชั้นทบยาวถึงผิวบนของฐาน (สั้นกว่าผนัง t) หดปลายบน-ล่างหลบหูมุม
-  const rollW = Math.max(6, Hp - t)
-  const rollIns = Math.max(1.5, 2 * t)
   // ลิ้นล็อกปลายชั้นทบ + ช่องเสียบบนฐานตรงแนวชั้นทบ (ห่างขอบฐาน sp − t/2)
-  const tabL = Math.max(4, Math.min(7, 0.3 * rollW))
+  const tabL = Math.max(4, Math.min(7, 0.3 * (Hp - t)))
+  // ชั้นทบสั้นกว่าผนังเท่าความยาวลิ้นล็อก → ปลายลิ้นเสมอผิวล่างฐานพอดี ไม่โผล่ใต้กล่อง; หดปลายบน-ล่างหลบหูมุม
+  const rollW = Math.max(6, Hp - tabL)
+  const rollIns = Math.max(1.5, 2 * t)
   const tabW = Math.max(12, Math.min(26, 0.2 * Dp))
   const slotL = tabW + 1.5
   const slotW = Math.max(1.5, t + 0.6)
@@ -270,15 +270,18 @@ export function rollEndLayout(
             id: 'lip', parentId: 'lid', outline: rect(lx0, 0, lx1, y1),
             hingeA: P(lx0, y1), hingeB: P(lx1, y1), foldAngle: 90, stage: 5, zOffset: layer, tuck: true,
           },
-          // หูสองปลาย: พับตั้งฉากรอไว้ (ตอนฝายังตั้ง) แล้วตามลิ้นลงไปเก็บด้านในปีกข้างฝา — อยู่ในระนาบ x
-          // ด้านในชั้นทบตลอดการปิดฝา จึงไม่ทะลุผนังข้าง; zOffset ดันเข้าในอีกชั้นให้แนบด้านในปีกข้างฝา
+          // หูสองปลาย: พับทบ 180° แนบด้านในลิ้นไว้ก่อน (ตอนฝายังตั้ง) — ลิ้นงอเกินฉากตอนไถลลงผนังหน้า
+          // ถ้าหูตั้งฉากไว้จะโผล่ทะลุฝา; ปิดฝาเสร็จแล้วค่อยกางหูกลับ 90° เข้าไปแนบด้านในปีกข้างฝา (จังหวะสุดท้าย
+          // กวาดอยู่ในตัวกล่องล้วน) — ชั้นวัสดุ: ตอนทบอยู่ด้านในลิ้น (−layer ในแกนที่พลิกแล้ว) → ตอนจบ +layer
           {
             id: 'lip-ear-left', parentId: 'lip', outline: earOutline(true),
-            hingeA: P(lx0, 0), hingeB: P(lx0, y1), foldAngle: -90, stage: 4, zOffset: layer,
+            hingeA: P(lx0, 0), hingeB: P(lx0, y1), foldAngle: -180, stage: 4, zOffset: -layer,
+            refold: { angle: 90, stage: 6, dz: 2 * layer },
           },
           {
             id: 'lip-ear-right', parentId: 'lip', outline: earOutline(false),
-            hingeA: P(lx1, 0), hingeB: P(lx1, y1), foldAngle: 90, stage: 4, zOffset: layer,
+            hingeA: P(lx1, 0), hingeB: P(lx1, y1), foldAngle: 180, stage: 4, zOffset: -layer,
+            refold: { angle: -90, stage: 6, dz: 2 * layer },
           },
         ]
       : [

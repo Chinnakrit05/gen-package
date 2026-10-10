@@ -27,6 +27,9 @@ export interface Panel {
   assemble?: boolean
   // เลื่อนต่ออีกจังหวะตามแกน z ท้องถิ่น (มม.) ในช่วง stage ที่กำหนด — เช่นฝาครอบพลิกมาวางบนขอบฐานแล้วค่อยสวมลง
   slide?: { dz: number; stage: number }
+  // พับซ้ำรอบบานพับเดิมอีกจังหวะ (มุมบวกเพิ่มจาก foldAngle) + เลื่อนชั้น dz ตามแกน z ท้องถิ่น — สำหรับแผงที่ต้อง
+  // พับแนบไว้ก่อนแล้วค่อยกางออกทีหลัง (เช่นหูลิ้นหน้า rollover: พับทบแนบลิ้นตอนเสียบ แล้วกางเข้าข้างในผนังข้างตอนจบ)
+  refold?: { angle: number; stage: number; dz?: number }
 }
 
 export interface DimMark {

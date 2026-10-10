@@ -35,6 +35,17 @@ const WINDOWS_6: [number, number][] = [
   [0.86, 1],
 ]
 
+// 7 จังหวะ (rollover mailer): ผนัง → หูมุม → ผนังข้าง → ม้วนทบ+ปีกข้างฝา → หูลิ้นพับแนบ → ฝาปิด+ลิ้นเสียบ → หูลิ้นกางเข้าใน
+const WINDOWS_7: [number, number][] = [
+  [0, 0.26],
+  [0.22, 0.38],
+  [0.34, 0.5],
+  [0.46, 0.62],
+  [0.58, 0.7],
+  [0.68, 0.9],
+  [0.9, 1],
+]
+
 function stageProgress(windows: [number, number][], stage: number, fold: number): number {
   const [s, e] = windows[Math.min(stage, windows.length - 1)]
   const u = Math.min(1, Math.max(0, (fold - s) / (e - s)))
@@ -79,8 +90,8 @@ function tuckAngle(p: Panel, lid: Panel | undefined, progress: number, lidProgre
 export function computeMatrices(panels: Panel[], fold: number): Map<string, Matrix4> {
   const byId = new Map(panels.map((p) => [p.id, p]))
   const cache = new Map<string, Matrix4>()
-  const stages = panels.reduce((m, p) => Math.max(m, p.stage, p.slide?.stage ?? 0), 0) + 1
-  const windows = stages >= 6 ? WINDOWS_6 : stages >= 5 ? WINDOWS_5 : WINDOWS_4
+  const stages = panels.reduce((m, p) => Math.max(m, p.stage, p.slide?.stage ?? 0, p.refold?.stage ?? 0), 0) + 1
+  const windows = stages >= 7 ? WINDOWS_7 : stages >= 6 ? WINDOWS_6 : stages >= 5 ? WINDOWS_5 : WINDOWS_4
 
   const get = (id: string): Matrix4 => {
     const hit = cache.get(id)
@@ -101,6 +112,7 @@ export function computeMatrices(panels: Panel[], fold: number): Map<string, Matr
         // ถ้าใช้ progress เดิม ลิ้นจะเบียดผนังหน้าเกินความหนาชั้นช่วงที่ไถลลง
         progress = Math.min(1, (theta * 180) / Math.PI / p.foldAngle)
       }
+      if (p.refold) theta += (p.refold.angle * Math.PI * stageProgress(windows, p.refold.stage, fold)) / 180
       const local = new Matrix4()
         .makeTranslation(a.x, a.y, a.z)
         .multiply(new Matrix4().makeRotationAxis(axis, theta))
@@ -111,6 +123,9 @@ export function computeMatrices(panels: Panel[], fold: number): Map<string, Matr
     // ท้องถิ่นของ panel ซึ่งหลังพับจะชี้เข้าหากองชั้นวัสดุ — กัน z-fighting
     if (p.zOffset) {
       m.multiply(new Matrix4().makeTranslation(0, 0, p.zOffset * progress))
+    }
+    if (p.refold?.dz) {
+      m.multiply(new Matrix4().makeTranslation(0, 0, p.refold.dz * stageProgress(windows, p.refold.stage, fold)))
     }
     if (p.slide) {
       m.multiply(new Matrix4().makeTranslation(0, 0, p.slide.dz * stageProgress(windows, p.slide.stage, fold)))
@@ -137,7 +152,7 @@ export interface FoldBead {
 export function rollBeads(panels: Panel[], matrices: Map<string, Matrix4>): FoldBead[] {
   const out: FoldBead[] = []
   for (const p of panels) {
-    if (Math.abs(p.foldAngle ?? 0) !== 180 || p.assemble || !p.parentId || !p.hingeA || !p.hingeB) continue
+    if (Math.abs(p.foldAngle ?? 0) !== 180 || p.assemble || p.refold || !p.parentId || !p.hingeA || !p.hingeB) continue
     const pm = matrices.get(p.parentId)
     const rm = matrices.get(p.id)
     if (!pm || !rm) continue
