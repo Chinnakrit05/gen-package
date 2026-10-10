@@ -34,17 +34,27 @@ const cx1 = Math.max(...base.outline.map((p) => p.x))
 const yF = -Math.max(...base.outline.map((p) => p.y)) // ผนังหน้า (world y)
 const yB = -Math.min(...base.outline.map((p) => p.y)) // ผนังหลัง
 
-describe('tray: โครงสร้าง dieline', () => {
-  it('ลงทะเบียนใน registry และมีแผงครบ 9 ชิ้น (ฐาน+4 ผนัง+4 ลิ้นมุม)', () => {
+describe('tray: โครงสร้าง dieline (roll end tray)', () => {
+  it('ลงทะเบียนใน registry และมีแผงครบ 13 ชิ้น (ฐาน+4 ผนัง+4 หูมุม+สัน 2+ชั้นทบ 2)', () => {
     expect(tp.id).toBe('tray')
-    expect(d.panels).toHaveLength(9)
-    expect(d.panels.filter((p) => p.id.startsWith('tab-'))).toHaveLength(4)
+    expect(d.panels).toHaveLength(13)
+    expect(d.panels.filter((p) => p.id.startsWith('ear-'))).toHaveLength(4)
+    for (const id of ['spine-left', 'spine-right', 'roll-left', 'roll-right']) {
+      expect(d.panels.some((p) => p.id === id)).toBe(true)
+    }
   })
 
-  it('outline ทุกจุด finite และเป็นถาดเปิดบน (ไม่มีฝา/ลิ้นเสียบ)', () => {
+  it('ถาดเปิดบน (ไม่มีฝา/ปีก/ลิ้นเสียบ) ผนังหน้า-หลังสูงเท่ากัน และฐานเจาะช่องล็อก 4 ช่อง', () => {
     const pts = d.panels.flatMap((p) => p.outline)
     expect(pts.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true)
-    expect(d.panels.some((p) => p.id === 'lid' || p.id === 'lip')).toBe(false)
+    expect(d.panels.some((p) => p.id === 'lid' || p.id === 'lip' || p.id.startsWith('lid-flap'))).toBe(false)
+    const h = (id: string) => {
+      const ys = d.panels.find((p) => p.id === id)!.outline.map((q) => q.y)
+      return Math.max(...ys) - Math.min(...ys)
+    }
+    expect(h('front')).toBeCloseTo(h('back'), 6)
+    expect(base.holes).toHaveLength(4)
+    expect(Math.min(...pts.map((q) => q.y))).toBeCloseTo(0, 6) // ผนังหลังชิดขอบบนแผ่น
   })
 })
 
@@ -56,8 +66,8 @@ describe('tray: ตำแหน่งหลังพับสุด (fold=1)', (
   it.each([
     ['front', yF, 'y'],
     ['back', yB, 'y'],
-    ['left', cx0, 'x'],
-    ['right', cx1, 'x'],
+    ['side-left', cx0, 'x'],
+    ['side-right', cx1, 'x'],
   ] as const)('ผนัง %s ตั้งฉากบนระนาบตัวเอง สูง ~Hp/2', (id, plane, axis) => {
     const v = world(id)
     expect(Math.abs((axis === 'x' ? v.x : v.y) - plane)).toBeLessThan(0.5)
@@ -66,24 +76,30 @@ describe('tray: ตำแหน่งหลังพับสุด (fold=1)', (
   })
 
   it.each([
-    ['tab-lb', 'y', yB],
-    ['tab-lf', 'y', yF],
-    ['tab-rb', 'y', yB],
-    ['tab-rf', 'y', yF],
-  ] as const)('ลิ้นมุม %s พับเข้าแนบผนัง (ทุกจุดอยู่ในกล่อง ไม่ทะลุ/ไม่ลอยเหนือขอบ)', (id, _axis, plane) => {
-    const pts = worldPts(id)
-    // ทุกมุมอยู่ในกรอบกล่อง x∈[cx0,cx1], y∈[yF,yB], z∈[0,Hp]
-    for (const v of pts) {
-      expect(v.x).toBeGreaterThan(cx0 - 1)
-      expect(v.x).toBeLessThan(cx1 + 1)
+    ['ear-fl', cx0, 1],
+    ['ear-bl', cx0, 1],
+    ['ear-fr', cx1, -1],
+    ['ear-br', cx1, -1],
+  ] as const)('หูมุม %s พับแนบด้านในผนังข้าง ทุกมุมอยู่ในกล่อง', (id, plane, dir) => {
+    for (const v of worldPts(id)) {
+      expect((v.x - plane) * dir).toBeGreaterThanOrEqual(-0.01)
+      expect(Math.abs(v.x - plane)).toBeLessThan(3 * t + 1)
       expect(v.y).toBeGreaterThan(yF - 1)
       expect(v.y).toBeLessThan(yB + 1)
       expect(v.z).toBeGreaterThan(-1)
       expect(v.z).toBeLessThan(Hp + 1)
     }
-    // แนบผนังหน้า/หลัง: กึ่งกลางลิ้นอยู่ใกล้ระนาบผนังนั้น (พับเข้าด้านในเล็กน้อย)
-    const c = world(id)
-    expect(Math.abs(c.y - plane)).toBeLessThan(4 * t + 1)
+  })
+
+  it.each([
+    ['roll-left', cx0, 1],
+    ['roll-right', cx1, -1],
+  ] as const)('%s ทบลงด้านในทับหูมุม พาดจากบนผนังลงถึงฐาน', (id, plane, dir) => {
+    const pts = worldPts(id)
+    expect(pts.every((v) => (v.x - plane) * dir > 0.5)).toBe(true)
+    expect(pts.every((v) => Math.abs(v.x - plane) < 4 * t + 2)).toBe(true)
+    expect(Math.max(...pts.map((v) => v.z))).toBeGreaterThan(Hp * 0.85)
+    expect(Math.min(...pts.map((v) => v.z))).toBeLessThan(2)
   })
 })
 

@@ -15,6 +15,13 @@ import { placePath, placePoint } from '../stickerSheet'
 //   คอลัมน์: [ลิ้น|ชั้นทบ|สัน|ผนังข้าง|  ฐาน  |ผนังข้าง|สัน|ชั้นทบ|ลิ้น]
 //   แถว:     ลิ้นฝา / ฝา(+ปีกข้าง) / ผนังหลัง(+หู) / ฐาน / ผนังหน้า(+หู)
 export function fefco0427Layout(box: BoxParams, mat: Material): Dieline {
+  return rollEndLayout(box, mat, { lid: true })
+}
+
+// โครงถาดผนังทบ (roll end) ชุดเดียวกับ 0427 — lid=false = ถาดเปิดบน (กล่องถาด): ไม่มีฝา/ปีก/ลิ้นหน้า
+// ผนังหน้า-หลังสูงเท่ากัน ขอบบนผนังหลังตัดตรงเต็มกว้าง
+export function rollEndLayout(box: BoxParams, mat: Material, opts: { lid?: boolean } = {}): Dieline {
+  const lid = opts.lid !== false
   const { W, D, H } = box
   const t = mat.thickness
 
@@ -39,7 +46,7 @@ export function fefco0427Layout(box: BoxParams, mat: Material): Dieline {
   const earIns = Math.max(1.5, t + 0.5)
   const topIns = Math.max(1.5, 2 * t)
   // ผนังหน้าเตี้ยกว่า t: ฝาวางบนขอบ แล้วลิ้นหน้าเสียบด้านใน
-  const Hf = Hp - t
+  const Hf = lid ? Hp - t : Hp
   // ฝา: แคบกว่ากล่องข้างละ sp (ลงระหว่างสันผนังข้าง) + ปีกข้างลึกเกือบเท่าผนัง
   const lx0Off = sp
   const flapH = Math.max(8, Hp - 2 * t)
@@ -61,8 +68,8 @@ export function fefco0427Layout(box: BoxParams, mat: Material): Dieline {
   const lx0 = cx0 + lx0Off
   const lx1 = cx1 - lx0Off
   // แกน y
-  const y1 = lipH
-  const y2 = y1 + Dp
+  const y1 = lid ? lipH : 0
+  const y2 = lid ? y1 + Dp : 0
   const y3 = y2 + Hp
   const y4 = y3 + Dp
   const y5 = y4 + Hf
@@ -217,22 +224,26 @@ export function fefco0427Layout(box: BoxParams, mat: Material): Dieline {
       id: 'lip', parentId: 'lid', outline: lipOutline,
       hingeA: P(la, y1), hingeB: P(lb, y1), foldAngle: 90, stage: 5, zOffset: layer, tuck: true,
     },
-  ]
+  ].filter((p) => lid || !(p.id === 'lid' || p.id === 'lip' || p.id.startsWith('lid-flap')))
 
   const cut = (d: string): Segment => ({ kind: 'cut', d })
   const crease = (d: string): Segment => ({ kind: 'crease', d })
 
   const segments: Segment[] = [
-    // ลิ้นหน้าฝา (มุมโค้งใหญ่)
-    cut(`M ${la} ${y1} L ${la} ${r} Q ${la} 0 ${la + r} 0 L ${lb - r} 0 Q ${lb} 0 ${lb} ${r} L ${lb} ${y1}`),
-    cut(`M ${lx0} ${y1} L ${la} ${y1}`),
-    cut(`M ${lb} ${y1} L ${lx1} ${y1}`),
-    // ปีกข้างฝา
-    cut(flapCut(lx0, -1)),
-    cut(flapCut(lx1, 1)),
-    // ขอบบนผนังหลังนอกช่วงฝา (ฝาแคบกว่ากล่อง)
-    cut(`M ${cx0} ${y2} L ${lx0} ${y2}`),
-    cut(`M ${lx1} ${y2} L ${cx1} ${y2}`),
+    ...(lid
+      ? [
+          // ลิ้นหน้าฝา (มุมโค้งใหญ่)
+          cut(`M ${la} ${y1} L ${la} ${r} Q ${la} 0 ${la + r} 0 L ${lb - r} 0 Q ${lb} 0 ${lb} ${r} L ${lb} ${y1}`),
+          cut(`M ${lx0} ${y1} L ${la} ${y1}`),
+          cut(`M ${lb} ${y1} L ${lx1} ${y1}`),
+          // ปีกข้างฝา
+          cut(flapCut(lx0, -1)),
+          cut(flapCut(lx1, 1)),
+          // ขอบบนผนังหลังนอกช่วงฝา (ฝาแคบกว่ากล่อง)
+          cut(`M ${cx0} ${y2} L ${lx0} ${y2}`),
+          cut(`M ${lx1} ${y2} L ${cx1} ${y2}`),
+        ]
+      : [cut(`M ${cx0} ${y2} L ${cx1} ${y2}`)]), // ถาดเปิดบน: ขอบบนผนังหลังตรงเต็มกว้าง
     // หูมุมผนังหลัง + รอยตัดช่วงหด
     cut(`M ${cx0} ${y2} L ${cx0} ${y2 + topIns}`),
     cut(earCut(cx0, -1, y3, y2)),
@@ -258,10 +269,14 @@ export function fefco0427Layout(box: BoxParams, mat: Material): Dieline {
     // ช่องเสียบลิ้นบนฐาน
     ...slotCs.map(([x, y]) => cut(obroundPath(x, y, slotL, slotW, true))),
     // รอยพับ
-    crease(`M ${la} ${y1} L ${lb} ${y1}`), // ลิ้นหน้า|ฝา
-    crease(`M ${lx0} ${y1 + flapIn} L ${lx0} ${y2 - flapIn}`), // ปีกข้างฝา
-    crease(`M ${lx1} ${y1 + flapIn} L ${lx1} ${y2 - flapIn}`),
-    crease(`M ${lx0} ${y2} L ${lx1} ${y2}`), // ฝา|ผนังหลัง
+    ...(lid
+      ? [
+          crease(`M ${la} ${y1} L ${lb} ${y1}`), // ลิ้นหน้า|ฝา
+          crease(`M ${lx0} ${y1 + flapIn} L ${lx0} ${y2 - flapIn}`), // ปีกข้างฝา
+          crease(`M ${lx1} ${y1 + flapIn} L ${lx1} ${y2 - flapIn}`),
+          crease(`M ${lx0} ${y2} L ${lx1} ${y2}`), // ฝา|ผนังหลัง
+        ]
+      : []),
     crease(`M ${cx0} ${y3} L ${cx1} ${y3}`), // ผนังหลัง|ฐาน
     crease(`M ${cx0} ${y4} L ${cx1} ${y4}`), // ฐาน|ผนังหน้า
     crease(`M ${cx0} ${y3} L ${cx0} ${y4}`), // ฐาน|ผนังซ้าย

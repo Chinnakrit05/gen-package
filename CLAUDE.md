@@ -24,7 +24,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `src/core/materials.ts` — material registry: ความหนา t, foldable, สี — วัสดุกำหนดระยะเผื่อใน dieline ไม่ใช่แค่หน้าตา
 - `src/core/templates/index.ts` — template registry (BoxTemplate: defaults, tilt, supportsHandle, foldDepth, generate) — เพิ่มแบบกล่องใหม่ที่นี่
 - feature รูหิ้ว: `Panel.holes` (polygon rings → THREE.Shape.holes) + `obroundPts/obroundPath` ใน shared.ts; เพิ่ม feature ใหม่ต้องอัปเดต "ความสามารถของระบบ" ใน system prompt ของ server/boxSpec.ts ด้วย ไม่งั้น AI จะอ้างว่าทำได้ทั้งที่ engine ไม่มี
-- `src/core/templates/tuckEnd.ts` / `mailer.ts` / `sleeve.ts` / `bottleCarrier.ts` / `tray.ts` / `gable.ts` — generators: รับ W/D/H "ด้านใน" แปลงเป็นระยะ score +2t ต่อแกน, ระยะหลบ flap สเกลตาม t, ผลิตทั้ง segments (SVG มี Q curve) และ panels (3D, polygonized) จาก geometry เดียวกัน; mailer/tray/gable ใช้ tilt หมุนโมเดลให้ฐานลงพื้นตามจังหวะพับ (tray = ถาดเปิดบน ผนัง 4 ด้าน + ลิ้นมุมพับเข้าล็อก เหมือน mailer แต่ไม่มีฝา; gable = ต่อยอดจาก tray โดยเพิ่มแผงจั่วบนผนังหน้า-หลังที่ foldAngle=±lean เอียงมาชนกันที่สัน เกิดหลังคา+หูหิ้วในตัว, lean=asin(Dp/2G) — foldAngle 0 ของแผงลูก = ต่อดิ่งจากผนัง ไม่ใช่ 90)
+- `src/core/templates/tuckEnd.ts` / `mailer.ts` / `sleeve.ts` / `bottleCarrier.ts` / `tray.ts` / `gable.ts` — generators: รับ W/D/H "ด้านใน" แปลงเป็นระยะ score +2t ต่อแกน, ระยะหลบ flap สเกลตาม t, ผลิตทั้ง segments (SVG มี Q curve) และ panels (3D, polygonized) จาก geometry เดียวกัน; mailer/tray/gable ใช้ tilt หมุนโมเดลให้ฐานลงพื้นตามจังหวะพับ (tray = ถาดเปิดบนผนังทบ roll end — `rollEndLayout(…, { lid: false })` โครงเดียวกับ FEFCO 0427 ไม่มีฝา; gable = ต่อยอดจาก tray โดยเพิ่มแผงจั่วบนผนังหน้า-หลังที่ foldAngle=±lean เอียงมาชนกันที่สัน เกิดหลังคา+หูหิ้วในตัว, lean=asin(Dp/2G) — foldAngle 0 ของแผงลูก = ต่อดิ่งจากผนัง ไม่ใช่ 90)
 - `src/core/fold.ts` — fold engine: panel หมุนรอบ crease ในพิกัดแผ่นคลี่ คูณ matrix แม่เป็นลูกโซ่; ด้านในกล่อง = +z; stage 0-3 (ลำตัว→ลิ้นกันฝุ่น→ฝาเสียบ→ลิ้น); zOffset ดันชั้นวัสดุที่ซ้อนกันกัน z-fighting
 - `src/components/Viewer3D.tsx` — R3F viewer + FitCamera (วัดจากส่วนแผ่นที่ยื่นไกลสุดจากแผงหน้า ไม่ใช่ครึ่งแผ่น)
 - `src/components/DielineSVG.tsx` — blueprint preview + เส้นบอกขนาด (toggle ได้) + ลาก/หมุน/ลบ artwork; การลากมี snap; ซูม/แพน (Ctrl+ล้อ), กริด, ไม้บรรทัด, เส้นไกด์ลากเอง (state ใน component; guideLines ≠ prop `guides` ที่เป็น bleed/safe); เส้นไกด์เข้า snapTargets ตอนลาก
@@ -141,7 +141,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ธรรมดา (ฝาปิดก่อนแล้วค่อยพับลิ้น 90°) ปลายลิ้นจะกวาดทะลุผนังหน้า ~ความยาวลิ้น. template ใหม่ที่มีฝา+ลิ้น
   ให้ตั้ง tuck แล้วเพิ่มเคสใน `src/core/tuck.test.ts`
 - ลำดับ stage ต้องเป็นแบบพับจริง: แผงที่จบลง "ใน" ผนังอื่น (ลิ้นกันฝุ่น/ลิ้นมุม/หูมุม) ต้องพับเสร็จก่อนผนังนั้นตั้ง
-  (เช่น mailer/tray/trayPiece: ผนังข้าง 0 → ลิ้นมุม 1 → ผนังหน้า-หลัง 2) และ zOffset: พับก่อน = ลึกกว่า (ค่ามากกว่า)
+  (เช่น mailer/trayPiece: ผนังข้าง 0 → ลิ้นมุม 1 → ผนังหน้า-หลัง 2; tray/0427: ผนังหน้า-หลัง 0 → หูมุม 1 → ผนังข้าง 2 → ทบ 3) และ zOffset: พับก่อน = ลึกกว่า (ค่ามากกว่า)
   ไม่งั้นลิ้นกวาดอยู่นอกผนังที่ตั้งแล้วทะลุเข้าไปตอนท้าย — `src/core/foldOrder.test.ts` ไล่ตรวจทุก template อัตโนมัติ
 - FEFCO 0217 (กล่องหูหิ้วทรงจั่ว): ฝาหน้า-หลังพับแบนที่ปาก หูหิ้วสองชั้นตั้งกลาง แล้วหน้าจั่วเอนเข้า (stage สุดท้าย)
   ให้หูมนที่ปลายหูหิ้วโผล่ทะลุร่องหน้าจั่ว — ขอบร่องบากฝั่งแผงหูหิ้วเอียงตามมุมเอนของหน้าจั่ว;
