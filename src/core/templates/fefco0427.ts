@@ -20,8 +20,14 @@ export function fefco0427Layout(box: BoxParams, mat: Material): Dieline {
 
 // โครงถาดผนังทบ (roll end) ชุดเดียวกับ 0427 — lid=false = ถาดเปิดบน (กล่องถาด): ไม่มีฝา/ปีก/ลิ้นหน้า
 // ผนังหน้า-หลังสูงเท่ากัน ขอบบนผนังหลังตัดตรงเต็มกว้าง
-export function rollEndLayout(box: BoxParams, mat: Material, opts: { lid?: boolean } = {}): Dieline {
+// flap: 'taper' = ปีกข้างฝาคางหมู (FEFCO 0427) / 'long' = ปีกยาวเกือบเต็มฝา มุมฝั่งลิ้นหน้ามน ฝั่งบานพับเฉียง (rollover mailer)
+export function rollEndLayout(
+  box: BoxParams,
+  mat: Material,
+  opts: { lid?: boolean; flap?: 'taper' | 'long' } = {},
+): Dieline {
   const lid = opts.lid !== false
+  const longFlap = opts.flap === 'long'
   const { W, D, H } = box
   const t = mat.thickness
 
@@ -50,7 +56,8 @@ export function rollEndLayout(box: BoxParams, mat: Material, opts: { lid?: boole
   // ฝา: แคบกว่ากล่องข้างละ sp (ลงระหว่างสันผนังข้าง) + ปีกข้างลึกเกือบเท่าผนัง
   const lx0Off = sp
   const flapH = Math.max(8, Hp - 2 * t)
-  const flapIn = 1
+  // ปีกยาวหดปลายเท่าความหนาผนังหน้า-หลัง (ห้อยลงในกล่องระหว่างผนังหน้า-หลังพอดี)
+  const flapIn = longFlap ? t + 0.5 : 1
   // ลิ้นหน้าฝา: ลึกเกือบเท่าผนังหน้า มุมนอกโค้งใหญ่
   const tuckIn = Math.max(1, t + 0.5)
   const lipH = Math.max(10, Math.min(Hf - t, 0.8 * Dp))
@@ -111,13 +118,34 @@ export function rollEndLayout(box: BoxParams, mat: Material, opts: { lid?: boole
   // ปีกข้างฝา: คางหมูปลายลาด มุมนอกมน — hx = รอยพับ, dir = ทิศยื่น
   const cham = Math.min(flapH * 0.35, Dp * 0.2)
   const fr = Math.min(4, cham * 0.6)
-  const flapPts = (hx: number, dir: 1 | -1): Vec2[] => {
+  // มุมนอกมน: ปัดด้วยจุดบนโค้งกำลังสอง (ตรงกับ Q ใน path)
+  const q = (p0: Vec2, c: Vec2, p1: Vec2) =>
+    [0.25, 0.5, 0.75].map((s) => P((1 - s) ** 2 * p0.x + 2 * (1 - s) * s * c.x + s * s * p1.x, (1 - s) ** 2 * p0.y + 2 * (1 - s) * s * c.y + s * s * p1.y))
+  // ปีกยาว: มุมฝั่งลิ้นหน้ามนใหญ่ (lr) ฝั่งบานพับเฉียงเล็ก (lc) หลบผนังหลังตอนพับ
+  const lr = Math.min(flapH * 0.6, Dp * 0.15)
+  const lc = Math.min(flapH * 0.3, 6)
+  const longPts = (hx: number, dir: 1 | -1): Vec2[] => {
     const xo = hx + dir * flapH
     const ya = y1 + flapIn
     const yb = y2 - flapIn
-    // มุมนอกมน: ปัดด้วยจุดบนโค้งกำลังสอง (ตรงกับ Q ใน path)
-    const q = (p0: Vec2, c: Vec2, p1: Vec2) =>
-      [0.25, 0.5, 0.75].map((s) => P((1 - s) ** 2 * p0.x + 2 * (1 - s) * s * c.x + s * s * p1.x, (1 - s) ** 2 * p0.y + 2 * (1 - s) * s * c.y + s * s * p1.y))
+    const a = P(hx + dir * (flapH - lr), ya)
+    const b = P(xo, ya + lr)
+    return [P(hx, ya), a, ...q(a, P(xo, ya), b), b, P(xo, yb - lc), P(hx + dir * (flapH - lc), yb), P(hx, yb)]
+  }
+  const longCut = (hx: number, dir: 1 | -1) => {
+    const xo = hx + dir * flapH
+    const ya = y1 + flapIn
+    const yb = y2 - flapIn
+    return (
+      `M ${hx} ${y1} L ${hx} ${ya} L ${hx + dir * (flapH - lr)} ${ya} Q ${xo} ${ya} ${xo} ${ya + lr} ` +
+      `L ${xo} ${yb - lc} L ${hx + dir * (flapH - lc)} ${yb} L ${hx} ${yb} L ${hx} ${y2}`
+    )
+  }
+  const flapPts = (hx: number, dir: 1 | -1): Vec2[] => {
+    if (longFlap) return longPts(hx, dir)
+    const xo = hx + dir * flapH
+    const ya = y1 + flapIn
+    const yb = y2 - flapIn
     const c1 = P(xo, ya + cham)
     const c2 = P(xo, yb - cham)
     const a1 = P(hx + dir * (flapH - fr), ya + cham * (1 - fr / flapH))
@@ -127,6 +155,7 @@ export function rollEndLayout(box: BoxParams, mat: Material, opts: { lid?: boole
     return [P(hx, ya), a1, ...q(a1, c1, b1), b1, a2, ...q(a2, c2, b2), b2, P(hx, yb)]
   }
   const flapCut = (hx: number, dir: 1 | -1) => {
+    if (longFlap) return longCut(hx, dir)
     const xo = hx + dir * flapH
     const ya = y1 + flapIn
     const yb = y2 - flapIn
