@@ -24,10 +24,15 @@ export function fefco0427Layout(box: BoxParams, mat: Material): Dieline {
 export function rollEndLayout(
   box: BoxParams,
   mat: Material,
-  opts: { lid?: boolean; flap?: 'taper' | 'long' } = {},
+  opts: { lid?: boolean; flap?: 'taper' | 'long'; front?: 'tuck' | 'over' } = {},
 ): Dieline {
   const lid = opts.lid !== false
   const longFlap = opts.flap === 'long'
+  // front: 'tuck' = ลิ้นหน้าเสียบด้านในผนังหน้า (0427) / 'over' = แผงหน้าฝาคลุมด้านนอกผนังหน้า กว้างเต็มแผ่น
+  // หูสองปลายพับอ้อมมุมไปแนบด้านนอกผนังข้าง (rollover mailer)
+  const over = lid && opts.front === 'over'
+  // แผงหน้าคลุมนอก: ปีกข้างฝาพับก่อน (3) แล้วแผงหน้า+หูค่อยพับอ้อมมุมด้านนอก (4) — ไม่กวาดผ่านกันที่มุม
+  const flapStage = over ? 3 : 4
   const { W, D, H } = box
   const t = mat.thickness
 
@@ -60,7 +65,7 @@ export function rollEndLayout(
   const flapIn = longFlap ? t + 0.5 : 1
   // ลิ้นหน้าฝา: ลึกเกือบเท่าผนังหน้า มุมนอกโค้งใหญ่
   const tuckIn = Math.max(1, t + 0.5)
-  const lipH = Math.max(10, Math.min(Hf - t, 0.8 * Dp))
+  const lipH = over ? Math.max(10, 0.9 * Hf) : Math.max(10, Math.min(Hf - t, 0.8 * Dp))
 
   // แกน x
   const xr0 = tabL // ขอบอิสระชั้นทบซ้าย (ลิ้นยื่นไปถึง x=0)
@@ -176,6 +181,15 @@ export function rollEndLayout(
     P(lb, y1),
   ]
 
+  // แผงหน้าคลุมนอก (over): กลาง = กว้างกล่อง [cx0,cx1] บานพับตามขอบหน้าฝา; หูสองปลายเลยมุมกล่องถึงแนวนอกปีกข้างฝา
+  const ex0 = lx0 - flapH
+  const ex1 = lx1 + flapH
+  const er = Math.min(lipH * 0.6, (cx0 - ex0) * 0.9)
+  const earOutline = (left: boolean): Vec2[] =>
+    left
+      ? [P(cx0, y1), P(cx0, 0), P(ex0 + er, 0), ...arcPts(ex0 + er, er, er, Math.PI * 1.5, Math.PI, 4), P(ex0, er), P(ex0, y1)]
+      : [P(cx1, y1), P(ex1, y1), P(ex1, er), ...arcPts(ex1 - er, er, er, 0, -Math.PI / 2, 4), P(ex1 - er, 0), P(cx1, 0)]
+
   const slotCs: [number, number][] = [
     [cx0 + slotOff, yc1],
     [cx0 + slotOff, yc2],
@@ -243,17 +257,37 @@ export function rollEndLayout(
     },
     {
       id: 'lid-flap-left', parentId: 'lid', outline: flapPts(lx0, -1),
-      hingeA: P(lx0, y1 + flapIn), hingeB: P(lx0, y2 - flapIn), foldAngle: -90, stage: 4,
+      hingeA: P(lx0, y1 + flapIn), hingeB: P(lx0, y2 - flapIn), foldAngle: -90, stage: flapStage,
     },
     {
       id: 'lid-flap-right', parentId: 'lid', outline: flapPts(lx1, 1),
-      hingeA: P(lx1, y1 + flapIn), hingeB: P(lx1, y2 - flapIn), foldAngle: 90, stage: 4,
+      hingeA: P(lx1, y1 + flapIn), hingeB: P(lx1, y2 - flapIn), foldAngle: 90, stage: flapStage,
     },
-    {
-      id: 'lip', parentId: 'lid', outline: lipOutline,
-      hingeA: P(la, y1), hingeB: P(lb, y1), foldAngle: 90, stage: 5, zOffset: layer, tuck: true,
-    },
-  ].filter((p) => lid || !(p.id === 'lid' || p.id === 'lip' || p.id.startsWith('lid-flap')))
+    ...(over
+      ? [
+          // แผงหน้าคลุมนอก: พับงอรอไว้ก่อนฝาปิด (stage 4) — ฝาลงมาแล้วแผงหน้าคลุมด้านนอกผนังหน้าพอดี
+          // zOffset ติดลบ = ออกนอกผนัง (แกน z ท้องถิ่นชี้เข้ากล่องหลังพับ)
+          {
+            id: 'lip', parentId: 'lid', outline: rect(cx0, 0, cx1, y1),
+            hingeA: P(lx0, y1), hingeB: P(lx1, y1), foldAngle: 90, stage: 4, zOffset: -layer,
+          },
+          // หูสองปลาย: อ้อมมุมไปแนบด้านนอกผนังข้าง (อยู่ในระนาบผนังข้างตลอดการปิดฝา จึงไม่ทะลุ)
+          {
+            id: 'lip-ear-left', parentId: 'lip', outline: earOutline(true),
+            hingeA: P(cx0, 0), hingeB: P(cx0, y1), foldAngle: -90, stage: 4, zOffset: -layer,
+          },
+          {
+            id: 'lip-ear-right', parentId: 'lip', outline: earOutline(false),
+            hingeA: P(cx1, 0), hingeB: P(cx1, y1), foldAngle: 90, stage: 4, zOffset: -layer,
+          },
+        ]
+      : [
+          {
+            id: 'lip', parentId: 'lid', outline: lipOutline,
+            hingeA: P(la, y1), hingeB: P(lb, y1), foldAngle: 90, stage: 5, zOffset: layer, tuck: true,
+          },
+        ]),
+  ].filter((p) => lid || !(p.id === 'lid' || p.id.startsWith('lip') || p.id.startsWith('lid-flap')))
 
   const cut = (d: string): Segment => ({ kind: 'cut', d })
   const crease = (d: string): Segment => ({ kind: 'crease', d })
@@ -261,10 +295,21 @@ export function rollEndLayout(
   const segments: Segment[] = [
     ...(lid
       ? [
-          // ลิ้นหน้าฝา (มุมโค้งใหญ่)
-          cut(`M ${la} ${y1} L ${la} ${r} Q ${la} 0 ${la + r} 0 L ${lb - r} 0 Q ${lb} 0 ${lb} ${r} L ${lb} ${y1}`),
-          cut(`M ${lx0} ${y1} L ${la} ${y1}`),
-          cut(`M ${lb} ${y1} L ${lx1} ${y1}`),
+          ...(over
+            ? [
+                // แผงหน้าคลุมนอก + หูมุมมน: ขอบนอก แล้วแยกจากปีกข้างฝาตามแนวขอบหน้าฝา
+                cut(
+                  `M ${ex0} ${y1} L ${ex0} ${er} Q ${ex0} 0 ${ex0 + er} 0 L ${ex1 - er} 0 Q ${ex1} 0 ${ex1} ${er} L ${ex1} ${y1}`,
+                ),
+                cut(`M ${ex0} ${y1} L ${lx0} ${y1}`),
+                cut(`M ${lx1} ${y1} L ${ex1} ${y1}`),
+              ]
+            : [
+                // ลิ้นหน้าฝา (มุมโค้งใหญ่)
+                cut(`M ${la} ${y1} L ${la} ${r} Q ${la} 0 ${la + r} 0 L ${lb - r} 0 Q ${lb} 0 ${lb} ${r} L ${lb} ${y1}`),
+                cut(`M ${lx0} ${y1} L ${la} ${y1}`),
+                cut(`M ${lb} ${y1} L ${lx1} ${y1}`),
+              ]),
           // ปีกข้างฝา
           cut(flapCut(lx0, -1)),
           cut(flapCut(lx1, 1)),
@@ -300,7 +345,13 @@ export function rollEndLayout(
     // รอยพับ
     ...(lid
       ? [
-          crease(`M ${la} ${y1} L ${lb} ${y1}`), // ลิ้นหน้า|ฝา
+          ...(over
+            ? [
+                crease(`M ${lx0} ${y1} L ${lx1} ${y1}`), // แผงหน้า|ฝา
+                crease(`M ${cx0} 0 L ${cx0} ${y1}`), // หูซ้าย
+                crease(`M ${cx1} 0 L ${cx1} ${y1}`), // หูขวา
+              ]
+            : [crease(`M ${la} ${y1} L ${lb} ${y1}`)]), // ลิ้นหน้า|ฝา
           crease(`M ${lx0} ${y1 + flapIn} L ${lx0} ${y2 - flapIn}`), // ปีกข้างฝา
           crease(`M ${lx1} ${y1 + flapIn} L ${lx1} ${y2 - flapIn}`),
           crease(`M ${lx0} ${y2} L ${lx1} ${y2}`), // ฝา|ผนังหลัง

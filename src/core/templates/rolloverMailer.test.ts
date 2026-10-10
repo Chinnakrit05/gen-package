@@ -29,13 +29,22 @@ const yF = -Math.max(...base.outline.map((p) => p.y))
 const yB = -Math.min(...base.outline.map((p) => p.y))
 
 describe('rollover-mailer: โครงสร้าง dieline', () => {
-  it('ลงทะเบียน + แผงครบ 17 ชิ้น (หูมุม 4, สัน+ชั้นทบ 4, ฝา+ปีกข้าง 2+ลิ้นหน้า)', () => {
+  it('ลงทะเบียน + แผงครบ 19 ชิ้น (หูมุม 4, สัน+ชั้นทบ 4, ฝา+ปีกข้าง 2+แผงหน้าคลุม+หูแผงหน้า 2)', () => {
     expect(tp.id).toBe('rollover-mailer')
-    expect(d.panels).toHaveLength(17)
-    for (const id of ['ear-fl', 'ear-br', 'spine-left', 'roll-right', 'lid', 'lid-flap-left', 'lid-flap-right', 'lip']) {
+    expect(d.panels).toHaveLength(19)
+    for (const id of ['ear-fl', 'ear-br', 'spine-left', 'roll-right', 'lid', 'lid-flap-left', 'lid-flap-right', 'lip', 'lip-ear-left', 'lip-ear-right']) {
       expect(d.panels.some((p) => p.id === id)).toBe(true)
     }
     expect(base.holes).toHaveLength(4) // ช่องล็อกลิ้นชั้นทบ
+  })
+
+  it('แผงหน้าฝากว้างเต็มแผ่น (คลุมแนวปีกข้างฝา) มีรอยพับหูที่มุมกล่อง', () => {
+    const xsOf = (id: string) => d.panels.find((p) => p.id === id)!.outline.map((q) => q.x)
+    const flapX = [...xsOf('lid-flap-left'), ...xsOf('lid-flap-right')]
+    const frontX = [...xsOf('lip'), ...xsOf('lip-ear-left'), ...xsOf('lip-ear-right')]
+    expect(Math.min(...frontX)).toBeCloseTo(Math.min(...flapX), 6)
+    expect(Math.max(...frontX)).toBeCloseTo(Math.max(...flapX), 6)
+    expect(d.panels.find((p) => p.id === 'lip')!.tuck).toBeFalsy()
   })
 
   it('ผังวางฝาไว้บน (ไม่หมุน) และปีกข้างฝายาวเกือบเต็มฝา', () => {
@@ -87,10 +96,46 @@ describe('rollover-mailer: ตำแหน่งหลังพับสุด (
     }
   })
 
-  it('ลิ้นหน้าเสียบด้านในผนังหน้า', () => {
-    for (const q of pts('lip')) {
-      expect(q.y).toBeGreaterThanOrEqual(yF - 0.01)
-      expect(q.y).toBeLessThan(yF + 4 * t + 2)
+  it('แผงหน้าฝาคลุมด้านนอกผนังหน้า กว้างเต็มกล่อง สูงเกือบเท่าผนัง', () => {
+    const v = pts('lip')
+    for (const q of v) {
+      expect(q.y).toBeLessThanOrEqual(yF + 0.01) // นอกผนังหน้า
+      expect(q.y).toBeGreaterThan(yF - 2 * t - 1)
+    }
+    const xs = v.map((q) => q.x)
+    expect(Math.min(...xs)).toBeCloseTo(cx0, 3)
+    expect(Math.max(...xs)).toBeCloseTo(cx1, 3)
+    const zs = v.map((q) => q.z)
+    expect(Math.max(...zs)).toBeGreaterThan(Hp - 1)
+    expect(Math.min(...zs)).toBeGreaterThan(0) // ไม่ถึงพื้น (เห็นผนังหน้าใต้แผง)
+    expect(Math.min(...zs)).toBeLessThan(Hp * 0.25)
+  })
+
+  it.each([
+    ['lip-ear-left', cx0, -1],
+    ['lip-ear-right', cx1, 1],
+  ] as const)('%s อ้อมมุมไปแนบด้านนอกผนังข้าง ช่วงหน้ากล่อง', (id, plane, dir) => {
+    for (const q of pts(id)) {
+      expect((q.x - plane) * dir).toBeGreaterThanOrEqual(-0.01) // นอกผนังข้าง
+      expect(Math.abs(q.x - plane)).toBeLessThan(2 * t + 1)
+      expect(q.y).toBeGreaterThan(yF - 2 * t - 1) // เริ่มจากมุมนอก (แผงหน้าอยู่นอกผนังหน้า)
+      expect(q.y).toBeLessThan(yB)
+      expect(q.z).toBeGreaterThan(0)
+      expect(q.z).toBeLessThan(Hp + 0.5)
+    }
+  })
+
+  it('ตลอดการปิดฝา แผงหน้าและหูไม่เข้าไปในตัวกล่อง (ไม่ทะลุผนัง)', () => {
+    for (let f = 0; f <= 1.0001; f += 0.005) {
+      const Mf = computeMatrices(d.panels, f)
+      for (const id of ['lip', 'lip-ear-left', 'lip-ear-right']) {
+        const p = d.panels.find((q) => q.id === id)!
+        for (const v of p.outline) {
+          const w = to3D(v).applyMatrix4(Mf.get(id)!)
+          const inside = w.x > cx0 + 0.5 && w.x < cx1 - 0.5 && w.y > yF + 0.5 && w.y < yB - 0.5 && w.z > 0.5 && w.z < Hp - 0.5
+          expect(inside).toBe(false)
+        }
+      }
     }
   })
 })

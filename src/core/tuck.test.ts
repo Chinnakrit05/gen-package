@@ -16,7 +16,6 @@ const cases: [string, string, Partial<BoxParams>][] = [
   ['tuck-end', 'corrugated-e', { W: 40, D: 30, H: 120 }], // กล่องผอม ลิ้นยาวเทียบฝา
   ['fefco-0215', 'corrugated-e', {}],
   ['mailer', 'corrugated-e', {}],
-  ['rollover-mailer', 'corrugated-e', {}],
   ['fefco-0427', 'corrugated-e', {}],
 ]
 
