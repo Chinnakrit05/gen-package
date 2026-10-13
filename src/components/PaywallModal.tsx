@@ -9,7 +9,7 @@ import { ApiClientError } from '../services/api/client'
 // server ใน development/test มีปุ่มจำลองการชำระ → ผู้เรียกรีเฟรชสิทธิ์แล้วทำ action ที่ค้าง (ดาวน์โหลด) ต่อ
 
 // ราคาสำรองเมื่อโหลด entitlements ไม่ได้ (แสดงผลเท่านั้น — server เป็นผู้คิดราคาจริงตอนสั่งซื้อ)
-const FALLBACK_AMOUNT_MINOR: Record<OrderKind, number> = { design: 14900, pro: 39900 }
+export const FALLBACK_AMOUNT_MINOR: Record<OrderKind, number> = { design: 14900, pro: 39900 }
 
 export function formatBaht(amountMinor: number): string {
   return new Intl.NumberFormat('th-TH', {
@@ -31,6 +31,8 @@ export interface PaywallModalProps {
   onAlreadyLicensed?(): void
   // order ที่มีอยู่แล้ว (เปิดต่อจากรอบก่อน/เทสต์) — เริ่มที่หน้าสถานะรอชำระ
   order?: Order | null
+  // ลิงก์ "เปรียบเทียบแพ็กเกจทั้งหมด" → หน้าแพ็กเกจ (ไม่ส่ง = ไม่แสดง เช่นเปิดมาจากหน้าแพ็กเกจเอง)
+  onShowPlans?(): void
 }
 
 export function PaywallModal({
@@ -43,6 +45,7 @@ export function PaywallModal({
   onDevFulfil,
   onAlreadyLicensed,
   order: initialOrder = null,
+  onShowPlans,
 }: PaywallModalProps) {
   const t = useT()
   const [kind, setKind] = useState<OrderKind>(initialKind)
@@ -158,6 +161,14 @@ export function PaywallModal({
             <button type="button" className="link-btn" disabled={locked} onClick={() => setKind(otherKind)}>
               {kind === 'design' ? t('ดู Pro', 'See Pro') : t('ซื้อรายแบบ', 'Buy per design')}
             </button>
+            {onShowPlans && (
+              <>
+                {' · '}
+                <button type="button" className="link-btn" disabled={locked} onClick={onShowPlans}>
+                  {t('เปรียบเทียบแพ็กเกจทั้งหมด', 'Compare all plans')}
+                </button>
+              </>
+            )}
           </p>
         )}
         {order && (

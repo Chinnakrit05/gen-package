@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client'
 import type { BillingCatalog, Entitlements, Order, OrderKind } from '../../shared/contracts/billing'
 import type { ProjectSummary } from '../../shared/contracts/projects'
 import App, { type CloudProjectBridge, type ProjectStoreSnapshot } from '../../src/App'
+import { PricingPage } from '../../src/components/PricingPage'
 import type { AiBoxSpec } from '../../src/core/ai'
 import { freshProject, type Project } from '../../src/core/project'
 import { ApiClientError } from '../../src/services/api/client'
@@ -194,6 +195,8 @@ function buildBridge(state: FakeState, bump: () => void): CloudProjectBridge {
 
 function Fixture() {
   const [scenario, setScenario] = useState<Scenario>('free')
+  // หน้าแพ็กเกจแบบผู้เยี่ยมชม (ที่หน้าเข้าสู่ระบบ) — ในแอปเปิดจากชิปแพ็กเกจบน header
+  const [guestPricing, setGuestPricing] = useState(false)
   const [version, setVersion] = useState(0)
   const bump = useCallback(() => setVersion((v) => v + 1), [])
   const state = useMemo(() => makeState(scenario), [scenario])
@@ -209,12 +212,23 @@ function Fixture() {
   return (
     <>
       <App key={scenario} cloud={bridge} initialStore={initialStore} migrateLegacy={false} onLogout={() => {}} />
+      {guestPricing && (
+        <PricingPage
+          viewer={{ kind: 'guest' }}
+          catalog={null}
+          onClose={() => setGuestPricing(false)}
+          onChoose={() => setGuestPricing(false)}
+        />
+      )}
       <div className="fixture-bar" role="toolbar" aria-label="สลับสถานะแพ็กเกจ (fixture)">
         {SCENARIOS.map((item) => (
           <button key={item} type="button" aria-pressed={item === scenario} onClick={() => setScenario(item)}>
             {item}
           </button>
         ))}
+        <button type="button" aria-pressed={guestPricing} onClick={() => setGuestPricing((v) => !v)}>
+          pricing (guest)
+        </button>
         <span className="fixture-state">
           <b>{ent.plan}</b>{ent.proUntil ? ` ถึง ${new Date(ent.proUntil).toLocaleDateString('th-TH')}` : ''} · เครดิต {ent.credits} ·
           ซื้อแล้ว {ent.licensedProjectIds.length} แบบ · orders {state.orders.size} — ลายน้ำ/ป้าย 149 ฿/paywall ต้องตามสถานะนี้

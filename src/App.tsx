@@ -130,6 +130,7 @@ import type { Entitlements, ExportAuthorization, Order, OrderKind } from '../sha
 import type { ProjectSaveState } from './services/projects/durableSaveQueue'
 import { ApiClientError } from './services/api/client'
 import { PaywallModal } from './components/PaywallModal'
+import { PricingPage } from './components/PricingPage'
 import { WATERMARK_ALPHA, WATERMARK_TEXT, watermarkTiles } from './core/watermark'
 import { rasterizeTrustedPreset } from './services/projects/trustedPresetRasterizer'
 import { PRESETS, PRESET_CATS, presetById, presetDataUrl, type Preset } from './core/presets'
@@ -1218,6 +1219,8 @@ export default function App({
   // paywall ที่เปิดอยู่ + action ที่ค้าง (ดาวน์โหลด) ทำต่อหลังได้สิทธิ์
   const [paywall, setPaywall] = useState<{ kind: OrderKind; after?: () => void | Promise<void> } | null>(null)
   const [paywallBusy, setPaywallBusy] = useState(false)
+  // หน้าแพ็กเกจและราคา (cloud) — เปิดจากชิปแพ็กเกจ/ลิงก์ใน paywall; ปุ่มซื้อเปิด paywall ซ้อนด้านบน
+  const [pricingOpen, setPricingOpen] = useState(false)
   // ป้ายราคาบนปุ่มดาวน์โหลดเมื่อยังไม่มีสิทธิ์ (cloud + ไม่ใช่ Pro + แบบนี้ยังไม่ซื้อ)
   const exportLock = cloud && watermarkOn ? (
     <span className="export-lock" title={t('ต้องซื้อแบบนี้หรือสมัคร Pro ก่อนดาวน์โหลด', 'Buy this design or go Pro to download')}>
@@ -2919,8 +2922,8 @@ export default function App({
           <button
             type="button"
             className={`plan-chip${gatePlan === 'pro' ? ' pro' : ''}`}
-            title={t('แพ็กเกจและเครดิต AI — กดเพื่อดู/สมัคร Pro', 'Plan & AI credits — open to see/upgrade to Pro')}
-            onClick={() => setPaywall({ kind: 'pro' })}
+            title={t('แพ็กเกจและเครดิต AI — กดเพื่อดูแพ็กเกจทั้งหมด', 'Plan & AI credits — open to compare plans')}
+            onClick={() => setPricingOpen(true)}
           >
             <b>{gatePlan === 'pro' ? t(`Pro · ถึง ${proUntilLabel}`, `Pro · until ${proUntilLabel}`) : t('Freemium', 'Freemium')}</b>
             <span className="plan-chip-credits">
@@ -5525,6 +5528,26 @@ export default function App({
           onCancel={() => setNameModal(null)}
         />
       )}
+      {/* หน้าแพ็กเกจ (cloud) — อยู่ใต้ paywall (z-index ต่ำกว่า) เพื่อให้กดซื้อแล้ว modal ซ้อนขึ้นมาได้ */}
+      {cloud && pricingOpen && (
+        <PricingPage
+          viewer={{
+            kind: 'member',
+            plan: gatePlan,
+            proUntilLabel,
+            credits: gateCredits,
+            projectName: activeName,
+            activeLicensed: licensed.has(activeId),
+          }}
+          catalog={entitlements?.catalog ?? null}
+          escapeDisabled={paywall !== null}
+          onClose={() => setPricingOpen(false)}
+          onChoose={(kind) => {
+            if (kind === 'free') setPricingOpen(false)
+            else setPaywall({ kind })
+          }}
+        />
+      )}
       {/* paywall (cloud): ซื้อรายแบบ/สมัคร Pro — หลังชำระ (จำลอง) ทำ action ที่ค้างต่อผ่านด่านสิทธิ์อีกครั้ง */}
       {cloud && paywall && (
         <PaywallModal
@@ -5537,6 +5560,10 @@ export default function App({
             if (!paywallBusy) setPaywall(null)
           }}
           onPurchase={(kind) => cloud.createOrder(kind, kind === 'design' ? activeId : undefined)}
+          onShowPlans={pricingOpen ? undefined : () => {
+            setPaywall(null)
+            setPricingOpen(true)
+          }}
           onDevFulfil={async (orderId) => {
             setPaywallBusy(true)
             try {

@@ -52,12 +52,15 @@ export function Login({
   busy = false,
   error,
   finePrint,
+  onShowPricing,
 }: {
   onLogin: () => void
   mode?: 'local' | 'cloud'
   busy?: boolean
   error?: string | null
   finePrint?: string
+  // ลิงก์ไปหน้าแพ็กเกจและราคา (cloud) — ไม่ส่ง = ไม่แสดง
+  onShowPricing?: () => void
 }) {
   return (
     <div className="login-screen">
@@ -82,6 +85,11 @@ export function Login({
         <p className="login-fine">{finePrint ?? (mode === 'local'
           ? 'งานบันทึกในเบราว์เซอร์นี้เท่านั้น · ไม่เชื่อมบัญชีหรือข้อมูล Cloud'
           : 'เข้าสู่ระบบอย่างปลอดภัยผ่าน Google')}</p>
+        {onShowPricing && (
+          <button type="button" className="login-pricing" onClick={onShowPricing}>
+            ดูแพ็กเกจและราคา →
+          </button>
+        )}
       </div>
       <p className="login-footer">PackIt · เครื่องมือสร้างแพ็กเกจแบบพารามิเตอร์</p>
     </div>

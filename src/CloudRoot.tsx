@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { Login } from './components/Login'
+import { PricingPage } from './components/PricingPage'
 import { LoadingStage } from './components/LoadingBoundary'
 import type { ClientConfig } from './config'
 import { bootstrapSession } from './services/api/session'
@@ -24,6 +25,8 @@ export function CloudRoot({ config, startupVariant }: { config: ClientConfig; st
   }, [])
   const [loginError, setLoginError] = useState<string | null>(null)
   const [loginBusy, setLoginBusy] = useState(false)
+  // หน้าแพ็กเกจสำหรับผู้ที่ยังไม่เข้าสู่ระบบ (ไม่มี catalog เพราะ endpoint ต้อง login — ใช้ราคาสำรอง)
+  const [pricingOpen, setPricingOpen] = useState(false)
   const bootstrapController = useMemo(() => new WorkspaceBootstrapController<Session>({
     bootstrap: (accessToken, signal) => bootstrapSession(config.apiBaseUrl, accessToken, signal),
     refreshSession: async () => {
@@ -97,12 +100,26 @@ export function CloudRoot({ config, startupVariant }: { config: ClientConfig; st
     return <LoadingStage title="กำลังตรวจสอบบัญชี" message="กำลังเตรียมพื้นที่ทำงานของคุณ…" />
   }
   if (!session) {
+    if (pricingOpen) {
+      return (
+        <PricingPage
+          viewer={{ kind: 'guest' }}
+          catalog={null}
+          onClose={() => setPricingOpen(false)}
+          onChoose={() => {
+            setPricingOpen(false)
+            void signIn()
+          }}
+        />
+      )
+    }
     return (
       <Login
         onLogin={() => void signIn()}
         busy={loginBusy}
         error={loginError}
         finePrint="บัญชี Google ผ่าน Supabase Auth · session ถูกตรวจโดย server"
+        onShowPricing={() => setPricingOpen(true)}
       />
     )
   }
