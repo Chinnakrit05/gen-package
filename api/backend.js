@@ -54391,6 +54391,30 @@ function createSupabaseAssetService(config2) {
   return new AssetService(new SupabaseAssetRepository(client), new SupabaseObjectStorage(client));
 }
 
+// server/logging.ts
+var MAX_LOG_TEXT = 500;
+function redactLogText(text) {
+  return text.replace(/\bsk-ant-[A-Za-z0-9_-]+/g, "[redacted-key]").replace(/\bsb_(?:secret|publishable)_[A-Za-z0-9_-]+/g, "[redacted-key]").replace(/\bBearer\s+[^\s"',;]+/gi, "Bearer [redacted]").replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]*)?/g, "[redacted-jwt]").replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[redacted-email]").replace(/\s+/g, " ").trim().slice(0, MAX_LOG_TEXT);
+}
+function errorMessageForLog(error62) {
+  if (error62 instanceof Error) return redactLogText(`${error62.name}: ${error62.message}`);
+  if (typeof error62 === "string") return redactLogText(error62);
+  if (typeof error62 === "object" && error62 !== null) {
+    const message = error62.message;
+    if (typeof message === "string") return redactLogText(message);
+  }
+  return "unknown error";
+}
+function formatServerLog(level, event, fields = {}) {
+  return JSON.stringify({ level, event, ...fields });
+}
+function logServerEvent(level, event, fields = {}) {
+  const line = formatServerLog(level, event, fields);
+  if (level === "error") console.error(line);
+  else if (level === "warn") console.warn(line);
+  else console.info(line);
+}
+
 // server/modules/billing/validation.ts
 var timestampSchema = external_exports.string().refine((value) => !Number.isNaN(Date.parse(value)), "invalid timestamp");
 var creditsSchema = external_exports.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
@@ -54469,7 +54493,7 @@ var orderResultSchema = external_exports.object({
 function paymentRequiredDetails(error62, projectId) {
   let price;
   try {
-    price = JSON.parse(error62.details);
+    price = JSON.parse(error62.details ?? "");
   } catch {
     price = void 0;
   }
@@ -54482,8 +54506,9 @@ function paymentRequiredDetails(error62, projectId) {
 function exhaustedPlan(error62) {
   return error62.details === "pro" ? "pro" : "free";
 }
-function mapDatabaseError(error62, context = {}) {
-  if (error62.message.includes("EXPORT_PAYMENT_REQUIRED")) {
+function mapBillingDatabaseError(error62, context = {}) {
+  const message = error62.message ?? "";
+  if (message.includes("EXPORT_PAYMENT_REQUIRED")) {
     return new HttpError(
       402,
       "PAYMENT_REQUIRED",
@@ -54491,53 +54516,96 @@ function mapDatabaseError(error62, context = {}) {
       paymentRequiredDetails(error62, context.projectId)
     );
   }
-  if (error62.message.includes("AI_CREDITS_EXHAUSTED")) {
-    return new HttpError(402, "AI_CREDITS_EXHAUSTED", "\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 AI \u0E2B\u0E21\u0E14 \u0E0B\u0E37\u0E49\u0E2D\u0E41\u0E1A\u0E1A\u0E2B\u0E23\u0E37\u0E2D\u0E2A\u0E21\u0E31\u0E04\u0E23 Pro \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E23\u0E31\u0E1A\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15\u0E40\u0E1E\u0E34\u0E48\u0E21", {
+  if (message.includes("AI_CREDITS_EXHAUSTED")) {
+    return new HttpError(402, "AI_CREDITS_EXHAUSTED", "\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 AI \u0E2B\u0E21\u0E14\u0E41\u0E25\u0E49\u0E27", {
       credits: 0,
       plan: exhaustedPlan(error62)
     });
   }
-  if (error62.message.includes("AI_REQUEST_IN_PROGRESS")) {
+  if (message.includes("AI_CONCURRENCY_LIMIT")) {
+    return new HttpError(429, "AI_RATE_LIMITED", "\u0E21\u0E35\u0E04\u0E33\u0E02\u0E2D AI \u0E02\u0E2D\u0E07\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E35\u0E48\u0E07\u0E32\u0E19\u0E19\u0E35\u0E49\u0E01\u0E33\u0E25\u0E31\u0E07\u0E17\u0E33\u0E07\u0E32\u0E19\u0E2D\u0E22\u0E39\u0E48 \u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48");
+  }
+  if (message.includes("AI_REQUEST_IN_PROGRESS")) {
     return new HttpError(409, "AI_REQUEST_IN_PROGRESS", "\u0E04\u0E33\u0E02\u0E2D AI \u0E19\u0E35\u0E49\u0E01\u0E33\u0E25\u0E31\u0E07\u0E14\u0E33\u0E40\u0E19\u0E34\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E22\u0E39\u0E48");
   }
-  if (error62.message.includes("AI_REQUEST_NOT_RESERVED")) {
+  if (message.includes("AI_REQUEST_NOT_RESERVED")) {
     return new HttpError(409, "AI_REQUEST_IN_PROGRESS", "\u0E04\u0E33\u0E02\u0E2D AI \u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E1B\u0E34\u0E14\u0E44\u0E1B\u0E41\u0E25\u0E49\u0E27");
   }
-  if (error62.message.includes("IDEMPOTENCY_KEY_REUSED")) {
+  if (message.includes("IDEMPOTENCY_KEY_REUSED")) {
     return new HttpError(409, "IDEMPOTENCY_KEY_REUSED", "operationId \u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2D\u0E37\u0E48\u0E19\u0E41\u0E25\u0E49\u0E27");
   }
-  if (error62.message.includes("ALREADY_LICENSED")) {
+  if (message.includes("ALREADY_LICENSED")) {
     return new HttpError(409, "ALREADY_LICENSED", "\u0E41\u0E1A\u0E1A\u0E19\u0E35\u0E49\u0E44\u0E14\u0E49\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E14\u0E32\u0E27\u0E19\u0E4C\u0E42\u0E2B\u0E25\u0E14\u0E41\u0E25\u0E49\u0E27 \u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E0B\u0E37\u0E49\u0E2D\u0E0B\u0E49\u0E33");
   }
-  if (error62.message.includes("PROJECT_NOT_FOUND")) {
+  if (message.includes("PROJECT_NOT_FOUND")) {
     return new HttpError(404, "NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E19\u0E35\u0E49");
   }
-  if (error62.message.includes("ORDER_NOT_FOUND")) {
+  if (message.includes("ORDER_NOT_FOUND")) {
     return new HttpError(404, "ORDER_NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E0B\u0E37\u0E49\u0E2D\u0E19\u0E35\u0E49");
   }
-  if (error62.message.includes("ORDER_NOT_PAYABLE")) {
+  if (message.includes("ORDER_NOT_PAYABLE")) {
     return new HttpError(409, "ORDER_NOT_PAYABLE", "\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E0B\u0E37\u0E49\u0E2D\u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E22\u0E01\u0E40\u0E25\u0E34\u0E01\u0E41\u0E25\u0E49\u0E27");
   }
-  if (error62.message.includes("APP_USER_NOT_ACTIVE")) {
+  if (message.includes("APP_USER_NOT_ACTIVE")) {
     return new HttpError(403, "USER_NOT_ACTIVE", "\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
   }
   return new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
 }
-function providerContractError() {
-  return new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E37\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+var MAX_INT4 = 2147483647;
+function tokenCount(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= MAX_INT4 ? value : null;
+}
+function modelName(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed.length >= 1 && trimmed.length <= 200 ? trimmed : null;
+}
+function settleUsageParams(usage) {
+  return {
+    p_model: modelName(usage?.model),
+    p_input_tokens: tokenCount(usage?.inputTokens),
+    p_output_tokens: tokenCount(usage?.outputTokens),
+    p_cache_read_tokens: tokenCount(usage?.cacheReadTokens),
+    p_cache_creation_tokens: tokenCount(usage?.cacheCreationTokens),
+    p_has_image: typeof usage?.hasImage === "boolean" ? usage.hasImage : null
+  };
 }
 var SupabaseBillingRepository = class {
   constructor(client) {
     this.client = client;
+  }
+  // map + log กรณี 5xx (รหัสที่ไม่รู้จัก) หนึ่งบรรทัด: requestId, RPC, รหัส, ข้อความจาก DB (ผ่าน redact)
+  databaseError(error62, rpc, actor, context = {}) {
+    const mapped = mapBillingDatabaseError(error62, context);
+    if (mapped.status >= 500) {
+      logServerEvent("error", "billing_database_error", {
+        requestId: actor?.requestId,
+        route: `rpc ${rpc}`,
+        code: mapped.code,
+        dbCode: error62.code ?? void 0,
+        error: errorMessageForLog(error62)
+      });
+    }
+    return mapped;
+  }
+  // RPC คืน jsonb ที่ไม่ตรงสัญญา — log เฉพาะ path ของ field ที่ผิด (ไม่ log ค่า)
+  contractError(rpc, actor, error62) {
+    const mapped = new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E37\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+    logServerEvent("error", "billing_contract_error", {
+      requestId: actor?.requestId,
+      route: `rpc ${rpc}`,
+      code: mapped.code,
+      error: `invalid fields: ${error62.issues.slice(0, 5).map((issue2) => issue2.path.join(".") || "(root)").join(", ")}`
+    });
+    return mapped;
   }
   async getEntitlements(actor, workspaceId) {
     const { data, error: error62 } = await this.client.rpc("get_entitlements", {
       p_actor_user_id: actor.userId,
       p_workspace_id: workspaceId
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw this.databaseError(error62, "get_entitlements", actor);
     const parsed = entitlementsResultSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError();
+    if (!parsed.success) throw this.contractError("get_entitlements", actor, parsed.error);
     return parsed.data;
   }
   async authorizeExport(actor, projectId) {
@@ -54545,9 +54613,9 @@ var SupabaseBillingRepository = class {
       p_actor_user_id: actor.userId,
       p_project_id: projectId
     });
-    if (error62) throw mapDatabaseError(error62, { projectId });
+    if (error62) throw this.databaseError(error62, "authorize_export", actor, { projectId });
     const parsed = exportAuthorizationResultSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError();
+    if (!parsed.success) throw this.contractError("authorize_export", actor, parsed.error);
     return parsed.data;
   }
   async reserveAiCredit(actor, workspaceId, operationId) {
@@ -54556,20 +54624,21 @@ var SupabaseBillingRepository = class {
       p_workspace_id: workspaceId,
       p_operation_id: operationId
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw this.databaseError(error62, "reserve_ai_credit", actor);
     const parsed = aiReservationResultSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError();
+    if (!parsed.success) throw this.contractError("reserve_ai_credit", actor, parsed.error);
     return parsed.data;
   }
-  async settleAiRequest(actor, requestId, outcome) {
+  async settleAiRequest(actor, requestId, outcome, usage) {
     const { data, error: error62 } = await this.client.rpc("settle_ai_request", {
       p_actor_user_id: actor.userId,
       p_request_id: requestId,
-      p_outcome: outcome
+      p_outcome: outcome,
+      ...settleUsageParams(usage)
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw this.databaseError(error62, "settle_ai_request", actor);
     const parsed = aiSettlementResultSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError();
+    if (!parsed.success) throw this.contractError("settle_ai_request", actor, parsed.error);
     return parsed.data;
   }
   async createOrder(actor, input2) {
@@ -54580,9 +54649,9 @@ var SupabaseBillingRepository = class {
       p_kind: input2.kind,
       p_project_id: input2.projectId ?? null
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw this.databaseError(error62, "create_order", actor);
     const parsed = orderResultSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError();
+    if (!parsed.success) throw this.contractError("create_order", actor, parsed.error);
     return { ...parsed.data, checkoutUrl: null };
   }
   async fulfilOrder(actor, orderId, provider, providerRef) {
@@ -54592,9 +54661,9 @@ var SupabaseBillingRepository = class {
       p_provider: provider,
       p_provider_ref: providerRef
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw this.databaseError(error62, "fulfil_order", actor);
     const parsed = orderResultSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError();
+    if (!parsed.success) throw this.contractError("fulfil_order", actor, parsed.error);
     return { ...parsed.data, checkoutUrl: null };
   }
 };
@@ -58218,7 +58287,7 @@ var projectListRowSchema = external_exports.object({
 }).strict();
 
 // server/adapters/supabase/projectRepository.ts
-function mapDatabaseError2(error62) {
+function mapDatabaseError(error62) {
   if (error62.message.includes("ASSET_NOT_READY")) {
     return new HttpError(422, "ASSET_NOT_READY", "\u0E23\u0E39\u0E1B\u0E17\u0E35\u0E48\u0E2D\u0E49\u0E32\u0E07\u0E16\u0E36\u0E07\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
   }
@@ -58245,7 +58314,7 @@ function mapDatabaseError2(error62) {
   }
   return new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
 }
-function providerContractError2() {
+function providerContractError() {
   return new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E37\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
 }
 var SupabaseProjectRepository = class {
@@ -58260,9 +58329,9 @@ var SupabaseProjectRepository = class {
       p_cursor_id: query.cursor?.id ?? null,
       p_limit: query.limit + 1
     });
-    if (error62) throw mapDatabaseError2(error62);
+    if (error62) throw mapDatabaseError(error62);
     const parsed = projectListRowSchema.array().safeParse(data);
-    if (!parsed.success) throw providerContractError2();
+    if (!parsed.success) throw providerContractError();
     const hasMore = parsed.data.length > query.limit;
     const rows = parsed.data.slice(0, query.limit);
     const items = rows.map((row) => ({
@@ -58283,9 +58352,9 @@ var SupabaseProjectRepository = class {
       p_actor_user_id: actor.userId,
       p_project_id: projectId
     });
-    if (error62) throw mapDatabaseError2(error62);
+    if (error62) throw mapDatabaseError(error62);
     const parsed = cloudProjectSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError2();
+    if (!parsed.success) throw providerContractError();
     return parsed.data;
   }
   async create(actor, input2, hash2) {
@@ -58298,9 +58367,9 @@ var SupabaseProjectRepository = class {
       p_document_schema_version: input2.documentSchemaVersion,
       p_document: input2.document
     });
-    if (error62) throw mapDatabaseError2(error62);
+    if (error62) throw mapDatabaseError(error62);
     const parsed = cloudProjectSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError2();
+    if (!parsed.success) throw providerContractError();
     return parsed.data;
   }
   async importLegacy(actor, input2, hash2) {
@@ -58316,9 +58385,9 @@ var SupabaseProjectRepository = class {
       p_document_schema_version: input2.documentSchemaVersion,
       p_document: input2.document
     });
-    if (error62) throw mapDatabaseError2(error62);
+    if (error62) throw mapDatabaseError(error62);
     const parsed = legacyImportReceiptSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError2();
+    if (!parsed.success) throw providerContractError();
     return parsed.data;
   }
   async save(actor, input2, hash2) {
@@ -58332,9 +58401,9 @@ var SupabaseProjectRepository = class {
       p_document_schema_version: input2.documentSchemaVersion,
       p_document: input2.document
     });
-    if (error62) throw mapDatabaseError2(error62);
+    if (error62) throw mapDatabaseError(error62);
     const parsed = saveReceiptSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError2();
+    if (!parsed.success) throw providerContractError();
     return parsed.data;
   }
   async remove(actor, input2, hash2) {
@@ -58345,9 +58414,9 @@ var SupabaseProjectRepository = class {
       p_request_hash: hash2,
       p_expected_revision: input2.expectedRevision
     });
-    if (error62) throw mapDatabaseError2(error62);
+    if (error62) throw mapDatabaseError(error62);
     const parsed = deleteReceiptSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError2();
+    if (!parsed.success) throw providerContractError();
     return parsed.data;
   }
 };
@@ -58655,7 +58724,7 @@ function buildUserContent(prompt, current) {
 
 \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14\u0E08\u0E32\u0E01\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32: ${prompt}` : prompt;
 }
-async function askClaude(apiKey, model, prompt, current, image, limits) {
+async function askClaudeWithUsage(apiKey, model, prompt, current, image, limits) {
   const client = new Anthropic({
     apiKey,
     ...limits?.timeoutMs !== void 0 ? { timeout: limits.timeoutMs } : {},
@@ -58685,7 +58754,16 @@ async function askClaude(apiKey, model, prompt, current, image, limits) {
     (b) => b.type === "tool_use" && b.name === "box_spec"
   );
   if (!block) throw new Error("\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E1C\u0E25\u0E25\u0E31\u0E1E\u0E18\u0E4C\u0E08\u0E32\u0E01\u0E42\u0E21\u0E40\u0E14\u0E25");
-  return sanitize(block.input, false);
+  return {
+    spec: sanitize(block.input, false),
+    model: msg.model,
+    usage: {
+      inputTokens: msg.usage.input_tokens,
+      outputTokens: msg.usage.output_tokens,
+      cacheReadTokens: msg.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: msg.usage.cache_creation_input_tokens ?? 0
+    }
+  };
 }
 var JSON_INSTRUCTION = `
 
@@ -58695,11 +58773,14 @@ var JSON_INSTRUCTION = `
 
 // server/modules/ai/aiService.ts
 var AiProviderError = class extends Error {
-  constructor(kind) {
+  constructor(kind, source) {
     super(kind);
     this.kind = kind;
     this.name = "AiProviderError";
+    this.providerMessage = source === void 0 ? kind : errorMessageForLog(source);
   }
+  // providerMessage = ข้อความจากต้นทางที่ผ่าน redact แล้ว ไว้ให้ router log (ไม่ส่งถึง client)
+  providerMessage;
 };
 var CLOUD_AI_LIMITS = { timeoutMs: 5e4, maxRetries: 0 };
 var AnthropicAiService = class {
@@ -58709,12 +58790,12 @@ var AnthropicAiService = class {
   }
   async generateBoxSpec(apiKey, input2) {
     try {
-      return await askClaude(apiKey, this.model, input2.prompt, input2.current, input2.image, this.limits);
+      return await askClaudeWithUsage(apiKey, this.model, input2.prompt, input2.current, input2.image, this.limits);
     } catch (error62) {
-      if (error62 instanceof Anthropic.AuthenticationError) throw new AiProviderError("authentication");
-      if (error62 instanceof Anthropic.RateLimitError) throw new AiProviderError("rate-limit");
-      if (error62 instanceof Anthropic.APIError) throw new AiProviderError("provider");
-      throw new AiProviderError("internal");
+      if (error62 instanceof Anthropic.AuthenticationError) throw new AiProviderError("authentication", error62);
+      if (error62 instanceof Anthropic.RateLimitError) throw new AiProviderError("rate-limit", error62);
+      if (error62 instanceof Anthropic.APIError) throw new AiProviderError("provider", error62);
+      throw new AiProviderError("internal", error62);
     }
   }
 };
@@ -58748,30 +58829,53 @@ var BillingService = class {
     this.repository = repository;
     this.options = options;
   }
-  withDevFlag(entitlements) {
-    return { ...entitlements, devFulfilAvailable: this.options.devFulfilEnabled };
+  withServerFlags(entitlements) {
+    return {
+      ...entitlements,
+      devFulfilAvailable: this.options.devFulfilEnabled,
+      purchasesEnabled: this.options.purchasesEnabled
+    };
   }
   async getEntitlements(actor, workspaceId) {
-    return this.withDevFlag(await this.repository.getEntitlements(actor, workspaceId));
+    return this.withServerFlags(await this.repository.getEntitlements(actor, workspaceId));
   }
   async authorizeExport(actor, projectId) {
     const authorization = await this.repository.authorizeExport(actor, projectId);
-    return { ...authorization, entitlements: this.withDevFlag(authorization.entitlements) };
+    return { ...authorization, entitlements: this.withServerFlags(authorization.entitlements) };
   }
-  createOrder(actor, input2) {
-    return this.repository.createOrder(actor, input2);
+  async createOrder(actor, input2) {
+    if (!this.options.purchasesEnabled) {
+      throw new HttpError(503, "PURCHASE_UNAVAILABLE", "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E40\u0E1B\u0E34\u0E14\u0E02\u0E32\u0E22 \u2014 \u0E23\u0E30\u0E1A\u0E1A\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E2B\u0E49\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23");
+    }
+    const order = await this.repository.createOrder(actor, input2);
+    logServerEvent("info", "order_created", {
+      requestId: actor.requestId,
+      orderId: order.id,
+      kind: order.kind,
+      workspaceId: order.workspaceId,
+      provider: order.provider
+    });
+    return order;
   }
   async devFulfilOrder(actor, orderId, requestId) {
     if (!this.options.devFulfilEnabled) {
       throw new HttpError(404, "NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A API endpoint \u0E19\u0E35\u0E49");
     }
-    return this.repository.fulfilOrder(actor, orderId, "dev", requestId);
+    const order = await this.repository.fulfilOrder(actor, orderId, "dev", requestId);
+    logServerEvent("info", "order_fulfilled", {
+      requestId,
+      orderId: order.id,
+      kind: order.kind,
+      workspaceId: order.workspaceId,
+      provider: order.provider
+    });
+    return order;
   }
   reserveAiCredit(actor, workspaceId, operationId) {
     return this.repository.reserveAiCredit(actor, workspaceId, operationId);
   }
-  settleAiRequest(actor, requestId, outcome) {
-    return this.repository.settleAiRequest(actor, requestId, outcome);
+  settleAiRequest(actor, requestId, outcome, usage) {
+    return this.repository.settleAiRequest(actor, requestId, outcome, usage);
   }
 };
 
@@ -58911,6 +59015,26 @@ async function rejectNonEmptyBody(req) {
 function isDevFulfilEnvironment(config2) {
   return config2.appEnv === "development" || config2.appEnv === "test";
 }
+function isPurchaseEnabled(config2) {
+  return isDevFulfilEnvironment(config2);
+}
+function billingFlags(config2) {
+  return {
+    devFulfilEnabled: isDevFulfilEnvironment(config2),
+    purchasesEnabled: isPurchaseEnabled(config2)
+  };
+}
+function unexpectedError(requestId, route, error62, fallback) {
+  logServerEvent("error", "api_unexpected_error", {
+    requestId,
+    route,
+    status: fallback.status,
+    code: fallback.code,
+    error: errorMessageForLog(error62)
+  });
+  return fallback;
+}
+var AI_ROUTE = "POST /api/v1/ai/box-spec";
 function validationError(error62) {
   return new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07", {
     issues: error62.issues.slice(0, 20).map((issue2) => ({
@@ -58928,9 +59052,8 @@ function createApiRouter(config2, dependencies = {}) {
   const projectService = dependencies.projectService === void 0 ? config2.supabase && new ProjectService(createSupabaseProjectRepository(config2.supabase)) : dependencies.projectService;
   const assetService = dependencies.assetService === void 0 ? config2.supabase && createSupabaseAssetService(config2.supabase) : dependencies.assetService;
   const aiService = dependencies.aiService === void 0 ? new AnthropicAiService(config2.ai?.model) : dependencies.aiService;
-  const billingService = dependencies.billingService === void 0 ? config2.supabase && new BillingService(createSupabaseBillingRepository(config2.supabase), {
-    devFulfilEnabled: isDevFulfilEnvironment(config2)
-  }) : dependencies.billingService;
+  const billingRepository = dependencies.billingRepository === void 0 ? config2.supabase && createSupabaseBillingRepository(config2.supabase) : dependencies.billingRepository;
+  const billingService = dependencies.billingService === void 0 ? billingRepository && new BillingService(billingRepository, billingFlags(config2)) : dependencies.billingService;
   return async (req, res) => {
     const requestId = randomUUID3();
     const path5 = requestPath(req);
@@ -59009,37 +59132,63 @@ function createApiRouter(config2, dependencies = {}) {
           throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E04\u0E35\u0E22\u0E4C AI");
         }
         const reservation = await billingService.reserveAiCredit(actor, input2.workspaceId, input2.operationId);
-        let data;
+        const hasImage = image !== void 0;
+        let generated;
         try {
-          data = await aiService.generateBoxSpec(serverAi.anthropicApiKey, {
+          generated = await aiService.generateBoxSpec(serverAi.anthropicApiKey, {
             prompt: input2.prompt.trim(),
             ...current ? { current } : {},
             ...image ? { image } : {}
           });
         } catch (providerError) {
           try {
-            await billingService.settleAiRequest(actor, reservation.requestId, "failed");
+            await billingService.settleAiRequest(actor, reservation.requestId, "failed", { hasImage });
           } catch (refundError) {
-            console.warn(`[${requestId}] \u0E04\u0E37\u0E19\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 ai_request ${reservation.requestId} \u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 (\u0E04\u0E49\u0E32\u0E07\u0E2A\u0E16\u0E32\u0E19\u0E30 reserved)`, refundError);
+            logServerEvent("warn", "ai_refund_failed", {
+              requestId,
+              route: AI_ROUTE,
+              aiRequestId: reservation.requestId,
+              error: errorMessageForLog(refundError)
+            });
           }
           throw providerError;
         }
+        const usage = {
+          hasImage,
+          model: generated.model,
+          ...generated.usage ?? {}
+        };
         let credits = reservation.credits;
         try {
-          credits = (await billingService.settleAiRequest(actor, reservation.requestId, "succeeded")).credits;
+          credits = (await billingService.settleAiRequest(actor, reservation.requestId, "succeeded", usage)).credits;
         } catch (settleError) {
-          console.warn(`[${requestId}] settle ai_request ${reservation.requestId} \u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 (\u0E04\u0E49\u0E32\u0E07\u0E2A\u0E16\u0E32\u0E19\u0E30 reserved)`, settleError);
+          logServerEvent("warn", "ai_settle_failed", {
+            requestId,
+            route: AI_ROUTE,
+            aiRequestId: reservation.requestId,
+            error: errorMessageForLog(settleError)
+          });
         }
-        sendJson(res, 200, { data: { ...data, credits }, requestId }, requestId);
+        sendJson(res, 200, { data: { ...generated.spec, credits }, requestId }, requestId);
       } catch (error63) {
         let httpError;
         if (error63 instanceof HttpError) httpError = error63;
-        else if (error63 instanceof AiProviderError && error63.kind === "authentication") {
-          httpError = new HttpError(503, "CONFIGURATION_ERROR", "\u0E04\u0E35\u0E22\u0E4C AI \u0E02\u0E2D\u0E07 server \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
-        } else if (error63 instanceof AiProviderError && error63.kind === "rate-limit") {
-          httpError = new HttpError(429, "AI_RATE_LIMITED", "\u0E40\u0E23\u0E35\u0E22\u0E01 AI \u0E16\u0E35\u0E48\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48");
-        } else {
-          httpError = new HttpError(502, "AI_PROVIDER_UNAVAILABLE", "\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23 AI \u0E02\u0E31\u0E14\u0E02\u0E49\u0E2D\u0E07 \u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07");
+        else {
+          if (error63 instanceof AiProviderError && error63.kind === "authentication") {
+            httpError = new HttpError(503, "CONFIGURATION_ERROR", "\u0E04\u0E35\u0E22\u0E4C AI \u0E02\u0E2D\u0E07 server \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+          } else if (error63 instanceof AiProviderError && error63.kind === "rate-limit") {
+            httpError = new HttpError(429, "AI_RATE_LIMITED", "\u0E40\u0E23\u0E35\u0E22\u0E01 AI \u0E16\u0E35\u0E48\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48");
+          } else {
+            httpError = new HttpError(502, "AI_PROVIDER_UNAVAILABLE", "\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23 AI \u0E02\u0E31\u0E14\u0E02\u0E49\u0E2D\u0E07 \u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07");
+          }
+          logServerEvent("error", "ai_provider_error", {
+            requestId,
+            route: AI_ROUTE,
+            status: httpError.status,
+            code: httpError.code,
+            kind: error63 instanceof AiProviderError ? error63.kind : "unexpected",
+            error: error63 instanceof AiProviderError ? error63.providerMessage : errorMessageForLog(error63)
+          });
         }
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
       }
@@ -59199,7 +59348,12 @@ function createApiRouter(config2, dependencies = {}) {
         const data = await billingService.getEntitlements(actor, query.workspaceId);
         sendJson(res, 200, { data, requestId }, requestId);
       } catch (error63) {
-        const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E42\u0E2B\u0E25\u0E14\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        const httpError = error63 instanceof HttpError ? error63 : unexpectedError(
+          requestId,
+          "GET /api/v1/billing/entitlements",
+          error63,
+          new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E42\u0E2B\u0E25\u0E14\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08")
+        );
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
       }
       return;
@@ -59219,7 +59373,12 @@ function createApiRouter(config2, dependencies = {}) {
         const data = await billingService.createOrder(actor, input2);
         sendJson(res, 201, { data, requestId }, requestId);
       } catch (error63) {
-        const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E0B\u0E37\u0E49\u0E2D\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        const httpError = error63 instanceof HttpError ? error63 : unexpectedError(
+          requestId,
+          "POST /api/v1/billing/orders",
+          error63,
+          new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E0B\u0E37\u0E49\u0E2D\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08")
+        );
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
       }
       return;
@@ -59243,7 +59402,12 @@ function createApiRouter(config2, dependencies = {}) {
         const data = await billingService.devFulfilOrder(actor, orderId, requestId);
         sendJson(res, 200, { data, requestId }, requestId);
       } catch (error63) {
-        const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E08\u0E33\u0E25\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        const httpError = error63 instanceof HttpError ? error63 : unexpectedError(
+          requestId,
+          "POST /api/v1/billing/orders/:id/dev-fulfil",
+          error63,
+          new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E08\u0E33\u0E25\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08")
+        );
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
       }
       return;
@@ -59264,7 +59428,12 @@ function createApiRouter(config2, dependencies = {}) {
         const data = await billingService.authorizeExport(actor, projectId);
         sendJson(res, 200, { data, requestId }, requestId);
       } catch (error63) {
-        const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E14\u0E32\u0E27\u0E19\u0E4C\u0E42\u0E2B\u0E25\u0E14\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        const httpError = error63 instanceof HttpError ? error63 : unexpectedError(
+          requestId,
+          "POST /api/v1/projects/:id/export-authorizations",
+          error63,
+          new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E14\u0E32\u0E27\u0E19\u0E4C\u0E42\u0E2B\u0E25\u0E14\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08")
+        );
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
       }
       return;

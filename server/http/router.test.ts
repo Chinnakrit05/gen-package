@@ -1,16 +1,17 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BillingCatalog, Order } from '../../shared/contracts/billing'
 import type { CloudProjectDocumentV1 } from '../../shared/contracts/projects'
+import { mapBillingDatabaseError } from '../adapters/supabase/billingRepository'
 import type { ServerConfig } from '../config'
 import type { SessionService } from '../modules/identity/sessionService'
 import type { AssetService } from '../modules/assets/assetService'
 import { AiProviderError, type AiService } from '../modules/ai/aiService'
-import { BillingService, type BillingRepository, type StoredEntitlements } from '../modules/billing/billingService'
+import type { BillingRepository, StoredEntitlements } from '../modules/billing/billingService'
 import type { ProjectRepository } from '../modules/projects/projectRepository'
 import { ProjectService } from '../modules/projects/projectService'
 import { normalizeVercelRequestUrl } from '../entrypoints/vercel'
 import { HttpError } from './errors'
-import { createApiRouter, type HttpRequest, type HttpResponse } from './router'
+import { billingFlags, createApiRouter, type HttpRequest, type HttpResponse } from './router'
 
 function request(method: string, url: string, authorization?: string): HttpRequest {
   return { method, url, headers: authorization ? { authorization } : {} }
@@ -73,6 +74,10 @@ const pendingOrder: Order = {
   createdAt: '2026-10-13T00:00:00.000Z',
   paidAt: null,
 }
+const aiModel = 'claude-test-model'
+const aiUsage = { inputTokens: 1200, outputTokens: 340, cacheReadTokens: 0, cacheCreationTokens: 0 }
+// รูปอ้างอิงขั้นต่ำที่ parseImage ยอมรับ (base64 ≥ 100 ตัวอักษร)
+const refImage = { data: 'A'.repeat(120), mediaType: 'image/png' }
 const boxSpec = {
   template: 'tuck-end',
   materialId: 'carton-300',
@@ -133,7 +138,8 @@ function billingRepositoryStub(overrides: Partial<BillingRepository> = {}): Bill
   }
 }
 
-// router ที่มี billing service จริงต่อกับ repository ปลอม — dev gate คำนวณจาก appEnv แบบเดียวกับ createApiRouter
+// router ที่มี billing service จริงต่อกับ repository ปลอม — ส่ง repository ให้ createApiRouter สร้าง service เอง
+// สวิตช์เปิดขาย/จำลองจ่ายจึงมาจาก billingFlags(config) ตัวจริงของ router ไม่ใช่สูตรที่เทสต์ลอกมา
 function billingRouter(
   repository: BillingRepository,
   options: { appEnv?: ServerConfig['appEnv']; ai?: ServerConfig['ai']; aiService?: AiService } = {},
@@ -149,9 +155,7 @@ function billingRouter(
     projectService: null,
     assetService: null,
     aiService: options.aiService ?? null,
-    billingService: new BillingService(repository, {
-      devFulfilEnabled: appEnv === 'development' || appEnv === 'test',
-    }),
+    billingRepository: repository,
   })
 }
 
@@ -165,7 +169,20 @@ function aiRequest(body: unknown, authorization: string | null = 'Bearer verifie
   }
 }
 
+// อ่าน log บรรทัดเดียว (JSON) ที่ server เขียนผ่าน logServerEvent
+function logLines(spy: { mock: { calls: unknown[][] } }): Record<string, unknown>[] {
+  return spy.mock.calls.map((call) => {
+    expect(call).toHaveLength(1)
+    expect(String(call[0])).not.toContain('\n')
+    return JSON.parse(String(call[0])) as Record<string, unknown>
+  })
+}
+
 describe('API router', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it.each(['/api/backend', '/api/v1/projects'])(
     'lists projects through the Vercel adapter at %s without relaxing query validation',
     async (runtimePath) => {
@@ -309,15 +326,15 @@ describe('API router', () => {
     expect(providerCalled).toBe(false)
   })
 
-  it('reserves a credit, calls the provider with the server key, settles and returns the balance', async () => {
+  it('reserves a credit, calls the provider with the server key, settles with usage and returns the balance', async () => {
     const calls: unknown[] = []
     const configuredRouter = billingRouter(billingRepositoryStub({
       reserveAiCredit: async (resolvedActor, resolvedWorkspaceId, resolvedOperationId) => {
         calls.push(['reserve', resolvedActor.userId, resolvedWorkspaceId, resolvedOperationId])
         return { requestId: aiRequestId, credits: 4 }
       },
-      settleAiRequest: async (_actor, requestId, outcome) => {
-        calls.push(['settle', requestId, outcome])
+      settleAiRequest: async (_actor, requestId, outcome, usage) => {
+        calls.push(['settle', requestId, outcome, usage])
         return { credits: 4 }
       },
     }), {
@@ -325,21 +342,26 @@ describe('API router', () => {
       aiService: {
         async generateBoxSpec(apiKey, input) {
           calls.push(['generate', apiKey, input])
-          return boxSpec
+          return { spec: boxSpec, model: aiModel, usage: aiUsage }
         },
       },
     })
     const target = response()
-    await configuredRouter(aiRequest({ workspaceId, operationId, prompt: '  กล่องของฝาก ' }), target.res)
+    await configuredRouter(aiRequest({ workspaceId, operationId, prompt: '  กล่องของฝาก ', image: refImage }), target.res)
 
     expect(target.res.statusCode).toBe(200)
     expect(calls).toEqual([
       ['reserve', actor.userId, workspaceId, operationId],
-      ['generate', serverAiKey, { prompt: 'กล่องของฝาก' }],
-      ['settle', aiRequestId, 'succeeded'],
+      ['generate', serverAiKey, { prompt: 'กล่องของฝาก', image: refImage }],
+      ['settle', aiRequestId, 'succeeded', { hasImage: true, model: aiModel, ...aiUsage }],
     ])
-    expect(JSON.stringify(target.readBody())).not.toContain(serverAiKey)
-    expect(target.readBody()).toMatchObject({ data: { template: 'tuck-end', mock: false, credits: 4 } })
+    const body = target.readBody()
+    expect(JSON.stringify(body)).not.toContain(serverAiKey)
+    expect(body).toEqual({ data: { ...boxSpec, credits: 4 }, requestId: expect.any(String) })
+    // model/usage เป็นข้อมูลต้นทุนฝั่ง server เท่านั้น — response คงรูป { ...spec, credits }
+    for (const key of ['model', 'usage', 'inputTokens', 'outputTokens', 'hasImage']) {
+      expect(body.data).not.toHaveProperty(key)
+    }
   })
 
   it.each([
@@ -350,21 +372,43 @@ describe('API router', () => {
     const settled: unknown[] = []
     const configuredRouter = billingRouter(billingRepositoryStub({
       reserveAiCredit: async () => ({ requestId: aiRequestId, credits: 4 }),
-      settleAiRequest: async (_actor, requestId, outcome) => {
-        settled.push([requestId, outcome])
+      settleAiRequest: async (_actor, requestId, outcome, usage) => {
+        settled.push([requestId, outcome, usage])
         return { credits: 5 }
       },
     }), {
       ai: { anthropicApiKey: serverAiKey, model: 'm' },
-      aiService: { generateBoxSpec: async () => { throw new AiProviderError(kind) } },
+      aiService: {
+        generateBoxSpec: async () => {
+          // ข้อความต้นทางที่บังเอิญมีคีย์ติดมา ต้องไม่หลุดไปทั้ง response และ log
+          throw new AiProviderError(kind, new Error(`upstream ${kind} for key ${serverAiKey}`))
+        },
+      },
     })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const target = response()
     await configuredRouter(aiRequest({ workspaceId, operationId, prompt: 'กล่องของฝาก' }), target.res)
 
     expect(target.res.statusCode).toBe(status)
-    expect(target.readBody()).toMatchObject({ error: { code } })
-    expect(JSON.stringify(target.readBody())).not.toContain(serverAiKey)
-    expect(settled).toEqual([[aiRequestId, 'failed']])
+    const body = target.readBody()
+    expect(body).toMatchObject({ error: { code } })
+    expect(JSON.stringify(body)).not.toContain(serverAiKey)
+    expect(settled).toEqual([[aiRequestId, 'failed', { hasImage: false }]])
+
+    const [line] = logLines(error)
+    expect(error).toHaveBeenCalledTimes(1)
+    expect(line).toMatchObject({
+      level: 'error',
+      event: 'ai_provider_error',
+      requestId: body.requestId,
+      route: 'POST /api/v1/ai/box-spec',
+      status,
+      code,
+      kind,
+    })
+    expect(String(line.error)).toContain(`upstream ${kind}`)
+    expect(JSON.stringify(line)).not.toContain(serverAiKey)
+    expect(JSON.stringify(line)).not.toContain('กล่องของฝาก')
   })
 
   it('keeps the delivered result and the deducted credit when settling a success fails', async () => {
@@ -377,20 +421,51 @@ describe('API router', () => {
       },
     }), {
       ai: { anthropicApiKey: serverAiKey, model: 'm' },
-      aiService: { generateBoxSpec: async () => boxSpec },
+      aiService: { generateBoxSpec: async () => ({ spec: boxSpec, model: aiModel, usage: null }) },
     })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const target = response()
-    try {
-      await configuredRouter(aiRequest({ workspaceId, operationId, prompt: 'กล่องของฝาก' }), target.res)
-    } finally {
-      warn.mockRestore()
-    }
+    await configuredRouter(aiRequest({ workspaceId, operationId, prompt: 'กล่องของฝาก' }), target.res)
 
     // ผลลัพธ์จาก provider ต้องถึงผู้ใช้ และต้องไม่พยายามคืนเครดิต (settle 'failed') ทั้งที่ได้ผลแล้ว
     expect(target.res.statusCode).toBe(200)
     expect(target.readBody()).toMatchObject({ data: { template: 'tuck-end', credits: 4 } })
     expect(settled).toEqual([[aiRequestId, 'succeeded']])
+    expect(logLines(warn)).toEqual([expect.objectContaining({
+      event: 'ai_settle_failed',
+      requestId: target.readBody().requestId,
+      aiRequestId,
+    })])
+  })
+
+  it('passes the per-workspace concurrency cap through as 429 without calling the provider', async () => {
+    let providerCalled = false
+    let settleCalled = false
+    const configuredRouter = billingRouter(billingRepositoryStub({
+      // แปลงผ่าน mapper จริงของ adapter: reserve_ai_credit raise AI_CONCURRENCY_LIMIT
+      reserveAiCredit: async () => {
+        throw mapBillingDatabaseError({ message: 'AI_CONCURRENCY_LIMIT', details: null, code: 'P0001' })
+      },
+      settleAiRequest: async () => {
+        settleCalled = true
+        throw new Error('must not be called')
+      },
+    }), {
+      ai: { anthropicApiKey: serverAiKey, model: 'm' },
+      aiService: {
+        generateBoxSpec: async () => {
+          providerCalled = true
+          throw new Error('must not be called')
+        },
+      },
+    })
+    const target = response()
+    await configuredRouter(aiRequest({ workspaceId, operationId, prompt: 'กล่องของฝาก' }), target.res)
+
+    expect(target.res.statusCode).toBe(429)
+    expect(target.readBody()).toMatchObject({ error: { code: 'AI_RATE_LIMITED' } })
+    expect(providerCalled).toBe(false)
+    expect(settleCalled).toBe(false)
   })
 
   it('passes a credit refusal through without calling the provider', async () => {
@@ -456,10 +531,22 @@ describe('API router', () => {
     expect(reserveCalled).toBe(false)
   })
 
+  // เจ้าของผลิตภัณฑ์ 13 ต.ค. 2026: ยังไม่มีผู้ให้บริการชำระเงิน → staging/production ห้ามขาย/จำลองจ่าย
   it.each([
     ['test', true],
+    ['development', true],
     ['staging', false],
-  ] as const)('returns entitlements with devFulfilAvailable reflecting appEnv %s', async (appEnv, devFulfilAvailable) => {
+    ['production', false],
+  ] as const)('keeps purchases and dev fulfilment %s → %s', (appEnv, enabled) => {
+    expect(billingFlags({ appEnv })).toEqual({ devFulfilEnabled: enabled, purchasesEnabled: enabled })
+  })
+
+  it.each([
+    ['test', true],
+    ['development', true],
+    ['staging', false],
+    ['production', false],
+  ] as const)('returns entitlements with devFulfilAvailable and purchasesEnabled reflecting appEnv %s', async (appEnv, enabled) => {
     const configuredRouter = billingRouter(billingRepositoryStub(), { appEnv })
     const target = response()
     await configuredRouter(
@@ -468,7 +555,7 @@ describe('API router', () => {
     )
     expect(target.res.statusCode).toBe(200)
     expect(target.readBody()).toMatchObject({
-      data: { workspaceId, plan: 'free', credits: 3, catalog, devFulfilAvailable },
+      data: { workspaceId, plan: 'free', credits: 3, catalog, devFulfilAvailable: enabled, purchasesEnabled: enabled },
     })
 
     const rejected = response()
@@ -480,7 +567,64 @@ describe('API router', () => {
     expect(rejected.readBody()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } })
   })
 
+  it('logs one line and answers 503 when a billing dependency fails unexpectedly', async () => {
+    const configuredRouter = billingRouter(billingRepositoryStub({
+      getEntitlements: async () => {
+        throw new TypeError('fetch failed for owner@example.test with Bearer abc.def.ghi')
+      },
+    }))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const target = response()
+    await configuredRouter(
+      request('GET', `/api/v1/billing/entitlements?workspaceId=${workspaceId}`, 'Bearer token'),
+      target.res,
+    )
+
+    expect(target.res.statusCode).toBe(503)
+    const body = target.readBody()
+    expect(body).toMatchObject({ error: { code: 'DEPENDENCY_UNAVAILABLE' } })
+    expect(JSON.stringify(body)).not.toContain('fetch failed')
+    const lines = logLines(error)
+    expect(lines).toEqual([{
+      level: 'error',
+      event: 'api_unexpected_error',
+      requestId: body.requestId,
+      route: 'GET /api/v1/billing/entitlements',
+      status: 503,
+      code: 'DEPENDENCY_UNAVAILABLE',
+      error: expect.stringContaining('TypeError: fetch failed'),
+    }])
+    expect(JSON.stringify(lines)).not.toMatch(/owner@example\.test|abc\.def\.ghi/)
+  })
+
+  it.each(['staging', 'production'] as const)(
+    'refuses orders with 503 PURCHASE_UNAVAILABLE in %s without touching the repository',
+    async (appEnv) => {
+      let called = false
+      const configuredRouter = billingRouter(billingRepositoryStub({
+        createOrder: async () => {
+          called = true
+          throw new Error('must not be called')
+        },
+      }), { appEnv })
+      const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+      const target = response()
+      await configuredRouter({
+        method: 'POST',
+        url: '/api/v1/billing/orders',
+        headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
+        body: { workspaceId, operationId, kind: 'pro' },
+      }, target.res)
+
+      expect(target.res.statusCode).toBe(503)
+      expect(target.readBody()).toMatchObject({ error: { code: 'PURCHASE_UNAVAILABLE' } })
+      expect(called).toBe(false)
+      expect(info).not.toHaveBeenCalled()
+    },
+  )
+
   it('creates an order for the actor and reports that there is no checkout page yet', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => {})
     const calls: unknown[] = []
     const configuredRouter = billingRouter(billingRepositoryStub({
       createOrder: async (resolvedActor, input) => {
@@ -519,6 +663,7 @@ describe('API router', () => {
   })
 
   it('hides dev fulfilment outside development/test and fulfils with the dev provider inside', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => {})
     const fulfilled: unknown[] = []
     const repository = billingRepositoryStub({
       fulfilOrder: async (resolvedActor, resolvedOrderId, provider, providerRef) => {

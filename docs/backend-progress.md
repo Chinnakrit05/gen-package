@@ -284,3 +284,15 @@ Known gap: ต้องทดสอบ route นี้บน Vercel preview ด�
 - ที่ตรวจได้โดยไม่ใช้ Docker (13 ตุลาคม 2026): `npx tsc --noEmit` PASS, `npm test` **76 files, 883 passed + 1 skipped**, `npm run build` PASS (คำเตือนขนาด 3D chunk เดิม), `node --check` ของทุกสคริปต์ PASS; fixture `tests/browser/paywall.html` ตรวจด้วยตาใน dev server ผ่าน (Freemium ชิป/ลายน้ำ blueprint+3D/ป้าย 149 ฿ → modal → สั่งซื้อ → จำลองชำระ → ป้ายหาย/เครดิต 10/แท็ก "ซื้อแล้ว"; Pro แสดงวันหมดอายุ)
 - **NOT RUN** (ต้องมี Docker/Supabase local ซึ่งไม่พร้อมบนเครื่องที่พัฒนา): `npm run db:reset`, `npm run db:test` (รวม `0006_billing.test.sql`), `npm run db:test:integration` (รวม billing lifecycle), `npm run test:http:local`, `npm run test:e2e:local`, `npm run ops:cleanup:report` — ต้องรันให้ผ่านก่อน merge; staging ต้อง push migration billing และตั้ง `ANTHROPIC_API_KEY` ใน Vercel ก่อน AI บน cloud จะใช้ได้
 - ไม่มี provider: ไม่มี checkout/webhook จริง, modal แจ้ง "ระบบชำระเงินยังไม่เปิดให้บริการ" และมีปุ่มจำลองการชำระเฉพาะ `APP_ENV` development/test; การเลือก provider, ภาษี/เอกสาร และ refund policy ยังเป็นคำถามเปิดตาม spec §11.3
+
+## ซ่อนการซื้อ + แก้ช่องว่างจากการตรวจ — 13 ตุลาคม 2026
+
+สถานะ: **implemented บน branch `claude/freemium-pro-packages-6050c9`; ส่วนที่ต้องใช้ Docker ยัง NOT RUN**
+
+- เจ้าของผลิตภัณฑ์ตัดสินใจซ่อนการซื้อจนกว่าจะมีผู้ให้บริการชำระเงิน: `Entitlements.purchasesEnabled` (true เฉพาะ development/test), `POST /billing/orders` → 503 `PURCHASE_UNAVAILABLE` บน staging/production; paywall, หน้าแพ็กเกจ (สมาชิก/ผู้เยี่ยมชม) และชิปแพ็กเกจไม่มีปุ่มซื้อ/ต่ออายุ แสดง "ยังไม่เปิดขาย" แทนข้อความ "ติดต่อผู้ดูแล"
+- AI: เก็บ model/โทเคน/แนบรูปต่อคำขอใน `ai_requests` (settle 9 พารามิเตอร์), จำกัดคำขอค้างต่อ workspace ไม่เกิน 2 (`AI_CONCURRENCY_LIMIT` → 429), สคริปต์ `npm run ops:ai-usage:report` สำหรับตั้งราคาเครดิตจากต้นทุนจริง; migration แก้ในไฟล์เดิมเพราะยังไม่เคย apply ที่ไหน
+- server log JSON บรรทัดเดียว (`server/logging.ts`) ตัดคีย์/token/อีเมล ครอบ 5xx ของ AI/billing และ order created/fulfilled; `mapBillingDatabaseError` มี unit test ครบทุกข้อความ
+- client: สิทธิ์รีเฟรชเมื่อออนไลน์/focus/เปิดหน้าแพ็กเกจ พร้อมสถานะ error + ลองใหม่; ปุ่ม AI ตอนเครดิต 0 เปิดหน้าแพ็กเกจแทนการปิดปุ่ม และไม่เสนอซื้อรายแบบให้ Pro; ออฟไลน์ปิดปุ่มดาวน์โหลดไฟล์ผลิตพร้อมคำใบ้ และ fetch ล้มเป็น `NETWORK_ERROR` อ่านเข้าใจได้; เตือนก่อนลบ/ทำสำเนางานที่ซื้อแล้ว; ข้อความใหม่แปลสองภาษา; fixture เพิ่ม purchases off / offline / plan error
+- ตรวจแล้ว: `npx tsc --noEmit` PASS, `npm test` **81 files, 964 passed + 1 skipped**, `npm run build` PASS; ตรวจด้วยตาใน fixture ทั้งสถานะยังไม่เปิดขาย, ออฟไลน์, โหลดแพ็กเกจไม่สำเร็จ, AI เครดิต 0 และยืนยันว่า local-demo ไม่มีชิป/ลายน้ำ/ป้ายราคาเหมือนเดิม
+- **NOT RUN**: pgTAP `0006_billing.test.sql` (`plan(131)`), `tests/integration/billing.lifecycle.test.ts`, `test:http:local` (รวม export-authorizations 402 → 200) และรายงานต้นทุนกับฐานข้อมูลจริง
+

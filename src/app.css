@@ -1363,11 +1363,25 @@ main {
   cursor: not-allowed;
   opacity: 0.68;
 }
-.pb-disabled-note {
-  max-width: 220px;
-  color: var(--text-3);
-  font-size: 11px;
-  line-height: 1.25;
+/* เครดิต AI 0 (cloud): ปุ่มยังกดได้ (ไปหน้าแพ็กเกจ) — ป้าย "0" ให้เห็นบนจอสัมผัสที่ไม่มี tooltip */
+.pb-fab.blocked {
+  opacity: 0.86;
+}
+.pb-fab-zero {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  /* สีตายตัว: อยู่บนปุ่มหลัก (ไล่สี accent) ทั้งธีมสว่าง/มืด — พื้นขาวทึบ ตัวแดงเข้ม อ่านออกเสมอ */
+  background: #fff;
+  color: #b3261e;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: 1px;
 }
 /* แผงช่องพิมพ์ AI = dropdown มุมขวาใต้ header, portal ไป body + z สูงสุด (ลอยเหนือทุกอย่าง) */
 .promptbar {
@@ -4195,15 +4209,24 @@ aside .art-actions .file-pick:only-child {
 .plan-chip-short {
   display: none;
 }
-/* ชิปบอกเครดิตแล้ว ข้อความยาวใต้ปุ่ม AI จึงซ่อนจากสายตา (title ของปุ่มและ screen reader ยังได้เหตุผลครบ) */
-header.with-plan .pb-disabled-note {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
+/* โหลดสิทธิ์ไม่ได้ — ชิปเป็นปุ่มลองใหม่ (โทนเตือน ไม่ใช่ error แดง: งานยังใช้ได้ server ตัดสินสิทธิ์เอง) */
+.plan-chip.error {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-weight: 600;
+}
+.plan-chip.error:hover {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.plan-chip:disabled {
+  cursor: progress;
+  opacity: 0.75;
+}
+.plan-chip:disabled:hover {
+  border-color: var(--border-strong);
+  color: var(--text-2);
 }
 @media (max-width: 1280px) {
   header.with-plan .plan-chip-long {
@@ -4236,6 +4259,17 @@ header.with-plan .pb-disabled-note {
     order: 3;
     flex-basis: 100%;
   }
+}
+
+/* ออฟไลน์ (cloud): ขอสิทธิ์ดาวน์โหลดจาก server ไม่ได้ → ปุ่มไฟล์ผลิตกดไม่ได้ + ข้อความบอกเหตุผลเหนือรายการ */
+.export-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.export-offline {
+  margin: 0 0 8px;
+  color: var(--warn);
+  font-weight: 600;
 }
 
 /* ป้ายราคาบนปุ่มดาวน์โหลดเมื่อยังไม่มีสิทธิ์ (ชิดขวาของปุ่ม) */
@@ -4308,6 +4342,22 @@ header.with-plan .pb-disabled-note {
 :root[data-theme='dark'] .paywall-note {
   background: rgba(186, 117, 23, 0.16);
   color: #f0c57a;
+}
+/* ยังไม่เปิดขาย — โทนสงบ (accent อ่อน) ไม่ใช่คำเตือน: ผู้ใช้ยังออกแบบ/ดูพรีวิวได้ตามปกติ */
+.paywall-soon {
+  display: grid;
+  gap: 2px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.paywall-soon span {
+  color: var(--text-2);
 }
 .paywall-error {
   margin-top: 10px;
@@ -4449,6 +4499,29 @@ header.with-plan .pb-disabled-note {
   font-size: 16px;
   line-height: 1.7;
   color: var(--text-2);
+}
+.pricing-soon {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 4px 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 18px auto 0;
+  padding: 9px 16px;
+  border: 1px solid var(--accent-border);
+  border-radius: 14px;
+  background: var(--accent-weak);
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.pricing-soon b {
+  color: var(--accent-ink);
+}
+.pricing-soon + .pricing-status {
+  margin-top: 10px;
 }
 .pricing-status {
   display: inline-flex;

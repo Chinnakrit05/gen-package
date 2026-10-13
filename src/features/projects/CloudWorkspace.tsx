@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Entitlements } from '../../../shared/contracts/billing'
 import type { CloudProject, ProjectSummary } from '../../../shared/contracts/projects'
-import App, { type CloudProjectBridge, type ProjectStoreSnapshot } from '../../App'
+import App, { type CloudProjectBridge, type EntitlementsStatus, type ProjectStoreSnapshot } from '../../App'
 import { LoadingStage } from '../../components/LoadingBoundary'
 import { freshProject, type Project } from '../../core/project'
 import { requestCloudBoxSpec } from '../../services/api/ai'
@@ -63,6 +63,9 @@ type WorkspaceState =
   | { status: 'error'; message: string }
   | { status: 'ready'; initialProject: Project }
 
+// รีเฟรชสิทธิ์อัตโนมัติตอนกลับมาที่แท็บ (focus/visibilitychange) ไม่เกินครั้งละ 30 วินาที
+const ENTITLEMENTS_AUTO_REFRESH_MS = 30_000
+
 export function CloudWorkspace(props: CloudWorkspaceProps) {
   const tokenRef = useRef(props.accessToken)
   tokenRef.current = props.accessToken
@@ -75,6 +78,16 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
   const [migrationError, setMigrationError] = useState<string | null>(null)
   // สิทธิ์แพ็กเกจ/เครดิต AI ของ workspace — null = โหลดไม่ได้ (App ปฏิบัติเหมือน Freemium แต่ยังเปิดงานได้)
   const [entitlements, setEntitlements] = useState<Entitlements | null>(null)
+  // 'loading' = กำลังโหลดครั้งแรก/โหลดใหม่หลังล้มเหลว, 'ready' = มีข้อมูลจาก server (รีเฟรชล้มเหลวคงข้อมูลเดิมไว้),
+  // 'error' = ยังไม่เคยโหลดได้ (รวมเปิดแบบออฟไลน์) — App ไม่บล็อก AI ฝั่ง client เมื่อไม่ใช่ 'ready' (server ตัดสินเอง)
+  const [entitlementsStatus, setEntitlementsStatusState] = useState<EntitlementsStatus>('loading')
+  const entitlementsStatusRef = useRef<EntitlementsStatus>('loading')
+  const setEntitlementsStatus = useCallback((next: EntitlementsStatus) => {
+    entitlementsStatusRef.current = next
+    setEntitlementsStatusState(next)
+  }, [])
+  const entitlementsRequest = useRef<Promise<Entitlements | null> | null>(null)
+  const lastEntitlementsLoad = useRef(0)
   const initialCreateOperationId = useRef(crypto.randomUUID())
   const scope = useMemo(() => ({ appUserId: props.appUserId, workspaceId: props.workspaceId }), [props.appUserId, props.workspaceId])
   const clientId = useMemo(() => getCloudDraftClientId(), [])
@@ -283,7 +296,8 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
           cloud = await getProject(props.apiBaseUrl, tokenRef.current, summaries[0].id, abortController.signal)
         }
         const project = await controller.open(cloud)
-        // สิทธิ์แพ็กเกจ/เครดิตก่อนตั้ง ready — โหลดไม่ได้ (ApiClientError/เครือข่าย) = null → Freemium แต่เปิดงานได้
+        // สิทธิ์แพ็กเกจ/เครดิตก่อนตั้ง ready — โหลดไม่ได้ (ApiClientError/เครือข่าย) = null + 'error' แต่เปิดงานได้
+        lastEntitlementsLoad.current = Date.now()
         const loadedEntitlements = await getEntitlements(
           props.apiBaseUrl,
           tokenRef.current,
@@ -292,6 +306,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
         ).catch(() => null)
         if (active) {
           setEntitlements(loadedEntitlements)
+          setEntitlementsStatus(loadedEntitlements ? 'ready' : 'error')
           setWorkspace({ status: 'ready', initialProject: project })
         }
       } catch (error) {
@@ -308,7 +323,11 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
               updatedAt: new Date(record.updatedAt).toISOString(),
             })))
             const project = await controller.open(cloudShellFromDraft(drafts[0]))
-            if (active) setWorkspace({ status: 'ready', initialProject: project })
+            if (active) {
+              // เปิดแบบออฟไลน์: ยังไม่มีสิทธิ์จาก server — โหลดเมื่อกลับมาออนไลน์ (event online)
+              setEntitlementsStatus('error')
+              setWorkspace({ status: 'ready', initialProject: project })
+            }
             return
           }
         }
@@ -323,7 +342,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       unsubscribe()
       controller.dispose()
     }
-  }, [controller, createFromEditor, mutations, props.apiBaseUrl, props.workspaceId, refreshItems])
+  }, [controller, createFromEditor, mutations, props.apiBaseUrl, props.workspaceId, refreshItems, setEntitlementsStatus])
 
   useEffect(() => {
     const update = () => {
@@ -364,26 +383,70 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     controller.setOnline(navigator.onLine)
   }, [controller, props.accessToken])
 
-  // โหลดสิทธิ์ใหม่ (หลังชำระ/จำลองการชำระ) — ล้มเหลวคง state เดิมไว้และคืน null
-  const refreshEntitlements = useCallback(async (): Promise<Entitlements | null> => {
-    try {
-      const next = await getEntitlements(props.apiBaseUrl, tokenRef.current, props.workspaceId)
-      setEntitlements(next)
-      return next
-    } catch {
-      return null
+  // โหลดสิทธิ์ใหม่ (เปิดหน้าแพ็กเกจ/paywall, หลังชำระ, กลับมาออนไลน์/กลับมาที่แท็บ, ปุ่มลองใหม่บนชิป) — คืน null เมื่อล้มเหลว
+  // คำขอที่ซ้อนกันใช้ promise เดียว (หลายจุดเรียกพร้อมกันได้โดยไม่ยิงซ้ำ); ล้มเหลวขณะมีข้อมูลเดิม (ready) คงข้อมูลเดิมไว้
+  // fresh = ต้องได้ผลหลังการเปลี่ยนแปลงที่เพิ่งทำ (เช่นหลังชำระ) — คำขอที่ค้างอยู่อาจเริ่มก่อนนั้น จึงรอแล้วยิงใหม่
+  const refreshEntitlements = useCallback((fresh = false): Promise<Entitlements | null> => {
+    const pending = entitlementsRequest.current
+    if (pending) return fresh ? pending.then(() => refreshEntitlements()) : pending
+    lastEntitlementsLoad.current = Date.now()
+    if (entitlementsStatusRef.current !== 'ready') setEntitlementsStatus('loading')
+    const request = getEntitlements(props.apiBaseUrl, tokenRef.current, props.workspaceId).then(
+      (next) => {
+        setEntitlements(next)
+        setEntitlementsStatus('ready')
+        return next
+      },
+      () => {
+        if (entitlementsStatusRef.current !== 'ready') setEntitlementsStatus('error')
+        return null
+      },
+    ).finally(() => {
+      entitlementsRequest.current = null
+    })
+    entitlementsRequest.current = request
+    return request
+  }, [props.apiBaseUrl, props.workspaceId, setEntitlementsStatus])
+
+  // รีเฟรชสิทธิ์อัตโนมัติหลังเปิดพื้นที่งานแล้ว: กลับมาออนไลน์ (ทุกครั้ง — รวมเปิดแบบออฟไลน์ที่ยังไม่เคยโหลด),
+  // กลับมาที่แท็บ/หน้าต่าง (throttle 30 วิ — focus กับ visibilitychange มักมาคู่กัน)
+  const workspaceReady = workspace.status === 'ready'
+  useEffect(() => {
+    if (!workspaceReady) return
+    const refreshIfStale = () => {
+      if (!navigator.onLine) return
+      if (Date.now() - lastEntitlementsLoad.current < ENTITLEMENTS_AUTO_REFRESH_MS) return
+      void refreshEntitlements()
     }
-  }, [props.apiBaseUrl, props.workspaceId])
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refreshIfStale()
+    }
+    const onOnline = () => {
+      void refreshEntitlements()
+    }
+    // ออนไลน์อยู่แล้วตอนพื้นที่งานพร้อมแต่ยังไม่มีสิทธิ์ (เช่น event online มาก่อนเปิดจาก draft เสร็จ) — ลองทันที
+    if (entitlementsStatusRef.current === 'error') refreshIfStale()
+    window.addEventListener('online', onOnline)
+    window.addEventListener('focus', refreshIfStale)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('focus', refreshIfStale)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [refreshEntitlements, workspaceReady])
 
   const bridge = useMemo<CloudProjectBridge>(() => ({
     items,
     online,
     saveState,
     entitlements,
-    refreshEntitlements,
+    entitlementsStatus,
+    refreshEntitlements: () => refreshEntitlements(),
     authorizeExport: async (projectId) => {
       const authorization = await authorizeRemoteExport(props.apiBaseUrl, tokenRef.current, projectId)
       setEntitlements(authorization.entitlements)
+      setEntitlementsStatus('ready')
       return authorization
     },
     createOrder: (kind, projectId) => createRemoteOrder(props.apiBaseUrl, tokenRef.current, {
@@ -394,7 +457,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     }),
     devFulfilOrder: async (orderId) => {
       const order = await devFulfilRemoteOrder(props.apiBaseUrl, tokenRef.current, orderId)
-      await refreshEntitlements()
+      await refreshEntitlements(true)
       return order
     },
     onProjectChange: async (project) => {
@@ -503,7 +566,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
         throw error
       }
     },
-  }), [clientId, controller, createFromEditor, entitlements, items, mutations, online, props.apiBaseUrl, props.workspaceId, refreshEntitlements, refreshItems, saveState, scope, store, subscribeRemoteProject])
+  }), [clientId, controller, createFromEditor, entitlements, entitlementsStatus, items, mutations, online, props.apiBaseUrl, props.workspaceId, refreshEntitlements, refreshItems, saveState, scope, setEntitlementsStatus, store, subscribeRemoteProject])
 
   if (workspace.status === 'loading') {
     return <LoadingStage title="กำลังเปิดงาน" message="กำลังโหลดโปรเจกต์และฉบับร่างล่าสุด…" />

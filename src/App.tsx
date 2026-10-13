@@ -132,6 +132,7 @@ import { ApiClientError } from './services/api/client'
 import { PaywallModal } from './components/PaywallModal'
 import { PricingPage } from './components/PricingPage'
 import { WATERMARK_ALPHA, WATERMARK_TEXT, watermarkTiles } from './core/watermark'
+import { deleteProjectConfirmText, designLicenseKnowledge, saveAsCopyConfirmText } from './core/designLicense'
 import { rasterizeTrustedPreset } from './services/projects/trustedPresetRasterizer'
 import { PRESETS, PRESET_CATS, presetById, presetDataUrl, type Preset } from './core/presets'
 import {
@@ -943,6 +944,9 @@ export interface ProjectStoreSnapshot {
   showDims: boolean
 }
 
+// สถานะการโหลดสิทธิ์แพ็กเกจ (cloud) — ดู CloudWorkspace: 'error' = ยังไม่เคยโหลดได้ (รวมเปิดแบบออฟไลน์)
+export type EntitlementsStatus = 'loading' | 'ready' | 'error'
+
 export interface CloudProjectBridge {
   items: ProjectSummary[]
   online: boolean
@@ -964,6 +968,8 @@ export interface CloudProjectBridge {
   ) => Promise<AiBoxSpec>
   // --- billing/entitlement (ดู docs/billing-freemium-pro.md §4) — null = โหลดไม่ได้ ปฏิบัติเหมือน Freemium ---
   entitlements: Entitlements | null
+  entitlementsStatus: EntitlementsStatus
+  // โหลดสิทธิ์ใหม่ (คำขอซ้อนกันใช้ promise เดียว) — App เรียกตอนเปิดหน้าแพ็กเกจ/paywall, ปุ่มลองใหม่บนชิป, เครดิตหมด
   refreshEntitlements(): Promise<Entitlements | null>
   // ขอสิทธิ์ดาวน์โหลดไฟล์ผลิตของแบบ (server ตัดสิน) — โยน ApiClientError PAYMENT_REQUIRED เมื่อต้องซื้อ
   authorizeExport(projectId: string): Promise<ExportAuthorization>
@@ -1212,6 +1218,20 @@ export default function App({
   const licensed = useMemo(() => new Set(entitlements?.licensedProjectIds ?? []), [entitlements])
   const watermarkOn = cloud !== undefined && gatePlan !== 'pro' && !licensed.has(activeId)
   const watermark = watermarkOn ? WATERMARK_TEXT[lang] : null
+  const entitlementsStatus: EntitlementsStatus = cloud?.entitlementsStatus ?? 'ready'
+  const designLicenseOf = (id: string) =>
+    designLicenseKnowledge(id, licensed, cloud !== undefined, entitlementsStatus === 'ready')
+  // ยังไม่เปิดขาย (server ตัดสิน; entitlements null = ไม่รู้ → ถือว่าไม่เปิด): ซ่อนทุกปุ่มที่ชวนซื้อ
+  const purchasesEnabled = entitlements?.purchasesEnabled === true
+  // AI ถูกบล็อกฝั่ง client เฉพาะเมื่อรู้แน่ว่าเครดิต 0 (สิทธิ์ 'ready') — โหลดไม่ได้/กำลังโหลด ปล่อยให้ server ตัดสิน
+  const aiBlockedReason = cloud && entitlementsStatus === 'ready' && entitlements?.credits === 0
+    ? gatePlan === 'pro'
+      ? t('เครดิต AI รอบนี้หมดแล้ว', 'AI credits for this period are used up')
+      : t('ต้องมีเครดิต AI — ดูแพ็กเกจ', 'AI credits required — see plans')
+    : undefined
+  // ดาวน์โหลดไฟล์ผลิตบน cloud ต้องขอสิทธิ์จาก server ทุกครั้ง — ออฟไลน์จึงกดไม่ได้
+  const exportOffline = cloud !== undefined && !cloud.online
+  const exportOfflineMessage = t('ต้องออนไลน์เพื่อดาวน์โหลดไฟล์ผลิต', 'Go online to download production files')
   const designPrice = Math.round((entitlements?.catalog.design.amountMinor ?? 14900) / 100)
   const proUntilLabel = entitlements?.proUntil
     ? new Date(entitlements.proUntil).toLocaleDateString(lang === 'en' ? 'en-GB' : 'th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -1219,11 +1239,22 @@ export default function App({
   // paywall ที่เปิดอยู่ + action ที่ค้าง (ดาวน์โหลด) ทำต่อหลังได้สิทธิ์
   const [paywall, setPaywall] = useState<{ kind: OrderKind; after?: () => void | Promise<void> } | null>(null)
   const [paywallBusy, setPaywallBusy] = useState(false)
-  // หน้าแพ็กเกจและราคา (cloud) — เปิดจากชิปแพ็กเกจ/ลิงก์ใน paywall; ปุ่มซื้อเปิด paywall ซ้อนด้านบน
+  // หน้าแพ็กเกจและราคา (cloud) — เปิดจากชิปแพ็กเกจ/ลิงก์ใน paywall/ปุ่ม AI เมื่อเครดิตหมด; ปุ่มซื้อเปิด paywall ซ้อนด้านบน
   const [pricingOpen, setPricingOpen] = useState(false)
-  // ป้ายราคาบนปุ่มดาวน์โหลดเมื่อยังไม่มีสิทธิ์ (cloud + ไม่ใช่ Pro + แบบนี้ยังไม่ซื้อ)
+  // เปิดหน้าแพ็กเกจหรือ paywall = โหลดสิทธิ์ใหม่ (ราคา/เครดิต/เปิดขายหรือยัง อาจเปลี่ยนตั้งแต่โหลดครั้งก่อน)
+  const paywallOpen = paywall !== null
+  // deps เฉพาะสถานะเปิด/ปิดโดยเจตนา — ไม่รีเฟรชซ้ำทุกครั้งที่ bridge (cloud) สร้างใหม่
+  useEffect(() => {
+    if (cloud && (pricingOpen || paywallOpen)) void cloud.refreshEntitlements()
+  }, [pricingOpen, paywallOpen])
+  // ป้ายราคาบนปุ่มดาวน์โหลดเมื่อยังไม่มีสิทธิ์ (cloud + ไม่ใช่ Pro + แบบนี้ยังไม่ซื้อ) — ยังไม่เปิดขาย: ไม่ชวนซื้อ
   const exportLock = cloud && watermarkOn ? (
-    <span className="export-lock" title={t('ต้องซื้อแบบนี้หรือสมัคร Pro ก่อนดาวน์โหลด', 'Buy this design or go Pro to download')}>
+    <span
+      className="export-lock"
+      title={purchasesEnabled
+        ? t('ต้องซื้อแบบนี้หรือสมัคร Pro ก่อนดาวน์โหลด', 'Buy this design or go Pro to download')
+        : t('ไฟล์ผลิตดาวน์โหลดได้เมื่อซื้อแบบนี้หรือเป็น Pro — ยังไม่เปิดขาย', 'Production files need this design bought or Pro — not on sale yet')}
+    >
       {designPrice} ฿
     </span>
   ) : null
@@ -2030,7 +2061,9 @@ export default function App({
     if (aiBusy || projectBusy || (cloud && !cloud.online)) return
     const victim = cloud?.items.find((project) => project.id === id) ?? projects.find((p) => p.id === id)
     if (!victim) return
-    if (!window.confirm(`ลบงาน "${victim.name}" ทั้งงานรวมประวัติ?`)) return
+    // แบบที่มีสิทธิ์ดาวน์โหลดแล้ว: สิทธิ์ผูกกับ id ของงาน — ลบแล้วหายถาวร (สำเนา/นำเข้าใหม่ได้ id ใหม่ ไม่ได้สิทธิ์ตาม)
+    // สิทธิ์ยังโหลดไม่ได้ → เตือนแบบมีเงื่อนไข ไม่ถือว่า "ไม่ได้ซื้อ"
+    if (!window.confirm(deleteProjectConfirmText(victim.name, designLicenseOf(id), t))) return
     if (cloud) {
       const current = flushInto(projects).find((project) => project.id === activeId)
       if (!current) return
@@ -2282,14 +2315,23 @@ export default function App({
       await run()
       return
     }
+    // ขอสิทธิ์จาก server ไม่ได้ขณะออฟไลน์ — ปุ่มถูก disable อยู่แล้ว กันกรณีหลุดออฟไลน์ระหว่างทาง (เช่น หลังชำระใน paywall)
+    if (!cloud.online) {
+      window.alert(exportOfflineMessage)
+      return
+    }
     try {
       await cloud.authorizeExport(activeId)
       await run()
     } catch (e) {
       if (e instanceof ApiClientError && e.code === 'PAYMENT_REQUIRED') {
-        // สิทธิ์ฝั่ง client อาจค้าง (เช่น Pro หมดอายุระหว่างเปิดแท็บ) — ซิงก์ชิป/ลายน้ำ/ป้ายราคาใหม่ข้างหลัง modal
-        void cloud.refreshEntitlements()
+        // สิทธิ์ฝั่ง client อาจค้าง (เช่น Pro หมดอายุระหว่างเปิดแท็บ) — เปิด paywall แล้ว effect โหลดสิทธิ์ใหม่
+        // (ซิงก์ชิป/ลายน้ำ/ป้ายราคา/เปิดขายหรือยัง ข้างหลัง modal)
         setPaywall({ kind: 'design', after: run })
+        return
+      }
+      if (e instanceof ApiClientError && e.code === 'NETWORK_ERROR') {
+        window.alert(t('เชื่อมต่อ server ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองใหม่', 'Cannot reach the server — check your connection and try again'))
         return
       }
       window.alert(e instanceof Error ? e.message : t('ขอสิทธิ์ดาวน์โหลดไม่สำเร็จ', 'Could not authorize the download'))
@@ -2881,7 +2923,7 @@ export default function App({
                   disabled={projectBusy || !cloud.online}
                   onClick={() => {
                     const current = flushInto(projects).find((project) => project.id === activeId)
-                    if (!current || !window.confirm('ทิ้ง draft ในแท็บนี้แล้วโหลด cloud ล่าสุด?')) return
+                    if (!current || !window.confirm(t('ทิ้ง draft ในแท็บนี้แล้วโหลด cloud ล่าสุด?', 'Discard this tab’s draft and reload the latest cloud version?'))) return
                     startProjectOperation('reload')
                     void cloud.resolveConflict(current, 'reload').then((resolved) => {
                       setProjects([resolved])
@@ -2890,13 +2932,16 @@ export default function App({
                       window.alert(error instanceof Error ? error.message : 'โหลด cloud ล่าสุดไม่สำเร็จ')
                     }).finally(() => setProjectOperation(null))
                   }}
-                >โหลดล่าสุด</button>
+                >{t('โหลดล่าสุด', 'Reload latest')}</button>
                 <button
                   className="cloud-conflict-btn"
                   disabled={projectBusy || !cloud.online}
                   onClick={() => {
                     const current = flushInto(projects).find((project) => project.id === activeId)
                     if (!current) return
+                    // สำเนาได้ id ใหม่ = แบบใหม่ที่ไม่มีสิทธิ์ดาวน์โหลด — เตือนก่อน และชี้ทางที่เก็บสิทธิ์ไว้ได้ (โหลดล่าสุด)
+                    const copyWarning = saveAsCopyConfirmText(designLicenseOf(activeId), t)
+                    if (copyWarning && !window.confirm(copyWarning)) return
                     startProjectOperation('copy')
                     void cloud.resolveConflict(current, 'copy').then((resolved) => {
                       setProjects([resolved])
@@ -2905,7 +2950,7 @@ export default function App({
                       window.alert(error instanceof Error ? error.message : 'บันทึกเป็นสำเนาไม่สำเร็จ')
                     }).finally(() => setProjectOperation(null))
                   }}
-                >เก็บเป็นสำเนา</button>
+                >{t('เก็บเป็นสำเนา', 'Save as copy')}</button>
               </>
             )}
             {cloud.saveState === 'error' && (
@@ -2913,12 +2958,12 @@ export default function App({
                 className="cloud-conflict-btn"
                 disabled={projectBusy || !cloud.online}
                 onClick={() => void cloud.retrySave()}
-              >ลองอีกครั้ง</button>
+              >{t('ลองอีกครั้ง', 'Try again')}</button>
             )}
           </div>
         )}
-        {cloud && (
-          /* ชิปแพ็กเกจ: Freemium / Pro ถึงวันที่ + เครดิต AI คงเหลือ — กดเปิด paywall แบบ Pro */
+        {cloud && (entitlementsStatus === 'ready' ? (
+          /* ชิปแพ็กเกจ: Freemium / Pro ถึงวันที่ + เครดิต AI คงเหลือ — กดเปิดหน้าแพ็กเกจ */
           <button
             type="button"
             className={`plan-chip${gatePlan === 'pro' ? ' pro' : ''}`}
@@ -2930,23 +2975,43 @@ export default function App({
               <span className="plan-chip-long">{t('เครดิต AI', 'AI credits')}</span>
               <span className="plan-chip-short">AI</span> {gateCredits}
             </span>
-            {gatePlan !== 'pro' && <span className="plan-chip-upgrade">{t('อัปเกรด Pro', 'Upgrade to Pro')}</span>}
+            {gatePlan !== 'pro' && (
+              <span className="plan-chip-upgrade">
+                {purchasesEnabled ? t('อัปเกรด Pro', 'Upgrade to Pro') : t('ดูแพ็กเกจ', 'See plans')}
+              </span>
+            )}
           </button>
-        )}
+        ) : entitlementsStatus === 'error' ? (
+          /* โหลดสิทธิ์ไม่ได้ (รวมเปิดแบบออฟไลน์) — กดลองใหม่; AI/ดาวน์โหลดยังให้ server ตัดสินตามปกติ */
+          <button
+            type="button"
+            className="plan-chip error"
+            title={t('โหลดแพ็กเกจและเครดิต AI ไม่สำเร็จ — กดเพื่อลองใหม่', 'Could not load your plan and AI credits — click to retry')}
+            onClick={() => void cloud.refreshEntitlements()}
+          >
+            {t('โหลดแพ็กเกจไม่สำเร็จ · ลองใหม่', 'Plan unavailable · Retry')}
+          </button>
+        ) : (
+          <button type="button" className="plan-chip" disabled aria-busy="true">
+            {t('กำลังโหลดแพ็กเกจ…', 'Loading plan…')}
+          </button>
+        ))}
         <PromptBar
           current={{ template: templateId, materialId, W, D, H, handle }}
           hasDesign={history.length > 0}
           onApply={applySpec}
           onLoadingChange={setAiBusy}
           allowApiKey={!cloud}
-          credits={cloud ? gateCredits : undefined}
-          disabledReason={
-            cloud && gateCredits === 0
-              ? t(`ต้องมีเครดิต AI — ซื้อแบบนี้ ${designPrice} บาท หรือสมัคร Pro`, `AI credits required — buy this design (${designPrice} THB) or go Pro`)
-              : undefined
-          }
+          credits={cloud && entitlementsStatus === 'ready' ? gateCredits : undefined}
+          blockedReason={aiBlockedReason}
+          onBlocked={() => setPricingOpen(true)}
           onError={(code) => {
-            if (code === 'AI_CREDITS_EXHAUSTED') setPaywall({ kind: 'design' })
+            // server บอกว่าเครดิตหมด (ฝั่ง client อาจยังเห็นเครดิตค้าง) — ซิงก์สิทธิ์แล้วให้ดูแพ็กเกจ ไม่ใช่ paywall รายแบบ
+            // (Pro ต้องไม่ถูกชวนซื้อรายแบบ)
+            if (code === 'AI_CREDITS_EXHAUSTED' && cloud) {
+              void cloud.refreshEntitlements()
+              setPricingOpen(true)
+            }
           }}
           requestSpec={cloud?.requestAiSpec}
         />
@@ -5162,9 +5227,13 @@ export default function App({
                     </ul>
                   </div>
                 )}
+                {exportOffline && (
+                  <p className="hint export-offline" role="status">{exportOfflineMessage}</p>
+                )}
                 <div className="export-list">
-                  {/* ไฟล์ผลิตทั้ง 4 ผ่าน gatedDownload (cloud: server ตัดสินสิทธิ์ก่อนสร้างไฟล์) — ป้ายราคาเมื่อยังไม่มีสิทธิ์ */}
-                  <button className="export-item primary" onClick={() => void gatedDownload(downloadSpecSheet)}>
+                  {/* ไฟล์ผลิตทั้ง 4 ผ่าน gatedDownload (cloud: server ตัดสินสิทธิ์ก่อนสร้างไฟล์) — ป้ายราคาเมื่อยังไม่มีสิทธิ์;
+                      ออฟไลน์ขอสิทธิ์ไม่ได้จึงกดไม่ได้ (.genpkg.json สำรองงานยังส่งออกได้) */}
+                  <button className="export-item primary" disabled={exportOffline} onClick={() => void gatedDownload(downloadSpecSheet)}>
                     <span className="export-badge">PDF</span>
                     <span className="export-body">
                       <span className="export-name">ใบสเปกขอราคา</span>
@@ -5172,7 +5241,7 @@ export default function App({
                     </span>
                     {exportLock}
                   </button>
-                  <button className="export-item" onClick={() => void gatedDownload(downloadDXF)}>
+                  <button className="export-item" disabled={exportOffline} onClick={() => void gatedDownload(downloadDXF)}>
                     <span className="export-badge">DXF</span>
                     <span className="export-body">
                       <span className="export-name">ไฟล์ผลิต · ส่งโรงไดคัท</span>
@@ -5180,7 +5249,7 @@ export default function App({
                     </span>
                     {exportLock}
                   </button>
-                  <button className="export-item" onClick={() => void gatedDownload(downloadPDF)}>
+                  <button className="export-item" disabled={exportOffline} onClick={() => void gatedDownload(downloadPDF)}>
                     <span className="export-badge">PDF</span>
                     <span className="export-body">
                       <span className="export-name">แบบพิมพ์ 1:1</span>
@@ -5188,7 +5257,7 @@ export default function App({
                     </span>
                     {exportLock}
                   </button>
-                  <button className="export-item" onClick={() => void gatedDownload(downloadSVG)}>
+                  <button className="export-item" disabled={exportOffline} onClick={() => void gatedDownload(downloadSVG)}>
                     <span className="export-badge">SVG</span>
                     <span className="export-body">
                       <span className="export-name">dieline เวกเตอร์</span>
@@ -5540,11 +5609,12 @@ export default function App({
             activeLicensed: licensed.has(activeId),
           }}
           catalog={entitlements?.catalog ?? null}
+          purchasesEnabled={purchasesEnabled}
           escapeDisabled={paywall !== null}
           onClose={() => setPricingOpen(false)}
           onChoose={(kind) => {
             if (kind === 'free') setPricingOpen(false)
-            else setPaywall({ kind })
+            else if (purchasesEnabled) setPaywall({ kind })
           }}
         />
       )}
@@ -5559,7 +5629,15 @@ export default function App({
           onClose={() => {
             if (!paywallBusy) setPaywall(null)
           }}
-          onPurchase={(kind) => cloud.createOrder(kind, kind === 'design' ? activeId : undefined)}
+          onPurchase={async (kind) => {
+            try {
+              return await cloud.createOrder(kind, kind === 'design' ? activeId : undefined)
+            } catch (e) {
+              // server ปิดการขายหลังเราโหลดสิทธิ์ (503) — โหลดใหม่ให้ modal/หน้าแพ็กเกจสลับเป็น "ยังไม่เปิดขาย"
+              if (e instanceof ApiClientError && e.code === 'PURCHASE_UNAVAILABLE') void cloud.refreshEntitlements()
+              throw e
+            }
+          }}
           onShowPlans={pricingOpen ? undefined : () => {
             setPaywall(null)
             setPricingOpen(true)

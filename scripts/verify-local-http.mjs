@@ -30,7 +30,7 @@ try {
   }
 
   process.stdout.write('Local dev/preview HTTP parity: PASS\n')
-  process.stdout.write('Verified JSON 401/404/405/410/413, Cloud AI auth/server-key/validation guards, billing entitlements + pro order dev-fulfil, expired/foreign bearer rejection, direct Data API denial, and request IDs.\n')
+  process.stdout.write('Verified JSON 401/404/405/410/413, Cloud AI auth/server-key/validation guards, billing entitlements (purchasesEnabled) + export authorization 402→200 + pro order dev-fulfil, expired/foreign bearer rejection, direct Data API denial, and request IDs.\n')
 } finally {
   for (const fixture of fixtures) {
     if (!fixture.appUserId && fixture.authUserId) {
@@ -130,7 +130,9 @@ async function verifyApiContract(mode, accessToken) {
     `${mode} Cloud AI missing operationId`,
   )
 
-  // billing: workspace ใหม่เป็น Freemium → สั่ง Pro → จำลองจ่าย (APP_ENV=development) → เป็น Pro พร้อมเครดิต
+  // billing: workspace ใหม่เป็น Freemium → ดาวน์โหลดไฟล์ผลิตไม่ได้ (402) → สั่ง Pro → จำลองจ่าย (APP_ENV=development)
+  // → เป็น Pro พร้อมเครดิต และดาวน์โหลดแบบเดิมได้ (200, license 'pro')
+  // APP_ENV=development จึงเปิดขาย (purchasesEnabled) — staging/production ยังปิดจนกว่าจะมีผู้ให้บริการชำระเงิน
   const entitlementsPath = `/api/v1/billing/entitlements?workspaceId=${encodeURIComponent(workspaceId)}`
   await expectJson(
     request(entitlementsPath, { headers: { authorization: `Bearer ${accessToken}` } }),
@@ -138,8 +140,47 @@ async function verifyApiContract(mode, accessToken) {
     (body) => body.data?.workspaceId === workspaceId
       && body.data?.plan === 'free'
       && body.data?.credits === 0
-      && body.data?.devFulfilAvailable === true,
+      && body.data?.devFulfilAvailable === true
+      && body.data?.purchasesEnabled === true,
     `${mode} fresh entitlements`,
+  )
+  // เอกสารขั้นต่ำที่ผ่าน cloudProjectDocumentSchema (server/modules/projects/validation.ts)
+  const project = await expectJson(
+    request('/api/v1/projects', {
+      method: 'POST',
+      headers: authorizedJson,
+      body: JSON.stringify({
+        workspaceId,
+        operationId: randomUUID(),
+        name: 'HTTP parity export',
+        documentSchemaVersion: 1,
+        document: {
+          live: { template: 'tuck-end', materialId: 'carton-300', W: 80, D: 50, H: 120, handle: false },
+          qty: 500,
+          fillColor: null,
+          decos: [],
+          history: [],
+          histIdx: -1,
+        },
+      }),
+    }),
+    201,
+    (body) => typeof body.data?.id === 'string' && body.data?.workspaceId === workspaceId,
+    `${mode} create project for export authorization`,
+  )
+  const exportAuthorizationPath = `/api/v1/projects/${encodeURIComponent(project.data.id)}/export-authorizations`
+  // export-authorizations ไม่รับ body (rejectNonEmptyBody) — ส่งแค่ bearer
+  await expectJson(
+    request(exportAuthorizationPath, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${accessToken}` },
+    }),
+    402,
+    (body) => body.error?.code === 'PAYMENT_REQUIRED'
+      && body.error?.details?.projectId === project.data.id
+      && body.error?.details?.price?.kind === 'design'
+      && Number.isInteger(body.error?.details?.price?.amountMinor),
+    `${mode} free workspace export authorization`,
   )
   const order = await expectJson(
     request('/api/v1/billing/orders', {
@@ -174,6 +215,19 @@ async function verifyApiContract(mode, accessToken) {
       && Number.isInteger(body.data?.credits)
       && body.data.credits > 0,
     `${mode} pro entitlements after dev-fulfil`,
+  )
+  await expectJson(
+    request(exportAuthorizationPath, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${accessToken}` },
+    }),
+    200,
+    (body) => body.data?.projectId === project.data.id
+      && body.data?.source === 'pro'
+      && body.data?.entitlements?.plan === 'pro'
+      && body.data?.entitlements?.purchasesEnabled === true
+      && body.data?.entitlements?.licensedProjectIds?.includes(project.data.id),
+    `${mode} pro workspace export authorization`,
   )
   const now = Math.floor(Date.now() / 1000)
   const expiredToken = resignJwt(accessToken, { iat: now - 3600, exp: now - 60 }, localSigningKey)

@@ -1,10 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk'
 import {
-  askClaude,
+  askClaudeWithUsage,
   type BoxSpecResult,
+  type ClaudeUsage,
   type CurrentSpec,
   type RefImage,
 } from '../../boxSpec'
+import { errorMessageForLog } from '../../logging'
 
 export interface AiBoxSpecInput {
   prompt: string
@@ -12,16 +14,29 @@ export interface AiBoxSpecInput {
   image?: RefImage
 }
 
+export type AiUsage = ClaudeUsage
+
+// ผลของคำขอ AI บน cloud: spec ส่งถึงผู้ใช้; model/usage เก็บลง ai_requests ตอน settle เท่านั้น (ไม่ส่งให้ client)
+export interface AiBoxSpecOutput {
+  spec: BoxSpecResult
+  model: string
+  usage: AiUsage | null
+}
+
 export interface AiService {
-  generateBoxSpec(apiKey: string, input: AiBoxSpecInput): Promise<BoxSpecResult>
+  generateBoxSpec(apiKey: string, input: AiBoxSpecInput): Promise<AiBoxSpecOutput>
 }
 
 export type AiProviderFailureKind = 'authentication' | 'rate-limit' | 'provider' | 'internal'
 
 export class AiProviderError extends Error {
-  constructor(readonly kind: AiProviderFailureKind) {
+  // providerMessage = ข้อความจากต้นทางที่ผ่าน redact แล้ว ไว้ให้ router log (ไม่ส่งถึง client)
+  readonly providerMessage: string
+
+  constructor(readonly kind: AiProviderFailureKind, source?: unknown) {
     super(kind)
     this.name = 'AiProviderError'
+    this.providerMessage = source === undefined ? kind : errorMessageForLog(source)
   }
 }
 
@@ -35,14 +50,14 @@ export class AnthropicAiService implements AiService {
     private readonly limits: { timeoutMs?: number; maxRetries?: number } = CLOUD_AI_LIMITS,
   ) {}
 
-  async generateBoxSpec(apiKey: string, input: AiBoxSpecInput): Promise<BoxSpecResult> {
+  async generateBoxSpec(apiKey: string, input: AiBoxSpecInput): Promise<AiBoxSpecOutput> {
     try {
-      return await askClaude(apiKey, this.model, input.prompt, input.current, input.image, this.limits)
+      return await askClaudeWithUsage(apiKey, this.model, input.prompt, input.current, input.image, this.limits)
     } catch (error) {
-      if (error instanceof Anthropic.AuthenticationError) throw new AiProviderError('authentication')
-      if (error instanceof Anthropic.RateLimitError) throw new AiProviderError('rate-limit')
-      if (error instanceof Anthropic.APIError) throw new AiProviderError('provider')
-      throw new AiProviderError('internal')
+      if (error instanceof Anthropic.AuthenticationError) throw new AiProviderError('authentication', error)
+      if (error instanceof Anthropic.RateLimitError) throw new AiProviderError('rate-limit', error)
+      if (error instanceof Anthropic.APIError) throw new AiProviderError('provider', error)
+      throw new AiProviderError('internal', error)
     }
   }
 }

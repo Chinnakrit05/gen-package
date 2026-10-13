@@ -1,14 +1,18 @@
 // Run npm run dev:local, open /tests/browser/paywall.html — visual check of the Freemium/Pro gating
 // (watermark on blueprint/3D/sticker sheet, 149 ฿ lock badges, paywall modal, plan chip, AI credits)
 // with a fake CloudProjectBridge kept in memory. No Supabase, backend, credentials or extra dependency.
-import { StrictMode, useCallback, useMemo, useState } from 'react'
+// Toggles: "purchases off" (= staging/production today: no pay/renew buttons, 503 PURCHASE_UNAVAILABLE),
+// "offline" (download buttons disabled, server calls fail with NETWORK_ERROR) and "plan error"
+// (entitlements failed to load: chip shows Retry, refresh keeps failing until the toggle is off).
+import { StrictMode, useCallback, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { BillingCatalog, Entitlements, Order, OrderKind } from '../../shared/contracts/billing'
 import type { ProjectSummary } from '../../shared/contracts/projects'
-import App, { type CloudProjectBridge, type ProjectStoreSnapshot } from '../../src/App'
+import App, { type CloudProjectBridge, type EntitlementsStatus, type ProjectStoreSnapshot } from '../../src/App'
 import { PricingPage } from '../../src/components/PricingPage'
 import type { AiBoxSpec } from '../../src/core/ai'
 import { freshProject, type Project } from '../../src/core/project'
+import { LangCtx, loadLang } from '../../src/i18n'
 import { ApiClientError } from '../../src/services/api/client'
 import '@fontsource/noto-sans-thai/400.css'
 import '@fontsource/noto-sans-thai/700.css'
@@ -48,8 +52,17 @@ function makeState(scenario: Scenario): FakeState {
       licensedProjectIds: scenario === 'free+licensed' ? [first.id] : [],
       catalog: CATALOG,
       devFulfilAvailable: true,
+      purchasesEnabled: true,
     },
   }
+}
+
+// สวิตช์ที่ไม่ผูกกับ scenario (เปลี่ยนแล้ว App ไม่ remount) — อ่านผ่าน ref ให้ closure ของ bridge เห็นค่าล่าสุด
+interface Flags {
+  purchasesOff: boolean
+  offline: boolean
+  planError: boolean
+  planRefreshing: boolean
 }
 
 const summaries = (state: FakeState): ProjectSummary[] => state.projects.map((project) => ({
@@ -61,14 +74,27 @@ const summaries = (state: FakeState): ProjectSummary[] => state.projects.map((pr
 }))
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
-const snapshot = (state: FakeState): Entitlements => ({
+// ยังไม่เปิดขาย = เหมือน server staging/production ตอนนี้: ไม่เปิดขายและจำลองการชำระไม่ได้
+const snapshot = (state: FakeState, flags: Flags): Entitlements => ({
   ...state.entitlements,
   licensedProjectIds: [...state.entitlements.licensedProjectIds],
+  purchasesEnabled: !flags.purchasesOff,
+  devFulfilAvailable: !flags.purchasesOff && state.entitlements.devFulfilAvailable,
 })
 
+const networkError = () => new ApiClientError(0, 'NETWORK_ERROR', 'เชื่อมต่อ server ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองใหม่')
+
 // bridge ใหม่ทุกครั้งที่ state เปลี่ยน (bump) เพื่อให้ App เห็น entitlements ล่าสุดผ่าน prop
-function buildBridge(state: FakeState, bump: () => void): CloudProjectBridge {
+function buildBridge(state: FakeState, flagsRef: { current: Flags }, bump: () => void): CloudProjectBridge {
   const ent = state.entitlements
+  const flags = flagsRef.current
+  // เรียก server ปลอม: ออฟไลน์ = fetch ไม่ถึง (client ห่อเป็น NETWORK_ERROR)
+  const online = () => {
+    if (flagsRef.current.offline) throw networkError()
+  }
+  const entitlementsStatus: EntitlementsStatus = flags.planError
+    ? flags.planRefreshing ? 'loading' : 'error'
+    : 'ready'
   const isPro = () => ent.plan === 'pro' && !!ent.proUntil && Date.parse(ent.proUntil) > Date.now()
   const licensed = (projectId: string) => ent.licensedProjectIds.includes(projectId)
   const grant = (projectId: string) => {
@@ -76,9 +102,10 @@ function buildBridge(state: FakeState, bump: () => void): CloudProjectBridge {
   }
   return {
     items: summaries(state),
-    online: true,
-    saveState: 'clean',
-    entitlements: snapshot(state),
+    online: !flags.offline,
+    saveState: flags.offline ? 'offline' : 'clean',
+    entitlements: flags.planError ? null : snapshot(state, flags),
+    entitlementsStatus,
     onProjectChange: async (project) => {
       state.projects = state.projects.map((item) => (item.id === project.id ? structuredClone(project) : item))
     },
@@ -112,6 +139,7 @@ function buildBridge(state: FakeState, bump: () => void): CloudProjectBridge {
     subscribeRemoteProject: () => () => {},
     requestAiSpec: async (_prompt, current) => {
       await delay(350)
+      online()
       if (ent.credits <= 0) {
         throw new ApiClientError(402, 'AI_CREDITS_EXHAUSTED', 'เครดิต AI หมด — ซื้อแบบนี้หรือสมัคร Pro', { credits: 0, plan: ent.plan })
       }
@@ -131,14 +159,28 @@ function buildBridge(state: FakeState, bump: () => void): CloudProjectBridge {
       }
       return spec
     },
-    refreshEntitlements: async () => snapshot(state),
+    // plan error: โหลดไม่สำเร็จจนกว่าจะปิดสวิตช์ (ระหว่างนั้นชิปเป็น "กำลังโหลด" แล้วกลับเป็น "ลองใหม่")
+    refreshEntitlements: async () => {
+      if (flagsRef.current.planError || flagsRef.current.offline) {
+        if (flagsRef.current.planError) {
+          flagsRef.current.planRefreshing = true
+          bump()
+        }
+        await delay(400)
+        flagsRef.current.planRefreshing = false
+        bump()
+        return null
+      }
+      return snapshot(state, flagsRef.current)
+    },
     authorizeExport: async (projectId) => {
       await delay(200)
-      if (licensed(projectId)) return { projectId, source: 'purchase', entitlements: snapshot(state) }
+      online()
+      if (licensed(projectId)) return { projectId, source: 'purchase', entitlements: snapshot(state, flagsRef.current) }
       if (isPro()) {
         grant(projectId)
         bump()
-        return { projectId, source: 'pro', entitlements: snapshot(state) }
+        return { projectId, source: 'pro', entitlements: snapshot(state, flagsRef.current) }
       }
       throw new ApiClientError(402, 'PAYMENT_REQUIRED', 'ต้องซื้อแบบนี้ (149 บาท) หรือสมัคร Pro ก่อนดาวน์โหลด', {
         projectId,
@@ -147,6 +189,10 @@ function buildBridge(state: FakeState, bump: () => void): CloudProjectBridge {
     },
     createOrder: async (kind: OrderKind, projectId?: string) => {
       await delay(200)
+      online()
+      if (flagsRef.current.purchasesOff) {
+        throw new ApiClientError(503, 'PURCHASE_UNAVAILABLE', 'ยังไม่เปิดขาย — ยังไม่มีผู้ให้บริการชำระเงิน')
+      }
       if (kind === 'design') {
         if (!projectId) throw new ApiClientError(400, 'VALIDATION_ERROR', 'design ต้องระบุ projectId')
         if (licensed(projectId)) throw new ApiClientError(409, 'ALREADY_LICENSED', 'แบบนี้ซื้อแล้ว')
@@ -172,6 +218,8 @@ function buildBridge(state: FakeState, bump: () => void): CloudProjectBridge {
     },
     devFulfilOrder: async (orderId) => {
       await delay(300)
+      online()
+      if (flagsRef.current.purchasesOff) throw new ApiClientError(404, 'NOT_FOUND', 'ไม่พบเส้นทางนี้')
       const order = state.orders.get(orderId)
       if (!order) throw new ApiClientError(404, 'ORDER_NOT_FOUND', 'ไม่พบคำสั่งซื้อ')
       if (order.status === 'paid') return order
@@ -199,26 +247,37 @@ function Fixture() {
   const [guestPricing, setGuestPricing] = useState(false)
   const [version, setVersion] = useState(0)
   const bump = useCallback(() => setVersion((v) => v + 1), [])
+  const flagsRef = useRef<Flags>({ purchasesOff: false, offline: false, planError: false, planRefreshing: false })
+  const flags = flagsRef.current
+  const toggle = (key: 'purchasesOff' | 'offline' | 'planError') => {
+    flagsRef.current[key] = !flagsRef.current[key]
+    flagsRef.current.planRefreshing = false
+    bump()
+  }
   const state = useMemo(() => makeState(scenario), [scenario])
-  // version อยู่ใน deps โดยเจตนา: bridge สร้างใหม่หลัง state ภายในเปลี่ยน (ชำระ/หักเครดิต) ให้ App รีเรนเดอร์
+  // version อยู่ใน deps โดยเจตนา: bridge สร้างใหม่หลัง state ภายในเปลี่ยน (ชำระ/หักเครดิต/สวิตช์) ให้ App รีเรนเดอร์
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const bridge = useMemo(() => buildBridge(state, bump), [state, bump, version])
+  const bridge = useMemo(() => buildBridge(state, flagsRef, bump), [state, bump, version])
   const initialStore = useMemo<ProjectStoreSnapshot>(() => ({
     projects: state.projects.map((project) => structuredClone(project)),
     activeId: state.projects[0].id,
     showDims: true,
   }), [state])
-  const ent = bridge.entitlements!
+  const ent = state.entitlements
   return (
     <>
       <App key={scenario} cloud={bridge} initialStore={initialStore} migrateLegacy={false} onLogout={() => {}} />
       {guestPricing && (
-        <PricingPage
-          viewer={{ kind: 'guest' }}
-          catalog={null}
-          onClose={() => setGuestPricing(false)}
-          onChoose={() => setGuestPricing(false)}
-        />
+        // เหมือน CloudRoot: ผู้เยี่ยมชมไม่รู้ว่าเปิดขายหรือยัง → purchasesEnabled false เสมอ
+        <LangCtx.Provider value={loadLang()}>
+          <PricingPage
+            viewer={{ kind: 'guest' }}
+            catalog={null}
+            purchasesEnabled={false}
+            onClose={() => setGuestPricing(false)}
+            onChoose={() => setGuestPricing(false)}
+          />
+        </LangCtx.Provider>
       )}
       <div className="fixture-bar" role="toolbar" aria-label="สลับสถานะแพ็กเกจ (fixture)">
         {SCENARIOS.map((item) => (
@@ -229,9 +288,20 @@ function Fixture() {
         <button type="button" aria-pressed={guestPricing} onClick={() => setGuestPricing((v) => !v)}>
           pricing (guest)
         </button>
+        <span className="fixture-sep" aria-hidden="true" />
+        <button type="button" aria-pressed={flags.purchasesOff} onClick={() => toggle('purchasesOff')}>
+          purchases off
+        </button>
+        <button type="button" aria-pressed={flags.offline} onClick={() => toggle('offline')}>
+          offline
+        </button>
+        <button type="button" aria-pressed={flags.planError} onClick={() => toggle('planError')}>
+          plan error
+        </button>
         <span className="fixture-state">
           <b>{ent.plan}</b>{ent.proUntil ? ` ถึง ${new Date(ent.proUntil).toLocaleDateString('th-TH')}` : ''} · เครดิต {ent.credits} ·
-          ซื้อแล้ว {ent.licensedProjectIds.length} แบบ · orders {state.orders.size} — ลายน้ำ/ป้าย 149 ฿/paywall ต้องตามสถานะนี้
+          ซื้อแล้ว {ent.licensedProjectIds.length} แบบ · orders {state.orders.size} · ขาย {flags.purchasesOff ? 'ปิด' : 'เปิด (dev)'} ·
+          {' '}{flags.offline ? 'ออฟไลน์' : 'ออนไลน์'} · สิทธิ์ {bridge.entitlementsStatus} — ลายน้ำ/ป้าย 149 ฿/paywall ต้องตามสถานะนี้
         </span>
       </div>
     </>

@@ -16,6 +16,7 @@ const entitlements: Entitlements = {
     pro: { kind: 'pro', amountMinor: 39900, currency: 'THB', credits: 100, periodDays: 30 },
   },
   devFulfilAvailable: true,
+  purchasesEnabled: true,
 }
 
 const order: Order = {
@@ -90,6 +91,16 @@ describe('billing API client', () => {
     }))
 
     await expect(createOrder('/api/v1', 'token', input)).resolves.toMatchObject({ id: 'order-1', status: 'pending' })
+  })
+
+  it('surfaces PURCHASE_UNAVAILABLE (503) when the server has purchasing switched off', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      error: { code: 'PURCHASE_UNAVAILABLE', message: 'ยังไม่เปิดขาย' },
+      requestId: crypto.randomUUID(),
+    }), { status: 503, headers: { 'content-type': 'application/json' } })))
+
+    const input = { workspaceId: 'space', operationId: crypto.randomUUID(), kind: 'pro' as const }
+    await expect(createOrder('/api/v1', 'token', input)).rejects.toMatchObject({ status: 503, code: 'PURCHASE_UNAVAILABLE' })
   })
 
   it('posts dev-fulfil to the order route', async () => {

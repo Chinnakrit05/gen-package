@@ -8,6 +8,8 @@ import { FALLBACK_AMOUNT_MINOR, formatBaht } from './PaywallModal'
 // ใช้สองที่: ในแอป (สมาชิก cloud: เห็นแพ็กเกจปัจจุบัน ปุ่มซื้อเปิด PaywallModal) และหน้าเข้าสู่ระบบ (ผู้เยี่ยมชม:
 // ปุ่มทั้งหมดพาไปเข้าสู่ระบบ) — ราคา/เครดิตมาจาก catalog ของ server; ผู้เยี่ยมชมยังไม่มี catalog (endpoint ต้อง login)
 // จึงใช้ราคาสำรองเดียวกับ PaywallModal และไม่แสดงจำนวนเครดิต (ไม่เดาตัวเลขที่ผู้ดูแลปรับได้)
+// ยังไม่เปิดขาย (purchasesEnabled false — ผู้เยี่ยมชมเป็น false เสมอ): ปุ่มของแพ็กเกจที่ต้องจ่ายเป็น "เปิดขายเร็ว ๆ นี้"
+// แบบกดไม่ได้ (รวมต่ออายุ Pro) + ป้ายแจ้งใต้หัวหน้า + FAQ วิธีชำระบอกว่ายังไม่เปิด — ไม่มีข้อความให้ติดต่อผู้ดูแล
 
 export type PricingViewer =
   | { kind: 'guest' }
@@ -23,6 +25,8 @@ export type PricingViewer =
 export interface PricingPageProps {
   viewer: PricingViewer
   catalog: BillingCatalog | null
+  // เปิดให้ซื้อได้หรือไม่ (Entitlements.purchasesEnabled จาก server; ผู้เยี่ยมชม/โหลดสิทธิ์ไม่ได้ = false)
+  purchasesEnabled: boolean
   onClose(): void
   // สมาชิก: 'design'/'pro' → เปิด paywall, 'free' → กลับไปออกแบบ; ผู้เยี่ยมชม: ทุกปุ่ม → เข้าสู่ระบบ
   onChoose(kind: OrderKind | 'free'): void
@@ -46,7 +50,7 @@ interface PlanCard {
   note?: string
 }
 
-export function PricingPage({ viewer, catalog, onClose, onChoose, escapeDisabled = false }: PricingPageProps) {
+export function PricingPage({ viewer, catalog, purchasesEnabled, onClose, onChoose, escapeDisabled = false }: PricingPageProps) {
   const t = useT()
   const rootRef = useRef<HTMLDivElement>(null)
   const escRef = useRef({ escapeDisabled, onClose })
@@ -85,6 +89,7 @@ export function PricingPage({ viewer, catalog, onClose, onChoose, escapeDisabled
   const breakEven = Math.floor(proMinor / designMinor) + 1
 
   const projectLabel = member ? `“${member.projectName}”` : ''
+  const comingSoon = { label: t('เปิดขายเร็ว ๆ นี้', 'Coming soon'), disabled: true, primary: false }
 
   const cards: PlanCard[] = [
     {
@@ -127,13 +132,16 @@ export function PricingPage({ viewer, catalog, onClose, onChoose, escapeDisabled
             : t('แถมเครดิต AI', 'Bonus AI credits'),
         },
       ],
-      cta: guest
-        ? { label: t('เข้าสู่ระบบเพื่อซื้อ', 'Sign in to buy'), disabled: false, primary: false }
-        : isPro
-          ? { label: t('Pro ดาวน์โหลดได้ทุกแบบอยู่แล้ว', 'Pro already covers every design'), disabled: true, primary: false }
-          : member?.activeLicensed
-            ? { label: t(`ซื้อแบบ ${projectLabel} แล้ว`, `${projectLabel} is already yours`), disabled: true, primary: false }
-            : { label: t(`ซื้อแบบ ${projectLabel}`, `Buy ${projectLabel}`), disabled: false, primary: false },
+      // สถานะที่เป็นข้อเท็จจริง (Pro ครอบคลุมแล้ว / ซื้อแล้ว) แสดงเหมือนเดิมแม้ยังไม่เปิดขาย — ไม่ใช่ปุ่มซื้อ
+      cta: isPro
+        ? { label: t('Pro ดาวน์โหลดได้ทุกแบบอยู่แล้ว', 'Pro already covers every design'), disabled: true, primary: false }
+        : member?.activeLicensed
+          ? { label: t(`ซื้อแบบ ${projectLabel} แล้ว`, `${projectLabel} is already yours`), disabled: true, primary: false }
+          : !purchasesEnabled
+            ? comingSoon
+            : guest
+              ? { label: t('เข้าสู่ระบบเพื่อซื้อ', 'Sign in to buy'), disabled: false, primary: false }
+              : { label: t(`ซื้อแบบ ${projectLabel}`, `Buy ${projectLabel}`), disabled: false, primary: false },
       current: null,
     },
     {
@@ -155,11 +163,15 @@ export function PricingPage({ viewer, catalog, onClose, onChoose, escapeDisabled
         { ok: true, text: t('เครดิตไม่หมดอายุ ใช้ต่อได้แม้เลิก Pro', 'Credits never expire, even after Pro ends') },
         { ok: true, text: t('แบบที่โหลดตอนเป็น Pro ยังโหลดได้หลังหมดอายุ', 'Designs downloaded while Pro stay downloadable') },
       ],
-      cta: guest
-        ? { label: t('เข้าสู่ระบบเพื่อสมัคร Pro', 'Sign in to go Pro'), disabled: false, primary: true }
-        : isPro
-          ? { label: t('ต่ออายุ Pro', 'Renew Pro'), disabled: false, primary: true }
-          : { label: t('สมัคร Pro', 'Go Pro'), disabled: false, primary: true },
+      cta: !purchasesEnabled
+        ? isPro
+          ? { label: t('ต่ออายุได้เมื่อเปิดขาย', 'Renewal opens soon'), disabled: true, primary: false }
+          : comingSoon
+        : guest
+          ? { label: t('เข้าสู่ระบบเพื่อสมัคร Pro', 'Sign in to go Pro'), disabled: false, primary: true }
+          : isPro
+            ? { label: t('ต่ออายุ Pro', 'Renew Pro'), disabled: false, primary: true }
+            : { label: t('สมัคร Pro', 'Go Pro'), disabled: false, primary: true },
       current: isPro
         ? member?.proUntilLabel
           ? t(`ใช้อยู่ · ถึง ${member.proUntilLabel}`, `Active · until ${member.proUntilLabel}`)
@@ -223,10 +235,15 @@ export function PricingPage({ viewer, catalog, onClose, onChoose, escapeDisabled
     },
     {
       q: t('ชำระเงินอย่างไร', 'How do I pay?'),
-      a: t(
-        'ระบบชำระเงินออนไลน์ยังไม่เปิดให้บริการ กดซื้อแล้วระบบจะสร้างคำสั่งซื้อไว้ให้ ติดต่อผู้ดูแลเพื่อเปิดสิทธิ์',
-        'Online payment is not open yet. Pressing buy creates an order; contact the administrator to activate it.',
-      ),
+      a: purchasesEnabled
+        ? t(
+          'ระบบชำระเงินออนไลน์ยังไม่เปิดให้บริการ กดซื้อแล้วระบบจะสร้างคำสั่งซื้อไว้ให้ ติดต่อผู้ดูแลเพื่อเปิดสิทธิ์',
+          'Online payment is not open yet. Pressing buy creates an order; contact the administrator to activate it.',
+        )
+        : t(
+          'ยังไม่เปิดรับชำระเงิน เราจะประกาศให้ทราบเมื่อเปิดขาย ระหว่างนี้ออกแบบและดูพรีวิวได้ฟรีทุกอย่าง',
+          'Payments are not open yet — we will announce when sales open. Meanwhile, design and preview everything for free.',
+        ),
     },
   ]
 
@@ -263,6 +280,17 @@ export function PricingPage({ viewer, catalog, onClose, onChoose, escapeDisabled
               'Try unlimited packaging designs with 3D previews, then pay only for the design you send to print — or go Pro to download every design.',
             )}
           </p>
+          {!purchasesEnabled && (
+            <div className="pricing-soon" role="note">
+              <b>{t('ยังไม่เปิดขาย', 'Not on sale yet')}</b>
+              <span>
+                {t(
+                  'ระบบชำระเงินจะเปิดเร็ว ๆ นี้ ตอนนี้ออกแบบและดูพรีวิวได้ฟรี',
+                  'Payments open soon. You can keep designing and previewing for free.',
+                )}
+              </span>
+            </div>
+          )}
           {member && (
             <div className="pricing-status" role="status">
               <b>{isPro ? 'Pro' : 'Freemium'}</b>

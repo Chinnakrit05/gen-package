@@ -56,6 +56,9 @@ create index credit_ledger_workspace_created_idx
   on app_private.credit_ledger (workspace_id, created_at desc);
 
 -- คำขอ AI หนึ่งรายการ = จอง 1 เครดิตก่อนเรียก provider แล้ว settle ทีหลัง
+-- model/*_tokens/has_image = ข้อมูลต้นทุนที่ server ส่งมาตอน settle (scripts/report-ai-usage.mjs อ่านไปสรุป)
+-- ไม่มี prompt/รูป/ผลลัพธ์; model และโทเคนมีเฉพาะ succeeded, has_image มีทั้ง succeeded และ failed
+-- (แถวที่ถูกคืนเพราะค้างเกิน 15 นาทีไม่มีข้อมูลเหล่านี้)
 create table app_private.ai_requests (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references app_private.workspaces(id) on delete restrict,
@@ -63,13 +66,39 @@ create table app_private.ai_requests (
   operation_id uuid not null,
   state text not null default 'reserved',
   reserved_units integer not null default 1,
+  model text,
+  input_tokens integer,
+  output_tokens integer,
+  cache_read_tokens integer,
+  cache_creation_tokens integer,
+  has_image boolean,
   created_at timestamptz not null default statement_timestamp(),
   settled_at timestamptz,
   constraint ai_requests_state check (state in ('reserved', 'succeeded', 'failed')),
   constraint ai_requests_reserved_units check (reserved_units = 1),
   constraint ai_requests_settled_at check ((state = 'reserved') = (settled_at is null)),
+  constraint ai_requests_model_length check (model is null or char_length(model) between 1 and 200),
+  constraint ai_requests_input_tokens check (input_tokens >= 0),
+  constraint ai_requests_output_tokens check (output_tokens >= 0),
+  constraint ai_requests_cache_read_tokens check (cache_read_tokens >= 0),
+  constraint ai_requests_cache_creation_tokens check (cache_creation_tokens >= 0),
+  constraint ai_requests_usage_succeeded check (
+    state = 'succeeded'
+    or (
+      model is null
+      and input_tokens is null
+      and output_tokens is null
+      and cache_read_tokens is null
+      and cache_creation_tokens is null
+    )
+  ),
   constraint ai_requests_operation_unique unique (workspace_id, actor_user_id, operation_id)
 );
+
+-- คำขอที่ค้าง reserved ต่อ workspace: ใช้ทั้งตอนคืนแถวค้างและนับ concurrency cap ใน reserve_ai_credit
+create index ai_requests_reserved_idx
+  on app_private.ai_requests (workspace_id, created_at)
+  where state = 'reserved';
 
 create table app_private.orders (
   id uuid primary key default gen_random_uuid(),
@@ -341,7 +370,8 @@ end;
 $$;
 
 -- จอง 1 เครดิตก่อนเรียก provider (หักทันที); operation_id เดิมที่ยังค้าง → AI_REQUEST_IN_PROGRESS,
--- ที่ settle แล้ว → IDEMPOTENCY_KEY_REUSED; เครดิตไม่พอ → AI_CREDITS_EXHAUSTED (detail = plan)
+-- ที่ settle แล้ว → IDEMPOTENCY_KEY_REUSED; ค้าง reserved ครบ 2 คำขอแล้ว → AI_CONCURRENCY_LIMIT;
+-- เครดิตไม่พอ → AI_CREDITS_EXHAUSTED (detail = plan)
 create function public.reserve_ai_credit(
   p_actor_user_id uuid,
   p_workspace_id uuid,
@@ -405,6 +435,18 @@ begin
     raise exception using errcode = 'P0001', message = 'IDEMPOTENCY_KEY_REUSED';
   end if;
 
+  -- เพดานคำขอที่วิ่งพร้อมกันต่อ workspace = 2 (นับแถว reserved ที่เหลือหลังคืนแถวค้างด้านบน)
+  -- กันยิงขนานจนเผาเครดิต/ค่า provider; ปฏิเสธก่อนหักเครดิต — server map เป็น 429 AI_RATE_LIMITED
+  -- advisory lock ด้านบนทำให้การนับนี้กับการ insert ด้านล่างเรียงกันต่อ workspace
+  if (
+    select count(*)
+    from app_private.ai_requests
+    where workspace_id = p_workspace_id
+      and state = 'reserved'
+  ) >= 2 then
+    raise exception using errcode = 'P0001', message = 'AI_CONCURRENCY_LIMIT';
+  end if;
+
   select * into v_balance
   from app_private.credit_balances
   where workspace_id = p_workspace_id
@@ -438,10 +480,17 @@ end;
 $$;
 
 -- ปิดคำขอ AI: failed → คืนเครดิต; succeeded → ไม่คืน; ต้องเป็นของ actor และยัง reserved
+-- พารามิเตอร์ usage (ไม่บังคับ): model/โทเคนเก็บเฉพาะ succeeded (failed ถูกทิ้ง), has_image เก็บทั้งสองผล
 create function public.settle_ai_request(
   p_actor_user_id uuid,
   p_request_id uuid,
-  p_outcome text
+  p_outcome text,
+  p_model text default null,
+  p_input_tokens integer default null,
+  p_output_tokens integer default null,
+  p_cache_read_tokens integer default null,
+  p_cache_creation_tokens integer default null,
+  p_has_image boolean default null
 )
 returns jsonb
 language plpgsql
@@ -483,7 +532,13 @@ begin
 
   update app_private.ai_requests
   set state = p_outcome,
-      settled_at = statement_timestamp()
+      settled_at = statement_timestamp(),
+      has_image = p_has_image,
+      model = case when p_outcome = 'succeeded' then nullif(btrim(p_model), '') end,
+      input_tokens = case when p_outcome = 'succeeded' then p_input_tokens end,
+      output_tokens = case when p_outcome = 'succeeded' then p_output_tokens end,
+      cache_read_tokens = case when p_outcome = 'succeeded' then p_cache_read_tokens end,
+      cache_creation_tokens = case when p_outcome = 'succeeded' then p_cache_creation_tokens end
   where id = p_request_id;
 
   return jsonb_build_object('credits', coalesce(v_balance.balance, 0));
@@ -670,7 +725,8 @@ revoke all on function app_private.order_json(app_private.orders) from public, a
 revoke all on function public.get_entitlements(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.authorize_export(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.reserve_ai_credit(uuid, uuid, uuid) from public, anon, authenticated;
-revoke all on function public.settle_ai_request(uuid, uuid, text) from public, anon, authenticated;
+revoke all on function public.settle_ai_request(uuid, uuid, text, text, integer, integer, integer, integer, boolean)
+  from public, anon, authenticated;
 revoke all on function public.create_order(uuid, uuid, uuid, text, uuid) from public, anon, authenticated;
 revoke all on function public.fulfil_order(uuid, uuid, text, text) from public, anon, authenticated;
 
@@ -681,6 +737,7 @@ grant execute on function app_private.order_json(app_private.orders) to service_
 grant execute on function public.get_entitlements(uuid, uuid) to service_role;
 grant execute on function public.authorize_export(uuid, uuid) to service_role;
 grant execute on function public.reserve_ai_credit(uuid, uuid, uuid) to service_role;
-grant execute on function public.settle_ai_request(uuid, uuid, text) to service_role;
+grant execute on function public.settle_ai_request(uuid, uuid, text, text, integer, integer, integer, integer, boolean)
+  to service_role;
 grant execute on function public.create_order(uuid, uuid, uuid, text, uuid) to service_role;
 grant execute on function public.fulfil_order(uuid, uuid, text, text) to service_role;

@@ -15784,6 +15784,9 @@ function buildUserContent(prompt, current) {
 \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14\u0E08\u0E32\u0E01\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32: ${prompt}` : prompt;
 }
 async function askClaude(apiKey, model, prompt, current, image, limits) {
+  return (await askClaudeWithUsage(apiKey, model, prompt, current, image, limits)).spec;
+}
+async function askClaudeWithUsage(apiKey, model, prompt, current, image, limits) {
   const client = new Anthropic({
     apiKey,
     ...limits?.timeoutMs !== void 0 ? { timeout: limits.timeoutMs } : {},
@@ -15813,7 +15816,16 @@ async function askClaude(apiKey, model, prompt, current, image, limits) {
     (b) => b.type === "tool_use" && b.name === "box_spec"
   );
   if (!block) throw new Error("\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E1C\u0E25\u0E25\u0E31\u0E1E\u0E18\u0E4C\u0E08\u0E32\u0E01\u0E42\u0E21\u0E40\u0E14\u0E25");
-  return sanitize(block.input, false);
+  return {
+    spec: sanitize(block.input, false),
+    model: msg.model,
+    usage: {
+      inputTokens: msg.usage.input_tokens,
+      outputTokens: msg.usage.output_tokens,
+      cacheReadTokens: msg.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: msg.usage.cache_creation_input_tokens ?? 0
+    }
+  };
 }
 var JSON_INSTRUCTION = `
 

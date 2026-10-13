@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Order } from '../../../shared/contracts/billing'
 import { HttpError } from '../../http/errors'
 import { BillingService, type BillingRepository, type StoredEntitlements } from './billingService'
@@ -55,19 +55,50 @@ function repositoryStub(overrides: Partial<BillingRepository> = {}): BillingRepo
 }
 
 describe('BillingService', () => {
-  it('adds the dev-fulfil flag to entitlements and export authorizations', async () => {
-    for (const devFulfilEnabled of [true, false]) {
+  let info: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    info = vi.spyOn(console, 'info').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    info.mockRestore()
+  })
+
+  it('adds the dev-fulfil and purchases flags to entitlements and export authorizations', async () => {
+    for (const [devFulfilEnabled, purchasesEnabled] of [[true, true], [false, false], [true, false]] as const) {
       const service = new BillingService(repositoryStub({
         authorizeExport: async () => ({ projectId, source: 'pro', entitlements: stored }),
-      }), { devFulfilEnabled })
+      }), { devFulfilEnabled, purchasesEnabled })
 
-      expect(await service.getEntitlements(actor, workspaceId)).toEqual({ ...stored, devFulfilAvailable: devFulfilEnabled })
+      expect(await service.getEntitlements(actor, workspaceId)).toEqual({
+        ...stored,
+        devFulfilAvailable: devFulfilEnabled,
+        purchasesEnabled,
+      })
       expect(await service.authorizeExport(actor, projectId)).toEqual({
         projectId,
         source: 'pro',
-        entitlements: { ...stored, devFulfilAvailable: devFulfilEnabled },
+        entitlements: { ...stored, devFulfilAvailable: devFulfilEnabled, purchasesEnabled },
       })
     }
+  })
+
+  it('refuses orders with 503 PURCHASE_UNAVAILABLE before touching the repository when purchases are off', async () => {
+    let called = false
+    const service = new BillingService(repositoryStub({
+      createOrder: async () => {
+        called = true
+        throw new Error('must not be called')
+      },
+    }), { devFulfilEnabled: false, purchasesEnabled: false })
+
+    const failure = await service.createOrder(actor, { workspaceId, operationId, kind: 'pro' })
+      .then(() => null, (error: unknown) => error)
+    expect(failure).toBeInstanceOf(HttpError)
+    expect(failure).toMatchObject({ status: 503, code: 'PURCHASE_UNAVAILABLE' })
+    expect(called).toBe(false)
+    expect(info).not.toHaveBeenCalled()
   })
 
   it('hides dev fulfilment unless the environment allows it', async () => {
@@ -77,7 +108,7 @@ describe('BillingService', () => {
         called = true
         throw new Error('must not be called')
       },
-    }), { devFulfilEnabled: false })
+    }), { devFulfilEnabled: false, purchasesEnabled: false })
 
     const failure = await service.devFulfilOrder(actor, orderId, 'request-1').then(() => null, (error: unknown) => error)
     expect(failure).toBeInstanceOf(HttpError)
@@ -92,10 +123,21 @@ describe('BillingService', () => {
         calls.push([resolvedActor?.userId, resolvedOrderId, provider, providerRef])
         return paidOrder
       },
-    }), { devFulfilEnabled: true })
+    }), { devFulfilEnabled: true, purchasesEnabled: true })
 
     expect(await service.devFulfilOrder(actor, orderId, 'request-1')).toBe(paidOrder)
     expect(calls).toEqual([[actor.userId, orderId, 'dev', 'request-1']])
+    // log หนึ่งบรรทัดต่อการชำระ: order/kind/workspace/provider — ไม่มีข้อมูลผู้ใช้
+    expect(info).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(info.mock.calls[0][0]))).toEqual({
+      level: 'info',
+      event: 'order_fulfilled',
+      requestId: 'request-1',
+      orderId,
+      kind: 'design',
+      workspaceId,
+      provider: 'dev',
+    })
   })
 
   it('passes orders and AI credit bookkeeping through to the repository unchanged', async () => {
@@ -109,20 +151,40 @@ describe('BillingService', () => {
         calls.push(['reserve', resolvedActor.userId, resolvedWorkspaceId, resolvedOperationId])
         return { requestId: aiRequestId, credits: 2 }
       },
-      settleAiRequest: async (resolvedActor, requestId, outcome) => {
-        calls.push(['settle', resolvedActor.userId, requestId, outcome])
+      settleAiRequest: async (resolvedActor, requestId, outcome, usage) => {
+        calls.push(['settle', resolvedActor.userId, requestId, outcome, usage])
         return { credits: 3 }
       },
-    }), { devFulfilEnabled: true })
+    }), { devFulfilEnabled: true, purchasesEnabled: true })
 
     const input = { workspaceId, operationId, kind: 'design' as const, projectId }
+    const usage = {
+      hasImage: true,
+      model: 'claude-test-model',
+      inputTokens: 1200,
+      outputTokens: 340,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+    }
     expect(await service.createOrder(actor, input)).toMatchObject({ id: orderId, status: 'pending', checkoutUrl: null })
     expect(await service.reserveAiCredit(actor, workspaceId, operationId)).toEqual({ requestId: aiRequestId, credits: 2 })
     expect(await service.settleAiRequest(actor, aiRequestId, 'failed')).toEqual({ credits: 3 })
+    expect(await service.settleAiRequest(actor, aiRequestId, 'succeeded', usage)).toEqual({ credits: 3 })
     expect(calls).toEqual([
       ['order', actor.userId, input],
       ['reserve', actor.userId, workspaceId, operationId],
-      ['settle', actor.userId, aiRequestId, 'failed'],
+      ['settle', actor.userId, aiRequestId, 'failed', undefined],
+      ['settle', actor.userId, aiRequestId, 'succeeded', usage],
     ])
+    expect(info).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(info.mock.calls[0][0]))).toEqual({
+      level: 'info',
+      event: 'order_created',
+      requestId: actor.requestId,
+      orderId,
+      kind: 'design',
+      workspaceId,
+      provider: 'none',
+    })
   })
 })

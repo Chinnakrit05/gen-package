@@ -1,6 +1,6 @@
 begin;
 
-select plan(112);
+select plan(131);
 
 select has_table('app_private', 'plan_catalog', 'plan_catalog exists');
 select has_table('app_private', 'subscriptions', 'subscriptions exists');
@@ -9,6 +9,12 @@ select has_table('app_private', 'credit_ledger', 'credit_ledger exists');
 select has_table('app_private', 'ai_requests', 'ai_requests exists');
 select has_table('app_private', 'orders', 'orders exists');
 select has_table('app_private', 'design_licenses', 'design_licenses exists');
+select has_column('app_private', 'ai_requests', 'model', 'ai_requests records the model');
+select has_column('app_private', 'ai_requests', 'input_tokens', 'ai_requests records input tokens');
+select has_column('app_private', 'ai_requests', 'output_tokens', 'ai_requests records output tokens');
+select has_column('app_private', 'ai_requests', 'cache_read_tokens', 'ai_requests records cache read tokens');
+select has_column('app_private', 'ai_requests', 'cache_creation_tokens', 'ai_requests records cache creation tokens');
+select has_column('app_private', 'ai_requests', 'has_image', 'ai_requests records whether an image was attached');
 select ok((select relrowsecurity from pg_class where oid = 'app_private.plan_catalog'::regclass), 'plan catalog has RLS');
 select ok((select relrowsecurity from pg_class where oid = 'app_private.subscriptions'::regclass), 'subscriptions has RLS');
 select ok((select relrowsecurity from pg_class where oid = 'app_private.credit_balances'::regclass), 'credit balances has RLS');
@@ -34,6 +40,14 @@ select ok(
   'authenticated cannot reserve AI credits directly'
 );
 select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.settle_ai_request(uuid,uuid,text,text,integer,integer,integer,integer,boolean)',
+    'EXECUTE'
+  ),
+  'authenticated cannot settle AI requests directly'
+);
+select ok(
   has_function_privilege('service_role', 'public.get_entitlements(uuid,uuid)', 'EXECUTE'),
   'service role can read entitlements'
 );
@@ -46,7 +60,11 @@ select ok(
   'service role can reserve AI credits'
 );
 select ok(
-  has_function_privilege('service_role', 'public.settle_ai_request(uuid,uuid,text)', 'EXECUTE'),
+  has_function_privilege(
+    'service_role',
+    'public.settle_ai_request(uuid,uuid,text,text,integer,integer,integer,integer,boolean)',
+    'EXECUTE'
+  ),
   'service role can settle AI requests'
 );
 select ok(
@@ -452,6 +470,133 @@ select is(
   9,
   'fresh reservation still settles normally'
 );
+
+-- เพดานคำขอที่ค้าง reserved พร้อมกันต่อ workspace = 2: คำขอที่ 3 ถูกปฏิเสธโดยไม่หักเครดิต
+create temporary table ai_parallel_one as
+select public.reserve_ai_credit(
+  (select app_user_id from billing_actor),
+  (select personal_workspace_id from billing_actor),
+  'a0000000-0000-4000-8000-000000000006'
+) as result;
+create temporary table ai_parallel_two as
+select public.reserve_ai_credit(
+  (select app_user_id from billing_actor),
+  (select personal_workspace_id from billing_actor),
+  'a0000000-0000-4000-8000-000000000007'
+) as result;
+
+select is(
+  (select (result->>'credits')::integer from ai_parallel_two),
+  7,
+  'two outstanding reservations each deduct a credit'
+);
+select throws_ok(
+  $$select public.reserve_ai_credit(
+    (select app_user_id from billing_actor),
+    (select personal_workspace_id from billing_actor),
+    'a0000000-0000-4000-8000-000000000008'
+  )$$,
+  'P0001', 'AI_CONCURRENCY_LIMIT',
+  'third parallel reservation hits the concurrency cap'
+);
+select is(
+  (select balance from app_private.credit_balances
+    where workspace_id = (select personal_workspace_id from billing_actor)),
+  7,
+  'concurrency refusal deducts nothing'
+);
+select is(
+  (select count(*)::integer from app_private.ai_requests
+    where workspace_id = (select personal_workspace_id from billing_actor)
+      and operation_id = 'a0000000-0000-4000-8000-000000000008'),
+  0,
+  'concurrency refusal leaves no request behind'
+);
+
+-- แถวที่ค้างเกิน 15 นาทีถูกคืนก่อนนับ จึงไม่กินเพดาน (operation ที่ถูกปฏิเสธลองใหม่ได้)
+update app_private.ai_requests
+set created_at = statement_timestamp() - interval '20 minutes'
+where id = (select (result->>'requestId')::uuid from ai_parallel_one);
+
+create temporary table ai_parallel_three as
+select public.reserve_ai_credit(
+  (select app_user_id from billing_actor),
+  (select personal_workspace_id from billing_actor),
+  'a0000000-0000-4000-8000-000000000008'
+) as result;
+
+select is(
+  (select (result->>'credits')::integer from ai_parallel_three),
+  7,
+  'stale reservations do not count toward the concurrency cap'
+);
+
+-- settle บันทึกข้อมูลต้นทุน: succeeded เก็บ model/โทเคน/has_image, failed เก็บแค่ has_image
+select is(
+  (public.settle_ai_request(
+    (select app_user_id from billing_actor),
+    (select (result->>'requestId')::uuid from ai_parallel_two),
+    'succeeded',
+    p_model => 'claude-test-model',
+    p_input_tokens => 1200,
+    p_output_tokens => 340,
+    p_cache_read_tokens => 0,
+    p_cache_creation_tokens => 0,
+    p_has_image => true
+  )->>'credits')::integer,
+  7,
+  'succeeded settle with usage keeps the deduction'
+);
+select is(
+  (select (model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, has_image)::text
+    from app_private.ai_requests
+    where id = (select (result->>'requestId')::uuid from ai_parallel_two)),
+  '(claude-test-model,1200,340,0,0,t)',
+  'succeeded settle stores the model, tokens and image flag'
+);
+select is(
+  (public.settle_ai_request(
+    (select app_user_id from billing_actor),
+    (select (result->>'requestId')::uuid from ai_parallel_three),
+    'failed',
+    p_model => 'claude-test-model',
+    p_input_tokens => 99,
+    p_output_tokens => 9,
+    p_cache_read_tokens => 0,
+    p_cache_creation_tokens => 0,
+    p_has_image => false
+  )->>'credits')::integer,
+  8,
+  'failed settle with usage still refunds'
+);
+select is(
+  (select (model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, has_image)::text
+    from app_private.ai_requests
+    where id = (select (result->>'requestId')::uuid from ai_parallel_three)),
+  '(,,,,,f)',
+  'failed settle stores only the image flag'
+);
+select is(
+  (select (model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, has_image)::text
+    from app_private.ai_requests
+    where id = (select (result->>'requestId')::uuid from ai_second)),
+  '(,,,,,)',
+  'settle without usage leaves the usage columns empty'
+);
+select throws_ok(
+  $$update app_private.ai_requests
+    set input_tokens = -1
+    where id = (select (result->>'requestId')::uuid from ai_parallel_two)$$,
+  '23514', null,
+  'token counts cannot be negative'
+);
+select throws_ok(
+  $$update app_private.ai_requests
+    set model = 'claude-test-model'
+    where id = (select (result->>'requestId')::uuid from ai_parallel_three)$$,
+  '23514', null,
+  'only succeeded requests carry a model and token counts'
+);
 select throws_ok(
   $$select public.reserve_ai_credit(
     (select app_user_id from billing_other),
@@ -509,7 +654,7 @@ select ok(
     from pro_entitlements),
   'pro period runs 30 days from now'
 );
-select is((select (result->>'credits')::integer from pro_entitlements), 109, 'pro purchase adds its credits on top');
+select is((select (result->>'credits')::integer from pro_entitlements), 108, 'pro purchase adds its credits on top');
 select is(
   (select count(*)::integer from app_private.subscriptions
     where workspace_id = (select personal_workspace_id from billing_actor)
@@ -598,7 +743,7 @@ select is(
     (select app_user_id from billing_actor),
     (select personal_workspace_id from billing_actor)
   )->>'credits')::integer,
-  209,
+  208,
   'renewal adds another round of credits'
 );
 
@@ -655,7 +800,7 @@ select is(
     (select app_user_id from billing_actor),
     (select personal_workspace_id from billing_actor)
   )->>'credits')::integer,
-  209,
+  208,
   'credits do not expire with the pro plan'
 );
 

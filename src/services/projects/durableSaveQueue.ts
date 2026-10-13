@@ -438,6 +438,9 @@ function classifyFailure(value: unknown, online: boolean): FailureKind {
     : null
   if (status === 409) return 'conflict'
   if (status === 429 || status === 503) return 'retry'
+  // fetch ไม่ถึง server ขณะเบราว์เซอร์ยังออนไลน์ (requestApi ห่อ TypeError เป็น NETWORK_ERROR status 0) = ลองใหม่
+  // แบบเดิม — ถ้าตกไป 'offline' คิวจะหยุดรอ event online ที่อาจไม่มาเลย
+  if (status === 0 && (value as { code?: unknown }).code === 'NETWORK_ERROR') return 'retry'
   if (status === 0) return 'offline'
   if (value instanceof TypeError) return 'retry'
   return 'fatal'

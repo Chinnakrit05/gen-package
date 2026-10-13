@@ -299,6 +299,87 @@ describe('billing lifecycle: entitlements, orders, licenses and AI credits', () 
     expect(evidence).toEqual({ requests: 2, refunds: 1, reserved: 0, states: ['failed', 'succeeded'] })
   })
 
+  it('stores AI usage on settle and caps outstanding reservations per workspace at two', async () => {
+    const workspaceId = owner.personal_workspace_id
+    const before = (await billing.getEntitlements(ownerActor, workspaceId)).credits
+    expect(before).toBeGreaterThanOrEqual(2)
+
+    const first = await billing.reserveAiCredit(ownerActor, workspaceId, randomUUID())
+    const second = await billing.reserveAiCredit(ownerActor, workspaceId, randomUUID())
+    expect(second.credits).toBe(before - 2)
+
+    // คำขอที่ 3 ระหว่างสองคำขอแรกยังค้าง → 429 AI_RATE_LIMITED ไม่หักเครดิต ไม่ทิ้งแถว
+    const blockedOperation = randomUUID()
+    await expect(billing.reserveAiCredit(ownerActor, workspaceId, blockedOperation))
+      .rejects.toMatchObject({ status: 429, code: 'AI_RATE_LIMITED' })
+    expect((await billing.getEntitlements(ownerActor, workspaceId)).credits).toBe(before - 2)
+    const [blocked] = await sql<{ count: number }[]>`
+      select count(*)::integer as count from app_private.ai_requests
+      where workspace_id = ${workspaceId} and operation_id = ${blockedOperation}
+    `
+    expect(blocked.count).toBe(0)
+
+    // succeeded เก็บ model/โทเคน/has_image; failed เก็บแค่ has_image (และยังคืนเครดิตตามปกติ)
+    await expect(billing.settleAiRequest(ownerActor, first.requestId, 'succeeded', {
+      hasImage: true,
+      model: 'claude-test-model',
+      inputTokens: 1234,
+      outputTokens: 321,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+    })).resolves.toEqual({ credits: before - 2 })
+    await expect(billing.settleAiRequest(ownerActor, second.requestId, 'failed', {
+      hasImage: false,
+      model: 'claude-test-model',
+      inputTokens: 99,
+      outputTokens: 9,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+    })).resolves.toEqual({ credits: before - 1 })
+
+    type UsageRow = {
+      state: string
+      model: string | null
+      input_tokens: number | null
+      output_tokens: number | null
+      cache_read_tokens: number | null
+      cache_creation_tokens: number | null
+      has_image: boolean | null
+    }
+    const usageRow = async (id: string) => {
+      const [row] = await sql<UsageRow[]>`
+        select state, model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, has_image
+        from app_private.ai_requests
+        where id = ${id}
+      `
+      return row
+    }
+    expect(await usageRow(first.requestId)).toEqual({
+      state: 'succeeded',
+      model: 'claude-test-model',
+      input_tokens: 1234,
+      output_tokens: 321,
+      cache_read_tokens: 0,
+      cache_creation_tokens: 0,
+      has_image: true,
+    })
+    expect(await usageRow(second.requestId)).toEqual({
+      state: 'failed',
+      model: null,
+      input_tokens: null,
+      output_tokens: null,
+      cache_read_tokens: null,
+      cache_creation_tokens: null,
+      has_image: false,
+    })
+
+    // ปิดครบแล้วจองใหม่ได้ — operationId ที่ถูกปฏิเสธเพราะเพดานไม่ถูกบันทึก จึงใช้ซ้ำได้
+    const retried = await billing.reserveAiCredit(ownerActor, workspaceId, blockedOperation)
+    expect(retried.credits).toBe(before - 2)
+    await expect(billing.settleAiRequest(ownerActor, retried.requestId, 'failed', { hasImage: false }))
+      .resolves.toEqual({ credits: before - 1 })
+  })
+
   it('turns the workspace Pro after a pro order and licenses designs on export', async () => {
     const workspaceId = owner.personal_workspace_id
     const before = await billing.getEntitlements(ownerActor, workspaceId)

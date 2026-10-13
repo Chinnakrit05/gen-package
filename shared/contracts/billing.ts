@@ -26,6 +26,9 @@ export interface Entitlements {
   licensedProjectIds: string[]
   catalog: BillingCatalog
   devFulfilAvailable: boolean // server อยู่ใน development/test จึงจำลองการชำระได้
+  // เปิดให้สั่งซื้อได้หรือไม่ — เจ้าของผลิตภัณฑ์ตัดสินใจ (13 ต.ค. 2026) ให้ซ่อนปุ่มซื้อจนกว่าจะมีผู้ให้บริการชำระเงิน
+  // ตอนนี้ server คืน true เฉพาะ development/test (จำลองการชำระได้); false = client ซ่อนปุ่มซื้อ และ POST /billing/orders ตอบ 503
+  purchasesEnabled: boolean
 }
 
 export type LicenseSource = 'purchase' | 'pro' | 'admin'
