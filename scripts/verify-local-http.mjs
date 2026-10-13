@@ -11,43 +11,50 @@ const sql = postgres(status.DB_URL, { max: 2, idle_timeout: 2 })
 const admin = createClient(status.API_URL, status.SECRET_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 })
-let authUserId = null
-let appUserId = null
+const browserClient = createClient(status.API_URL, status.PUBLISHABLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+})
+// บัญชี fixture แยกต่อ mode: billing smoke เปลี่ยนสถานะ workspace (free → pro) จึงใช้บัญชีเดิมซ้ำรอบ preview ไม่ได้
+const fixtures = []
 
 try {
-  const email = `http-parity-${randomUUID()}@example.test`
-  const password = `Local-${randomUUID()}!aA1`
-  const created = await admin.auth.admin.createUser({ email, password, email_confirm: true })
-  if (created.error || !created.data.user) throw created.error ?? new Error('create auth user failed')
-  authUserId = created.data.user.id
-
-  const browserClient = createClient(status.API_URL, status.PUBLISHABLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-  const signedIn = await browserClient.auth.signInWithPassword({ email, password })
-  if (signedIn.error || !signedIn.data.session) throw signedIn.error ?? new Error('sign in failed')
-
   for (const mode of ['dev', 'preview']) {
+    const fixture = await createFixtureUser()
     const server = startVite(mode)
     try {
       await waitForHttp(`${APP_ORIGIN}/api/v1/health`)
-      const verifiedAppUserId = await verifyApiContract(mode, signedIn.data.session.access_token)
-      appUserId ??= verifiedAppUserId
+      fixture.appUserId = await verifyApiContract(mode, fixture.accessToken)
     } finally {
       await stopProcess(server)
     }
   }
 
   process.stdout.write('Local dev/preview HTTP parity: PASS\n')
-  process.stdout.write('Verified JSON 401/404/405/410/413, Cloud AI auth/BYOK guards, expired/foreign bearer rejection, direct Data API denial, and request IDs.\n')
+  process.stdout.write('Verified JSON 401/404/405/410/413, Cloud AI auth/server-key/validation guards, billing entitlements + pro order dev-fulfil, expired/foreign bearer rejection, direct Data API denial, and request IDs.\n')
 } finally {
-  if (!appUserId && authUserId) {
-    const rows = await sql`select app_user_id from app_private.auth_identities where subject = ${authUserId}`.catch(() => [])
-    appUserId = rows[0]?.app_user_id ?? null
+  for (const fixture of fixtures) {
+    if (!fixture.appUserId && fixture.authUserId) {
+      const rows = await sql`select app_user_id from app_private.auth_identities where subject = ${fixture.authUserId}`.catch(() => [])
+      fixture.appUserId = rows[0]?.app_user_id ?? null
+    }
+    if (fixture.appUserId) await cleanupAppData(fixture.appUserId).catch(() => undefined)
+    if (fixture.authUserId) await admin.auth.admin.deleteUser(fixture.authUserId).catch(() => undefined)
   }
-  if (appUserId) await cleanupAppData(appUserId).catch(() => undefined)
-  if (authUserId) await admin.auth.admin.deleteUser(authUserId).catch(() => undefined)
   await sql.end({ timeout: 1 }).catch(() => undefined)
+}
+
+async function createFixtureUser() {
+  const email = `http-parity-${randomUUID()}@example.test`
+  const password = `Local-${randomUUID()}!aA1`
+  const created = await admin.auth.admin.createUser({ email, password, email_confirm: true })
+  if (created.error || !created.data.user) throw created.error ?? new Error('create auth user failed')
+  // ลงทะเบียนก่อน sign-in เพื่อให้ finally ลบ auth user ได้แม้ sign-in ล้ม
+  const fixture = { authUserId: created.data.user.id, appUserId: null, accessToken: null }
+  fixtures.push(fixture)
+  const signedIn = await browserClient.auth.signInWithPassword({ email, password })
+  if (signedIn.error || !signedIn.data.session) throw signedIn.error ?? new Error('sign in failed')
+  fixture.accessToken = signedIn.data.session.access_token
+  return fixture
 }
 
 async function verifyApiContract(mode, accessToken) {
@@ -83,14 +90,20 @@ async function verifyApiContract(mode, accessToken) {
     (body) => typeof body.data?.user?.id === 'string',
     `${mode} session bootstrap`,
   )
+  const workspaceId = bootstrap.data.personalWorkspace.id
+  assert(typeof workspaceId === 'string' && workspaceId.length > 0, `${mode} bootstrap did not return a personal workspace`)
+  const authorizedJson = {
+    authorization: `Bearer ${accessToken}`,
+    'content-type': 'application/json',
+  }
+  // Cloud AI ใช้คีย์ของระบบ (ANTHROPIC_API_KEY ฝั่ง server) — client ไม่ส่งคีย์อีกต่อไป
+  // ลำดับที่ smoke นี้ยืนยัน: bearer → validate body → ไม่มีคีย์ server = 503 (ก่อนหักเครดิต)
+  const aiBody = { workspaceId, operationId: randomUUID(), prompt: 'test' }
   await expectJson(
     request('/api/v1/ai/box-spec', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-packit-anthropic-api-key': 'sk-ant-http-smoke-only',
-      },
-      body: JSON.stringify({ prompt: 'test' }),
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(aiBody),
     }),
     401,
     (body) => body.error?.code === 'AUTH_REQUIRED',
@@ -99,29 +112,68 @@ async function verifyApiContract(mode, accessToken) {
   await expectJson(
     request('/api/v1/ai/box-spec', {
       method: 'POST',
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ prompt: 'test' }),
+      headers: authorizedJson,
+      body: JSON.stringify(aiBody),
     }),
-    422,
-    (body) => body.error?.code === 'AI_API_KEY_REQUIRED',
-    `${mode} Cloud AI missing BYOK key`,
+    503,
+    (body) => body.error?.code === 'CONFIGURATION_ERROR',
+    `${mode} Cloud AI without server key`,
   )
   await expectJson(
     request('/api/v1/ai/box-spec', {
       method: 'POST',
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        'content-type': 'application/json',
-        'x-packit-anthropic-api-key': 'short',
-      },
-      body: JSON.stringify({ prompt: 'test' }),
+      headers: authorizedJson,
+      body: JSON.stringify({ workspaceId, prompt: 'test' }),
     }),
-    400,
-    (body) => body.error?.code === 'AI_API_KEY_INVALID',
-    `${mode} Cloud AI malformed BYOK key`,
+    422,
+    (body) => body.error?.code === 'VALIDATION_ERROR',
+    `${mode} Cloud AI missing operationId`,
+  )
+
+  // billing: workspace ใหม่เป็น Freemium → สั่ง Pro → จำลองจ่าย (APP_ENV=development) → เป็น Pro พร้อมเครดิต
+  const entitlementsPath = `/api/v1/billing/entitlements?workspaceId=${encodeURIComponent(workspaceId)}`
+  await expectJson(
+    request(entitlementsPath, { headers: { authorization: `Bearer ${accessToken}` } }),
+    200,
+    (body) => body.data?.workspaceId === workspaceId
+      && body.data?.plan === 'free'
+      && body.data?.credits === 0
+      && body.data?.devFulfilAvailable === true,
+    `${mode} fresh entitlements`,
+  )
+  const order = await expectJson(
+    request('/api/v1/billing/orders', {
+      method: 'POST',
+      headers: authorizedJson,
+      body: JSON.stringify({ workspaceId, operationId: randomUUID(), kind: 'pro' }),
+    }),
+    201,
+    (body) => typeof body.data?.id === 'string'
+      && body.data?.kind === 'pro'
+      && body.data?.status === 'pending'
+      && body.data?.checkoutUrl === null,
+    `${mode} create pro order`,
+  )
+  // dev-fulfil ไม่รับ body (rejectNonEmptyBody) — ส่งแค่ bearer
+  await expectJson(
+    request(`/api/v1/billing/orders/${order.data.id}/dev-fulfil`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${accessToken}` },
+    }),
+    200,
+    (body) => body.data?.id === order.data.id
+      && body.data?.status === 'paid'
+      && body.data?.provider === 'dev',
+    `${mode} dev-fulfil pro order`,
+  )
+  await expectJson(
+    request(entitlementsPath, { headers: { authorization: `Bearer ${accessToken}` } }),
+    200,
+    (body) => body.data?.plan === 'pro'
+      && typeof body.data?.proUntil === 'string'
+      && Number.isInteger(body.data?.credits)
+      && body.data.credits > 0,
+    `${mode} pro entitlements after dev-fulfil`,
   )
   const now = Math.floor(Date.now() / 1000)
   const expiredToken = resignJwt(accessToken, { iat: now - 3600, exp: now - 60 }, localSigningKey)
@@ -268,6 +320,10 @@ function startVite(mode) {
       APP_ALLOWED_ORIGINS: APP_ORIGIN,
       SUPABASE_URL: status.API_URL,
       SUPABASE_SECRET_KEY: status.SECRET_KEY,
+      // smoke นี้คาดหวัง 503 CONFIGURATION_ERROR จาก Cloud AI: ตั้งค่าว่างทับทั้ง shell และ .env.local
+      // (Vite loadEnv ให้ process.env ชนะไฟล์ .env; ค่าว่าง = ไม่มีคีย์ server)
+      ANTHROPIC_API_KEY: '',
+      BOX_SPEC_MODEL: '',
     },
   })
 }
@@ -310,6 +366,25 @@ async function stopProcess(child) {
 async function cleanupAppData(userId) {
   await sql.begin(async (tx) => {
     await tx`delete from app_private.legacy_imports where user_id = ${userId}`
+    // billing — ลบก่อน projects: orders/design_licenses อ้าง projects แบบ restrict, subscriptions อ้าง orders
+    await tx`delete from app_private.ai_requests where workspace_id in (
+      select workspace_id from app_private.workspace_members where user_id = ${userId}
+    )`
+    await tx`delete from app_private.credit_ledger where workspace_id in (
+      select workspace_id from app_private.workspace_members where user_id = ${userId}
+    )`
+    await tx`delete from app_private.credit_balances where workspace_id in (
+      select workspace_id from app_private.workspace_members where user_id = ${userId}
+    )`
+    await tx`delete from app_private.design_licenses where workspace_id in (
+      select workspace_id from app_private.workspace_members where user_id = ${userId}
+    )`
+    await tx`delete from app_private.subscriptions where workspace_id in (
+      select workspace_id from app_private.workspace_members where user_id = ${userId}
+    )`
+    await tx`delete from app_private.orders where workspace_id in (
+      select workspace_id from app_private.workspace_members where user_id = ${userId}
+    )`
     await tx`delete from app_private.project_operations where actor_user_id = ${userId}`
     await tx`delete from app_private.projects where created_by = ${userId}`
     await tx`delete from app_private.workspace_members where user_id = ${userId}`

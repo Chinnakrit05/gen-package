@@ -90,14 +90,16 @@ function useSheetTexture(
   decos: Deco[],
   fillColor: string | null | undefined,
   fillImage: FillImage | null | undefined,
+  watermark: string | null | undefined,
 ) {
   return useArtTexture({
     sheetW: dieline.width,
     sheetH: dieline.height,
     decos,
     fillImage,
-    // ไม่มีทั้งลาย สีพื้น และรูปพื้น → ใช้สีวัสดุตรง ๆ ไม่ต้องมี texture
-    enabled: decos.length > 0 || !!fillColor || !!fillImage,
+    // ไม่มีทั้งลาย สีพื้น และรูปพื้น → ใช้สีวัสดุตรง ๆ ไม่ต้องมี texture (แต่มีลายน้ำ = ต้องมีแม้กล่องเปล่า)
+    enabled: decos.length > 0 || !!fillColor || !!fillImage || !!watermark,
+    watermark,
     deps: [fillColor, fillImage, mat.color, mat.id, dieline],
     draw: (ctx, s, imgOf) => {
       // พื้นสีวัสดุก่อน (ช่องว่าง/ขอบ) แล้วทับด้วยสีพื้นแพ็กเกจเฉพาะพื้นที่แผงจริง
@@ -270,10 +272,12 @@ interface ModelProps {
   imperial?: boolean
   dimVariant?: 'lines' | 'badge'
   lightMode?: LightMode
+  // ลายน้ำพรีวิว (Freemium) ประทับบน texture ทั้งแผ่น — null/ไม่ส่ง = ไม่มี
+  watermark?: string | null
 }
 
-function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillColor, fillImage, dims, imperial, dimVariant }: ModelProps) {
-  const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage)
+function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillColor, fillImage, dims, imperial, dimVariant, watermark }: ModelProps) {
+  const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage, watermark)
 
   const geoms = useMemo(
     () =>
@@ -371,8 +375,8 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillCol
 // นามบัตรใน 3D = การ์ดใบเดียว (แผ่นบาง) พิมพ์ลายหน้าที่ +Z และลายหลังที่ -Z
 // ลายมาจาก texture แผ่นคลี่ผืนเดียวกับ blueprint (หน้าอยู่ช่วง x ซ้าย, หลังอยู่ช่วง x ขวา)
 // จึงคำนวณ UV ของแต่ละหน้าให้ชี้ไปช่วง x ของหน้านั้น ๆ — หลังกลับ (หมุนรอบแกน Y) ให้อ่านถูกด้าน
-function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial, dimVariant }: ModelProps) {
-  const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage)
+function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial, dimVariant, watermark }: ModelProps) {
+  const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage, watermark)
   const front = dieline.panels[0]
   const back = dieline.panels[1]
   const fxs = front.outline.map((p) => p.x)

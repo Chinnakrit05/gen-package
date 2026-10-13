@@ -18,7 +18,8 @@ npm run dev:local
 - ไม่ต้องสร้าง `.env.local`, login Google, ติดตั้ง Supabase CLI เพิ่ม หรือเปิด Docker
 - ออกแบบ 3D, จัด artwork, บันทึกงานในเบราว์เซอร์ และ export/import ไฟล์งานได้
 - `dev:local` ข้ามไฟล์ env และไม่ใช้ Supabase/AI keys ที่ค้างอยู่ใน shell จึงไม่แตะข้อมูล Cloud ของทีม
-- แถบ AI ใช้ตัวจำลองเมื่อไม่ได้กรอกคีย์ หากกรอก Anthropic API key ใน UI แล้วกดสร้าง จะเรียก API จริงและอาจมีค่าใช้จ่าย; คีย์อยู่ใน memory ของแท็บ ไม่บันทึกลงไฟล์งาน
+- แถบ AI ใช้ตัวจำลองเมื่อไม่ได้กรอกคีย์ หากกรอก Anthropic API key ใน UI แล้วกดสร้าง จะเรียก API จริงและอาจมีค่าใช้จ่าย; คีย์อยู่ใน memory ของแท็บ ไม่บันทึกลงไฟล์งาน (ช่องกรอกคีย์มีเฉพาะโหมดนี้ — Cloud ใช้คีย์ของระบบ)
+- โหมดนี้ไม่มีแพ็กเกจ/paywall: ดาวน์โหลดไฟล์ผลิตได้ทันทีและพรีวิวไม่มีลายน้ำ
 - งานอยู่ในเบราว์เซอร์และ origin นี้เท่านั้น ไม่ sync ข้ามเครื่อง ควร export เป็น `.genpkg.json` ก่อนล้างข้อมูลเบราว์เซอร์หรือย้ายเครื่อง
 - ใช้ `127.0.0.1:5173` ให้เหมือนเดิมเสมอ: `localhost:5173` และ URL/port อื่นมีพื้นที่เก็บงานแยกกัน
 
@@ -58,6 +59,10 @@ npm run setup:cloud
 | `SUPABASE_URL` | URL เดียวกับฝั่ง browser |
 | `SUPABASE_SECRET_KEY` | secret/service-role key สำหรับ server เท่านั้น |
 
+ตัวเลือกเพิ่มเติม (ไม่บังคับ): `ANTHROPIC_API_KEY` = คีย์ Anthropic **ของระบบ** ฝั่ง server (ห้ามใส่ใน `VITE_*`) ใช้กับแถบ AI บน Cloud และ `BOX_SPEC_MODEL` เลือกโมเดล (ค่าเริ่มต้น `claude-opus-4-8`) ถ้าไม่ตั้งคีย์ แถบ AI บน Cloud จะแจ้งว่า server ยังไม่ได้ตั้งค่า (503) — Cloud **ไม่รับคีย์จากผู้ใช้ใน UI อีกต่อไป** (การกรอกคีย์เองมีเฉพาะ local demo)
+
+แพ็กเกจบน Cloud (ดู [docs/billing-freemium-pro.md](docs/billing-freemium-pro.md)): Freemium ออกแบบ/ดู blueprint และ 3D ได้ แต่ไม่มีเครดิต AI และดาวน์โหลดไฟล์ผลิตไม่ได้ (พรีวิวมีลายน้ำ; ไฟล์สำรอง `.genpkg.json` ยังใช้ได้); ซื้อรายแบบ 149 บาท หรือ Pro 399 บาท/เดือน ยังไม่เลือกผู้ให้บริการชำระเงิน จึงมีเฉพาะปุ่ม "จำลองการชำระ (dev)" เมื่อ `APP_ENV` เป็น `development` หรือ `test` (staging/production ไม่มีเส้นทางนี้ — ห้ามใช้สองค่านี้กับ environment ที่มีผู้ใช้จริง)
+
 จากนั้นรัน:
 
 ```sh
@@ -80,7 +85,7 @@ npm run preview:local
 
 หยุด dev server ก่อน preview เพราะใช้ port 5173 เหมือนกัน `build:local` ไม่ใช้ค่า Cloud ส่วน `npm run build` และ `npm run preview` ปกติยังอ่าน env ตาม mode เพื่อรองรับ Cloud/Vercel **อย่า deploy `build:local` เป็น Cloud app**
 
-Browser regression ของตัวโหลด: รัน `npm run dev:local` เปิด `/tests/browser/loading-continuity.html` แล้วกด Run (เป็นชุดทดสอบแยก ไม่รวมใน `npm test`)
+Browser regression ของตัวโหลด: รัน `npm run dev:local` เปิด `/tests/browser/loading-continuity.html` แล้วกด Run (เป็นชุดทดสอบแยก ไม่รวมใน `npm test`); fixture ตรวจ paywall/ลายน้ำด้วยตาอยู่ที่ `/tests/browser/paywall.html` (สลับสถานะ free / ซื้อแล้ว / Pro / Pro หมดเครดิต โดยไม่ต้องมี Supabase)
 
 ## ปัญหาที่พบบ่อย
 

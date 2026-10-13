@@ -66,6 +66,19 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 
 หมายเหตุ CLI: server ล้าง env `ANTHROPIC_*`/`CLAUDE*` ก่อน spawn เสมอ (กัน base URL/token ของ session อื่น shadow login ปกติ) และปิด stdin ทันที — อย่าเอาออก ไม่งั้นพังเมื่อรันจากใน Claude Code
 
+ลำดับ api/cli/mock ข้างบนใช้กับ legacy `/api/box-spec` ของ local demo เท่านั้น — Cloud (`/api/v1/ai/box-spec`) ใช้ `ANTHROPIC_API_KEY` อย่างเดียว ไม่มี CLI/mock (ดูหัวข้อแพ็กเกจ)
+
+## แพ็กเกจ / billing
+
+- กติกา/ตาราง/RPC/route ทั้งหมดอยู่ใน `docs/billing-freemium-pro.md` (เอกสารหลัก แทนตัวเลขเดิมใน backend-implementation-spec §10–12): Freemium (AI 0 เครดิต, ดาวน์โหลดไฟล์ผลิตไม่ได้, พรีวิวมีลายน้ำ) / ซื้อรายแบบ 149 บาท ต่อ project id (สำเนา/นำเข้าได้ id ใหม่ = ไม่ได้สิทธิ์ตาม) / Pro 399 บาท/เดือน; ยังไม่เลือก payment provider → `orders.provider = 'none'`, `checkoutUrl = null`, จำลองจ่ายได้เฉพาะ `APP_ENV` development/test ผ่าน `POST /api/v1/billing/orders/:id/dev-fulfil`
+- ข้อมูลอยู่ใน `app_private` (migration `20261013000600_billing.sql`): `plan_catalog` (ราคา/เครดิต — ปรับตัวเลขที่ตารางนี้ ไม่ต้องแก้โค้ด), `orders`, `subscriptions`, `design_licenses`, `credit_balances`, `credit_ledger`, `ai_requests`; RPC `get_entitlements` / `authorize_export` / `reserve_ai_credit` / `settle_ai_request` / `create_order` / `fulfil_order` (raise รหัสคงที่ P0001 → server map เป็น HTTP) ผ่าน `server/adapters/supabase/billingRepository.ts` + `server/modules/billing/billingService.ts`
+- 402 สองรหัส: `PAYMENT_REQUIRED` (`POST /projects/:id/export-authorizations` ของแบบที่ยังไม่ซื้อและไม่ใช่ Pro, `details.price`) และ `AI_CREDITS_EXHAUSTED` (AI route, `details.credits/plan`); 409 `ALREADY_LICENSED` / `AI_REQUEST_IN_PROGRESS` / `ORDER_NOT_PAYABLE`; ปุ่มดาวน์โหลดบน cloud ต้องขอ authorization จาก server ก่อนสร้างไฟล์ทุกครั้ง (server ตัดสินสิทธิ์ ไม่ใช่ client)
+- AI บน cloud ใช้คีย์ของระบบ `ANTHROPIC_API_KEY` (+ `BOX_SPEC_MODEL`) ฝั่ง server เท่านั้น — client ไม่ส่งคีย์ (header BYOK `x-packit-anthropic-api-key` และ `AI_API_KEY_*` ถูกถอดแล้ว); ไม่มีคีย์ → 503 `CONFIGURATION_ERROR`; เครดิต 1 ต่อคำขอ หักตอนจอง (`reserve_ai_credit`) คืนเมื่อ provider ล้ม (`settle failed`) ผลกลับมาแล้วไม่คืน
+- โหมด local-demo (`dev:local`) ไม่มี paywall/ลายน้ำ (App ไม่ได้รับ prop `cloud` → `watermarkOn = false` และ `gatedDownload` ข้าม `authorizeExport`) และยังใช้ BYOK กับ legacy `/api/box-spec` ได้
+- ลายน้ำ (`src/core/watermark.ts` pure) อยู่บนพรีวิวเท่านั้น: DielineSVG prop `watermark`, texture 3D ผ่าน `useArtTexture`, overlay ของ StickerSheetPreview — **ห้าม** ทำเป็น Deco เพราะ Deco ไหลเข้า snap/DPI/contour/ไฟล์ส่งออก (ไฟล์ใช้ `dielineSVGString` คนละทางจึงไม่มีลายน้ำ)
+- ตรวจ UI ด้วยตา: `npm run dev:local` แล้วเปิด `/tests/browser/paywall.html` (mount App ด้วย fake CloudProjectBridge สลับ free / ซื้อแล้ว / Pro / Pro หมดเครดิต ไม่ต้องมี Supabase); เทสต์ที่ต้องมี Docker: pgTAP `0006_billing.test.sql`, `tests/integration/billing.lifecycle.test.ts`, `test:http:local` (AI 401/503/422 + billing smoke)
+- cleanup ของสคริปต์ local/เทสต์ integration ต้องลบตาราง billing ก่อน `projects` (orders/design_licenses อ้าง projects แบบ restrict; subscriptions อ้าง orders) — เพิ่มตารางใหม่ต้องเพิ่มในทุก cleanup block
+
 ## Gotchas
 
 - three ต้อง >= 0.185 — r175 มีบั๊ก ExtrudeGeometry ไม่สร้างฝาหน้า-หลังเมื่อ bevelEnabled:false (กล่องกลายเป็น wireframe)

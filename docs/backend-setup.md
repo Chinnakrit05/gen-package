@@ -1,8 +1,8 @@
 # PackIt backend local setup
 
-อัปเดตล่าสุด: 23 กันยายน 2026
+อัปเดตล่าสุด: 13 ตุลาคม 2026
 
-คู่มือนี้ครอบคลุม local Supabase, auth/session, project API ของ Phase 1 และสถานะ staging ที่ link แล้ว
+คู่มือนี้ครอบคลุม local Supabase, auth/session, project API ของ Phase 1, คีย์ AI ฝั่ง server/แพ็กเกจ (Freemium/Pro) และสถานะ staging ที่ link แล้ว
 
 ถ้าต้องการออกแบบในเครื่องอย่างเดียว ดู [README](../README.md): `npm ci` แล้ว `npm run dev:local` ได้เลย **ไม่ต้องมี Docker หรือคีย์ใด ๆ** ขั้นตอนข้างล่างสำหรับผู้พัฒนา backend/Cloud เท่านั้น
 
@@ -44,7 +44,7 @@ npm run test:e2e:local
 npm run test:http:local
 ```
 
-`db:reset` ในโปรเจกต์นี้ระบุ `--local` ชัดเจน: ลบและสร้างใหม่เฉพาะ local database แล้วใช้ migrations กับ `seed.sql` ตามลำดับ ส่วน `db:test` รัน pgTAP files ใต้ `supabase/tests/` และ `db:test:integration` ทดสอบ bootstrap/auth, project CAS/idempotency และ Storage asset lifecycle/quota กับ local services จริง `db:test:restore` dump/restore เฉพาะ `app_private` ไปฐานข้อมูลชั่วคราวชื่อ `packit_restore_*` และซ้อมสำรอง/ลบ/คืน Storage object ตัวอย่างพร้อม SHA-256 โดย cleanup fixture หลังจบ `test:e2e:local` ใช้ Chrome ที่ติดตั้งในเครื่องทดสอบ browser flow จริง และ `test:http:local` build แล้วตรวจ contract เดียวกันบน Vite dev/preview ดูรูปแบบ pgTAP ทางการได้ที่ [Testing Overview](https://supabase.com/docs/guides/local-development/testing/overview)
+`db:reset` ในโปรเจกต์นี้ระบุ `--local` ชัดเจน: ลบและสร้างใหม่เฉพาะ local database แล้วใช้ migrations กับ `seed.sql` ตามลำดับ ส่วน `db:test` รัน pgTAP files ใต้ `supabase/tests/` และ `db:test:integration` ทดสอบ bootstrap/auth, project CAS/idempotency, Storage asset lifecycle/quota และ billing lifecycle (entitlements, order/dev-fulfil, design license, เครดิต AI จอง/คืน) กับ local services จริง `db:test:restore` dump/restore เฉพาะ `app_private` ไปฐานข้อมูลชั่วคราวชื่อ `packit_restore_*` และซ้อมสำรอง/ลบ/คืน Storage object ตัวอย่างพร้อม SHA-256 โดย cleanup fixture หลังจบ `test:e2e:local` ใช้ Chrome ที่ติดตั้งในเครื่องทดสอบ browser flow จริง และ `test:http:local` build แล้วตรวจ contract เดียวกันบน Vite dev/preview ดูรูปแบบ pgTAP ทางการได้ที่ [Testing Overview](https://supabase.com/docs/guides/local-development/testing/overview)
 
 หาก Chrome ไม่อยู่ที่ path มาตรฐานของ Windows ให้ตั้ง `PACKIT_E2E_CHROME` เป็น executable path ก่อนรัน browser E2E; script ใช้ `playwright-core` และไม่ดาวน์โหลด browser binary ซ้ำ
 
@@ -80,9 +80,19 @@ APP_ENV=development
 APP_ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
 SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_SECRET_KEY=<local secret/service-role key>
+
+# AI บน Cloud: คีย์ของระบบฝั่ง server (ไม่บังคับ; ไม่ตั้ง = แถบ AI ตอบ 503 CONFIGURATION_ERROR)
+ANTHROPIC_API_KEY=
+BOX_SPEC_MODEL=
 ```
 
 cloud mode เชื่อม Auth, project controller, IndexedDB drafts/mutation journal, private assets และ legacy migration แล้ว สำหรับ local smoke ให้ใช้ URL/publishable/secret values จาก `npx supabase status` เท่านั้น ห้ามคัดลอก local secret ไป staging/production และอย่า commit `.env.local`
+
+## คีย์ AI ฝั่ง server และแพ็กเกจ
+
+ตั้งแต่ 13 ตุลาคม 2026 `POST /api/v1/ai/box-spec` ใช้ **`ANTHROPIC_API_KEY` ของระบบ** (server env; บน Vercel ตั้งเป็น Secret) และ `BOX_SPEC_MODEL` (ว่าง = `claude-opus-4-8`) เท่านั้น — browser ไม่ส่งคีย์ของผู้ใช้อีกต่อไป (header BYOK ถูกถอดออก; การกรอกคีย์ใน UI เหลือเฉพาะ local demo กับ legacy `/api/box-spec`) ไม่ตั้งคีย์ → route ตอบ 503 `CONFIGURATION_ERROR` โดยไม่หักเครดิต
+
+คำขอ AI หัก 1 เครดิตของ workspace ตอนจอง (`reserve_ai_credit`) และคืนเมื่อ provider ล้ม; เครดิตมาจากการซื้อรายแบบ 149 บาท หรือ Pro 399 บาท/เดือน ตาม [billing-freemium-pro.md](billing-freemium-pro.md) (ตาราง/RPC ใน migration `20261013000600_billing.sql`; ราคาและจำนวนเครดิตแก้ที่ `app_private.plan_catalog`) ยังไม่เลือกผู้ให้บริการชำระเงิน: `POST /api/v1/billing/orders` สร้าง order `pending` (`provider = 'none'`) และ `POST /api/v1/billing/orders/:id/dev-fulfil` จำลองการจ่ายได้เฉพาะ `APP_ENV=development|test` (staging/production ตอบ 404) ห้ามนำ dev-fulfil ไปเปิดบน environment ที่มีผู้ใช้จริง
 
 หลัง sign-in browser ส่ง access token ไป `POST /api/v1/session/bootstrap`; server ตรวจ token กับ Supabase Auth แล้วสร้าง app user/personal workspace ผ่าน server-only RPC หลังจากนั้น editor โหลดและบันทึก `/api/v1/projects` ผ่าน durable queue; browser draft, pending save/create/delete และ migration journal ถูก scope ด้วย internal app user/workspace
 
@@ -173,16 +183,17 @@ npm run staging:readiness
 - Supabase CLI 2.117.0: ติดตั้งและรันได้
 - Docker Desktop 4.91.0, Docker Engine 29.8.0 และ WSL 2.7.13: รัน local stack ได้; stale socket จากการเริ่มครั้งก่อนไม่ปรากฏแล้ว
 - `supabase db reset --local`: **PASS** — foundation, identity/workspace, project และ asset migrations พร้อม seed
-- `supabase test db`: **PASS** — 5 files, 133 assertions
-- `npm run db:test:integration`: **PASS** — 6 files, 9 tests; รวม Storage byte lifecycle, private access, quota/concurrency, project asset links และ legacy import dedupe
-- `npm test`: **PASS ล่าสุดใน local worktree** — 46 files, 460 unit tests (รวม onboarding isolation/no-overwrite, tab-focus bootstrap และ loading UI/logo); loading continuity browser checks 12 กรณีผ่านแยกต่างหาก; ผล deploy ของ continuity ยังไม่ได้ตรวจ
+- `supabase test db`: **PASS (ผลก่อนเพิ่ม billing)** — 5 files, 133 assertions; ไฟล์ที่ 6 `0006_billing.test.sql` ยัง NOT RUN
+- `npm run db:test:integration`: **PASS** — 6 files, 9 tests; รวม Storage byte lifecycle, private access, quota/concurrency, project asset links และ legacy import dedupe (ผลก่อนเพิ่ม billing; ไฟล์ที่ 7 `billing.lifecycle.test.ts` ยัง NOT RUN — ดูข้อท้าย)
+- `npm test`: **PASS ล่าสุดใน local worktree (13 ตุลาคม 2026)** — 76 files, 883 passed + 1 skipped (รวม onboarding isolation/no-overwrite, tab-focus bootstrap, loading UI/logo และ billing: `PaywallModal`, `watermark`, `services/api/billing`, `billingService`, router 402/409); loading continuity browser checks 12 กรณีผ่านแยกต่างหาก; ผล deploy ของ continuity ยังไม่ได้ตรวจ
 - `npm run build`: **PASS หลัง P1.8** — API bundles, `tsc --noEmit` และ Vite production build
 - `npm run db:test:restore`: **PASS** — restore `app_private` ไป isolated database; project document, `project_assets`, asset metadata และ Storage object ที่คืนมามี ID/key/checksum ตรงกัน
 - `npm run test:e2e:local`: **PASS** — auth/account isolation, migration consent/raw backup/dedupe, trusted preset + portable roundtrip, clean/dirty cross-tab, offline create/delete/import/upload restrictions + edit/reconnect และ create/delete replay หลัง response หาย
-- `npm run test:http:local`: **PASS** — Vite dev/preview parity สำหรับ JSON 401/404/405/410/413, Cloud AI auth/BYOK guards, expired/foreign-shaped bearer rejection, anon/authenticated direct Data API RPC denial และ request ID
+- `npm run test:http:local`: **PASS (ผลก่อนเพิ่ม billing)** — Vite dev/preview parity สำหรับ JSON 401/404/405/410/413, Cloud AI auth guards, expired/foreign-shaped bearer rejection, anon/authenticated direct Data API RPC denial และ request ID; เวอร์ชันปัจจุบันเปลี่ยนความคาดหวัง AI route เป็น 401 (ไม่มี bearer) / 503 (server ไม่มีคีย์ — สคริปต์ตั้ง `ANTHROPIC_API_KEY` ว่างให้ child process) / 422 (ไม่มี `operationId`) และเพิ่ม billing smoke (entitlements free → สั่ง Pro → dev-fulfil → pro) ด้วยบัญชี fixture แยกต่อ mode — ยัง NOT RUN
 - `npm run ops:cleanup:report`: **PASS** — read-only DB/Storage reconciliation; หลังล้าง fixture รายงาน assets/objects/candidates เป็นศูนย์
 - cloud-mode HTTP smoke: **PASS** — root 200, missing/forged bearer 401 JSON, legacy `/api/box-spec` 410
 - Google OAuth บน remote/staging: **PASS** — provider, callback, PKCE, token verification, personal-workspace bootstrap และ editor mount ผ่านจาก local cloud-mode app; ไม่บันทึก credentials/tokens ลง Git
 - Remote/staging foundation: **PASS** — project healthy/link, migration parity, private buckets, Auth URLs, Google login/bootstrap, local-origin project create/save/reload, private asset upload/download และ legacy migration; deployment-dependent smoke **PARTIAL** ตามขอบเขตด้านบน
+- Billing / Freemium-Pro (13 ตุลาคม 2026): migration `20261013000600_billing.sql`, pgTAP `0006_billing.test.sql`, `tests/integration/billing.lifecycle.test.ts`, `test:http:local` และ `test:e2e:local` เวอร์ชันใหม่: **NOT RUN** — Docker/Supabase local ไม่พร้อมบนเครื่องที่พัฒนา ต้องรัน `db:reset` → `db:test` → `db:test:integration` → `test:http:local` ก่อน merge; staging ยังไม่ได้ push migration billing และยังไม่ได้ตั้ง `ANTHROPIC_API_KEY` ใน Vercel
 
 ดู checklist รายกรณีและ evidence ที่ [backend-acceptance-phase1.md](backend-acceptance-phase1.md)

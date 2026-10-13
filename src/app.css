@@ -2884,7 +2884,8 @@ aside .art-actions .file-pick:only-child {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
+  /* เหนือแผงลอยทุกชั้น (แผง AI 200, คำใบ้ 200, แกลเลอรี 220) — modal ต้องบังทุกอย่างข้างหลัง */
+  z-index: 300;
 }
 .modal {
   background: var(--surface-solid);
@@ -4149,4 +4150,160 @@ aside .art-actions .file-pick:only-child {
   min-width: 0;
   padding-left: 4px;
   padding-right: 4px;
+}
+
+/* --- แพ็กเกจ Freemium/Pro (cloud): ชิปแพ็กเกจบน header, ป้ายล็อกปุ่มดาวน์โหลด, paywall, ป้ายซื้อแล้ว, ลายน้ำ --- */
+/* ชิปแพ็กเกจ — หน้าตาเดียวกับ .cloud-save-state แต่เป็นปุ่ม pill (กดเปิด paywall แบบ Pro) */
+.plan-chip {
+  flex-shrink: 0;
+  width: auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.plan-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.plan-chip b {
+  font-weight: 700;
+  color: var(--text);
+}
+.plan-chip.pro b {
+  color: var(--accent-ink);
+}
+.plan-chip-upgrade {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--cta-grad);
+  color: var(--on-cta);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+/* ป้ายราคาบนปุ่มดาวน์โหลดเมื่อยังไม่มีสิทธิ์ (ชิดขวาของปุ่ม) */
+.export-item .export-lock {
+  margin-left: auto;
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--warn-border);
+  border-radius: 999px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+:root[data-theme='dark'] .export-item .export-lock {
+  background: rgba(186, 117, 23, 0.18);
+  color: #f0c57a;
+}
+
+/* paywall modal */
+.paywall-modal {
+  width: min(460px, 92vw);
+}
+.paywall-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+.paywall-price b {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--accent-ink);
+}
+.paywall-price small {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.paywall-list {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+.paywall-switch {
+  margin: 12px 0 0;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.paywall-note {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-border);
+  border-radius: 10px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.paywall-note small {
+  color: inherit;
+  opacity: 0.85;
+  word-break: break-all;
+}
+:root[data-theme='dark'] .paywall-note {
+  background: rgba(186, 117, 23, 0.16);
+  color: #f0c57a;
+}
+.paywall-error {
+  margin-top: 10px;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* ป้าย "ซื้อแล้ว" — บนการ์ดในแกลเลอรี (มุมซ้ายบน คู่กับ "เปิดอยู่" ขวาบน) และต่อท้ายชื่องานบนปุ่มเลือกงาน */
+.project-gallery-licensed {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.project-gallery-trigger-copy .project-gallery-licensed {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.project-gallery-card .project-gallery-licensed {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* เครดิต AI ในหัวแถบ AI */
+.pb-credits {
+  margin-left: auto;
+  margin-right: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+
+/* ลายน้ำพรีวิว: สี/ความทึบกำหนดเป็น attribute (ตัวเข้ม + ขอบขาว paint-order:stroke จึงอ่านออกทั้งพื้นอ่อน/เข้ม
+   รวมการ์ดโหมดมืด) — ที่นี่แค่ฟอนต์ไทยและกันเลือกข้อความ */
+.dieline-svg .watermark text,
+.sheet-preview .watermark text {
+  user-select: none;
+  font-family: 'Noto Sans Thai', system-ui, sans-serif;
 }

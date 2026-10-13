@@ -10,7 +10,14 @@ export interface ServerConfig {
     secretKey: string
     issuer: string
   }
+  // คีย์ AI ของระบบสำหรับ /api/v1/ai/box-spec (cloud ไม่รับคีย์จากผู้ใช้แล้ว) — ไม่บังคับ: ไม่มี → route ตอบ 503
+  ai: null | {
+    anthropicApiKey: string
+    model: string
+  }
 }
+
+export const DEFAULT_AI_MODEL = 'claude-opus-4-8'
 
 export class ServerConfigError extends Error {
   constructor(message: string) {
@@ -85,5 +92,10 @@ export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
       }
     : null
 
-  return { appEnv, allowedOrigins, supabase }
+  const anthropicApiKey = optionalString(env.ANTHROPIC_API_KEY)
+  const ai = anthropicApiKey
+    ? { anthropicApiKey, model: optionalString(env.BOX_SPEC_MODEL) ?? DEFAULT_AI_MODEL }
+    : null
+
+  return { appEnv, allowedOrigins, supabase, ai }
 }

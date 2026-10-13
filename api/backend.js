@@ -26008,6 +26008,7 @@ var init_sdk = __esm({
 
 // server/config.ts
 var APP_ENVIRONMENTS = ["development", "test", "staging", "production"];
+var DEFAULT_AI_MODEL = "claude-opus-4-8";
 var ServerConfigError = class extends Error {
   constructor(message) {
     super(message);
@@ -26069,7 +26070,9 @@ function loadServerConfig(env = process.env) {
     secretKey: supabaseSecretKey,
     issuer: `${parseHttpUrl(supabaseUrl, "SUPABASE_URL")}/auth/v1`
   } : null;
-  return { appEnv, allowedOrigins, supabase };
+  const anthropicApiKey = optionalString(env.ANTHROPIC_API_KEY);
+  const ai = anthropicApiKey ? { anthropicApiKey, model: optionalString(env.BOX_SPEC_MODEL) ?? DEFAULT_AI_MODEL } : null;
+  return { appEnv, allowedOrigins, supabase, ai };
 }
 
 // server/http/router.ts
@@ -54388,6 +54391,224 @@ function createSupabaseAssetService(config2) {
   return new AssetService(new SupabaseAssetRepository(client), new SupabaseObjectStorage(client));
 }
 
+// server/modules/billing/validation.ts
+var timestampSchema = external_exports.string().refine((value) => !Number.isNaN(Date.parse(value)), "invalid timestamp");
+var creditsSchema = external_exports.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+var orderKindSchema = external_exports.enum(["design", "pro"]);
+var orderIdSchema = external_exports.uuid();
+var entitlementsQuerySchema = external_exports.object({
+  workspaceId: external_exports.uuid()
+}).strict();
+var createOrderInputSchema = external_exports.object({
+  workspaceId: external_exports.uuid(),
+  operationId: external_exports.uuid(),
+  kind: orderKindSchema,
+  projectId: external_exports.uuid().optional()
+}).strict().superRefine((input2, context) => {
+  if (input2.kind === "design" !== (input2.projectId !== void 0)) {
+    context.addIssue({
+      code: "custom",
+      path: ["projectId"],
+      message: "projectId \u0E08\u0E33\u0E40\u0E1B\u0E47\u0E19\u0E40\u0E09\u0E1E\u0E32\u0E30\u0E40\u0E21\u0E37\u0E48\u0E2D kind \u0E40\u0E1B\u0E47\u0E19 design"
+    });
+  }
+});
+var aiBoxSpecRequestSchema = external_exports.object({
+  workspaceId: external_exports.uuid(),
+  operationId: external_exports.uuid(),
+  prompt: external_exports.string().min(1).max(2e3).refine((value) => value.trim().length > 0, "prompt \u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E27\u0E48\u0E32\u0E07"),
+  current: external_exports.unknown().optional(),
+  image: external_exports.unknown().optional()
+}).strict();
+var catalogItemResultSchema = external_exports.object({
+  kind: orderKindSchema,
+  amountMinor: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  currency: external_exports.literal("THB"),
+  credits: creditsSchema,
+  periodDays: external_exports.number().int().positive().nullable()
+}).strict();
+var entitlementsResultSchema = external_exports.object({
+  workspaceId: external_exports.uuid(),
+  plan: external_exports.enum(["free", "pro"]),
+  proUntil: timestampSchema.nullable(),
+  credits: creditsSchema,
+  licensedProjectIds: external_exports.array(external_exports.uuid()),
+  catalog: external_exports.object({
+    design: catalogItemResultSchema,
+    pro: catalogItemResultSchema
+  }).strict()
+}).strict();
+var exportAuthorizationResultSchema = external_exports.object({
+  projectId: external_exports.uuid(),
+  source: external_exports.enum(["purchase", "pro", "admin"]),
+  entitlements: entitlementsResultSchema
+}).strict();
+var aiReservationResultSchema = external_exports.object({
+  requestId: external_exports.uuid(),
+  credits: creditsSchema
+}).strict();
+var aiSettlementResultSchema = external_exports.object({
+  credits: creditsSchema
+}).strict();
+var orderResultSchema = external_exports.object({
+  id: external_exports.uuid(),
+  workspaceId: external_exports.uuid(),
+  kind: orderKindSchema,
+  projectId: external_exports.uuid().nullable(),
+  amountMinor: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  currency: external_exports.literal("THB"),
+  credits: creditsSchema,
+  status: external_exports.enum(["pending", "paid", "canceled"]),
+  provider: external_exports.string().min(1).max(40),
+  providerRef: external_exports.string().min(1).max(200).nullable(),
+  createdAt: timestampSchema,
+  paidAt: timestampSchema.nullable()
+}).strict();
+
+// server/adapters/supabase/billingRepository.ts
+function paymentRequiredDetails(error62, projectId) {
+  let price;
+  try {
+    price = JSON.parse(error62.details);
+  } catch {
+    price = void 0;
+  }
+  const parsed = catalogItemResultSchema.safeParse(price);
+  return {
+    ...projectId ? { projectId } : {},
+    ...parsed.success ? { price: parsed.data } : {}
+  };
+}
+function exhaustedPlan(error62) {
+  return error62.details === "pro" ? "pro" : "free";
+}
+function mapDatabaseError(error62, context = {}) {
+  if (error62.message.includes("EXPORT_PAYMENT_REQUIRED")) {
+    return new HttpError(
+      402,
+      "PAYMENT_REQUIRED",
+      "\u0E15\u0E49\u0E2D\u0E07\u0E0B\u0E37\u0E49\u0E2D\u0E41\u0E1A\u0E1A\u0E19\u0E35\u0E49\u0E2B\u0E23\u0E37\u0E2D\u0E2A\u0E21\u0E31\u0E04\u0E23 Pro \u0E01\u0E48\u0E2D\u0E19\u0E14\u0E32\u0E27\u0E19\u0E4C\u0E42\u0E2B\u0E25\u0E14\u0E44\u0E1F\u0E25\u0E4C\u0E1C\u0E25\u0E34\u0E15",
+      paymentRequiredDetails(error62, context.projectId)
+    );
+  }
+  if (error62.message.includes("AI_CREDITS_EXHAUSTED")) {
+    return new HttpError(402, "AI_CREDITS_EXHAUSTED", "\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 AI \u0E2B\u0E21\u0E14 \u0E0B\u0E37\u0E49\u0E2D\u0E41\u0E1A\u0E1A\u0E2B\u0E23\u0E37\u0E2D\u0E2A\u0E21\u0E31\u0E04\u0E23 Pro \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E23\u0E31\u0E1A\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15\u0E40\u0E1E\u0E34\u0E48\u0E21", {
+      credits: 0,
+      plan: exhaustedPlan(error62)
+    });
+  }
+  if (error62.message.includes("AI_REQUEST_IN_PROGRESS")) {
+    return new HttpError(409, "AI_REQUEST_IN_PROGRESS", "\u0E04\u0E33\u0E02\u0E2D AI \u0E19\u0E35\u0E49\u0E01\u0E33\u0E25\u0E31\u0E07\u0E14\u0E33\u0E40\u0E19\u0E34\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E22\u0E39\u0E48");
+  }
+  if (error62.message.includes("AI_REQUEST_NOT_RESERVED")) {
+    return new HttpError(409, "AI_REQUEST_IN_PROGRESS", "\u0E04\u0E33\u0E02\u0E2D AI \u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E1B\u0E34\u0E14\u0E44\u0E1B\u0E41\u0E25\u0E49\u0E27");
+  }
+  if (error62.message.includes("IDEMPOTENCY_KEY_REUSED")) {
+    return new HttpError(409, "IDEMPOTENCY_KEY_REUSED", "operationId \u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2D\u0E37\u0E48\u0E19\u0E41\u0E25\u0E49\u0E27");
+  }
+  if (error62.message.includes("ALREADY_LICENSED")) {
+    return new HttpError(409, "ALREADY_LICENSED", "\u0E41\u0E1A\u0E1A\u0E19\u0E35\u0E49\u0E44\u0E14\u0E49\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E14\u0E32\u0E27\u0E19\u0E4C\u0E42\u0E2B\u0E25\u0E14\u0E41\u0E25\u0E49\u0E27 \u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E0B\u0E37\u0E49\u0E2D\u0E0B\u0E49\u0E33");
+  }
+  if (error62.message.includes("PROJECT_NOT_FOUND")) {
+    return new HttpError(404, "NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E19\u0E35\u0E49");
+  }
+  if (error62.message.includes("ORDER_NOT_FOUND")) {
+    return new HttpError(404, "ORDER_NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E0B\u0E37\u0E49\u0E2D\u0E19\u0E35\u0E49");
+  }
+  if (error62.message.includes("ORDER_NOT_PAYABLE")) {
+    return new HttpError(409, "ORDER_NOT_PAYABLE", "\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E0B\u0E37\u0E49\u0E2D\u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E22\u0E01\u0E40\u0E25\u0E34\u0E01\u0E41\u0E25\u0E49\u0E27");
+  }
+  if (error62.message.includes("APP_USER_NOT_ACTIVE")) {
+    return new HttpError(403, "USER_NOT_ACTIVE", "\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
+  }
+  return new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
+}
+function providerContractError() {
+  return new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E37\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+}
+var SupabaseBillingRepository = class {
+  constructor(client) {
+    this.client = client;
+  }
+  async getEntitlements(actor, workspaceId) {
+    const { data, error: error62 } = await this.client.rpc("get_entitlements", {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId
+    });
+    if (error62) throw mapDatabaseError(error62);
+    const parsed = entitlementsResultSchema.safeParse(data);
+    if (!parsed.success) throw providerContractError();
+    return parsed.data;
+  }
+  async authorizeExport(actor, projectId) {
+    const { data, error: error62 } = await this.client.rpc("authorize_export", {
+      p_actor_user_id: actor.userId,
+      p_project_id: projectId
+    });
+    if (error62) throw mapDatabaseError(error62, { projectId });
+    const parsed = exportAuthorizationResultSchema.safeParse(data);
+    if (!parsed.success) throw providerContractError();
+    return parsed.data;
+  }
+  async reserveAiCredit(actor, workspaceId, operationId) {
+    const { data, error: error62 } = await this.client.rpc("reserve_ai_credit", {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId,
+      p_operation_id: operationId
+    });
+    if (error62) throw mapDatabaseError(error62);
+    const parsed = aiReservationResultSchema.safeParse(data);
+    if (!parsed.success) throw providerContractError();
+    return parsed.data;
+  }
+  async settleAiRequest(actor, requestId, outcome) {
+    const { data, error: error62 } = await this.client.rpc("settle_ai_request", {
+      p_actor_user_id: actor.userId,
+      p_request_id: requestId,
+      p_outcome: outcome
+    });
+    if (error62) throw mapDatabaseError(error62);
+    const parsed = aiSettlementResultSchema.safeParse(data);
+    if (!parsed.success) throw providerContractError();
+    return parsed.data;
+  }
+  async createOrder(actor, input2) {
+    const { data, error: error62 } = await this.client.rpc("create_order", {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: input2.workspaceId,
+      p_operation_id: input2.operationId,
+      p_kind: input2.kind,
+      p_project_id: input2.projectId ?? null
+    });
+    if (error62) throw mapDatabaseError(error62);
+    const parsed = orderResultSchema.safeParse(data);
+    if (!parsed.success) throw providerContractError();
+    return { ...parsed.data, checkoutUrl: null };
+  }
+  async fulfilOrder(actor, orderId, provider, providerRef) {
+    const { data, error: error62 } = await this.client.rpc("fulfil_order", {
+      p_actor_user_id: actor?.userId ?? null,
+      p_order_id: orderId,
+      p_provider: provider,
+      p_provider_ref: providerRef
+    });
+    if (error62) throw mapDatabaseError(error62);
+    const parsed = orderResultSchema.safeParse(data);
+    if (!parsed.success) throw providerContractError();
+    return { ...parsed.data, checkoutUrl: null };
+  }
+};
+function createSupabaseBillingRepository(config2) {
+  const client = createClient(config2.url, config2.secretKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false
+    }
+  });
+  return new SupabaseBillingRepository(client);
+}
+
 // src/core/materials.ts
 var MATERIALS = [
   {
@@ -54482,8 +54703,9 @@ var MATERIALS = [
     thickness: 0.2,
     foldable: false,
     process: "\u0E14\u0E36\u0E07\u0E02\u0E36\u0E49\u0E19\u0E23\u0E39\u0E1B (draw & iron)",
-    color: "#c8ccd0",
-    roughness: 0.3,
+    color: "#dfe3e7",
+    roughness: 0.22,
+    metalness: 0.9,
     note: "\u0E14\u0E36\u0E07\u0E02\u0E36\u0E49\u0E19\u0E23\u0E39\u0E1B\u0E08\u0E32\u0E01\u0E41\u0E1C\u0E48\u0E19 \u2014 blueprint \u0E17\u0E35\u0E48\u0E40\u0E2B\u0E47\u0E19\u0E04\u0E37\u0E2D dieline \u0E02\u0E2D\u0E07\u0E09\u0E25\u0E32\u0E01/\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E01\u0E23\u0E30\u0E1B\u0E4B\u0E2D\u0E07 \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E2A\u0E48\u0E07\u0E1E\u0E34\u0E21\u0E1E\u0E4C"
   },
   {
@@ -54495,7 +54717,8 @@ var MATERIALS = [
     form: "pouch",
     process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C + \u0E25\u0E32\u0E21\u0E34\u0E40\u0E19\u0E15 + \u0E0B\u0E35\u0E25\u0E02\u0E2D\u0E1A\u0E02\u0E36\u0E49\u0E19\u0E23\u0E39\u0E1B\u0E16\u0E38\u0E07",
     color: "#e7e3d8",
-    roughness: 0.55,
+    roughness: 0.32,
+    metalness: 0.55,
     note: "\u0E16\u0E38\u0E07\u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E0B\u0E35\u0E25\u0E02\u0E2D\u0E1A \u2014 blueprint \u0E17\u0E35\u0E48\u0E40\u0E2B\u0E47\u0E19\u0E04\u0E37\u0E2D\u0E41\u0E1C\u0E48\u0E19\u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E41\u0E1A\u0E19 (\u0E2B\u0E19\u0E49\u0E32+\u0E2B\u0E25\u0E31\u0E07+\u0E01\u0E49\u0E19) \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E2A\u0E48\u0E07\u0E1E\u0E34\u0E21\u0E1E\u0E4C"
   },
   {
@@ -54532,6 +54755,42 @@ var MATERIALS = [
     color: "#ffffff",
     roughness: 0.35,
     note: "\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19 + \u0E44\u0E14\u0E04\u0E31\u0E17\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B \u2014 blueprint \u0E17\u0E35\u0E48\u0E40\u0E2B\u0E47\u0E19\u0E04\u0E37\u0E2D\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14\u0E02\u0E2D\u0E07\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E2A\u0E48\u0E07\u0E1E\u0E34\u0E21\u0E1E\u0E4C"
+  },
+  {
+    id: "sticker-pp",
+    nameTh: "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C PP (\u0E02\u0E32\u0E27)",
+    detail: "\u0E09\u0E25\u0E32\u0E01\u0E02\u0E27\u0E14\u0E19\u0E49\u0E33/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07 \xB7 \u0E02\u0E2D\u0E07\u0E40\u0E02\u0E49\u0E32\u0E15\u0E39\u0E49\u0E40\u0E22\u0E47\u0E19 \xB7 \u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E41\u0E08\u0E01/\u0E02\u0E32\u0E22",
+    thickness: 0.08,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C + \u0E44\u0E14\u0E04\u0E31\u0E17",
+    color: "#ffffff",
+    roughness: 0.4,
+    note: "\u0E1E\u0E25\u0E32\u0E2A\u0E15\u0E34\u0E01 PP \u0E2A\u0E35\u0E02\u0E32\u0E27\u0E17\u0E36\u0E1A \u0E01\u0E31\u0E19\u0E19\u0E49\u0E33 \u0E17\u0E19\u0E01\u0E27\u0E48\u0E32\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29 \u2014 \u0E2A\u0E35\u0E2D\u0E2D\u0E01\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A\u0E08\u0E2D\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14\u0E43\u0E19\u0E01\u0E25\u0E38\u0E48\u0E21\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C"
+  },
+  {
+    id: "sticker-pp-clear",
+    nameTh: "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C PP \u0E43\u0E2A",
+    detail: "\u0E15\u0E34\u0E14\u0E02\u0E27\u0E14\u0E41\u0E01\u0E49\u0E27/\u0E01\u0E23\u0E30\u0E08\u0E01\u0E43\u0E2B\u0E49\u0E40\u0E2B\u0E47\u0E19\u0E1E\u0E37\u0E49\u0E19\u0E1C\u0E34\u0E27 \xB7 \u0E25\u0E32\u0E22\u0E40\u0E2A\u0E49\u0E19\u0E2A\u0E35\u0E40\u0E02\u0E49\u0E21",
+    thickness: 0.08,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C + \u0E44\u0E14\u0E04\u0E31\u0E17",
+    color: "#e8f0f4",
+    roughness: 0.15,
+    clear: true,
+    note: "\u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E43\u0E2A \u0E44\u0E21\u0E48\u0E21\u0E35\u0E2B\u0E21\u0E36\u0E01\u0E02\u0E32\u0E27 \u2014 \u0E2A\u0E35\u0E02\u0E32\u0E27\u0E43\u0E19\u0E07\u0E32\u0E19\u0E08\u0E30\u0E43\u0E2A \u0E2A\u0E35\u0E2D\u0E48\u0E2D\u0E19\u0E08\u0E30\u0E08\u0E32\u0E07\u0E08\u0E19\u0E41\u0E17\u0E1A\u0E21\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E40\u0E2B\u0E47\u0E19 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E01\u0E31\u0E1A\u0E25\u0E32\u0E22\u0E2A\u0E35\u0E40\u0E02\u0E49\u0E21"
+  },
+  {
+    id: "sticker-pp-clear-white",
+    nameTh: "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C PP \u0E43\u0E2A \u0E23\u0E2D\u0E07\u0E02\u0E32\u0E27",
+    detail: "\u0E42\u0E25\u0E42\u0E01\u0E49\u0E1A\u0E19\u0E02\u0E27\u0E14\u0E41\u0E01\u0E49\u0E27 \xB7 \u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E01\u0E23\u0E30\u0E08\u0E01\u0E2B\u0E19\u0E49\u0E32\u0E23\u0E49\u0E32\u0E19 \xB7 \u0E25\u0E32\u0E22\u0E2A\u0E35\u0E2A\u0E14\u0E1A\u0E19\u0E1E\u0E37\u0E49\u0E19\u0E43\u0E2A",
+    thickness: 0.08,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E2B\u0E21\u0E36\u0E01\u0E02\u0E32\u0E27\u0E23\u0E2D\u0E07 + \u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E2A\u0E35 + \u0E44\u0E14\u0E04\u0E31\u0E17",
+    color: "#e8f0f4",
+    roughness: 0.15,
+    clear: true,
+    underbase: true,
+    note: "\u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E43\u0E2A + \u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E2B\u0E21\u0E36\u0E01\u0E02\u0E32\u0E27\u0E23\u0E2D\u0E07\u0E43\u0E15\u0E49\u0E25\u0E32\u0E22 \u0E25\u0E32\u0E22\u0E17\u0E36\u0E1A\u0E2A\u0E14 \u0E2A\u0E48\u0E27\u0E19\u0E2D\u0E37\u0E48\u0E19\u0E22\u0E31\u0E07\u0E43\u0E2A \u2014 \u0E44\u0E1F\u0E25\u0E4C\u0E2A\u0E48\u0E07\u0E2D\u0E2D\u0E01\u0E21\u0E35\u0E40\u0E25\u0E40\u0E22\u0E2D\u0E23\u0E4C White \u0E43\u0E2B\u0E49\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34"
   },
   {
     id: "sticker-paper",
@@ -54609,6 +54868,87 @@ function obroundPath(cx, cy, length, thick, vertical = false) {
     return `M ${cx - half} ${cy - r} L ${cx + half} ${cy - r} A ${r} ${r} 0 0 1 ${cx + half} ${cy + r} L ${cx - half} ${cy + r} A ${r} ${r} 0 0 1 ${cx - half} ${cy - r} Z`;
   }
   return `M ${cx - r} ${cy - half} A ${r} ${r} 0 0 1 ${cx + r} ${cy - half} L ${cx + r} ${cy + half} A ${r} ${r} 0 0 1 ${cx - r} ${cy + half} Z`;
+}
+function autoSegments(panels) {
+  const eps = 1e-6;
+  const hinges = panels.filter((p) => p.hingeA && p.hingeB).map((p) => [p.hingeA, p.hingeB]);
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const key = (a, b) => {
+    const r = (v) => Math.round(v * 1e3);
+    const k1 = `${r(a.x)},${r(a.y)}`;
+    const k2 = `${r(b.x)},${r(b.y)}`;
+    return k1 < k2 ? `${k1}|${k2}` : `${k2}|${k1}`;
+  };
+  const covered = (p, q) => {
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    const L2 = dx * dx + dy * dy;
+    if (L2 < eps) return [];
+    const L = Math.sqrt(L2);
+    const res = [];
+    for (const [a, b] of hinges) {
+      const ca = ((a.x - p.x) * dy - (a.y - p.y) * dx) / L;
+      const cb = ((b.x - p.x) * dy - (b.y - p.y) * dx) / L;
+      if (Math.abs(ca) > 1e-4 || Math.abs(cb) > 1e-4) continue;
+      const ta = ((a.x - p.x) * dx + (a.y - p.y) * dy) / L2;
+      const tb = ((b.x - p.x) * dx + (b.y - p.y) * dy) / L2;
+      const lo = Math.max(0, Math.min(ta, tb));
+      const hi = Math.min(1, Math.max(ta, tb));
+      if (hi - lo > 1e-6) res.push([lo, hi]);
+    }
+    return res.sort((u, v) => u[0] - v[0]);
+  };
+  const lerp = (p, q, t) => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+  const f = (v) => String(Math.round(v * 1e3) / 1e3);
+  for (const p of panels) {
+    const ring = p.outline;
+    let path5 = [];
+    const flush = () => {
+      if (path5.length > 1) out.push({ kind: "cut", d: "M " + path5.map((v) => `${f(v.x)} ${f(v.y)}`).join(" L ") });
+      path5 = [];
+    };
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i];
+      const b = ring[(i + 1) % ring.length];
+      const k = key(a, b);
+      if (seen.has(k)) {
+        flush();
+        continue;
+      }
+      seen.add(k);
+      let t0 = 0;
+      const pieces = [];
+      for (const [lo, hi] of covered(a, b)) {
+        if (lo > t0 + 1e-6) pieces.push([t0, lo]);
+        t0 = Math.max(t0, hi);
+      }
+      if (t0 < 1 - 1e-6) pieces.push([t0, 1]);
+      if (pieces.length === 1 && pieces[0][0] === 0 && pieces[0][1] === 1) {
+        if (!path5.length) path5.push(a);
+        path5.push(b);
+        continue;
+      }
+      flush();
+      for (const [lo, hi] of pieces) {
+        const s = lerp(a, b, lo);
+        const e = lerp(a, b, hi);
+        out.push({ kind: "cut", d: `M ${f(s.x)} ${f(s.y)} L ${f(e.x)} ${f(e.y)}` });
+      }
+    }
+    flush();
+    for (const h of p.holes ?? []) {
+      out.push({ kind: "cut", d: "M " + h.map((v) => `${f(v.x)} ${f(v.y)}`).join(" L ") + " Z" });
+    }
+  }
+  const hk = /* @__PURE__ */ new Set();
+  for (const [a, b] of hinges) {
+    const k = key(a, b);
+    if (hk.has(k)) continue;
+    hk.add(k);
+    out.push({ kind: "crease", d: `M ${f(a.x)} ${f(a.y)} L ${f(b.x)} ${f(b.y)}` });
+  }
+  return out;
 }
 
 // src/core/templates/tuckEnd.ts
@@ -54765,7 +55105,8 @@ function generateTuckEndBox(box, mat) {
       hingeB: P(x5 - tuckIn, tiTop),
       foldAngle: 90,
       stage: 3,
-      zOffset: 0.15
+      zOffset: 0.15,
+      tuck: true
     },
     {
       id: "tuck-bot",
@@ -54784,7 +55125,8 @@ function generateTuckEndBox(box, mat) {
       hingeB: P(x5 - tuckIn, tiBot),
       foldAngle: -90,
       stage: 3,
-      zOffset: 0.15
+      zOffset: 0.15,
+      tuck: true
     }
   ];
   const cut = (d) => ({ kind: "cut", d });
@@ -54885,7 +55227,7 @@ function generateMailerBox(box, mat) {
       hingeA: P(cx0, y4),
       hingeB: P(cx1, y4),
       foldAngle: -90,
-      stage: 0
+      stage: 2
     },
     {
       id: "back",
@@ -54894,7 +55236,7 @@ function generateMailerBox(box, mat) {
       hingeA: P(cx0, y3),
       hingeB: P(cx1, y3),
       foldAngle: 90,
-      stage: 0
+      stage: 2
     },
     {
       id: "side-left",
@@ -54963,7 +55305,7 @@ function generateMailerBox(box, mat) {
       hingeA: P(cx0, y2),
       hingeB: P(cx1, y2),
       foldAngle: 90,
-      stage: 2
+      stage: 3
     },
     {
       id: "lip",
@@ -54973,7 +55315,8 @@ function generateMailerBox(box, mat) {
       hingeB: P(cx1 - tuckIn, y1),
       foldAngle: 90,
       stage: 3,
-      zOffset: layer
+      zOffset: layer,
+      tuck: true
     },
     {
       id: "lip-left",
@@ -55059,81 +55402,201 @@ function generateMailerBox(box, mat) {
   return { width, height, segments, panels, dims };
 }
 
+// src/core/stickerContour.ts
+var STICKER_RULES = {
+  minBorder: 1,
+  // มีขอบขาว: เส้นตัดห่างชิ้นงานอย่างน้อย
+  minBleed: 1,
+  // ไม่มีขอบขาว: สีต้องเลยเส้นตัดออกไปอย่างน้อย
+  minGap: 2,
+  // ระยะระหว่างเส้นตัดกับเส้นตัด
+  minHole: 2,
+  // ช่องเจาะไดคัทเล็กสุด
+  minRadius: 0.5
+  // รัศมีโค้งเล็กสุดของเส้นตัด (ต่ำกว่านี้ = หักศอก ตัดไม่สวย)
+};
+var STICKER_OFFSET_MIN = STICKER_RULES.minBorder;
+var NO_BORDER_INSET = STICKER_RULES.minBleed;
+
+// src/core/stickerSheet.ts
+var SHEET_GAP = STICKER_RULES.minGap;
+var placePoint = (pl, p) => pl.rot ? { x: pl.tx - p.y, y: pl.ty + p.x } : { x: pl.tx + p.x, y: pl.ty + p.y };
+var fmt3 = (v) => String(Math.round(v * 1e3) / 1e3);
+function placePath(d, pl) {
+  const tok = d.match(/[MLQAZ]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? [];
+  const out = [];
+  let i = 0;
+  const num = () => Number(tok[i++]);
+  const pt = () => {
+    const q = placePoint(pl, P(num(), num()));
+    return `${fmt3(q.x)} ${fmt3(q.y)}`;
+  };
+  let cmd = "";
+  while (i < tok.length) {
+    const t = tok[i];
+    if (/^[MLQAZ]$/i.test(t)) {
+      cmd = t.toUpperCase();
+      i++;
+      out.push(cmd);
+      if (cmd === "Z") continue;
+    }
+    switch (cmd) {
+      case "M":
+      case "L":
+        out.push(pt());
+        break;
+      case "Q":
+        out.push(pt(), pt());
+        break;
+      case "A": {
+        const rx = num();
+        const ry = num();
+        const rot = num() + (pl.rot ? 90 : 0);
+        const large = num();
+        const sweep = num();
+        out.push(`${rx} ${ry} ${rot} ${large} ${sweep}`, pt());
+        break;
+      }
+      default:
+        i++;
+    }
+  }
+  return out.join(" ");
+}
+
 // src/core/templates/fefco0427.ts
-function generateFefco0427(box, mat) {
+function fefco0427Layout(box, mat) {
+  return rollEndLayout(box, mat, { lid: true });
+}
+function rollEndLayout(box, mat, opts = {}) {
+  const lid = opts.lid !== false;
+  const longFlap = opts.flap === "long";
+  const over = lid && opts.front === "wide";
+  const flapStage = over ? 3 : 4;
   const { W, D, H } = box;
   const t = mat.thickness;
   const Wp = W + 2 * t;
   const Dp = D + 2 * t;
   const Hp = H + t;
   const layer = t + 0.05;
-  const rollW = Math.max(6, Hp - t);
+  const sp = 3 * t + 0.2;
+  const tabL = Math.max(4, Math.min(7, 0.3 * (Hp - t)));
+  const rollW = Math.max(6, Hp - tabL);
   const rollIns = Math.max(1.5, 2 * t);
-  const tabL = Math.max(5, Math.min(8, 0.35 * rollW));
-  const tabW = Math.max(12, Math.min(26, 0.22 * Dp));
+  const tabW = Math.max(12, Math.min(26, 0.2 * Dp));
   const slotL = tabW + 1.5;
   const slotW = Math.max(1.5, t + 0.6);
-  const slotOff = Math.max(2, 2.5 * t);
-  const earW = Math.max(8, Math.min(0.9 * Hp, 0.4 * Dp));
+  const slotOff = sp - t / 2;
+  const earW = Math.max(8, Math.min(1.3 * Hp, 0.4 * Dp));
   const earIns = Math.max(1.5, t + 0.5);
   const topIns = Math.max(1.5, 2 * t);
-  const earSlant = Math.min(6, earW * 0.5);
+  const Hf = lid ? Hp - t : Hp;
+  const lx0Off = sp;
+  const flapH = Math.max(8, Hp - 2 * t);
+  const flapIn = longFlap ? t + 0.5 : 1;
   const tuckIn = Math.max(1, t + 0.5);
-  const lipH = Math.max(10, Math.min(0.7 * Hp, 0.8 * Dp));
-  const lockW = Math.min(4, tuckIn + 3);
-  const lockH = Math.min(10, lipH * 0.5);
-  const r = Math.min(7, lipH * 0.45, (Wp - 2 * tuckIn) / 2);
+  const lipH = Math.max(10, Math.min(Hf - t, 0.8 * Dp));
   const xr0 = tabL;
   const xr1 = xr0 + rollW;
-  const cx0 = xr1 + Hp;
+  const xs1 = xr1 + sp;
+  const cx0 = xs1 + Hp;
   const cx1 = cx0 + Wp;
-  const xr2 = cx1 + Hp;
+  const xs2 = cx1 + Hp;
+  const xr2 = xs2 + sp;
   const xr3 = xr2 + rollW;
   const width = xr3 + tabL;
-  const y1 = lipH;
-  const y2 = y1 + Dp;
+  const lx0 = cx0 + lx0Off;
+  const lx1 = cx1 - lx0Off;
+  const y1 = lid ? lipH : 0;
+  const y2 = lid ? y1 + Dp : 0;
   const y3 = y2 + Hp;
   const y4 = y3 + Dp;
-  const y5 = y4 + Hp;
+  const y5 = y4 + Hf;
   const height = y5;
+  const r = Math.min(lipH * 0.85, (lx1 - lx0 - 2 * tuckIn) / 2);
   const yc1 = y3 + Dp * 0.28;
   const yc2 = y3 + Dp * 0.72;
   const rollOutline = (x0, x1, tabX) => {
     const pts = [P(x0, y3 + rollIns), P(x1, y3 + rollIns)];
     for (const yc of [yc1, yc2]) {
-      pts.push(P(x1, yc - tabW / 2));
-      pts.push(P(tabX, yc - tabW / 2 + 1.5));
-      pts.push(P(tabX, yc + tabW / 2 - 1.5));
-      pts.push(P(x1, yc + tabW / 2));
+      pts.push(P(x1, yc - tabW / 2), P(tabX, yc - tabW / 2 + 1.5), P(tabX, yc + tabW / 2 - 1.5), P(x1, yc + tabW / 2));
     }
     pts.push(P(x1, y4 - rollIns), P(x0, y4 - rollIns));
-    return { pts };
+    return pts;
+  };
+  const rollFreeCut = (x1, tabX) => {
+    let d = `M ${x1} ${y3 + rollIns}`;
+    for (const yc of [yc1, yc2]) {
+      d += ` L ${x1} ${yc - tabW / 2} L ${tabX} ${yc - tabW / 2 + 1.5} L ${tabX} ${yc + tabW / 2 - 1.5} L ${x1} ${yc + tabW / 2}`;
+    }
+    return d + ` L ${x1} ${y4 - rollIns}`;
   };
   const earPts = (hx, dir, ya, yb) => {
     const sy = Math.sign(yb - ya) || 1;
-    return [
-      P(hx, ya + sy * earIns),
-      P(hx + dir * earW, ya + sy * (earIns + earSlant)),
-      P(hx + dir * earW, yb - sy * (topIns + earSlant)),
-      P(hx, yb - sy * topIns)
-    ];
+    return [P(hx, ya + sy * earIns), P(hx + dir * earW, ya + sy * earIns), P(hx + dir * earW, yb - sy * topIns), P(hx, yb - sy * topIns)];
   };
+  const earCut = (hx, dir, ya, yb) => {
+    const e = earPts(hx, dir, ya, yb);
+    return `M ${e[0].x} ${e[0].y} L ${e[1].x} ${e[1].y} L ${e[2].x} ${e[2].y} L ${e[3].x} ${e[3].y}`;
+  };
+  const cham = Math.min(flapH * 0.35, Dp * 0.2);
+  const fr = Math.min(4, cham * 0.6);
+  const q = (p0, c, p1) => [0.25, 0.5, 0.75].map((s) => P((1 - s) ** 2 * p0.x + 2 * (1 - s) * s * c.x + s * s * p1.x, (1 - s) ** 2 * p0.y + 2 * (1 - s) * s * c.y + s * s * p1.y));
+  const lr = Math.min(flapH * 0.6, Dp * 0.15);
+  const lc = Math.min(flapH * 0.3, 6);
+  const longPts = (hx, dir) => {
+    const xo = hx + dir * flapH;
+    const ya = y1 + flapIn;
+    const yb = y2 - flapIn;
+    const a = P(hx + dir * (flapH - lr), ya);
+    const b = P(xo, ya + lr);
+    return [P(hx, ya), a, ...q(a, P(xo, ya), b), b, P(xo, yb - lc), P(hx + dir * (flapH - lc), yb), P(hx, yb)];
+  };
+  const longCut = (hx, dir) => {
+    const xo = hx + dir * flapH;
+    const ya = y1 + flapIn;
+    const yb = y2 - flapIn;
+    return `M ${hx} ${y1} L ${hx} ${ya} L ${hx + dir * (flapH - lr)} ${ya} Q ${xo} ${ya} ${xo} ${ya + lr} L ${xo} ${yb - lc} L ${hx + dir * (flapH - lc)} ${yb} L ${hx} ${yb} L ${hx} ${y2}`;
+  };
+  const flapPts = (hx, dir) => {
+    if (longFlap) return longPts(hx, dir);
+    const xo = hx + dir * flapH;
+    const ya = y1 + flapIn;
+    const yb = y2 - flapIn;
+    const c1 = P(xo, ya + cham);
+    const c2 = P(xo, yb - cham);
+    const a1 = P(hx + dir * (flapH - fr), ya + cham * (1 - fr / flapH));
+    const b1 = P(xo, ya + cham + fr);
+    const a2 = P(xo, yb - cham - fr);
+    const b2 = P(hx + dir * (flapH - fr), yb - cham * (1 - fr / flapH));
+    return [P(hx, ya), a1, ...q(a1, c1, b1), b1, a2, ...q(a2, c2, b2), b2, P(hx, yb)];
+  };
+  const flapCut = (hx, dir) => {
+    if (longFlap) return longCut(hx, dir);
+    const xo = hx + dir * flapH;
+    const ya = y1 + flapIn;
+    const yb = y2 - flapIn;
+    return `M ${hx} ${y1} L ${hx} ${ya} L ${hx + dir * (flapH - fr)} ${ya + cham * (1 - fr / flapH)} Q ${xo} ${ya + cham} ${xo} ${ya + cham + fr} L ${xo} ${yb - cham - fr} Q ${xo} ${yb - cham} ${hx + dir * (flapH - fr)} ${yb - cham * (1 - fr / flapH)} L ${hx} ${yb} L ${hx} ${y2}`;
+  };
+  const la = lx0 + tuckIn;
+  const lb = lx1 - tuckIn;
   const lipOutline = [
-    P(cx0 + tuckIn, y1),
-    P(cx0 + tuckIn - lockW, y1 - lockH * 0.35),
-    P(cx0 + tuckIn, y1 - lockH),
-    ...arcPts(cx0 + tuckIn + r, r, r, Math.PI, Math.PI * 1.5),
-    ...arcPts(cx1 - tuckIn - r, r, r, Math.PI * 1.5, Math.PI * 2),
-    P(cx1 - tuckIn, y1 - lockH),
-    P(cx1 - tuckIn + lockW, y1 - lockH * 0.35),
-    P(cx1 - tuckIn, y1)
+    P(la, y1),
+    ...arcPts(la + r, r, r, Math.PI, Math.PI * 1.5),
+    ...arcPts(lb - r, r, r, Math.PI * 1.5, Math.PI * 2),
+    P(lb, y1)
   ];
-  const slots = [
-    obroundPts(cx0 + slotOff, yc1, slotL, slotW, true),
-    obroundPts(cx0 + slotOff, yc2, slotL, slotW, true),
-    obroundPts(cx1 - slotOff, yc1, slotL, slotW, true),
-    obroundPts(cx1 - slotOff, yc2, slotL, slotW, true)
+  const ex0 = lx0 - flapH;
+  const ex1 = lx1 + flapH;
+  const er = Math.min(lipH * 0.6, flapH * 0.9);
+  const earOutline = (left) => left ? [P(lx0, y1), P(lx0, 0), P(ex0 + er, 0), ...arcPts(ex0 + er, er, er, Math.PI * 1.5, Math.PI, 4), P(ex0, er), P(ex0, y1)] : [P(lx1, y1), P(ex1, y1), P(ex1, er), ...arcPts(ex1 - er, er, er, 0, -Math.PI / 2, 4), P(ex1 - er, 0), P(lx1, 0)];
+  const slotCs = [
+    [cx0 + slotOff, yc1],
+    [cx0 + slotOff, yc2],
+    [cx1 - slotOff, yc1],
+    [cx1 - slotOff, yc2]
   ];
+  const slots = slotCs.map(([x, y]) => obroundPts(x, y, slotL, slotW, true));
   const panels = [
     { id: "base", parentId: null, outline: rect(cx0, y3, cx1, y4), holes: slots, stage: 0 },
     {
@@ -55157,22 +55620,22 @@ function generateFefco0427(box, mat) {
     {
       id: "side-left",
       parentId: "base",
-      outline: rect(xr1, y3, cx0, y4),
+      outline: rect(xs1, y3, cx0, y4),
       hingeA: P(cx0, y3),
       hingeB: P(cx0, y4),
       foldAngle: -90,
-      stage: 0
+      stage: 2
     },
     {
       id: "side-right",
       parentId: "base",
-      outline: rect(cx1, y3, xr2, y4),
+      outline: rect(cx1, y3, xs2, y4),
       hingeA: P(cx1, y3),
       hingeB: P(cx1, y4),
       foldAngle: 90,
-      stage: 0
+      stage: 2
     },
-    // หูมุม (stage 1) — พับเข้าแนบผนังข้างก่อนแผ่นม้วนทับ
+    // หูมุม (stage 1) พับก่อนผนังข้างตั้ง (2) — ไม่งั้นหูกวาดอยู่นอกผนังข้างแล้วทะลุเข้าตอนท้าย
     {
       id: "ear-fl",
       parentId: "front",
@@ -55213,74 +55676,148 @@ function generateFefco0427(box, mat) {
       stage: 1,
       zOffset: layer
     },
-    // แผ่นม้วน (stage 2) — รอหูมุมพับเสร็จก่อนค่อยทบ 180° กลับเข้าด้านในทับไว้ ทับหูมุม ลิ้นชี้ลงหาช่องบนฐาน
-    // zOffset ติดลบ: หลังหมุน 180° แกน z ท้องถิ่นกลับทิศ (ชี้ออกนอกกล่อง)
-    // จึงต้องดันทางลบเพื่อให้แผ่นม้วนลอยเข้าด้านใน ไม่ใช่ทะลุออกนอกผนัง
+    // สัน + ชั้นทบ (stage 3): พับ 90° สองครั้งที่รอยพับคู่ → ชั้นทบลงขนานผนังห่าง sp ทับหูมุม ลิ้นลงช่องบนฐาน
+    {
+      id: "spine-left",
+      parentId: "side-left",
+      outline: rect(xr1, y3 + rollIns, xs1, y4 - rollIns),
+      hingeA: P(xs1, y3 + rollIns),
+      hingeB: P(xs1, y4 - rollIns),
+      foldAngle: -90,
+      stage: 3
+    },
     {
       id: "roll-left",
-      parentId: "side-left",
-      outline: rollOutline(xr1, xr0, 0).pts,
+      parentId: "spine-left",
+      outline: rollOutline(xr1, xr0, 0),
       hingeA: P(xr1, y3 + rollIns),
       hingeB: P(xr1, y4 - rollIns),
-      foldAngle: -180,
-      stage: 2,
-      zOffset: -2 * layer
+      foldAngle: -90,
+      stage: 3
     },
     {
-      id: "roll-right",
+      id: "spine-right",
       parentId: "side-right",
-      outline: rollOutline(xr2, xr3, width).pts,
-      hingeA: P(xr2, y3 + rollIns),
-      hingeB: P(xr2, y4 - rollIns),
-      foldAngle: 180,
-      stage: 2,
-      zOffset: -2 * layer
-    },
-    // ฝาปิด (stage 3) แล้วลิ้นหน้าค่อยเสียบ (stage 4) — แยกจังหวะกันลิ้นกวาดทะลุผนังหน้า
-    {
-      id: "lid",
-      parentId: "back",
-      outline: rect(cx0, y1, cx1, y2),
-      hingeA: P(cx0, y2),
-      hingeB: P(cx1, y2),
+      outline: rect(xs2, y3 + rollIns, xr2, y4 - rollIns),
+      hingeA: P(xs2, y3 + rollIns),
+      hingeB: P(xs2, y4 - rollIns),
       foldAngle: 90,
       stage: 3
     },
     {
-      id: "lip",
-      parentId: "lid",
-      outline: lipOutline,
-      hingeA: P(cx0 + tuckIn, y1),
-      hingeB: P(cx1 - tuckIn, y1),
+      id: "roll-right",
+      parentId: "spine-right",
+      outline: rollOutline(xr2, xr3, width),
+      hingeA: P(xr2, y3 + rollIns),
+      hingeB: P(xr2, y4 - rollIns),
       foldAngle: 90,
-      stage: 4,
-      zOffset: layer
-    }
-  ];
+      stage: 3
+    },
+    // ฝา (stage 5) — ปีกข้าง (4) พับลงก่อน แล้วฝาปิดพาปีกลงด้านในชั้นทบ; ลิ้นหน้า tuck ผูกจังหวะกับฝา
+    {
+      id: "lid",
+      parentId: "back",
+      outline: rect(lx0, y1, lx1, y2),
+      hingeA: P(lx0, y2),
+      hingeB: P(lx1, y2),
+      foldAngle: 90,
+      stage: 5
+    },
+    {
+      id: "lid-flap-left",
+      parentId: "lid",
+      outline: flapPts(lx0, -1),
+      hingeA: P(lx0, y1 + flapIn),
+      hingeB: P(lx0, y2 - flapIn),
+      foldAngle: -90,
+      stage: flapStage
+    },
+    {
+      id: "lid-flap-right",
+      parentId: "lid",
+      outline: flapPts(lx1, 1),
+      hingeA: P(lx1, y1 + flapIn),
+      hingeB: P(lx1, y2 - flapIn),
+      foldAngle: 90,
+      stage: flapStage
+    },
+    ...over ? [
+      // ตัวลิ้น: เสียบด้านในผนังหน้า (tuck ผูกมุมกับฝา) กว้างพอดีระหว่างชั้นทบสองข้าง
+      {
+        id: "lip",
+        parentId: "lid",
+        outline: rect(lx0, 0, lx1, y1),
+        hingeA: P(lx0, y1),
+        hingeB: P(lx1, y1),
+        foldAngle: 90,
+        stage: 5,
+        zOffset: layer,
+        tuck: true
+      },
+      // หูสองปลาย: พับทบ 180° แนบด้านในลิ้นไว้ก่อน (ตอนฝายังตั้ง) — ลิ้นงอเกินฉากตอนไถลลงผนังหน้า
+      // ถ้าหูตั้งฉากไว้จะโผล่ทะลุฝา; ปิดฝาเสร็จแล้วค่อยกางหูกลับ 90° เข้าไปแนบด้านในปีกข้างฝา (จังหวะสุดท้าย
+      // กวาดอยู่ในตัวกล่องล้วน) — ชั้นวัสดุ: ตอนทบอยู่ด้านในลิ้น (−layer ในแกนที่พลิกแล้ว) → ตอนจบ +layer
+      {
+        id: "lip-ear-left",
+        parentId: "lip",
+        outline: earOutline(true),
+        hingeA: P(lx0, 0),
+        hingeB: P(lx0, y1),
+        foldAngle: -180,
+        stage: 4,
+        zOffset: -layer,
+        refold: { angle: 90, stage: 6, dz: 2 * layer }
+      },
+      {
+        id: "lip-ear-right",
+        parentId: "lip",
+        outline: earOutline(false),
+        hingeA: P(lx1, 0),
+        hingeB: P(lx1, y1),
+        foldAngle: 180,
+        stage: 4,
+        zOffset: -layer,
+        refold: { angle: -90, stage: 6, dz: 2 * layer }
+      }
+    ] : [
+      {
+        id: "lip",
+        parentId: "lid",
+        outline: lipOutline,
+        hingeA: P(la, y1),
+        hingeB: P(lb, y1),
+        foldAngle: 90,
+        stage: 5,
+        zOffset: layer,
+        tuck: true
+      }
+    ]
+  ].filter((p) => lid || !(p.id === "lid" || p.id.startsWith("lip") || p.id.startsWith("lid-flap")));
   const cut = (d) => ({ kind: "cut", d });
   const crease = (d) => ({ kind: "crease", d });
-  const earCut = (hx, dir, ya, yb) => {
-    const sy = Math.sign(yb - ya) || 1;
-    return `M ${hx} ${ya + sy * earIns} L ${hx + dir * earW} ${ya + sy * (earIns + earSlant)} L ${hx + dir * earW} ${yb - sy * (topIns + earSlant)} L ${hx} ${yb - sy * topIns}`;
-  };
-  const rollFreeCut = (x1, tabX) => {
-    let d = `M ${x1} ${y3 + rollIns}`;
-    for (const yc of [yc1, yc2]) {
-      d += ` L ${x1} ${yc - tabW / 2} L ${tabX} ${yc - tabW / 2 + 1.5} L ${tabX} ${yc + tabW / 2 - 1.5} L ${x1} ${yc + tabW / 2}`;
-    }
-    d += ` L ${x1} ${y4 - rollIns}`;
-    return d;
-  };
   const segments = [
-    // ลิ้นฝา (โค้งมน + บ่าล็อก)
-    cut(
-      `M ${cx0 + tuckIn} ${y1} L ${cx0 + tuckIn - lockW} ${y1 - lockH * 0.35} L ${cx0 + tuckIn} ${y1 - lockH} L ${cx0 + tuckIn} ${r} Q ${cx0 + tuckIn} 0 ${cx0 + tuckIn + r} 0 L ${cx1 - tuckIn - r} 0 Q ${cx1 - tuckIn} 0 ${cx1 - tuckIn} ${r} L ${cx1 - tuckIn} ${y1 - lockH} L ${cx1 - tuckIn + lockW} ${y1 - lockH * 0.35} L ${cx1 - tuckIn} ${y1}`
-    ),
-    cut(`M ${cx0} ${y1} L ${cx0 + tuckIn} ${y1}`),
-    cut(`M ${cx1 - tuckIn} ${y1} L ${cx1} ${y1}`),
-    // ขอบข้างฝา (ไม่มีปีก — ขอบข้างจบด้วยผนังม้วน)
-    cut(`M ${cx0} ${y1} L ${cx0} ${y2}`),
-    cut(`M ${cx1} ${y1} L ${cx1} ${y2}`),
+    ...lid ? [
+      ...over ? [
+        // ลิ้นหน้ากว้าง + หูมุมมน: ขอบนอก แล้วแยกจากปีกข้างฝาตามแนวขอบหน้าฝา
+        cut(
+          `M ${ex0} ${y1} L ${ex0} ${er} Q ${ex0} 0 ${ex0 + er} 0 L ${ex1 - er} 0 Q ${ex1} 0 ${ex1} ${er} L ${ex1} ${y1}`
+        ),
+        cut(`M ${ex0} ${y1} L ${lx0} ${y1}`),
+        cut(`M ${lx1} ${y1} L ${ex1} ${y1}`)
+      ] : [
+        // ลิ้นหน้าฝา (มุมโค้งใหญ่)
+        cut(`M ${la} ${y1} L ${la} ${r} Q ${la} 0 ${la + r} 0 L ${lb - r} 0 Q ${lb} 0 ${lb} ${r} L ${lb} ${y1}`),
+        cut(`M ${lx0} ${y1} L ${la} ${y1}`),
+        cut(`M ${lb} ${y1} L ${lx1} ${y1}`)
+      ],
+      // ปีกข้างฝา
+      cut(flapCut(lx0, -1)),
+      cut(flapCut(lx1, 1)),
+      // ขอบบนผนังหลังนอกช่วงฝา (ฝาแคบกว่ากล่อง)
+      cut(`M ${cx0} ${y2} L ${lx0} ${y2}`),
+      cut(`M ${lx1} ${y2} L ${cx1} ${y2}`)
+    ] : [cut(`M ${cx0} ${y2} L ${cx1} ${y2}`)],
+    // ถาดเปิดบน: ขอบบนผนังหลังตรงเต็มกว้าง
     // หูมุมผนังหลัง + รอยตัดช่วงหด
     cut(`M ${cx0} ${y2} L ${cx0} ${y2 + topIns}`),
     cut(earCut(cx0, -1, y3, y2)),
@@ -55288,12 +55825,12 @@ function generateFefco0427(box, mat) {
     cut(`M ${cx1} ${y2} L ${cx1} ${y2 + topIns}`),
     cut(earCut(cx1, 1, y3, y2)),
     cut(`M ${cx1} ${y3 - earIns} L ${cx1} ${y3}`),
-    // แถวผนังข้าง: ขอบบน-ล่างของผนัง + แผ่นม้วน (มีสเต็ปช่วงหด rollIns)
-    cut(`M ${cx0} ${y3} L ${xr1} ${y3} L ${xr1} ${y3 + rollIns} L ${xr0} ${y3 + rollIns}`),
-    cut(`M ${cx0} ${y4} L ${xr1} ${y4} L ${xr1} ${y4 - rollIns} L ${xr0} ${y4 - rollIns}`),
+    // แถวผนังข้าง: ขอบบน-ล่างผนัง → สัน+ชั้นทบ (หดปลาย rollIns)
+    cut(`M ${cx0} ${y3} L ${xs1} ${y3} L ${xs1} ${y3 + rollIns} L ${xr0} ${y3 + rollIns}`),
+    cut(`M ${cx0} ${y4} L ${xs1} ${y4} L ${xs1} ${y4 - rollIns} L ${xr0} ${y4 - rollIns}`),
     cut(rollFreeCut(xr0, 0)),
-    cut(`M ${cx1} ${y3} L ${xr2} ${y3} L ${xr2} ${y3 + rollIns} L ${xr3} ${y3 + rollIns}`),
-    cut(`M ${cx1} ${y4} L ${xr2} ${y4} L ${xr2} ${y4 - rollIns} L ${xr3} ${y4 - rollIns}`),
+    cut(`M ${cx1} ${y3} L ${xs2} ${y3} L ${xs2} ${y3 + rollIns} L ${xr3} ${y3 + rollIns}`),
+    cut(`M ${cx1} ${y4} L ${xs2} ${y4} L ${xs2} ${y4 - rollIns} L ${xr3} ${y4 - rollIns}`),
     cut(rollFreeCut(xr3, width)),
     // หูมุมผนังหน้า
     cut(`M ${cx0} ${y4} L ${cx0} ${y4 + earIns}`),
@@ -55302,18 +55839,26 @@ function generateFefco0427(box, mat) {
     cut(`M ${cx1} ${y4} L ${cx1} ${y4 + earIns}`),
     cut(earCut(cx1, 1, y4, y5)),
     cut(`M ${cx1} ${y5 - topIns} L ${cx1} ${y5}`),
-    // ขอบล่างสุด
     cut(`M ${cx0} ${y5} L ${cx1} ${y5}`),
     // ช่องเสียบลิ้นบนฐาน
-    cut(obroundPath(cx0 + slotOff, yc1, slotL, slotW, true)),
-    cut(obroundPath(cx0 + slotOff, yc2, slotL, slotW, true)),
-    cut(obroundPath(cx1 - slotOff, yc1, slotL, slotW, true)),
-    cut(obroundPath(cx1 - slotOff, yc2, slotL, slotW, true)),
+    ...slotCs.map(([x, y]) => cut(obroundPath(x, y, slotL, slotW, true))),
     // รอยพับ
-    crease(`M ${cx0 + tuckIn} ${y1} L ${cx1 - tuckIn} ${y1}`),
-    // ลิ้นฝา|ฝา
-    crease(`M ${cx0} ${y2} L ${cx1} ${y2}`),
-    // ฝา|ผนังหลัง
+    ...lid ? [
+      ...over ? [
+        crease(`M ${lx0} ${y1} L ${lx1} ${y1}`),
+        // ลิ้นหน้า|ฝา
+        crease(`M ${lx0} 0 L ${lx0} ${y1}`),
+        // หูซ้าย
+        crease(`M ${lx1} 0 L ${lx1} ${y1}`)
+        // หูขวา
+      ] : [crease(`M ${la} ${y1} L ${lb} ${y1}`)],
+      // ลิ้นหน้า|ฝา
+      crease(`M ${lx0} ${y1 + flapIn} L ${lx0} ${y2 - flapIn}`),
+      // ปีกข้างฝา
+      crease(`M ${lx1} ${y1 + flapIn} L ${lx1} ${y2 - flapIn}`),
+      crease(`M ${lx0} ${y2} L ${lx1} ${y2}`)
+      // ฝา|ผนังหลัง
+    ] : [],
     crease(`M ${cx0} ${y3} L ${cx1} ${y3}`),
     // ผนังหลัง|ฐาน
     crease(`M ${cx0} ${y4} L ${cx1} ${y4}`),
@@ -55322,28 +55867,47 @@ function generateFefco0427(box, mat) {
     // ฐาน|ผนังซ้าย
     crease(`M ${cx1} ${y3} L ${cx1} ${y4}`),
     // ฐาน|ผนังขวา
+    // รอยพับคู่ของผนังทบ (ผนัง|สัน, สัน|ชั้นทบ)
+    crease(`M ${xs1} ${y3 + rollIns} L ${xs1} ${y4 - rollIns}`),
     crease(`M ${xr1} ${y3 + rollIns} L ${xr1} ${y4 - rollIns}`),
-    // ผนังซ้าย|ม้วน
+    crease(`M ${xs2} ${y3 + rollIns} L ${xs2} ${y4 - rollIns}`),
     crease(`M ${xr2} ${y3 + rollIns} L ${xr2} ${y4 - rollIns}`),
-    // ผนังขวา|ม้วน
+    // หูมุม
     crease(`M ${cx0} ${y2 + topIns} L ${cx0} ${y3 - earIns}`),
-    // หูหลังซ้าย
     crease(`M ${cx1} ${y2 + topIns} L ${cx1} ${y3 - earIns}`),
-    // หูหลังขวา
     crease(`M ${cx0} ${y4 + earIns} L ${cx0} ${y5 - topIns}`),
-    // หูหน้าซ้าย
     crease(`M ${cx1} ${y4 + earIns} L ${cx1} ${y5 - topIns}`)
-    // หูหน้าขวา
   ];
   const dims = [
     { a: P(cx0, y5 + 12), b: P(cx1, y5 + 12), label: `W ${fmt(Wp)}` },
     { a: P(xr3 + 8, y3), b: P(xr3 + 8, y4), label: `D ${fmt(Dp)}` },
-    { a: P(cx0 - 8, y4), b: P(cx0 - 8, y5), label: `H ${fmt(Hp)}` },
+    { a: P(cx0 - 8, y2), b: P(cx0 - 8, y3), label: `H ${fmt(Hp)}` },
     { a: P(0, -10), b: P(width, -10), label: fmt(width) },
     { a: P(width + 10, 0), b: P(width + 10, height), label: fmt(height) }
   ];
   return { width, height, segments, panels, dims };
 }
+function rotateDieline90(d) {
+  const pl = { rot: true, tx: d.height, ty: 0 };
+  const pt = (p) => placePoint(pl, p);
+  return {
+    width: d.height,
+    height: d.width,
+    segments: d.segments.map((s) => ({ ...s, d: placePath(s.d, pl) })),
+    panels: d.panels.map((p) => ({
+      ...p,
+      outline: p.outline.map(pt),
+      ...p.holes ? { holes: p.holes.map((h) => h.map(pt)) } : {},
+      ...p.hingeA ? { hingeA: pt(p.hingeA) } : {},
+      ...p.hingeB ? { hingeB: pt(p.hingeB) } : {}
+    })),
+    dims: d.dims.map((m) => ({ ...m, a: pt(m.a), b: pt(m.b) }))
+  };
+}
+function generateFefco0427(box, mat) {
+  return rotateDieline90(fefco0427Layout(box, mat));
+}
+var FEFCO0427_SPIN = -Math.PI / 2;
 
 // src/core/templates/sleeve.ts
 function generateSleeve(box, mat) {
@@ -55591,162 +56155,7 @@ function generateBottleCarrier(box, mat) {
 
 // src/core/templates/tray.ts
 function generateTrayBox(box, mat) {
-  const { W, D, H } = box;
-  const t = mat.thickness;
-  const Wp = W + 2 * t;
-  const Dp = D + 2 * t;
-  const Hp = H + t;
-  const layer = t + 0.05;
-  const cx0 = Hp;
-  const cx1 = cx0 + Wp;
-  const by0 = Hp;
-  const by1 = by0 + Dp;
-  const width = cx1 + Hp;
-  const height = by1 + Hp;
-  const tabIn = Math.max(1.5, 2 * t + 0.5);
-  const tabW = Math.max(8, Math.min(0.72 * Hp, Dp / 2 - 2));
-  const tabSlant = Math.min(5, tabW * 0.45);
-  const tab = (xa, xb, y, dir) => [
-    P(xa + tabIn, y),
-    P(xa + tabIn + tabSlant, y + dir * tabW),
-    P(xb - tabIn - tabSlant, y + dir * tabW),
-    P(xb - tabIn, y)
-  ];
-  const panels = [
-    { id: "base", parentId: null, outline: rect(cx0, by0, cx1, by1), stage: 0 },
-    {
-      id: "back",
-      parentId: "base",
-      outline: rect(cx0, 0, cx1, by0),
-      hingeA: P(cx0, by0),
-      hingeB: P(cx1, by0),
-      foldAngle: 90,
-      stage: 0
-    },
-    {
-      id: "front",
-      parentId: "base",
-      outline: rect(cx0, by1, cx1, height),
-      hingeA: P(cx0, by1),
-      hingeB: P(cx1, by1),
-      foldAngle: -90,
-      stage: 0
-    },
-    {
-      id: "left",
-      parentId: "base",
-      outline: rect(0, by0, cx0, by1),
-      hingeA: P(cx0, by0),
-      hingeB: P(cx0, by1),
-      foldAngle: -90,
-      stage: 0
-    },
-    {
-      id: "right",
-      parentId: "base",
-      outline: rect(cx1, by0, width, by1),
-      hingeA: P(cx1, by0),
-      hingeB: P(cx1, by1),
-      foldAngle: 90,
-      stage: 0
-    },
-    // ลิ้นมุม (stage 1) — รอผนังพับขึ้นก่อน แล้วพับเข้าแนบผนังหน้า-หลังด้านใน
-    {
-      id: "tab-lb",
-      parentId: "left",
-      outline: tab(0, cx0, by0, -1),
-      hingeA: P(0, by0),
-      hingeB: P(cx0, by0),
-      foldAngle: 90,
-      stage: 1,
-      zOffset: layer
-    },
-    {
-      id: "tab-lf",
-      parentId: "left",
-      outline: tab(0, cx0, by1, 1),
-      hingeA: P(0, by1),
-      hingeB: P(cx0, by1),
-      foldAngle: -90,
-      stage: 1,
-      zOffset: layer
-    },
-    {
-      id: "tab-rb",
-      parentId: "right",
-      outline: tab(cx1, width, by0, -1),
-      hingeA: P(cx1, by0),
-      hingeB: P(width, by0),
-      foldAngle: 90,
-      stage: 1,
-      zOffset: layer
-    },
-    {
-      id: "tab-rf",
-      parentId: "right",
-      outline: tab(cx1, width, by1, 1),
-      hingeA: P(cx1, by1),
-      hingeB: P(width, by1),
-      foldAngle: -90,
-      stage: 1,
-      zOffset: layer
-    }
-  ];
-  const cut = (d) => ({ kind: "cut", d });
-  const crease = (d) => ({ kind: "crease", d });
-  const tabCut = (xa, xb, y, dir) => `M ${xa} ${y} L ${xa + tabIn} ${y} L ${xa + tabIn + tabSlant} ${y + dir * tabW} L ${xb - tabIn - tabSlant} ${y + dir * tabW} L ${xb - tabIn} ${y} L ${xb} ${y}`;
-  const segments = [
-    // ขอบนอก (cut) ไล่รอบรูป
-    cut(`M ${cx0} 0 L ${cx1} 0`),
-    // ขอบบนผนังหลัง
-    cut(`M ${cx1} 0 L ${cx1} ${by0}`),
-    // ขอบขวาผนังหลัง
-    cut(tabCut(cx1, width, by0, -1)),
-    // ลิ้นมุมขวา-หลัง
-    cut(`M ${width} ${by0} L ${width} ${by1}`),
-    // ขอบขวาผนังขวา
-    cut(tabCut(cx1, width, by1, 1)),
-    // ลิ้นมุมขวา-หน้า
-    cut(`M ${cx1} ${by1} L ${cx1} ${height}`),
-    // ขอบขวาผนังหน้า
-    cut(`M ${cx1} ${height} L ${cx0} ${height}`),
-    // ขอบล่างผนังหน้า
-    cut(`M ${cx0} ${by1} L ${cx0} ${height}`),
-    // ขอบซ้ายผนังหน้า
-    cut(tabCut(0, cx0, by1, 1)),
-    // ลิ้นมุมซ้าย-หน้า
-    cut(`M 0 ${by0} L 0 ${by1}`),
-    // ขอบซ้ายผนังซ้าย
-    cut(tabCut(0, cx0, by0, -1)),
-    // ลิ้นมุมซ้าย-หลัง
-    cut(`M ${cx0} 0 L ${cx0} ${by0}`),
-    // ขอบซ้ายผนังหลัง
-    // รอยพับ (crease)
-    crease(`M ${cx0} ${by0} L ${cx1} ${by0}`),
-    // ฐาน|ผนังหลัง
-    crease(`M ${cx0} ${by1} L ${cx1} ${by1}`),
-    // ฐาน|ผนังหน้า
-    crease(`M ${cx0} ${by0} L ${cx0} ${by1}`),
-    // ฐาน|ผนังซ้าย
-    crease(`M ${cx1} ${by0} L ${cx1} ${by1}`),
-    // ฐาน|ผนังขวา
-    crease(`M ${tabIn} ${by0} L ${cx0 - tabIn} ${by0}`),
-    // ผนังซ้าย|ลิ้นหลัง
-    crease(`M ${tabIn} ${by1} L ${cx0 - tabIn} ${by1}`),
-    // ผนังซ้าย|ลิ้นหน้า
-    crease(`M ${cx1 + tabIn} ${by0} L ${width - tabIn} ${by0}`),
-    // ผนังขวา|ลิ้นหลัง
-    crease(`M ${cx1 + tabIn} ${by1} L ${width - tabIn} ${by1}`)
-    // ผนังขวา|ลิ้นหน้า
-  ];
-  const dims = [
-    { a: P(cx0, height + 12), b: P(cx1, height + 12), label: `W ${fmt(Wp)}` },
-    { a: P(width + 8, by0), b: P(width + 8, by1), label: `D ${fmt(Dp)}` },
-    { a: P(-8, by1), b: P(-8, height), label: `H ${fmt(Hp)}` },
-    { a: P(0, -10), b: P(width, -10), label: fmt(width) },
-    { a: P(width + 22, 0), b: P(width + 22, height), label: fmt(height) }
-  ];
-  return { width, height, segments, panels, dims };
+  return rollEndLayout(box, mat, { lid: false });
 }
 
 // src/core/templates/gable.ts
@@ -55755,198 +56164,236 @@ function generateGableBox(box, mat) {
   const t = mat.thickness;
   const Wp = W + 2 * t;
   const Dp = D + 2 * t;
-  const Hp = H + t;
-  const G = Math.max(Dp * 0.72, Dp / 2 + 12);
-  const lean = Math.asin(Math.min(0.985, Dp / (2 * G))) * 180 / Math.PI;
-  const tabIn = Math.max(1.5, 2 * t + 0.5);
-  const tabW = Math.max(8, Math.min(0.72 * Hp, Dp / 2 - 2));
-  const tabSlant = Math.min(5, tabW * 0.45);
+  const Hp = H + 2 * t;
   const layer = t + 0.05;
-  const cx0 = Hp;
-  const cx1 = cx0 + Wp;
-  const width = cx1 + Hp;
-  const backRim = G;
-  const by0 = G + Hp;
-  const by1 = by0 + Dp;
-  const frontRim = by1 + Hp;
-  const height = frontRim + G;
-  const holeLen = Math.min(90, Wp * 0.5);
-  const holeThick = Math.min(20, G * 0.3);
-  const hasHandle = holeLen >= 40 && holeThick >= 8;
-  const holeCx = (cx0 + cx1) / 2;
-  const dHole = holeThick / 2 + Math.max(6, G * 0.16);
-  const backHoleCy = dHole;
-  const frontHoleCy = height - dHole;
-  const tab = (xa, xb, y, dir) => [
-    P(xa + tabIn, y),
-    P(xa + tabIn + tabSlant, y + dir * tabW),
-    P(xb - tabIn - tabSlant, y + dir * tabW),
-    P(xb - tabIn, y)
+  const glueW = Math.max(12, 10 + 2 * t);
+  const taper = 4;
+  const fin = Math.max(1.5, t + 0.5);
+  const gap = t + 0.01;
+  const lidLen = Dp / 2 - gap;
+  const finH = Math.max(28, 0.5 * Dp);
+  const finVert = 0.12 * finH;
+  const finCh = Math.min(finH - finVert, 0.2 * Wp);
+  const holeThick = Math.min(24, 0.36 * finH);
+  const holeLen = Math.min(110, 0.29 * Wp, Wp - 2 * finCh - 10);
+  const hasHole = holeLen >= holeThick + 10;
+  const sw = 2 * t + 1;
+  const half = Wp / 2;
+  const tipL = Math.max(8, Math.min(18, 0.12 * Dp));
+  const reach = half - sw / 2;
+  const finGap = 2 * gap + 1;
+  const ei = t + 0.3;
+  const tipR = Math.min(6, (Dp / 2 - finGap / 2 - ei) * 0.25);
+  const bLen = 0.64 * Dp;
+  const nA = 0.22 * bLen;
+  const cS = Math.min(Dp / 2, bLen * 0.78);
+  const cC = Math.min(0.25 * Wp, bLen * 0.78);
+  const dr = 2;
+  const X0 = 0;
+  const X1 = X0 + glueW;
+  const X2 = X1 + Wp;
+  const X3 = X2 + Dp;
+  const X4 = X3 + Wp;
+  const X5 = X4 + Dp;
+  const top = Math.max(lidLen + finH, reach + tipL) + 1;
+  const ridge = top - lidLen;
+  const bot = top + Hp;
+  const width = X5;
+  const height = bot + bLen + 2;
+  const finOutline = (xa, xb) => [
+    P(xa, ridge),
+    P(xa, ridge - finVert),
+    P(xa + finCh, ridge - finH),
+    P(xb - finCh, ridge - finH),
+    P(xb, ridge - finVert),
+    P(xb, ridge)
   ];
+  const holeCy = ridge - 0.56 * finH;
+  const capOutline = (xa, xb) => [P(xa, top), P(xa, top - reach), P(xb, top - reach), P(xb, top)];
+  const tipOutline = (xa, xb, outerLeft) => {
+    const y0 = top - reach;
+    const y1 = y0 - tipL;
+    if (outerLeft) {
+      return [P(xa, y0), ...arcPts(xa + tipR, y1 + tipR, tipR, Math.PI, Math.PI * 1.5, 4), P(xb, y1), P(xb, y0)];
+    }
+    return [P(xa, y0), P(xa, y1), ...arcPts(xb - tipR, y1 + tipR, tipR, Math.PI * 1.5, Math.PI * 2, 4), P(xb, y0)];
+  };
+  const caps = (side, xa, xb) => {
+    const cx = (xa + xb) / 2;
+    const halves = [
+      ["a", xa + ei, cx - finGap / 2, true],
+      ["b", cx + finGap / 2, xb - ei, false]
+    ];
+    return halves.flatMap(([k, a, b, outerLeft]) => [
+      {
+        id: `cap-${side}-${k}`,
+        parentId: `side-${side}`,
+        outline: capOutline(a, b),
+        // พับทับบนฝาแบน: zOffset ติดลบ = ลอยขึ้นเหนือฝา (แกน z ท้องถิ่นชี้เข้ากล่องหลังพับ)
+        hingeA: P(a, top),
+        hingeB: P(b, top),
+        foldAngle: 90,
+        stage: 5,
+        zOffset: -layer
+      },
+      {
+        // ลิ้นปลายพับงอรอไว้ก่อน (stage 4 ตอนแผงปิดยังตั้ง) — แผงปิดพับลงมาแล้วลิ้นจึงลงร่องตรง ๆ
+        // ถ้างอพร้อมแผงปิด ปลายลิ้นสองข้างกวาดสวนกันในร่อง
+        id: `tip-${side}-${k}`,
+        parentId: `cap-${side}-${k}`,
+        outline: tipOutline(a, b, outerLeft),
+        hingeA: P(a, top - reach),
+        hingeB: P(b, top - reach),
+        foldAngle: 90,
+        stage: 4
+      }
+    ]);
+  };
+  const lidFin = (face, x0, x1) => {
+    const cx = (x0 + x1) / 2;
+    const xa = x0 + ei;
+    const xb = x1 - ei;
+    return [
+      {
+        id: `lid-${face}-a`,
+        parentId: face,
+        outline: rect(xa, ridge, cx - sw / 2, top),
+        hingeA: P(xa, top),
+        hingeB: P(cx - sw / 2, top),
+        foldAngle: 90,
+        stage: 4
+      },
+      {
+        id: `lid-${face}-b`,
+        parentId: face,
+        outline: rect(cx + sw / 2, ridge, xb, top),
+        hingeA: P(cx + sw / 2, top),
+        hingeB: P(xb, top),
+        foldAngle: 90,
+        stage: 4
+      },
+      {
+        id: `fin-${face}`,
+        parentId: `lid-${face}-a`,
+        outline: finOutline(xa, xb),
+        holes: hasHole ? [obroundPts(cx, holeCy, holeLen, holeThick)] : void 0,
+        hingeA: P(xa, ridge),
+        hingeB: P(xb, ridge),
+        foldAngle: -90,
+        stage: 4
+      }
+    ];
+  };
   const panels = [
-    { id: "base", parentId: null, outline: rect(cx0, by0, cx1, by1), stage: 0 },
-    // ผนังข้าง (ปีก) — พับขึ้นก่อน (stage 0)
+    { id: "front", parentId: null, outline: rect(X1, top, X2, bot), stage: 0 },
     {
-      id: "left",
-      parentId: "base",
-      outline: rect(0, by0, cx0, by1),
-      hingeA: P(cx0, by0),
-      hingeB: P(cx0, by1),
+      id: "glue",
+      parentId: "front",
+      outline: [P(X1, top), P(X0, top + taper), P(X0, bot - taper), P(X1, bot)],
+      hingeA: P(X1, top),
+      hingeB: P(X1, bot),
       foldAngle: -90,
-      stage: 0
+      stage: 0,
+      zOffset: layer
     },
     {
-      id: "right",
-      parentId: "base",
-      outline: rect(cx1, by0, width, by1),
-      hingeA: P(cx1, by0),
-      hingeB: P(cx1, by1),
+      id: "side-right",
+      parentId: "front",
+      outline: rect(X2, top, X3, bot),
+      hingeA: P(X2, top),
+      hingeB: P(X2, bot),
       foldAngle: 90,
       stage: 0
     },
-    // ผนังหน้า-หลัง — พับขึ้นทีหลัง (stage 2) ปิดทับลิ้นมุม
     {
       id: "back",
-      parentId: "base",
-      outline: rect(cx0, backRim, cx1, by0),
-      hingeA: P(cx0, by0),
-      hingeB: P(cx1, by0),
+      parentId: "side-right",
+      outline: rect(X3, top, X4, bot),
+      hingeA: P(X3, top),
+      hingeB: P(X3, bot),
       foldAngle: 90,
-      stage: 2
+      stage: 0
     },
     {
-      id: "front",
-      parentId: "base",
-      outline: rect(cx0, by1, cx1, frontRim),
-      hingeA: P(cx0, by1),
-      hingeB: P(cx1, by1),
-      foldAngle: -90,
-      stage: 2
-    },
-    // ลิ้นมุม (stage 1) — พับเข้าหลังผนังหน้า-หลัง ล็อกมุม
-    {
-      id: "tab-lb",
-      parentId: "left",
-      outline: tab(0, cx0, by0, -1),
-      hingeA: P(0, by0),
-      hingeB: P(cx0, by0),
-      foldAngle: 90,
-      stage: 1,
-      zOffset: layer
-    },
-    {
-      id: "tab-lf",
-      parentId: "left",
-      outline: tab(0, cx0, by1, 1),
-      hingeA: P(0, by1),
-      hingeB: P(cx0, by1),
-      foldAngle: -90,
-      stage: 1,
-      zOffset: layer
-    },
-    {
-      id: "tab-rb",
-      parentId: "right",
-      outline: tab(cx1, width, by0, -1),
-      hingeA: P(cx1, by0),
-      hingeB: P(width, by0),
-      foldAngle: 90,
-      stage: 1,
-      zOffset: layer
-    },
-    {
-      id: "tab-rf",
-      parentId: "right",
-      outline: tab(cx1, width, by1, 1),
-      hingeA: P(cx1, by1),
-      hingeB: P(width, by1),
-      foldAngle: -90,
-      stage: 1,
-      zOffset: layer
-    },
-    // แผงจั่ว (stage 3) — เอียงเข้าจากขอบผนังมาชนที่สัน + รูหิ้ว
-    // foldAngle=0 = ต่อจากผนัง (ตั้งดิ่ง); เอียงเข้าหากึ่งกลาง = หมุนต่อในทิศเดียวกับผนัง
-    // (ผนังหลังพับ +90 → จั่วหลัง +lean, ผนังหน้าพับ -90 → จั่วหน้า -lean)
-    {
-      id: "gable-back",
+      id: "side-left",
       parentId: "back",
-      outline: rect(cx0, 0, cx1, backRim),
-      holes: hasHandle ? [obroundPts(holeCx, backHoleCy, holeLen, holeThick)] : void 0,
-      hingeA: P(cx0, backRim),
-      hingeB: P(cx1, backRim),
-      foldAngle: lean,
-      stage: 3
+      outline: rect(X4, top, X5, bot),
+      hingeA: P(X4, top),
+      hingeB: P(X4, bot),
+      foldAngle: 90,
+      stage: 0
+    },
+    // ก้นล็อก — พับก่อนอยู่ลึกกว่า: ลิ้นข้าง (มุมเฉียงหันหาผนังหน้า) → ลิ้นหน้าเว้ากลาง → ลิ้นหลังหกเหลี่ยมนอกสุด
+    {
+      id: "base-right",
+      parentId: "side-right",
+      outline: [P(X2 + fin, bot), P(X2 + fin, bot + dr), P(X2 + cS, bot + cS), P(X2 + cS, bot + bLen), P(X3 - fin, bot + bLen), P(X3 - fin, bot)],
+      hingeA: P(X2 + fin, bot),
+      hingeB: P(X3 - fin, bot),
+      foldAngle: -90,
+      stage: 1,
+      zOffset: 3 * layer
     },
     {
-      id: "gable-front",
+      id: "base-left",
+      parentId: "side-left",
+      outline: [P(X4 + fin, bot), P(X4 + fin, bot + bLen), P(X5 - cS, bot + bLen), P(X5 - cS, bot + cS), P(X5 - fin, bot + dr), P(X5 - fin, bot)],
+      hingeA: P(X4 + fin, bot),
+      hingeB: P(X5 - fin, bot),
+      foldAngle: -90,
+      stage: 1,
+      zOffset: 3 * layer
+    },
+    {
+      id: "base-front",
       parentId: "front",
-      outline: rect(cx0, frontRim, cx1, height),
-      holes: hasHandle ? [obroundPts(holeCx, frontHoleCy, holeLen, holeThick)] : void 0,
-      hingeA: P(cx0, frontRim),
-      hingeB: P(cx1, frontRim),
-      foldAngle: -lean,
-      stage: 3
-    }
+      outline: [
+        P(X1 + fin, bot),
+        P(X1 + fin, bot + bLen),
+        P(X1 + 0.25 * Wp, bot + bLen),
+        P(X1 + 0.25 * Wp, bot + bLen - nA),
+        P(X2 - 0.25 * Wp, bot + bLen - nA),
+        P(X2 - 0.25 * Wp, bot + bLen),
+        P(X2 - fin, bot + bLen),
+        P(X2 - fin, bot)
+      ],
+      hingeA: P(X1 + fin, bot),
+      hingeB: P(X2 - fin, bot),
+      foldAngle: -90,
+      stage: 2,
+      zOffset: 2 * layer
+    },
+    {
+      id: "base-back",
+      parentId: "back",
+      outline: [
+        P(X3 + fin, bot),
+        P(X3 + fin, bot + dr),
+        P(X3 + cC, bot + cC),
+        P(X3 + cC, bot + bLen),
+        P(X4 - cC, bot + bLen),
+        P(X4 - cC, bot + cC),
+        P(X4 - fin, bot + dr),
+        P(X4 - fin, bot)
+      ],
+      hingeA: P(X3 + fin, bot),
+      hingeB: P(X4 - fin, bot),
+      foldAngle: -90,
+      stage: 3,
+      zOffset: layer
+    },
+    ...lidFin("front", X1, X2),
+    ...lidFin("back", X3, X4),
+    ...caps("right", X2, X3),
+    ...caps("left", X4, X5)
   ];
-  const cut = (d) => ({ kind: "cut", d });
-  const crease = (d) => ({ kind: "crease", d });
-  const tabCut = (xa, xb, y, dir) => `M ${xa} ${y} L ${xa + tabIn} ${y} L ${xa + tabIn + tabSlant} ${y + dir * tabW} L ${xb - tabIn - tabSlant} ${y + dir * tabW} L ${xb - tabIn} ${y} L ${xb} ${y}`;
-  const segments = [
-    // จั่วหลัง (บนสุด)
-    cut(`M ${cx0} 0 L ${cx1} 0`),
-    cut(`M ${cx0} 0 L ${cx0} ${backRim}`),
-    cut(`M ${cx1} 0 L ${cx1} ${backRim}`),
-    // ผนังหลัง (ขอบข้าง)
-    cut(`M ${cx0} ${backRim} L ${cx0} ${by0}`),
-    cut(`M ${cx1} ${backRim} L ${cx1} ${by0}`),
-    // ผนังซ้าย (ลิ้นบน + ขอบซ้าย + ลิ้นล่าง)
-    cut(tabCut(0, cx0, by0, -1)),
-    cut(`M 0 ${by0} L 0 ${by1}`),
-    cut(tabCut(0, cx0, by1, 1)),
-    // ผนังขวา
-    cut(tabCut(cx1, width, by0, -1)),
-    cut(`M ${width} ${by0} L ${width} ${by1}`),
-    cut(tabCut(cx1, width, by1, 1)),
-    // ผนังหน้า (ขอบข้าง)
-    cut(`M ${cx0} ${by1} L ${cx0} ${frontRim}`),
-    cut(`M ${cx1} ${by1} L ${cx1} ${frontRim}`),
-    // จั่วหน้า (ล่างสุด)
-    cut(`M ${cx0} ${frontRim} L ${cx0} ${height}`),
-    cut(`M ${cx1} ${frontRim} L ${cx1} ${height}`),
-    cut(`M ${cx0} ${height} L ${cx1} ${height}`),
-    // รอยพับ
-    crease(`M ${cx0} ${backRim} L ${cx1} ${backRim}`),
-    // จั่วหลัง|ผนังหลัง
-    crease(`M ${cx0} ${by0} L ${cx1} ${by0}`),
-    // ฐาน|ผนังหลัง
-    crease(`M ${cx0} ${by1} L ${cx1} ${by1}`),
-    // ฐาน|ผนังหน้า
-    crease(`M ${cx0} ${frontRim} L ${cx1} ${frontRim}`),
-    // ผนังหน้า|จั่วหน้า
-    crease(`M ${cx0} ${by0} L ${cx0} ${by1}`),
-    // ฐาน|ผนังซ้าย
-    crease(`M ${cx1} ${by0} L ${cx1} ${by1}`),
-    // ฐาน|ผนังขวา
-    crease(`M ${tabIn} ${by0} L ${cx0 - tabIn} ${by0}`),
-    // ผนังซ้าย|ลิ้นหลัง
-    crease(`M ${tabIn} ${by1} L ${cx0 - tabIn} ${by1}`),
-    // ผนังซ้าย|ลิ้นหน้า
-    crease(`M ${cx1 + tabIn} ${by0} L ${width - tabIn} ${by0}`),
-    // ผนังขวา|ลิ้นหลัง
-    crease(`M ${cx1 + tabIn} ${by1} L ${width - tabIn} ${by1}`)
-    // ผนังขวา|ลิ้นหน้า
-  ];
-  if (hasHandle) {
-    segments.push(cut(obroundPath(holeCx, backHoleCy, holeLen, holeThick)));
-    segments.push(cut(obroundPath(holeCx, frontHoleCy, holeLen, holeThick)));
-  }
+  const segments = autoSegments(panels);
   const dims = [
-    { a: P(cx0, height + 12), b: P(cx1, height + 12), label: `W ${fmt(Wp)}` },
-    { a: P(width + 8, by0), b: P(width + 8, by1), label: `D ${fmt(Dp)}` },
-    { a: P(-8, backRim), b: P(-8, by0), label: `H ${fmt(Hp)}` },
-    { a: P(-8, 0), b: P(-8, backRim), label: `\u0E08\u0E31\u0E48\u0E27 ${fmt(G)}` },
+    { a: P(X1, height + 6), b: P(X2, height + 6), label: `W ${fmt(Wp)}` },
+    { a: P(X2, height + 6), b: P(X3, height + 6), label: `D ${fmt(Dp)}` },
+    { a: P(-8, top), b: P(-8, bot), label: `H ${fmt(Hp)}` },
     { a: P(0, -10), b: P(width, -10), label: fmt(width) },
-    { a: P(width + 22, 0), b: P(width + 22, height), label: fmt(height) }
+    { a: P(width + 10, 0), b: P(width + 10, height), label: fmt(height) }
   ];
   return { width, height, segments, panels, dims };
 }
@@ -56021,7 +56468,7 @@ function generateRSCBox(box, mat) {
       hingeB: P(x2, top),
       foldAngle: 90,
       stage: 1,
-      zOffset: layer
+      zOffset: 2 * layer
     },
     {
       id: "flap-t-sr",
@@ -56031,7 +56478,7 @@ function generateRSCBox(box, mat) {
       hingeB: P(x4, top),
       foldAngle: 90,
       stage: 1,
-      zOffset: layer
+      zOffset: 2 * layer
     },
     {
       id: "flap-b-sl",
@@ -56041,7 +56488,7 @@ function generateRSCBox(box, mat) {
       hingeB: P(x2, bot),
       foldAngle: -90,
       stage: 1,
-      zOffset: layer
+      zOffset: 2 * layer
     },
     {
       id: "flap-b-sr",
@@ -56051,7 +56498,7 @@ function generateRSCBox(box, mat) {
       hingeB: P(x4, bot),
       foldAngle: -90,
       stage: 1,
-      zOffset: layer
+      zOffset: 2 * layer
     },
     // ลิ้นหน้า-หลัง (outer) พับทับมาชนกลาง — stage 2, ยกสูงกว่าลิ้นข้างหนึ่งชั้น
     {
@@ -56062,7 +56509,7 @@ function generateRSCBox(box, mat) {
       hingeB: P(x3, top),
       foldAngle: 90,
       stage: 2,
-      zOffset: 2 * layer
+      zOffset: layer
     },
     {
       id: "flap-t-back",
@@ -56072,7 +56519,7 @@ function generateRSCBox(box, mat) {
       hingeB: P(x5, top),
       foldAngle: 90,
       stage: 2,
-      zOffset: 2 * layer
+      zOffset: layer
     },
     {
       id: "flap-b-front",
@@ -56082,7 +56529,7 @@ function generateRSCBox(box, mat) {
       hingeB: P(x3, bot),
       foldAngle: -90,
       stage: 2,
-      zOffset: 2 * layer
+      zOffset: layer
     },
     {
       id: "flap-b-back",
@@ -56092,7 +56539,7 @@ function generateRSCBox(box, mat) {
       hingeB: P(x5, bot),
       foldAngle: -90,
       stage: 2,
-      zOffset: 2 * layer
+      zOffset: layer
     }
   ];
   const cut = (d) => ({ kind: "cut", d });
@@ -56180,7 +56627,7 @@ function generateSticker(box) {
 }
 
 // src/core/templates/trayPiece.ts
-function buildTrayPiece(prefix, ox, oy, W, D, H, t, wallDir = 1) {
+function buildTrayPiece(prefix, ox, oy, W, D, H, t, wallDir = 1, opts = {}) {
   const Wp = W + 2 * t;
   const Dp = D + 2 * t;
   const Hp = H + t;
@@ -56196,12 +56643,23 @@ function buildTrayPiece(prefix, ox, oy, W, D, H, t, wallDir = 1) {
   const tabIn = Math.max(1.5, 2 * t + 0.5);
   const tabW = Math.max(8, Math.min(0.72 * Hp, Dp / 2 - 2));
   const tabSlant = Math.min(5, tabW * 0.45);
-  const tab = (xa, xb, y, d) => [
-    a(xa + tabIn, y),
-    a(xa + tabIn + tabSlant, y + d * tabW),
-    a(xb - tabIn - tabSlant, y + d * tabW),
-    a(xb - tabIn, y)
-  ];
+  const sq = !!opts.squareCorners;
+  const slot = Math.max(1, t + 0.3);
+  const sqW = Math.max(6, Hp - t - 0.5);
+  const tab = (xa, xb, y, d) => {
+    if (sq) {
+      const left = xa === 0;
+      const x0 = left ? xa : xa + slot;
+      const x1 = left ? xb - slot : xb;
+      return [a(x0, y), a(x0, y + d * sqW), a(x1, y + d * sqW), a(x1, y)];
+    }
+    return [
+      a(xa + tabIn, y),
+      a(xa + tabIn + tabSlant, y + d * tabW),
+      a(xb - tabIn - tabSlant, y + d * tabW),
+      a(xb - tabIn, y)
+    ];
+  };
   const r = (xa, ya, xb, yb) => rect(ox + xa, oy + ya, ox + xb, oy + yb);
   const panels = [
     { id: `${prefix}base`, parentId: null, outline: r(cx0, by0, cx1, by1), stage: 0 },
@@ -56212,7 +56670,7 @@ function buildTrayPiece(prefix, ox, oy, W, D, H, t, wallDir = 1) {
       hingeA: a(cx0, by0),
       hingeB: a(cx1, by0),
       foldAngle: 90 * dir,
-      stage: 0
+      stage: 2
     },
     {
       id: `${prefix}front`,
@@ -56221,7 +56679,7 @@ function buildTrayPiece(prefix, ox, oy, W, D, H, t, wallDir = 1) {
       hingeA: a(cx0, by1),
       hingeB: a(cx1, by1),
       foldAngle: -90 * dir,
-      stage: 0
+      stage: 2
     },
     {
       id: `${prefix}left`,
@@ -56285,7 +56743,17 @@ function buildTrayPiece(prefix, ox, oy, W, D, H, t, wallDir = 1) {
   const cut = (d) => ({ kind: "cut", d });
   const crease = (d) => ({ kind: "crease", d });
   const L = (x, y) => `${ox + x} ${oy + y}`;
-  const tabCut = (xa, xb, y, d) => `M ${L(xa, y)} L ${L(xa + tabIn, y)} L ${L(xa + tabIn + tabSlant, y + d * tabW)} L ${L(xb - tabIn - tabSlant, y + d * tabW)} L ${L(xb - tabIn, y)} L ${L(xb, y)}`;
+  const tabCut = (xa, xb, y, d) => {
+    if (sq) {
+      const pts = tab(xa, xb, y, d).map((q) => `${q.x} ${q.y}`);
+      return `M ${L(xa, y)} L ${pts[0]} L ${pts[1]} L ${pts[2]} L ${pts[3]} L ${L(xb, y)}`;
+    }
+    return `M ${L(xa, y)} L ${L(xa + tabIn, y)} L ${L(xa + tabIn + tabSlant, y + d * tabW)} L ${L(xb - tabIn - tabSlant, y + d * tabW)} L ${L(xb - tabIn, y)} L ${L(xb, y)}`;
+  };
+  const tabCrease = (xa, xb, y) => {
+    const o = tab(xa, xb, y, 1);
+    return crease(`M ${o[0].x} ${o[0].y} L ${o[3].x} ${o[3].y}`);
+  };
   const segments = [
     cut(`M ${L(cx0, 0)} L ${L(cx1, 0)}`),
     cut(`M ${L(cx1, 0)} L ${L(cx1, by0)}`),
@@ -56303,10 +56771,10 @@ function buildTrayPiece(prefix, ox, oy, W, D, H, t, wallDir = 1) {
     crease(`M ${L(cx0, by1)} L ${L(cx1, by1)}`),
     crease(`M ${L(cx0, by0)} L ${L(cx0, by1)}`),
     crease(`M ${L(cx1, by0)} L ${L(cx1, by1)}`),
-    crease(`M ${L(tabIn, by0)} L ${L(cx0 - tabIn, by0)}`),
-    crease(`M ${L(tabIn, by1)} L ${L(cx0 - tabIn, by1)}`),
-    crease(`M ${L(cx1 + tabIn, by0)} L ${L(w - tabIn, by0)}`),
-    crease(`M ${L(cx1 + tabIn, by1)} L ${L(w - tabIn, by1)}`)
+    tabCrease(0, cx0, by0),
+    tabCrease(0, cx0, by1),
+    tabCrease(cx1, w, by0),
+    tabCrease(cx1, w, by1)
   ];
   return { panels, segments, bbox: { x0: ox, y0: oy, x1: ox + w, y1: oy + h } };
 }
@@ -56318,19 +56786,40 @@ function trayPieceSize(W, D, H, t) {
 }
 
 // src/core/templates/lidBox.ts
+var LID_CLEAR = 0.8;
+var LID_SEAT = 0.1;
 function generateLidBox(box, mat) {
   const { W, D, H } = box;
   const t = mat.thickness;
-  const clear = 0.8;
-  const lidW = W + 2 * t + clear;
-  const lidD = D + 2 * t + clear;
-  const lidH = Math.max(10, H * 0.4);
+  const lidW = W + 2 * t + LID_CLEAR;
+  const lidD = D + 2 * t + LID_CLEAR;
+  const lidH = H;
   const GAP2 = 14;
   const base = trayPieceSize(W, D, H, t);
+  const lid = trayPieceSize(lidW, lidD, lidH, t);
+  const byOff = (lid.h - base.h) / 2;
   const bx = base.w + GAP2;
-  const basePiece = buildTrayPiece("b-", 0, 0, W, D, H, t, 1);
-  const lidPiece = buildTrayPiece("l-", bx, 0, lidW, lidD, lidH, t, 1);
-  const panels = [...basePiece.panels, ...lidPiece.panels];
+  const basePiece = buildTrayPiece("b-", 0, byOff, W, D, H, t, 1, { squareCorners: true });
+  const lidPiece = buildTrayPiece("l-", bx, 0, lidW, lidD, lidH, t, 1, { squareCorners: true });
+  const xcB = base.w / 2;
+  const xcL = bx + lid.w / 2;
+  const xh = (xcB + xcL) / 2;
+  const Hpb = H + t;
+  const Hpl = lidH + t;
+  const lidPanels = lidPiece.panels.map(
+    (p) => p.id === "l-base" ? {
+      ...p,
+      parentId: "b-base",
+      hingeA: P(xh, 0),
+      hingeB: P(xh, lid.h),
+      foldAngle: 180,
+      stage: 4,
+      zOffset: -(Hpb + Hpl),
+      slide: { dz: Hpl - t - LID_SEAT, stage: 5 },
+      assemble: true
+    } : p
+  );
+  const panels = [...basePiece.panels, ...lidPanels];
   const segments = [...basePiece.segments, ...lidPiece.segments];
   const width = lidPiece.bbox.x1;
   const height = Math.max(basePiece.bbox.y1, lidPiece.bbox.y1);
@@ -56662,7 +57151,8 @@ function generateFefco0215(box, mat) {
       hingeB: P(x5 - tuckIn, tiTop),
       foldAngle: 90,
       stage: 3,
-      zOffset: 0.15
+      zOffset: 0.15,
+      tuck: true
     },
     // --- ก้น auto-lock: ลิ้นข้างก่อน (stage 1) แล้วลิ้นหน้า-หลังทับ (stage 2) ---
     {
@@ -56817,7 +57307,7 @@ function generateFefco0202(box, mat) {
       hingeB: P(x2, top),
       foldAngle: 90,
       stage: 1,
-      zOffset: layer
+      zOffset: 3 * layer
     },
     {
       id: "flap-t-sr",
@@ -56827,7 +57317,7 @@ function generateFefco0202(box, mat) {
       hingeB: P(x4, top),
       foldAngle: 90,
       stage: 1,
-      zOffset: layer
+      zOffset: 3 * layer
     },
     {
       id: "flap-b-sl",
@@ -56837,7 +57327,7 @@ function generateFefco0202(box, mat) {
       hingeB: P(x2, bot),
       foldAngle: -90,
       stage: 1,
-      zOffset: layer
+      zOffset: 3 * layer
     },
     {
       id: "flap-b-sr",
@@ -56847,7 +57337,7 @@ function generateFefco0202(box, mat) {
       hingeB: P(x4, bot),
       foldAngle: -90,
       stage: 1,
-      zOffset: layer
+      zOffset: 3 * layer
     },
     // ลิ้นหน้า (outer เต็มลึก) พับก่อน แล้วลิ้นหลังพับทับบนสุด (เกยเต็ม)
     {
@@ -56868,7 +57358,7 @@ function generateFefco0202(box, mat) {
       hingeB: P(x5, top),
       foldAngle: 90,
       stage: 3,
-      zOffset: 3 * layer
+      zOffset: layer
     },
     {
       id: "flap-b-front",
@@ -56888,7 +57378,7 @@ function generateFefco0202(box, mat) {
       hingeB: P(x5, bot),
       foldAngle: -90,
       stage: 3,
-      zOffset: 3 * layer
+      zOffset: layer
     }
   ];
   const cut = (d) => ({ kind: "cut", d });
@@ -56938,170 +57428,151 @@ function generateFefco0217(box, mat) {
   const taper = 4;
   const fin = Math.max(1.5, t + 0.5);
   const layer = t + 0.05;
-  const handleH = Math.max(55, Math.min(150, Dp));
-  const lean = Math.asin(Math.min(0.98, Dp / 2 / handleH)) * 180 / Math.PI;
-  const sideH = handleH * 0.72;
-  const peakInset = Dp * 0.22;
-  const baseFB = Dp * 0.6;
-  const baseLR = Dp * 0.46;
-  const angFB = Math.min(14, Wp * 0.1);
-  const angLR = Math.min(14, Dp * 0.18);
-  const x1 = glueW;
-  const x2 = x1 + Dp;
-  const x3 = x2 + Wp;
-  const x4 = x3 + Dp;
-  const x5 = x4 + Wp;
-  const top = handleH;
+  const gap = t + 0.01;
+  const lidLen = Dp / 2 - gap;
+  const finH = Math.max(30, 0.57 * Dp);
+  const rIn = t + 0.5;
+  const earW = Math.min(22, Math.max(10, 0.07 * Wp));
+  const earR = earW / 2;
+  const earTopH = 0.82 * finH;
+  const notchH = 0.62 * finH;
+  const c = 0.5;
+  const tanB = (rIn + earW + c) / notchH;
+  const beta = Math.atan(tanB);
+  const cosB = Math.cos(beta);
+  const shoulderX = (h) => h * tanB + t / cosB + c;
+  const apexH = 0.93 * finH;
+  const gL = apexH / cosB;
+  const holeThick = Math.min(22, 0.38 * finH);
+  const backGrow = Math.max(3, 0.225 * holeThick);
+  const holeLen = Math.min(100, 0.35 * Wp, Wp - 2 * (shoulderX(finH) + backGrow) - 8);
+  const hasHole = holeLen >= holeThick + 10;
+  const bS = Math.min(0.77 * Dp, Wp / 2 - 2);
+  const bF = 0.8 * Dp;
+  const cF = Math.min(0.25 * Wp, 0.5 * Dp, bF);
+  const bB = 0.83 * Dp;
+  const cB = 0.24 * Wp;
+  const nB = 0.2 * Dp;
+  const X0 = 0;
+  const X1 = X0 + Dp;
+  const X2 = X1 + Wp;
+  const X3 = X2 + Dp;
+  const X4 = X3 + Wp;
+  const top = lidLen + finH;
+  const ridge = finH;
   const bot = top + Hp;
-  const width = x5;
-  const height = bot + baseFB + 4;
-  const holeLen = Math.min(100, Wp * 0.5);
-  const holeThick = Math.min(26, handleH * 0.3);
-  const holeCy = top - handleH * 0.55;
-  const holeF = obroundPts((x2 + x3) / 2, holeCy, holeLen, holeThick);
-  const holeB = obroundPts((x4 + x5) / 2, holeCy, holeLen, holeThick);
-  const slotW = Math.max(1.6, Dp * 0.035);
-  const slot = (cx) => {
-    const yTop = top - sideH + 2;
-    const yBot = top - sideH * 0.42;
-    return [P(cx - slotW, yTop), P(cx + slotW, yTop), P(cx + slotW, yBot), P(cx - slotW, yBot)];
+  const width = X4 + glueW;
+  const height = bot + Math.max(bS, bF, bB) + 4;
+  const yOf = (h) => ridge - h;
+  const holeCy = yOf(0.55 * finH);
+  const holeHalf = Math.max(0, holeLen / 2 - holeThick / 2);
+  const holeR = holeThick / 2;
+  const backLen = holeLen + 2 * backGrow;
+  const backThick = holeThick + 2 * backGrow;
+  const slotHalf = gap + Math.max(1, t);
+  const slotTop = (earTopH + 1.5) / cosB;
+  const slot = (cx) => [
+    P(cx - slotHalf, top),
+    ...arcPts(cx, top - slotTop + slotHalf, slotHalf, Math.PI, Math.PI * 2, 6),
+    P(cx + slotHalf, top)
+  ];
+  const slotCut = (cx) => `M ${cx - slotHalf} ${top} L ${cx - slotHalf} ${top - slotTop + slotHalf} A ${slotHalf} ${slotHalf} 0 0 1 ${cx + slotHalf} ${top - slotTop + slotHalf} L ${cx + slotHalf} ${top}`;
+  const apexR = Math.min(8, Dp * 0.07);
+  const half = Math.atan2(Dp / 2, gL);
+  const gableOutline = (xa, xb) => {
+    const cx = (xa + xb) / 2;
+    const cy = top - gL + apexR / Math.sin(half);
+    return [P(xa, top), ...arcPts(cx, cy, apexR, Math.PI + half, Math.PI * 2 - half, 6), P(xb, top)];
   };
-  const rect2 = (xa, ya, xb, yb) => [
-    P(xa, ya),
-    P(xb, ya),
-    P(xb, yb),
-    P(xa, yb)
+  const gableCut = (xa, xb) => "M " + gableOutline(xa, xb).map((q) => `${q.x} ${q.y}`).join(" L ");
+  const finOutline = (xa, xb) => [
+    P(xa + rIn, ridge),
+    ...arcPts(xa + rIn + earR, yOf(earTopH) + earR, earR, Math.PI, Math.PI * 2, 6),
+    P(xa + rIn + earW, yOf(notchH)),
+    P(xa + shoulderX(notchH), yOf(notchH)),
+    P(xa + shoulderX(finH), 0),
+    P(xb - shoulderX(finH), 0),
+    P(xb - shoulderX(notchH), yOf(notchH)),
+    P(xb - rIn - earW, yOf(notchH)),
+    ...arcPts(xb - rIn - earR, yOf(earTopH) + earR, earR, Math.PI, Math.PI * 2, 6),
+    P(xb - rIn, ridge)
   ];
-  const gableFlap = (xa, xb) => [
-    P(xa + fin, top),
-    P(xa + fin, top - sideH * 0.5),
-    P(xa + peakInset, top - sideH),
-    P(xb - peakInset, top - sideH),
-    P(xb - fin, top - sideH * 0.5),
-    P(xb - fin, top)
-  ];
-  const baseFBFlap = (xa, xb) => [
-    P(xa + fin, bot),
-    P(xa + fin + angFB, bot + baseFB),
-    P(xb - fin - angFB, bot + baseFB),
-    P(xb - fin, bot)
-  ];
-  const baseLRFlap = (xa, xb) => [
-    P(xa + fin, bot),
-    P(xa + fin, bot + baseLR),
-    P(xb - fin - angLR, bot + baseLR),
-    P(xb - fin, bot)
-  ];
+  const finCut = (xa, xb) => `M ${xa} ${top} L ${xa + rIn} ${top} L ${xa + rIn} ${yOf(earTopH) + earR} A ${earR} ${earR} 0 0 1 ${xa + rIn + earW} ${yOf(earTopH) + earR} L ${xa + rIn + earW} ${yOf(notchH)} L ${xa + shoulderX(notchH)} ${yOf(notchH)} L ${xa + shoulderX(finH)} 0 L ${xb - shoulderX(finH)} 0 L ${xb - shoulderX(notchH)} ${yOf(notchH)} L ${xb - rIn - earW} ${yOf(notchH)} L ${xb - rIn - earW} ${yOf(earTopH) + earR} A ${earR} ${earR} 0 0 1 ${xb - rIn} ${yOf(earTopH) + earR} L ${xb - rIn} ${top} L ${xb} ${top}`;
+  const fcx = (X1 + X2) / 2;
+  const bcx = (X3 + X4) / 2;
+  const betaDeg = beta * 180 / Math.PI;
   const panels = [
-    { id: "front", parentId: null, outline: rect2(x2, top, x3, bot), stage: 0 },
+    { id: "front", parentId: null, outline: rect(X1, top, X2, bot), stage: 0 },
     {
       id: "side-left",
       parentId: "front",
-      outline: rect2(x1, top, x2, bot),
-      hingeA: P(x2, top),
-      hingeB: P(x2, bot),
+      outline: rect(X0, top, X1, bot),
+      hingeA: P(X1, top),
+      hingeB: P(X1, bot),
       foldAngle: -90,
       stage: 0
     },
     {
-      id: "glue",
-      parentId: "side-left",
-      outline: [P(x1, top), P(0, top + taper), P(0, bot - taper), P(x1, bot)],
-      hingeA: P(x1, top),
-      hingeB: P(x1, bot),
-      foldAngle: -90,
-      stage: 0,
-      zOffset: layer
-    },
-    {
       id: "side-right",
       parentId: "front",
-      outline: rect2(x3, top, x4, bot),
-      hingeA: P(x3, top),
-      hingeB: P(x3, bot),
+      outline: rect(X2, top, X3, bot),
+      hingeA: P(X2, top),
+      hingeB: P(X2, bot),
       foldAngle: 90,
       stage: 0
     },
     {
       id: "back",
       parentId: "side-right",
-      outline: rect2(x4, top, x5, bot),
-      hingeA: P(x4, top),
-      hingeB: P(x4, bot),
+      outline: rect(X3, top, X4, bot),
+      hingeA: P(X3, top),
+      hingeB: P(X3, bot),
       foldAngle: 90,
       stage: 0
     },
-    // ลิ้นข้างทรงจั่ว+ร่องล็อก (พับเข้าก่อน)
     {
-      id: "gable-l",
-      parentId: "side-left",
-      outline: gableFlap(x1, x2),
-      holes: [slot((x1 + x2) / 2)],
-      hingeA: P(x1, top),
-      hingeB: P(x2, top),
-      foldAngle: 90,
-      stage: 1,
-      zOffset: layer
-    },
-    {
-      id: "gable-r",
-      parentId: "side-right",
-      outline: gableFlap(x3, x4),
-      holes: [slot((x3 + x4) / 2)],
-      hingeA: P(x3, top),
-      hingeB: P(x4, top),
-      foldAngle: 90,
-      stage: 1,
-      zOffset: layer
-    },
-    // หูหิ้วหน้า-หลัง เจาะรูจับ พับขึ้นชนกลาง
-    {
-      id: "handle-front",
-      parentId: "front",
-      outline: rect2(x2, 0, x3, top),
-      holes: [holeF],
-      hingeA: P(x2, top),
-      hingeB: P(x3, top),
-      foldAngle: lean,
-      stage: 2
-    },
-    {
-      id: "handle-back",
+      id: "glue",
       parentId: "back",
-      outline: rect2(x4, 0, x5, top),
-      holes: [holeB],
-      hingeA: P(x4, top),
-      hingeB: P(x5, top),
-      foldAngle: lean,
-      stage: 2
+      outline: [P(X4, top), P(X4 + glueW, top + taper), P(X4 + glueW, bot - taper), P(X4, bot)],
+      hingeA: P(X4, top),
+      hingeB: P(X4, bot),
+      foldAngle: 90,
+      stage: 0,
+      zOffset: layer
     },
-    // ก้น crash-lock
+    // ก้นล็อก — พับก่อนอยู่ลึกกว่า (zOffset มากกว่า): ลิ้นข้าง → ลิ้นหน้า → ลิ้นหลังปิดนอกสุด
     {
       id: "base-left",
       parentId: "side-left",
-      outline: baseLRFlap(x1, x2),
-      hingeA: P(x1, bot),
-      hingeB: P(x2, bot),
+      outline: rect(X0 + Dp / 2, bot, X1 - fin, bot + bS),
+      hingeA: P(X0 + Dp / 2, bot),
+      hingeB: P(X1 - fin, bot),
       foldAngle: -90,
       stage: 1,
-      zOffset: layer
+      zOffset: 3 * layer
     },
     {
       id: "base-right",
       parentId: "side-right",
-      outline: baseLRFlap(x3, x4),
-      hingeA: P(x3, bot),
-      hingeB: P(x4, bot),
+      outline: rect(X2 + fin, bot, X2 + Dp / 2, bot + bS),
+      hingeA: P(X2 + fin, bot),
+      hingeB: P(X2 + Dp / 2, bot),
       foldAngle: -90,
       stage: 1,
-      zOffset: layer
+      zOffset: 3 * layer
     },
     {
       id: "base-front",
       parentId: "front",
-      outline: baseFBFlap(x2, x3),
-      hingeA: P(x2, bot),
-      hingeB: P(x3, bot),
+      outline: [
+        P(X1 + fin, bot),
+        P(X1 + fin + cF, bot + cF),
+        P(X1 + fin + cF, bot + bF),
+        P(X2 - cF, bot + bF),
+        P(X2 - cF, bot)
+      ],
+      hingeA: P(X1 + fin, bot),
+      hingeB: P(X2 - cF, bot),
       foldAngle: -90,
       stage: 2,
       zOffset: 2 * layer
@@ -57109,209 +57580,152 @@ function generateFefco0217(box, mat) {
     {
       id: "base-back",
       parentId: "back",
-      outline: baseFBFlap(x4, x5),
-      hingeA: P(x4, bot),
-      hingeB: P(x5, bot),
+      outline: [
+        P(X3 + fin, bot),
+        P(X3 + fin, bot + bB),
+        P(X3 + cB, bot + bB),
+        P(X3 + cB, bot + bB - nB),
+        P(X4 - cB, bot + bB - nB),
+        P(X4 - cB, bot + bB),
+        P(X4 - fin, bot + bB),
+        P(X4 - fin, bot)
+      ],
+      hingeA: P(X3 + fin, bot),
+      hingeB: P(X4 - fin, bot),
       foldAngle: -90,
-      stage: 2,
-      zOffset: 2 * layer
+      stage: 3,
+      zOffset: layer
+    },
+    // ฝาแบน 90° → หูหิ้วพับกลับ -90° (จึงตั้งดิ่งตลอดการพับ เลื่อนจากขอบปากมาชนกันกลาง)
+    {
+      id: "lid-front",
+      parentId: "front",
+      outline: rect(X1 + rIn, ridge, X2 - rIn, top),
+      hingeA: P(X1 + rIn, top),
+      hingeB: P(X2 - rIn, top),
+      foldAngle: 90,
+      stage: 4
+    },
+    {
+      id: "fin-front",
+      parentId: "lid-front",
+      outline: finOutline(X1, X2),
+      holes: hasHole ? [obroundPts(fcx, holeCy, holeLen, holeThick)] : void 0,
+      hingeA: P(X1 + rIn, ridge),
+      hingeB: P(X2 - rIn, ridge),
+      foldAngle: -90,
+      stage: 4
+    },
+    {
+      id: "lid-back",
+      parentId: "back",
+      outline: rect(X3 + rIn, ridge, X4 - rIn, top),
+      hingeA: P(X3 + rIn, top),
+      hingeB: P(X4 - rIn, top),
+      foldAngle: 90,
+      stage: 4
+    },
+    {
+      id: "fin-back",
+      parentId: "lid-back",
+      outline: finOutline(X3, X4),
+      holes: hasHole ? [obroundPts(bcx, holeCy, backLen, backThick)] : void 0,
+      hingeA: P(X3 + rIn, ridge),
+      hingeB: P(X4 - rIn, ridge),
+      foldAngle: -90,
+      stage: 4
+    },
+    // หน้าจั่วเอนเข้าเป็นจังหวะสุดท้าย — หูหิ้วสอดผ่านร่อง หูมนโผล่นอก
+    {
+      id: "gable-left",
+      parentId: "side-left",
+      outline: gableOutline(X0, X1),
+      holes: [slot((X0 + X1) / 2)],
+      hingeA: P(X0, top),
+      hingeB: P(X1, top),
+      foldAngle: betaDeg,
+      stage: 5
+    },
+    {
+      id: "gable-right",
+      parentId: "side-right",
+      outline: gableOutline(X2, X3),
+      holes: [slot((X2 + X3) / 2)],
+      hingeA: P(X2, top),
+      hingeB: P(X3, top),
+      foldAngle: betaDeg,
+      stage: 5
     }
   ];
+  if (hasHole) {
+    panels.push({
+      id: "grip-flap",
+      parentId: "fin-front",
+      outline: obroundPts(fcx, holeCy, holeLen, holeThick),
+      hingeA: P(fcx - holeHalf, holeCy - holeR),
+      hingeB: P(fcx + holeHalf, holeCy - holeR),
+      foldAngle: -60,
+      stage: 4
+    });
+  }
   const cut = (d) => ({ kind: "cut", d });
   const crease = (d) => ({ kind: "crease", d });
-  const gableCut = (xa, xb) => `M ${xa} ${top} L ${xa + fin} ${top} L ${xa + fin} ${top - sideH * 0.5} L ${xa + peakInset} ${top - sideH} L ${xb - peakInset} ${top - sideH} L ${xb - fin} ${top - sideH * 0.5} L ${xb - fin} ${top} L ${xb} ${top}`;
-  const handleCut = (xa, xb) => `M ${xa} ${top} L ${xa} 0 L ${xb} 0 L ${xb} ${top}`;
-  const slotCut = (cx) => {
-    const yTop = top - sideH + 2;
-    const yBot = top - sideH * 0.42;
-    return `M ${cx - slotW} ${yTop} L ${cx + slotW} ${yTop} L ${cx + slotW} ${yBot} L ${cx - slotW} ${yBot} Z`;
-  };
-  const baseFBCut = (xa, xb) => `M ${xa} ${bot} L ${xa + fin} ${bot} L ${xa + fin + angFB} ${bot + baseFB} L ${xb - fin - angFB} ${bot + baseFB} L ${xb - fin} ${bot} L ${xb} ${bot}`;
-  const baseLRCut = (xa, xb) => `M ${xa} ${bot} L ${xa + fin} ${bot} L ${xa + fin} ${bot + baseLR} L ${xb - fin - angLR} ${bot + baseLR} L ${xb - fin} ${bot} L ${xb} ${bot}`;
   const segments = [
-    cut(`M ${x1} ${top} L 0 ${top + taper} L 0 ${bot - taper} L ${x1} ${bot}`),
-    cut(gableCut(x1, x2)),
-    cut(handleCut(x2, x3)),
-    cut(gableCut(x3, x4)),
-    cut(handleCut(x4, x5)),
-    cut(`M ${x5} ${top} L ${x5} ${bot}`),
-    cut(slotCut((x1 + x2) / 2)),
-    cut(slotCut((x3 + x4) / 2)),
-    cut(baseLRCut(x1, x2)),
-    cut(baseFBCut(x2, x3)),
-    cut(baseLRCut(x3, x4)),
-    cut(baseFBCut(x4, x5)),
-    cut(obroundPath((x2 + x3) / 2, holeCy, holeLen, holeThick)),
-    cut(obroundPath((x4 + x5) / 2, holeCy, holeLen, holeThick)),
-    crease(`M ${x1} ${top} L ${x1} ${bot}`),
-    crease(`M ${x2} ${top} L ${x2} ${bot}`),
-    crease(`M ${x3} ${top} L ${x3} ${bot}`),
-    crease(`M ${x4} ${top} L ${x4} ${bot}`),
-    crease(`M ${x2} ${top} L ${x3} ${top}`),
-    crease(`M ${x4} ${top} L ${x5} ${top}`),
-    crease(`M ${x1 + fin} ${top} L ${x2 - fin} ${top}`),
-    crease(`M ${x3 + fin} ${top} L ${x4 - fin} ${top}`),
-    crease(`M ${x1 + fin} ${bot} L ${x2 - fin} ${bot}`),
-    crease(`M ${x2 + fin} ${bot} L ${x3 - fin} ${bot}`),
-    crease(`M ${x3 + fin} ${bot} L ${x4 - fin} ${bot}`),
-    crease(`M ${x4 + fin} ${bot} L ${x5 - fin} ${bot}`)
+    // ขอบนอก (ตามเข็มนาฬิกา เริ่มมุมล่างซ้าย)
+    cut(`M ${X0} ${bot} L ${X0} ${top}`),
+    cut(gableCut(X0, X1)),
+    cut(finCut(X1, X2)),
+    cut(gableCut(X2, X3)),
+    cut(finCut(X3, X4)),
+    cut(`M ${X4} ${top} L ${X4 + glueW} ${top + taper} L ${X4 + glueW} ${bot - taper} L ${X4} ${bot}`),
+    cut(
+      `M ${X4} ${bot} L ${X4 - fin} ${bot} L ${X4 - fin} ${bot + bB} L ${X4 - cB} ${bot + bB} L ${X4 - cB} ${bot + bB - nB} L ${X3 + cB} ${bot + bB - nB} L ${X3 + cB} ${bot + bB} L ${X3 + fin} ${bot + bB} L ${X3 + fin} ${bot} L ${X3} ${bot}`
+    ),
+    cut(
+      `M ${X3} ${bot} L ${X2 + Dp / 2} ${bot} L ${X2 + Dp / 2} ${bot + bS} L ${X2 + fin} ${bot + bS} L ${X2 + fin} ${bot} L ${X2 - cF} ${bot} L ${X2 - cF} ${bot + bF} L ${X1 + fin + cF} ${bot + bF} L ${X1 + fin + cF} ${bot + cF} L ${X1 + fin} ${bot} L ${X1 - fin} ${bot} L ${X1 - fin} ${bot + bS} L ${X0 + Dp / 2} ${bot + bS} L ${X0 + Dp / 2} ${bot} L ${X0} ${bot}`
+    ),
+    cut(slotCut((X0 + X1) / 2)),
+    cut(slotCut((X2 + X3) / 2)),
+    crease(`M ${X1} ${top} L ${X1} ${bot}`),
+    crease(`M ${X2} ${top} L ${X2} ${bot}`),
+    crease(`M ${X3} ${top} L ${X3} ${bot}`),
+    crease(`M ${X4} ${top} L ${X4} ${bot}`),
+    // รอยพับหน้าจั่ว (เว้นช่วงร่อง)
+    crease(`M ${X0} ${top} L ${(X0 + X1) / 2 - slotHalf} ${top}`),
+    crease(`M ${(X0 + X1) / 2 + slotHalf} ${top} L ${X1} ${top}`),
+    crease(`M ${X2} ${top} L ${(X2 + X3) / 2 - slotHalf} ${top}`),
+    crease(`M ${(X2 + X3) / 2 + slotHalf} ${top} L ${X3} ${top}`),
+    crease(`M ${X1 + rIn} ${top} L ${X2 - rIn} ${top}`),
+    crease(`M ${X3 + rIn} ${top} L ${X4 - rIn} ${top}`),
+    crease(`M ${X1 + rIn} ${ridge} L ${X2 - rIn} ${ridge}`),
+    crease(`M ${X3 + rIn} ${ridge} L ${X4 - rIn} ${ridge}`),
+    crease(`M ${X0 + Dp / 2} ${bot} L ${X1 - fin} ${bot}`),
+    crease(`M ${X1 + fin} ${bot} L ${X2 - cF} ${bot}`),
+    crease(`M ${X2 + fin} ${bot} L ${X2 + Dp / 2} ${bot}`),
+    crease(`M ${X3 + fin} ${bot} L ${X4 - fin} ${bot}`)
   ];
+  if (hasHole) {
+    segments.push(cut(obroundPath(bcx, holeCy, backLen, backThick)));
+    segments.push(
+      cut(
+        `M ${fcx + holeHalf} ${holeCy - holeR} A ${holeR} ${holeR} 0 0 1 ${fcx + holeHalf} ${holeCy + holeR} L ${fcx - holeHalf} ${holeCy + holeR} A ${holeR} ${holeR} 0 0 1 ${fcx - holeHalf} ${holeCy - holeR}`
+      ),
+      crease(`M ${fcx - holeHalf} ${holeCy - holeR} L ${fcx + holeHalf} ${holeCy - holeR}`)
+    );
+  }
   const dims = [
-    { a: P(x2, bot + baseFB + 2), b: P(x3, bot + baseFB + 2), label: `W ${fmt(Wp)}` },
-    { a: P(x1, top + 8), b: P(x2, top + 8), label: `D ${fmt(Dp)}` },
-    { a: P(-8, top), b: P(-8, bot), label: `H ${fmt(Hp)}` }
+    { a: P(X1, bot + Math.max(bS, bF, bB) + 2), b: P(X2, bot + Math.max(bS, bF, bB) + 2), label: `W ${fmt(Wp)}` },
+    { a: P(X0, bot + bS + 10), b: P(X1, bot + bS + 10), label: `D ${fmt(Dp)}` },
+    { a: P(-8, top), b: P(-8, bot), label: `H ${fmt(Hp)}` },
+    { a: P(0, -10), b: P(width, -10), label: fmt(width) },
+    { a: P(width + 10, 0), b: P(width + 10, height), label: fmt(height) }
   ];
   return { width, height, segments, panels, dims };
 }
 
 // src/core/templates/rolloverMailer.ts
 function generateRolloverMailer(box, mat) {
-  const { W, D, H } = box;
-  const t = mat.thickness;
-  const Wp = W + 2 * t;
-  const Dp = D + 2 * t;
-  const Hp = H + t;
-  const layer = t + 0.05;
-  const tuckIn = Math.max(1, t + 0.5);
-  const lipH = Math.max(10, Math.min(0.7 * Hp, 0.8 * Dp));
-  const r = Math.min(7, lipH * 0.45, (Wp - 2 * tuckIn) / 2);
-  const cx0 = 2 * Hp;
-  const cx1 = cx0 + Wp;
-  const ly0 = 0;
-  const ly1 = ly0 + lipH;
-  const ky1 = ly1 + Dp;
-  const by0 = ky1 + Hp;
-  const by1 = by0 + Dp;
-  const fy1 = by1 + Hp;
-  const width = cx1 + 2 * Hp;
-  const height = fy1;
-  const lipOutline = [
-    P(cx0 + tuckIn, ly1),
-    ...arcPts(cx0 + tuckIn + r, ly0 + r, r, Math.PI, Math.PI * 1.5),
-    ...arcPts(cx1 - tuckIn - r, ly0 + r, r, Math.PI * 1.5, Math.PI * 2),
-    P(cx1 - tuckIn, ly1)
-  ];
-  const panels = [
-    { id: "base", parentId: null, outline: rect(cx0, by0, cx1, by1), stage: 0 },
-    {
-      id: "back",
-      parentId: "base",
-      outline: rect(cx0, ky1, cx1, by0),
-      hingeA: P(cx0, by0),
-      hingeB: P(cx1, by0),
-      foldAngle: 90,
-      stage: 0
-    },
-    {
-      id: "front",
-      parentId: "base",
-      outline: rect(cx0, by1, cx1, fy1),
-      hingeA: P(cx0, by1),
-      hingeB: P(cx1, by1),
-      foldAngle: -90,
-      stage: 0
-    },
-    {
-      id: "side-left",
-      parentId: "base",
-      outline: rect(cx0 - Hp, by0, cx0, by1),
-      hingeA: P(cx0, by0),
-      hingeB: P(cx0, by1),
-      foldAngle: -90,
-      stage: 0
-    },
-    {
-      id: "side-right",
-      parentId: "base",
-      outline: rect(cx1, by0, cx1 + Hp, by1),
-      hingeA: P(cx1, by0),
-      hingeB: P(cx1, by1),
-      foldAngle: 90,
-      stage: 0
-    },
-    // แผ่นม้วน 180° (double wall) — พับทบกลับเข้าด้านในแนบผนังข้าง
-    {
-      id: "roll-left",
-      parentId: "side-left",
-      outline: rect(cx0 - 2 * Hp, by0, cx0 - Hp, by1),
-      hingeA: P(cx0 - Hp, by0),
-      hingeB: P(cx0 - Hp, by1),
-      foldAngle: -180,
-      stage: 1,
-      zOffset: layer
-    },
-    {
-      id: "roll-right",
-      parentId: "side-right",
-      outline: rect(cx1 + Hp, by0, cx1 + 2 * Hp, by1),
-      hingeA: P(cx1 + Hp, by0),
-      hingeB: P(cx1 + Hp, by1),
-      foldAngle: 180,
-      stage: 1,
-      zOffset: layer
-    },
-    // ฝาพับคลุม (ต่อจากผนังหลัง)
-    {
-      id: "lid",
-      parentId: "back",
-      outline: rect(cx0, ly1, cx1, ky1),
-      hingeA: P(cx0, ky1),
-      hingeB: P(cx1, ky1),
-      foldAngle: 90,
-      stage: 2
-    },
-    {
-      id: "lip",
-      parentId: "lid",
-      outline: lipOutline,
-      hingeA: P(cx0 + tuckIn, ly1),
-      hingeB: P(cx1 - tuckIn, ly1),
-      foldAngle: 90,
-      stage: 3,
-      zOffset: layer
-    }
-  ];
-  const cut = (d) => ({ kind: "cut", d });
-  const crease = (d) => ({ kind: "crease", d });
-  const segments = [
-    // ลิ้นหน้า (มุมโค้ง)
-    cut(
-      `M ${cx0 + tuckIn} ${ly1} L ${cx0 + tuckIn} ${ly0 + r} Q ${cx0 + tuckIn} ${ly0} ${cx0 + tuckIn + r} ${ly0} L ${cx1 - tuckIn - r} ${ly0} Q ${cx1 - tuckIn} ${ly0} ${cx1 - tuckIn} ${ly0 + r} L ${cx1 - tuckIn} ${ly1}`
-    ),
-    cut(`M ${cx0} ${ly1} L ${cx0 + tuckIn} ${ly1}`),
-    cut(`M ${cx1 - tuckIn} ${ly1} L ${cx1} ${ly1}`),
-    // ขอบซ้าย-ขวาของฝา
-    cut(`M ${cx0} ${ly1} L ${cx0} ${ky1}`),
-    cut(`M ${cx1} ${ly1} L ${cx1} ${ky1}`),
-    // แผ่นม้วนซ้าย-ขวา (ขอบนอก)
-    cut(`M ${cx0 - Hp} ${by0} L ${cx0 - 2 * Hp} ${by0} L ${cx0 - 2 * Hp} ${by1} L ${cx0 - Hp} ${by1}`),
-    cut(`M ${cx1 + Hp} ${by0} L ${cx1 + 2 * Hp} ${by0} L ${cx1 + 2 * Hp} ${by1} L ${cx1 + Hp} ${by1}`),
-    // ผนังหน้า
-    cut(`M ${cx0} ${by1} L ${cx0} ${fy1} L ${cx1} ${fy1} L ${cx1} ${by1}`),
-    // รอยพับ
-    crease(`M ${cx0 + tuckIn} ${ly1} L ${cx1 - tuckIn} ${ly1}`),
-    // ลิ้นหน้า|ฝา
-    crease(`M ${cx0} ${ky1} L ${cx1} ${ky1}`),
-    // ฝา|ผนังหลัง
-    crease(`M ${cx0} ${by0} L ${cx1} ${by0}`),
-    // ผนังหลัง|ฐาน
-    crease(`M ${cx0} ${by1} L ${cx1} ${by1}`),
-    // ฐาน|ผนังหน้า
-    crease(`M ${cx0} ${by0} L ${cx0} ${by1}`),
-    // ฐาน|ผนังซ้าย
-    crease(`M ${cx1} ${by0} L ${cx1} ${by1}`),
-    // ฐาน|ผนังขวา
-    crease(`M ${cx0 - Hp} ${by0} L ${cx0 - Hp} ${by1}`),
-    // ผนังซ้าย|แผ่นม้วน (180°)
-    crease(`M ${cx1 + Hp} ${by0} L ${cx1 + Hp} ${by1}`)
-    // ผนังขวา|แผ่นม้วน (180°)
-  ];
-  const dims = [
-    { a: P(cx0, fy1 + 10), b: P(cx1, fy1 + 10), label: `W ${fmt(Wp)}` },
-    { a: P(cx1 + 2 * Hp + 8, by0), b: P(cx1 + 2 * Hp + 8, by1), label: `D ${fmt(Dp)}` },
-    { a: P(cx0 - 2 * Hp - 8, by1), b: P(cx0 - 2 * Hp - 8, fy1), label: `H ${fmt(Hp)}` }
-  ];
-  return { width, height, segments, panels, dims };
+  return rollEndLayout(box, mat, { lid: true, flap: "long", front: "wide" });
 }
 
 // src/core/templates/index.ts
@@ -57354,6 +57768,7 @@ var TEMPLATES = [
     detail: "\u0E2A\u0E48\u0E07\u0E2B\u0E19\u0E31\u0E07\u0E2A\u0E37\u0E2D/\u0E02\u0E2D\u0E07\u0E2B\u0E19\u0E31\u0E01 \xB7 \u0E2D\u0E35\u0E04\u0E2D\u0E21\u0E40\u0E21\u0E34\u0E23\u0E4C\u0E0B \xB7 \u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E01\u0E31\u0E19\u0E01\u0E23\u0E30\u0E41\u0E17\u0E01",
     defaults: { W: 200, D: 140, H: 60 },
     tilt: -Math.PI / 2,
+    spin: FEFCO0427_SPIN,
     supportsHandle: false,
     supportsVents: true,
     foldDepth: (b, m) => b.H + m.thickness,
@@ -57393,7 +57808,7 @@ var TEMPLATES = [
   },
   {
     id: "fefco-0217",
-    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E1A\u0E19\u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01 (FEFCO 0217)",
+    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27 (FEFCO 0217)",
     detail: "\u0E40\u0E04\u0E49\u0E01/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48 \xB7 \u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E16\u0E37\u0E2D\u0E01\u0E25\u0E31\u0E1A \xB7 \u0E0A\u0E38\u0E14\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D",
     defaults: { W: 300, D: 150, H: 180 },
     tilt: 0,
@@ -57477,11 +57892,11 @@ var TEMPLATES = [
     id: "gable",
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27 (gable)",
     detail: "\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E02\u0E19\u0E21 \xB7 \u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E16\u0E37\u0E2D\u0E01\u0E25\u0E31\u0E1A \xB7 \u0E0A\u0E38\u0E14\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D",
-    defaults: { W: 120, D: 100, H: 150 },
-    tilt: -Math.PI / 2,
+    defaults: { W: 200, D: 100, H: 120 },
+    tilt: 0,
     supportsHandle: false,
     supportsVents: true,
-    foldDepth: (b) => b.H + b.D * 0.6,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateGableBox
   },
   {
@@ -57637,11 +58052,17 @@ var decoSchema = external_exports.discriminatedUnion("type", [
 var currentSpecSchema = external_exports.object({
   template: external_exports.string().refine((value) => TEMPLATES.some((template) => template.id === value), "unknown template"),
   materialId: external_exports.string().refine((value) => MATERIALS.some((material) => material.id === value), "unknown material"),
-  W: finite.min(30).max(250),
+  // สติกเกอร์เล็กได้ถึง 10 มม. (แผ่นหลายดวง) — งานอื่นขั้นต่ำ 30 (ตรงกับ parseSpec ฝั่ง client)
+  W: finite.min(10).max(250),
   D: finite.min(20).max(150),
-  H: finite.min(30).max(300),
+  H: finite.min(10).max(300),
   handle: external_exports.boolean()
-}).strict();
+}).strict().superRefine((spec, context) => {
+  if (spec.template === "sticker") return;
+  for (const key of ["W", "H"]) {
+    if (spec[key] < 30) context.addIssue({ code: "custom", path: [key], message: `${key} \u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E19\u0E49\u0E2D\u0E22\u0E01\u0E27\u0E48\u0E32 30` });
+  }
+});
 var aiInfoSchema = external_exports.object({
   assumptions: external_exports.array(external_exports.string().max(300)).max(50),
   layoutNote: external_exports.string().max(200),
@@ -57673,7 +58094,19 @@ var cloudProjectDocumentSchema = external_exports.object({
   pouchAddons: external_exports.object({
     hangHole: optionalTrue,
     valve: optionalTrue,
-    tinTie: optionalTrue
+    tinTie: optionalTrue,
+    zipAt: finite.min(0).max(1e3).optional(),
+    tearAt: finite.min(0).max(1e3).optional()
+  }).strict().optional(),
+  stickerCut: external_exports.object({
+    shape: external_exports.enum(["rect", "contour"]),
+    border: external_exports.enum(["white", "none"]),
+    offset: finite.min(0).max(50),
+    sheet: external_exports.enum(["a6", "a5", "a4", "a3", "custom"]).optional(),
+    perSheet: external_exports.number().int().min(1).max(1e3).optional(),
+    sheetW: finite.min(0).max(5e3).optional(),
+    sheetH: finite.min(0).max(5e3).optional(),
+    sheetMargin: finite.min(0).max(100).optional()
   }).strict().optional(),
   decos: external_exports.array(decoSchema).max(500),
   history: external_exports.array(historySchema).max(30),
@@ -57733,7 +58166,7 @@ var safeRevisionSchema = external_exports.union([
     return revision;
   })
 ]);
-var timestampSchema = external_exports.string().refine((value) => !Number.isNaN(Date.parse(value)), "invalid timestamp");
+var timestampSchema2 = external_exports.string().refine((value) => !Number.isNaN(Date.parse(value)), "invalid timestamp");
 var readyAssetMetadataSchema = external_exports.object({
   id: external_exports.uuid(),
   workspaceId: external_exports.uuid(),
@@ -57744,7 +58177,7 @@ var readyAssetMetadataSchema = external_exports.object({
   sha256: external_exports.string().regex(/^[0-9a-f]{64}$/),
   width: safeRevisionSchema,
   height: safeRevisionSchema,
-  createdAt: timestampSchema
+  createdAt: timestampSchema2
 }).strict();
 var cloudProjectSchema = external_exports.object({
   id: external_exports.uuid(),
@@ -57753,20 +58186,20 @@ var cloudProjectSchema = external_exports.object({
   documentSchemaVersion: external_exports.literal(1),
   document: cloudProjectDocumentSchema,
   revision: safeRevisionSchema,
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
+  createdAt: timestampSchema2,
+  updatedAt: timestampSchema2,
   assets: external_exports.array(readyAssetMetadataSchema).max(500)
 }).strict();
 var saveReceiptSchema = external_exports.object({
   projectId: external_exports.uuid(),
   revision: safeRevisionSchema,
-  updatedAt: timestampSchema,
+  updatedAt: timestampSchema2,
   operationId: external_exports.uuid()
 }).strict();
 var deleteReceiptSchema = external_exports.object({
   projectId: external_exports.uuid(),
   revision: safeRevisionSchema,
-  deletedAt: timestampSchema,
+  deletedAt: timestampSchema2,
   operationId: external_exports.uuid()
 }).strict();
 var legacyImportReceiptSchema = external_exports.object({
@@ -57774,18 +58207,18 @@ var legacyImportReceiptSchema = external_exports.object({
   sourceProjectKey: external_exports.string().min(1).max(200),
   sourceHash: external_exports.string().regex(/^[0-9a-f]{64}$/),
   project: cloudProjectSchema,
-  completedAt: timestampSchema
+  completedAt: timestampSchema2
 }).strict();
 var projectListRowSchema = external_exports.object({
   project_id: external_exports.uuid(),
   workspace_id: external_exports.uuid(),
   project_name: external_exports.string().min(1).max(60),
   project_revision: safeRevisionSchema,
-  project_updated_at: timestampSchema
+  project_updated_at: timestampSchema2
 }).strict();
 
 // server/adapters/supabase/projectRepository.ts
-function mapDatabaseError(error62) {
+function mapDatabaseError2(error62) {
   if (error62.message.includes("ASSET_NOT_READY")) {
     return new HttpError(422, "ASSET_NOT_READY", "\u0E23\u0E39\u0E1B\u0E17\u0E35\u0E48\u0E2D\u0E49\u0E32\u0E07\u0E16\u0E36\u0E07\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
   }
@@ -57812,7 +58245,7 @@ function mapDatabaseError(error62) {
   }
   return new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
 }
-function providerContractError() {
+function providerContractError2() {
   return new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E37\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
 }
 var SupabaseProjectRepository = class {
@@ -57827,9 +58260,9 @@ var SupabaseProjectRepository = class {
       p_cursor_id: query.cursor?.id ?? null,
       p_limit: query.limit + 1
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = projectListRowSchema.array().safeParse(data);
-    if (!parsed.success) throw providerContractError();
+    if (!parsed.success) throw providerContractError2();
     const hasMore = parsed.data.length > query.limit;
     const rows = parsed.data.slice(0, query.limit);
     const items = rows.map((row) => ({
@@ -57850,9 +58283,9 @@ var SupabaseProjectRepository = class {
       p_actor_user_id: actor.userId,
       p_project_id: projectId
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = cloudProjectSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError();
+    if (!parsed.success) throw providerContractError2();
     return parsed.data;
   }
   async create(actor, input2, hash2) {
@@ -57865,9 +58298,9 @@ var SupabaseProjectRepository = class {
       p_document_schema_version: input2.documentSchemaVersion,
       p_document: input2.document
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = cloudProjectSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError();
+    if (!parsed.success) throw providerContractError2();
     return parsed.data;
   }
   async importLegacy(actor, input2, hash2) {
@@ -57883,9 +58316,9 @@ var SupabaseProjectRepository = class {
       p_document_schema_version: input2.documentSchemaVersion,
       p_document: input2.document
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = legacyImportReceiptSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError();
+    if (!parsed.success) throw providerContractError2();
     return parsed.data;
   }
   async save(actor, input2, hash2) {
@@ -57899,9 +58332,9 @@ var SupabaseProjectRepository = class {
       p_document_schema_version: input2.documentSchemaVersion,
       p_document: input2.document
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = saveReceiptSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError();
+    if (!parsed.success) throw providerContractError2();
     return parsed.data;
   }
   async remove(actor, input2, hash2) {
@@ -57912,9 +58345,9 @@ var SupabaseProjectRepository = class {
       p_request_hash: hash2,
       p_expected_revision: input2.expectedRevision
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = deleteReceiptSchema.safeParse(data);
-    if (!parsed.success) throw providerContractError();
+    if (!parsed.success) throw providerContractError2();
     return parsed.data;
   }
 };
@@ -58058,18 +58491,6 @@ init_sdk();
 import { execFile as execFile2 } from "node:child_process";
 import { promisify as promisify2 } from "node:util";
 init_sdk();
-
-// server/modules/ai/requestApiKey.ts
-function readRequestApiKey(headers) {
-  const raw = headers["x-packit-anthropic-api-key"];
-  if (raw === void 0) return void 0;
-  if (Array.isArray(raw) || typeof raw !== "string") return null;
-  const key = raw.trim();
-  if (key.length < 10 || key.length > 512 || /\s/.test(key)) return null;
-  return key;
-}
-
-// server/boxSpec.ts
 var execFileP = promisify2(execFile2);
 var LIMITS = { W: [30, 250], D: [20, 150], H: [30, 300] };
 var TEMPLATE_IDS = TEMPLATES.map((t) => t.id);
@@ -58094,12 +58515,12 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
 - tuck-end / fefco-0215 / mailer / fefco-0427 / tray / gable / lid-box: W\xD7D = footprint \u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19
 - fefco-0215: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E1A\u0E19\u0E40\u0E2A\u0E35\u0E22\u0E1A + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 (snap/crash-lock bottom) \u2014 \u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E40\u0E23\u0E47\u0E27 \u0E01\u0E49\u0E19\u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E17\u0E32\u0E01\u0E32\u0E27\u0E17\u0E35\u0E25\u0E30\u0E43\u0E1A; \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E17\u0E25\u0E22\u0E2D\u0E14\u0E19\u0E34\u0E22\u0E21 (\u0E02\u0E2D\u0E07\u0E0A\u0E33/\u0E02\u0E19\u0E21/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07); handle=false
 - fefco-0202 (OSC): \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E25\u0E39\u0E01\u0E1F\u0E39\u0E01\u0E0A\u0E34\u0E1B\u0E1B\u0E34\u0E49\u0E07\u0E41\u0E1A\u0E1A RSC \u0E41\u0E15\u0E48\u0E25\u0E34\u0E49\u0E19\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E22\u0E32\u0E27\u0E40\u0E15\u0E47\u0E21\u0E40\u0E01\u0E22\u0E17\u0E31\u0E1A\u0E01\u0E31\u0E19\u0E40\u0E15\u0E47\u0E21\u0E41\u0E1C\u0E48\u0E19 (\u0E01\u0E49\u0E19/\u0E1D\u0E32\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19) \u0E41\u0E02\u0E47\u0E07\u0E41\u0E23\u0E07\u0E01\u0E27\u0E48\u0E32 RSC \u2014 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E02\u0E2D\u0E07\u0E2B\u0E19\u0E31\u0E01/\u0E02\u0E2D\u0E07\u0E41\u0E04\u0E1A\u0E17\u0E35\u0E48\u0E25\u0E34\u0E49\u0E19 RSC \u0E0A\u0E19\u0E44\u0E21\u0E48\u0E16\u0E36\u0E07\u0E01\u0E25\u0E32\u0E07; W\xD7D = footprint, H = \u0E2A\u0E39\u0E07, handle=false
-- fefco-0217: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E21\u0E35\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E14\u0E49\u0E32\u0E19\u0E1A\u0E19 (\u0E25\u0E34\u0E49\u0E19\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19\u0E0A\u0E19\u0E01\u0E31\u0E19\u0E40\u0E1B\u0E47\u0E19\u0E2B\u0E39\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E08\u0E31\u0E1A) + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 \u2014 \u0E40\u0E04\u0E49\u0E01/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E16\u0E37\u0E2D\u0E2A\u0E30\u0E14\u0E27\u0E01; W\xD7D = footprint, H = \u0E2A\u0E39\u0E07, handle=false (\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E21\u0E35\u0E43\u0E19\u0E15\u0E31\u0E27)
+- fefco-0217: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27 \u2014 \u0E1D\u0E32\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E1E\u0E31\u0E1A\u0E41\u0E1A\u0E19\u0E17\u0E35\u0E48\u0E1B\u0E32\u0E01 \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19\u0E15\u0E31\u0E49\u0E07\u0E01\u0E25\u0E32\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07 (\u0E2B\u0E39\u0E2B\u0E25\u0E31\u0E07\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E08\u0E31\u0E1A \u0E2B\u0E39\u0E2B\u0E19\u0E49\u0E32\u0E40\u0E1B\u0E47\u0E19\u0E25\u0E34\u0E49\u0E19\u0E14\u0E31\u0E19) \u0E2B\u0E19\u0E49\u0E32\u0E08\u0E31\u0E48\u0E27\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21\u0E17\u0E35\u0E48\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E40\u0E2D\u0E19\u0E40\u0E02\u0E49\u0E32\u0E43\u0E2B\u0E49\u0E2B\u0E39\u0E21\u0E19\u0E1B\u0E25\u0E32\u0E22\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E42\u0E1C\u0E25\u0E48\u0E17\u0E30\u0E25\u0E38\u0E23\u0E48\u0E2D\u0E07\u0E25\u0E47\u0E2D\u0E01\u0E44\u0E27\u0E49 + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01 (\u0E15\u0E48\u0E32\u0E07\u0E08\u0E32\u0E01 gable \u0E17\u0E35\u0E48\u0E40\u0E1B\u0E47\u0E19\u0E16\u0E32\u0E14\u0E10\u0E32\u0E19\u0E15\u0E31\u0E19: 0217 \u0E40\u0E1B\u0E47\u0E19\u0E17\u0E48\u0E2D\u0E17\u0E32\u0E01\u0E32\u0E27\u0E02\u0E49\u0E32\u0E07 \u0E1E\u0E31\u0E1A\u0E41\u0E1A\u0E19\u0E2A\u0E48\u0E07\u0E44\u0E14\u0E49) \u2014 \u0E40\u0E04\u0E49\u0E01/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E16\u0E37\u0E2D\u0E2A\u0E30\u0E14\u0E27\u0E01; W\xD7D = footprint, H = \u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 (\u0E23\u0E30\u0E1A\u0E1A\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E04\u0E32+\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07), handle=false (\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E21\u0E35\u0E43\u0E19\u0E15\u0E31\u0E27)
 - rollover-mailer: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C\u0E1D\u0E32\u0E1E\u0E31\u0E1A \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E21\u0E49\u0E27\u0E19\u0E17\u0E1A\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 (rollover) \u0E02\u0E2D\u0E1A\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E41\u0E02\u0E47\u0E07\u0E41\u0E23\u0E07 \u2014 e-commerce \u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21; W\xD7D = footprint, H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07 (\u0E21\u0E31\u0E01\u0E40\u0E15\u0E35\u0E49\u0E22), handle=false
 - lid-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A): \u0E10\u0E32\u0E19\u0E16\u0E32\u0E14\u0E25\u0E36\u0E01 + \u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E16\u0E32\u0E14\u0E15\u0E37\u0E49\u0E19\u0E2A\u0E27\u0E21\u0E17\u0E31\u0E1A (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E10\u0E32\u0E19; \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1D\u0E32\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 (\u0E01\u0E27\u0E49\u0E32\u0E07/\u0E25\u0E36\u0E01\u0E01\u0E27\u0E48\u0E32\u0E40\u0E25\u0E47\u0E01\u0E19\u0E49\u0E2D\u0E22 \u0E2A\u0E39\u0E07 ~40%), handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E23\u0E2D\u0E07\u0E40\u0E17\u0E49\u0E32/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E41\u0E22\u0E01\u0E0A\u0E34\u0E49\u0E19
 - slide-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E2A\u0E44\u0E25\u0E14\u0E4C/matchbox): \u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (\u0E16\u0E32\u0E14) \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E40\u0E02\u0E49\u0E32-\u0E2D\u0E2D\u0E01\u0E43\u0E19\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E20\u0E32\u0E22\u0E19\u0E2D\u0E01 (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (D = \u0E17\u0E34\u0E28\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19), \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E1B\u0E23\u0E30\u0E14\u0E31\u0E1A/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E25\u0E47\u0E01/\u0E44\u0E21\u0E49\u0E02\u0E35\u0E14
 - display-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E02\u0E49\u0E32\u0E07/\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07): \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1B\u0E34\u0E14 5 \u0E14\u0E49\u0E32\u0E19 + \u0E1D\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E44\u0E14\u0E49 \u0E40\u0E08\u0E32\u0E30\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32 \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E02\u0E2D\u0E07\u0E2A\u0E30\u0E2A\u0E21\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E40\u0E2B\u0E47\u0E19\u0E02\u0E49\u0E32\u0E07\u0E43\u0E19
-- gable: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E04\u0E32\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27 \u0E10\u0E32\u0E19\u0E15\u0E31\u0E19 \u0E1C\u0E19\u0E31\u0E07 4 \u0E14\u0E49\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19 \u0E41\u0E1C\u0E07\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E40\u0E2D\u0E35\u0E22\u0E07\u0E21\u0E32\u0E0A\u0E19\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E31\u0E19 \u0E21\u0E35\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E17\u0E35\u0E48\u0E22\u0E2D\u0E14 = \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E43\u0E19\u0E15\u0E31\u0E27 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false \u2014 \u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E40\u0E08\u0E32\u0E30\u0E40\u0E1E\u0E34\u0E48\u0E21); H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 \u0E23\u0E30\u0E1A\u0E1A\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E04\u0E32\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21
+- gable: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27 (carry box) \u0E17\u0E48\u0E2D\u0E17\u0E32\u0E01\u0E32\u0E27\u0E02\u0E49\u0E32\u0E07 + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01 \u2014 \u0E1D\u0E32\u0E41\u0E1A\u0E19\u0E08\u0E32\u0E01\u0E1C\u0E19\u0E31\u0E07\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E1E\u0E31\u0E1A\u0E1B\u0E34\u0E14\u0E1B\u0E32\u0E01 \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E04\u0E32\u0E07\u0E2B\u0E21\u0E39\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E08\u0E31\u0E1A\u0E15\u0E31\u0E49\u0E07\u0E01\u0E25\u0E32\u0E07\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 \u0E41\u0E1C\u0E07\u0E1B\u0E34\u0E14\u0E1A\u0E19\u0E08\u0E32\u0E01\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E41\u0E22\u0E01\u0E2A\u0E2D\u0E07\u0E0B\u0E35\u0E01\u0E1E\u0E31\u0E1A\u0E17\u0E31\u0E1A\u0E1D\u0E32\u0E02\u0E49\u0E32\u0E07\u0E25\u0E30\u0E0B\u0E35\u0E01\u0E02\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27 \u0E1B\u0E25\u0E32\u0E22\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E25\u0E47\u0E2D\u0E01\u0E23\u0E48\u0E2D\u0E07\u0E01\u0E25\u0E32\u0E07 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false \u2014 \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E21\u0E35\u0E43\u0E19\u0E15\u0E31\u0E27); W\xD7D = footprint, H = \u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 (\u0E23\u0E30\u0E1A\u0E1A\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E40\u0E2B\u0E19\u0E37\u0E2D\u0E1B\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07) \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E16\u0E37\u0E2D\u0E01\u0E25\u0E31\u0E1A/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D
 - tray: \u0E16\u0E32\u0E14\u0E40\u0E1B\u0E34\u0E14\u0E1A\u0E19 (\u0E44\u0E21\u0E48\u0E21\u0E35\u0E1D\u0E32) \u0E1C\u0E19\u0E31\u0E07 4 \u0E14\u0E49\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19 \u0E21\u0E38\u0E21\u0E21\u0E35\u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u2014 H \u0E04\u0E37\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 (\u0E16\u0E32\u0E14\u0E21\u0E31\u0E01\u0E15\u0E37\u0E49\u0E19); \u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (handle=false); \u0E43\u0E0A\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E16\u0E32\u0E14/\u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C \u0E2B\u0E23\u0E37\u0E2D\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01\u0E04\u0E39\u0E48\u0E01\u0E31\u0E1A sleeve
 - fefco-0427: \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 (roll end) + \u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E10\u0E32\u0E19 \u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49\u0E01\u0E32\u0E27 \u2014 \u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48\u0E01\u0E27\u0E49\u0E32\u0E07\u0E01\u0E27\u0E48\u0E32 mailer \u0E18\u0E23\u0E23\u0E21\u0E14\u0E32 (\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E02\u0E49\u0E32\u0E07\u0E25\u0E30 ~H) \u0E41\u0E25\u0E30\u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false)
 - \u0E27\u0E31\u0E2A\u0E14\u0E38\u0E20\u0E32\u0E0A\u0E19\u0E30 (pet-bottle / glass / aluminum): \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E17\u0E23\u0E07 revolve + dieline "\u0E09\u0E25\u0E32\u0E01" \u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E15\u0E31\u0E27\u0E43\u0E2B\u0E49 \u2014 W = \u2300\u0E15\u0E31\u0E27\u0E20\u0E32\u0E0A\u0E19\u0E30, D = \u2300\u0E1B\u0E32\u0E01/\u0E04\u0E2D (\u0E15\u0E49\u0E2D\u0E07\u0E40\u0E25\u0E47\u0E01\u0E01\u0E27\u0E48\u0E32 W), H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E20\u0E32\u0E0A\u0E19\u0E30; template \u0E08\u0E30\u0E16\u0E39\u0E01\u0E25\u0E30\u0E40\u0E25\u0E22 (\u0E43\u0E2A\u0E48 tuck-end \u0E44\u0E1B\u0E44\u0E14\u0E49), handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false \u2014 \u0E43\u0E0A\u0E49\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23 "\u0E1C\u0E25\u0E34\u0E15\u0E15\u0E31\u0E27\u0E02\u0E27\u0E14/\u0E42\u0E2B\u0E25/\u0E01\u0E23\u0E30\u0E1B\u0E4B\u0E2D\u0E07\u0E40\u0E2D\u0E07" \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E43\u0E2A\u0E48\u0E21\u0E31\u0E19
@@ -58109,7 +58530,7 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
 - sleeve \u0E40\u0E1B\u0E47\u0E19\u0E17\u0E48\u0E2D\u0E17\u0E23\u0E07\u0E15\u0E23\u0E07 \u2014 \u0E02\u0E2D\u0E07\u0E17\u0E23\u0E07\u0E40\u0E23\u0E35\u0E22\u0E27 (\u0E41\u0E01\u0E49\u0E27\u0E01\u0E32\u0E41\u0E1F) \u0E08\u0E30\u0E2B\u0E25\u0E27\u0E21\u0E14\u0E49\u0E32\u0E19\u0E41\u0E04\u0E1A \u0E43\u0E2B\u0E49\u0E1B\u0E23\u0E30\u0E01\u0E32\u0E28\u0E40\u0E1B\u0E47\u0E19\u0E02\u0E49\u0E2D\u0E08\u0E33\u0E01\u0E31\u0E14\u0E43\u0E19 assumptions
 - bottle-carrier: W\xD7D = footprint \u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 (\u0E40\u0E0A\u0E48\u0E19 \u0E02\u0E27\u0E14 \u230066 \u0E27\u0E32\u0E07 2\xD72 \u2192 W,D \u2248 150), H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E02\u0E27\u0E14 \u2014 \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34: \u0E41\u0E1C\u0E48\u0E19\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E01\u0E25\u0E32\u0E07\u0E2A\u0E39\u0E07\u0E01\u0E27\u0E48\u0E32\u0E02\u0E27\u0E14 ~55 \u0E21\u0E21. \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E23\u0E39\u0E21\u0E37\u0E2D\u0E01\u0E25\u0E21, \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E2A\u0E39\u0E07 ~42% \u0E02\u0E2D\u0E07 H, \u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E2A\u0E2D\u0E07\u0E0A\u0E48\u0E2D\u0E07\u0E15\u0E48\u0E2D\u0E1C\u0E19\u0E31\u0E07 (handle flag \u0E44\u0E21\u0E48\u0E40\u0E01\u0E35\u0E48\u0E22\u0E27\u0E01\u0E31\u0E1A template \u0E19\u0E35\u0E49 \u2014 \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E21\u0E35\u0E43\u0E19\u0E15\u0E31\u0E27)
 - card (\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23): \u0E01\u0E32\u0E23\u0E4C\u0E14\u0E41\u0E1A\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E2A\u0E2D\u0E07\u0E2B\u0E19\u0E49\u0E32 (\u0E2B\u0E19\u0E49\u0E32+\u0E2B\u0E25\u0E31\u0E07 \u0E27\u0E32\u0E07\u0E40\u0E23\u0E35\u0E22\u0E07\u0E01\u0E31\u0E19\u0E1A\u0E19\u0E41\u0E1C\u0E48\u0E19\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E15\u0E01\u0E41\u0E15\u0E48\u0E07\u0E44\u0E14\u0E49\u0E17\u0E31\u0E49\u0E07\u0E2A\u0E2D\u0E07\u0E14\u0E49\u0E32\u0E19) \u0E44\u0E21\u0E48\u0E21\u0E35\u0E23\u0E2D\u0E22\u0E1E\u0E31\u0E1A \u2014 W = \u0E01\u0E27\u0E49\u0E32\u0E07, H = \u0E2A\u0E39\u0E07, \u0E04\u0E48\u0E32 D \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 (\u0E43\u0E2A\u0E48\u0E04\u0E48\u0E32\u0E43\u0E14\u0E01\u0E47\u0E44\u0E14\u0E49\u0E43\u0E19\u0E25\u0E34\u0E21\u0E34\u0E15), handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false; \u0E02\u0E19\u0E32\u0E14\u0E21\u0E32\u0E15\u0E23\u0E10\u0E32\u0E19 90\xD754 \u0E21\u0E21. \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D "\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23 / business card" \u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 (\u0E40\u0E1B\u0E47\u0E19\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E01\u0E32\u0E23\u0E4C\u0E14 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C)
-- sticker (\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E44\u0E14\u0E04\u0E31\u0E17): \u0E41\u0E1C\u0E48\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E14\u0E35\u0E22\u0E27 \u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E35\u0E48\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21\u0E21\u0E38\u0E21\u0E21\u0E19 (\u0E44\u0E14\u0E04\u0E31\u0E17\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B) \u0E44\u0E21\u0E48\u0E21\u0E35\u0E23\u0E2D\u0E22\u0E1E\u0E31\u0E1A \u2014 W = \u0E01\u0E27\u0E49\u0E32\u0E07, H = \u0E2A\u0E39\u0E07, \u0E04\u0E48\u0E32 D \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49, handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false; \u0E15\u0E49\u0E2D\u0E07\u0E43\u0E0A\u0E49\u0E04\u0E39\u0E48\u0E01\u0E31\u0E1A\u0E27\u0E31\u0E2A\u0E14\u0E38 sticker-vinyl (\u0E01\u0E31\u0E19\u0E19\u0E49\u0E33) \u0E2B\u0E23\u0E37\u0E2D sticker-paper (\u0E1B\u0E23\u0E30\u0E2B\u0E22\u0E31\u0E14); \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C / \u0E09\u0E25\u0E32\u0E01\u0E15\u0E34\u0E14 / label / \u0E42\u0E25\u0E42\u0E01\u0E49\u0E15\u0E34\u0E14" (\u0E40\u0E1B\u0E47\u0E19\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C)
+- sticker (\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E44\u0E14\u0E04\u0E31\u0E17): \u0E41\u0E1C\u0E48\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E14\u0E35\u0E22\u0E27 \u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E35\u0E48\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21\u0E21\u0E38\u0E21\u0E21\u0E19 (\u0E44\u0E14\u0E04\u0E31\u0E17\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B) \u0E44\u0E21\u0E48\u0E21\u0E35\u0E23\u0E2D\u0E22\u0E1E\u0E31\u0E1A \u2014 W = \u0E01\u0E27\u0E49\u0E32\u0E07, H = \u0E2A\u0E39\u0E07, \u0E04\u0E48\u0E32 D \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49, handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false; \u0E15\u0E49\u0E2D\u0E07\u0E43\u0E0A\u0E49\u0E04\u0E39\u0E48\u0E01\u0E31\u0E1A\u0E27\u0E31\u0E2A\u0E14\u0E38\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C: sticker-vinyl (\u0E44\u0E27\u0E19\u0E34\u0E25\u0E01\u0E31\u0E19\u0E19\u0E49\u0E33 \u0E17\u0E19\u0E41\u0E14\u0E14), sticker-pp (PP \u0E02\u0E32\u0E27 \u0E01\u0E31\u0E19\u0E19\u0E49\u0E33 \u0E17\u0E19\u0E01\u0E27\u0E48\u0E32\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29), sticker-pp-clear (PP \u0E43\u0E2A \u0E44\u0E21\u0E48\u0E21\u0E35\u0E2B\u0E21\u0E36\u0E01\u0E02\u0E32\u0E27 \u2014 \u0E2A\u0E35\u0E02\u0E32\u0E27\u0E43\u0E19\u0E07\u0E32\u0E19\u0E08\u0E30\u0E43\u0E2A \u0E2A\u0E35\u0E2D\u0E48\u0E2D\u0E19\u0E08\u0E32\u0E07 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E25\u0E32\u0E22\u0E2A\u0E35\u0E40\u0E02\u0E49\u0E21\u0E1A\u0E19\u0E02\u0E27\u0E14\u0E41\u0E01\u0E49\u0E27/\u0E01\u0E23\u0E30\u0E08\u0E01), sticker-pp-clear-white (PP \u0E43\u0E2A \u0E23\u0E2D\u0E07\u0E02\u0E32\u0E27 \u2014 \u0E25\u0E32\u0E22\u0E17\u0E36\u0E1A\u0E2A\u0E14\u0E1A\u0E19\u0E1E\u0E37\u0E49\u0E19\u0E43\u0E2A) \u0E2B\u0E23\u0E37\u0E2D sticker-paper (\u0E1B\u0E23\u0E30\u0E2B\u0E22\u0E31\u0E14); \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C / \u0E09\u0E25\u0E32\u0E01\u0E15\u0E34\u0E14 / label / \u0E42\u0E25\u0E42\u0E01\u0E49\u0E15\u0E34\u0E14" (\u0E40\u0E1B\u0E47\u0E19\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C)
 
 ## \u0E27\u0E31\u0E2A\u0E14\u0E38\u0E17\u0E35\u0E48\u0E21\u0E35\u0E43\u0E19\u0E23\u0E30\u0E1A\u0E1A (materialId)
 ${MATERIALS.map(
@@ -58126,7 +58547,7 @@ ${MATERIALS.map(
 - \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23 "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E43\u0E2A\u0E48\u0E02\u0E27\u0E14/\u0E41\u0E01\u0E49\u0E27" \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E27\u0E31\u0E2A\u0E14\u0E38\u0E01\u0E25\u0E48\u0E2D\u0E07 \u0E41\u0E15\u0E48\u0E16\u0E49\u0E32\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E1C\u0E25\u0E34\u0E15\u0E15\u0E31\u0E27\u0E02\u0E27\u0E14/\u0E01\u0E23\u0E30\u0E1B\u0E4B\u0E2D\u0E07/\u0E42\u0E2B\u0E25\u0E40\u0E2D\u0E07 \u2192 pet-bottle / aluminum / glass
 - \u0E16\u0E38\u0E07/\u0E0B\u0E2D\u0E07/doypack/\u0E16\u0E38\u0E07\u0E0B\u0E34\u0E1B/\u0E16\u0E38\u0E07\u0E15\u0E31\u0E49\u0E07\u0E44\u0E14\u0E49 (\u0E01\u0E32\u0E41\u0E1F \u0E0A\u0E32 \u0E02\u0E19\u0E21 \u0E1C\u0E07\u0E0A\u0E07 \u0E02\u0E2D\u0E07\u0E41\u0E2B\u0E49\u0E07) \u2192 pouch-foil (\u0E01\u0E31\u0E19\u0E0A\u0E37\u0E49\u0E19\u0E14\u0E35, \u0E04\u0E48\u0E32\u0E40\u0E23\u0E34\u0E48\u0E21\u0E15\u0E49\u0E19\u0E02\u0E2D\u0E07\u0E16\u0E38\u0E07); \u0E2A\u0E32\u0E22\u0E2D\u0E35\u0E42\u0E04\u0E48/\u0E04\u0E23\u0E32\u0E1F\u0E17\u0E4C \u2192 pouch-kraft; \u0E2D\u0E22\u0E32\u0E01\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E02\u0E49\u0E32\u0E07\u0E43\u0E19 \u2192 pouch-clear
 - \u0E2B\u0E25\u0E2D\u0E14\u0E04\u0E23\u0E35\u0E21/\u0E40\u0E08\u0E25/\u0E42\u0E25\u0E0A\u0E31\u0E48\u0E19/\u0E22\u0E32\u0E2A\u0E35\u0E1F\u0E31\u0E19 (\u0E2B\u0E25\u0E2D\u0E14\u0E1A\u0E35\u0E1A) \u2192 tube-laminate (template \u0E43\u0E2A\u0E48\u0E2D\u0E30\u0E44\u0E23\u0E01\u0E47\u0E44\u0E14\u0E49 \u0E16\u0E39\u0E01\u0E25\u0E30\u0E40\u0E25\u0E22)
-- \u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C/\u0E09\u0E25\u0E32\u0E01\u0E15\u0E34\u0E14/\u0E42\u0E25\u0E42\u0E01\u0E49\u0E15\u0E34\u0E14/label \u2192 template sticker + \u0E27\u0E31\u0E2A\u0E14\u0E38 sticker-vinyl (\u0E01\u0E31\u0E19\u0E19\u0E49\u0E33 \u0E17\u0E19\u0E41\u0E14\u0E14) \u0E2B\u0E23\u0E37\u0E2D sticker-paper (\u0E43\u0E19\u0E23\u0E48\u0E21/\u0E1B\u0E23\u0E30\u0E2B\u0E22\u0E31\u0E14)
+- \u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C/\u0E09\u0E25\u0E32\u0E01\u0E15\u0E34\u0E14/\u0E42\u0E25\u0E42\u0E01\u0E49\u0E15\u0E34\u0E14/label \u2192 template sticker + \u0E27\u0E31\u0E2A\u0E14\u0E38 sticker-vinyl (\u0E01\u0E31\u0E19\u0E19\u0E49\u0E33 \u0E17\u0E19\u0E41\u0E14\u0E14) / sticker-pp (\u0E09\u0E25\u0E32\u0E01\u0E02\u0E27\u0E14 \u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07 \u0E02\u0E2D\u0E07\u0E40\u0E02\u0E49\u0E32\u0E15\u0E39\u0E49\u0E40\u0E22\u0E47\u0E19) / sticker-pp-clear \u0E2B\u0E23\u0E37\u0E2D sticker-pp-clear-white (\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E43\u0E2A \u0E15\u0E34\u0E14\u0E41\u0E01\u0E49\u0E27/\u0E01\u0E23\u0E30\u0E08\u0E01 \u2014 \u0E25\u0E32\u0E22\u0E2A\u0E35\u0E2D\u0E48\u0E2D\u0E19/\u0E02\u0E32\u0E27\u0E2B\u0E23\u0E37\u0E2D\u0E2D\u0E22\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E25\u0E32\u0E22\u0E17\u0E36\u0E1A \u0E43\u0E0A\u0E49 -white) / sticker-paper (\u0E43\u0E19\u0E23\u0E48\u0E21/\u0E1B\u0E23\u0E30\u0E2B\u0E22\u0E31\u0E14)
 
 ## \u0E15\u0E32\u0E23\u0E32\u0E07\u0E02\u0E19\u0E32\u0E14\u0E02\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E1E\u0E1A\u0E1A\u0E48\u0E2D\u0E22 (\u0E21\u0E21.)
 ${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? " (\u0E40\u0E1B\u0E23\u0E32\u0E30)" : ""}`).join("\n")}
@@ -58145,7 +58566,7 @@ ${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? " (\u0E40\u0E1B\u0E23\u0E32
 4. handle=true \u0E01\u0E31\u0E1A\u0E02\u0E2D\u0E07\u0E2B\u0E19\u0E31\u0E01 (\u0E40\u0E0B\u0E23\u0E32\u0E21\u0E34\u0E01/\u0E41\u0E01\u0E49\u0E27/\u0E02\u0E27\u0E14\u0E2B\u0E25\u0E32\u0E22\u0E0A\u0E34\u0E49\u0E19 \u0E23\u0E27\u0E21 >2 \u0E01\u0E01.) \u2192 \u0E40\u0E15\u0E37\u0E2D\u0E19\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E23\u0E31\u0E1A\u0E19\u0E49\u0E33\u0E2B\u0E19\u0E31\u0E01\u0E08\u0E33\u0E01\u0E31\u0E14 \u0E04\u0E27\u0E23\u0E22\u0E01\u0E1B\u0E23\u0E30\u0E04\u0E2D\u0E07\u0E01\u0E49\u0E19\u0E01\u0E25\u0E48\u0E2D\u0E07
 
 ## \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E02\u0E2D\u0E07\u0E23\u0E30\u0E1A\u0E1A (\u0E2A\u0E33\u0E04\u0E31\u0E0D\u0E21\u0E32\u0E01 \u2014 \u0E2B\u0E49\u0E32\u0E21\u0E2D\u0E49\u0E32\u0E07\u0E40\u0E01\u0E34\u0E19\u0E19\u0E35\u0E49)
-\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A gen \u0E44\u0E14\u0E49\u0E08\u0E23\u0E34\u0E07\u0E21\u0E35\u0E40\u0E17\u0E48\u0E32\u0E19\u0E35\u0E49: \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19, \u0E27\u0E31\u0E2A\u0E14\u0E38\u0E08\u0E32\u0E01\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23, \u0E02\u0E19\u0E32\u0E14 W/D/H, \u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E40\u0E08\u0E32\u0E30 (handle=true \u2014 tuck-end \u0E40\u0E08\u0E32\u0E30\u0E1A\u0E19\u0E1D\u0E32\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E1A\u0E19, mailer \u0E40\u0E08\u0E32\u0E30\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E2A\u0E2D\u0E07\u0E14\u0E49\u0E32\u0E19; bottle-carrier \u0E21\u0E35\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27+\u0E23\u0E39\u0E21\u0E37\u0E2D+\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E43\u0E19\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27; sleeve/fefco-0427 \u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A), \u0E20\u0E32\u0E0A\u0E19\u0E30\u0E02\u0E36\u0E49\u0E19\u0E23\u0E39\u0E1B (\u0E27\u0E31\u0E2A\u0E14\u0E38 pet-bottle/glass/aluminum \u2192 \u0E17\u0E23\u0E07 revolve + dieline \u0E09\u0E25\u0E32\u0E01\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E15\u0E31\u0E27), \u0E2B\u0E25\u0E2D\u0E14\u0E04\u0E23\u0E35\u0E21 (\u0E27\u0E31\u0E2A\u0E14\u0E38 tube-laminate \u2192 \u0E17\u0E23\u0E07 revolve \u0E2B\u0E25\u0E2D\u0E14\u0E1A\u0E35\u0E1A \u0E1D\u0E32\u0E40\u0E01\u0E25\u0E35\u0E22\u0E27 \u0E01\u0E49\u0E19\u0E0B\u0E35\u0E25\u0E41\u0E1A\u0E19 + dieline \u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E15\u0E31\u0E27), \u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E44\u0E14\u0E04\u0E31\u0E17 (template sticker + \u0E27\u0E31\u0E2A\u0E14\u0E38 sticker-* \u2192 \u0E41\u0E1C\u0E48\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19\u0E21\u0E38\u0E21\u0E21\u0E19), \u0E41\u0E25\u0E30\u0E16\u0E38\u0E07\u0E1F\u0E34\u0E25\u0E4C\u0E21 (\u0E27\u0E31\u0E2A\u0E14\u0E38 pouch-* \u2192 dieline \u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E41\u0E1A\u0E19; \u0E21\u0E35 6 \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E49\u0E1C\u0E39\u0E49\u0E43\u0E0A\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A: \u0E16\u0E38\u0E07\u0E15\u0E31\u0E49\u0E07\u0E44\u0E14\u0E49 doypack (\u0E01\u0E49\u0E19\u0E15\u0E31\u0E49\u0E07 \u0E43\u0E0A\u0E49 D=\u0E25\u0E36\u0E01\u0E01\u0E49\u0E19), \u0E0B\u0E2D\u0E07\u0E41\u0E1A\u0E19 3 \u0E14\u0E49\u0E32\u0E19 (\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E49\u0E19 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 D \u2014 \u0E02\u0E2D\u0E07\u0E40\u0E25\u0E47\u0E01/\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E48\u0E32\u0E07/\u0E21\u0E32\u0E2A\u0E4C\u0E01/\u0E0B\u0E2D\u0E07\u0E0B\u0E2D\u0E2A), \u0E0B\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E07\u0E08\u0E35\u0E1A brick (\u0E16\u0E38\u0E07\u0E01\u0E32\u0E41\u0E1F\u0E04\u0E25\u0E32\u0E2A\u0E2A\u0E34\u0E01 \u0E17\u0E23\u0E07\u0E41\u0E17\u0E48\u0E07 \u0E43\u0E0A\u0E49 D=\u0E08\u0E35\u0E1A\u0E02\u0E49\u0E32\u0E07), \u0E16\u0E38\u0E07\u0E01\u0E49\u0E19\u0E41\u0E1A\u0E19\u0E15\u0E31\u0E49\u0E07\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21 box/quad-seal (\u0E01\u0E32\u0E41\u0E1F\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E15\u0E31\u0E49\u0E07\u0E17\u0E23\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07 \u0E43\u0E0A\u0E49 D), \u0E0B\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E01\u0E25\u0E32\u0E07 pillow (\u0E16\u0E38\u0E07\u0E02\u0E19\u0E21/\u0E0A\u0E34\u0E1B \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 D), \u0E41\u0E25\u0E30 \u0E16\u0E38\u0E07\u0E21\u0E35\u0E08\u0E38\u0E01 spout (\u0E02\u0E2D\u0E07\u0E40\u0E2B\u0E25\u0E27/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E14\u0E37\u0E48\u0E21 \u0E21\u0E35\u0E08\u0E38\u0E01+\u0E1D\u0E32 \u0E43\u0E0A\u0E49 D=\u0E01\u0E49\u0E19) + \u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E40\u0E2A\u0E23\u0E34\u0E21 (\u0E0B\u0E34\u0E1B\u0E25\u0E47\u0E2D\u0E01/\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01, \u0E23\u0E39\u0E41\u0E02\u0E27\u0E19 euro-hole, \u0E27\u0E32\u0E25\u0E4C\u0E27\u0E01\u0E32\u0E41\u0E1F, \u0E17\u0E35\u0E48\u0E23\u0E31\u0E14\u0E1B\u0E32\u0E01 tin-tie) \u2014 \u0E17\u0E31\u0E49\u0E07\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E16\u0E38\u0E07\u0E41\u0E25\u0E30\u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E40\u0E2A\u0E23\u0E34\u0E21\u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI; \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E0B\u0E2D\u0E07\u0E41\u0E1A\u0E1A\u0E40\u0E08\u0E32\u0E30\u0E08\u0E07/\u0E21\u0E35\u0E0B\u0E34\u0E1B/\u0E21\u0E35\u0E27\u0E32\u0E25\u0E4C\u0E27 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E27\u0E31\u0E2A\u0E14\u0E38\u0E16\u0E38\u0E07\u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A/\u0E40\u0E1B\u0E34\u0E14\u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A), \u0E41\u0E25\u0E30\u0E23\u0E39\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28 (vent holes) \u2014 \u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E01\u0E25\u0E21\u0E40\u0E1B\u0E47\u0E19\u0E01\u0E23\u0E34\u0E14\u0E1A\u0E19\u0E1C\u0E19\u0E31\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E31\u0E1A (tuck-end/mailer/fefco-0427/rsc/tray/gable) \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E2A\u0E48\u0E07\u0E1C\u0E25\u0E44\u0E21\u0E49/\u0E1C\u0E31\u0E01/\u0E02\u0E2D\u0E07\u0E2A\u0E14 \u0E40\u0E02\u0E49\u0E32\u0E17\u0E31\u0E49\u0E07 3D \u0E41\u0E25\u0E30\u0E44\u0E1F\u0E25\u0E4C\u0E15\u0E31\u0E14 (DXF/PDF); \u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A (\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E1C\u0E19\u0E31\u0E07+\u0E02\u0E19\u0E32\u0E14\u0E23\u0E39+\u0E08\u0E33\u0E19\u0E27\u0E19\u0E41\u0E16\u0E27/\u0E04\u0E2D\u0E25\u0E31\u0E21\u0E19\u0E4C) \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI \u2014 \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28/\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1C\u0E25\u0E44\u0E21\u0E49\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E31\u0E1A\u0E17\u0E35\u0E48\u0E40\u0E2B\u0E21\u0E32\u0E30 (\u0E40\u0E0A\u0E48\u0E19 rsc/tray) \u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E23\u0E39\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28\u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A
+\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A gen \u0E44\u0E14\u0E49\u0E08\u0E23\u0E34\u0E07\u0E21\u0E35\u0E40\u0E17\u0E48\u0E32\u0E19\u0E35\u0E49: \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19, \u0E27\u0E31\u0E2A\u0E14\u0E38\u0E08\u0E32\u0E01\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23, \u0E02\u0E19\u0E32\u0E14 W/D/H, \u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E40\u0E08\u0E32\u0E30 (handle=true \u2014 tuck-end \u0E40\u0E08\u0E32\u0E30\u0E1A\u0E19\u0E1D\u0E32\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E1A\u0E19, mailer \u0E40\u0E08\u0E32\u0E30\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E2A\u0E2D\u0E07\u0E14\u0E49\u0E32\u0E19; bottle-carrier \u0E21\u0E35\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27+\u0E23\u0E39\u0E21\u0E37\u0E2D+\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E43\u0E19\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27; sleeve/fefco-0427 \u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A), \u0E20\u0E32\u0E0A\u0E19\u0E30\u0E02\u0E36\u0E49\u0E19\u0E23\u0E39\u0E1B (\u0E27\u0E31\u0E2A\u0E14\u0E38 pet-bottle/glass/aluminum \u2192 \u0E17\u0E23\u0E07 revolve + dieline \u0E09\u0E25\u0E32\u0E01\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E15\u0E31\u0E27), \u0E2B\u0E25\u0E2D\u0E14\u0E04\u0E23\u0E35\u0E21 (\u0E27\u0E31\u0E2A\u0E14\u0E38 tube-laminate \u2192 \u0E17\u0E23\u0E07 revolve \u0E2B\u0E25\u0E2D\u0E14\u0E1A\u0E35\u0E1A \u0E1D\u0E32\u0E40\u0E01\u0E25\u0E35\u0E22\u0E27 \u0E01\u0E49\u0E19\u0E0B\u0E35\u0E25\u0E41\u0E1A\u0E19 + dieline \u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E15\u0E31\u0E27), \u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E44\u0E14\u0E04\u0E31\u0E17 (template sticker + \u0E27\u0E31\u0E2A\u0E14\u0E38 sticker-* \u2192 \u0E41\u0E1C\u0E48\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19\u0E21\u0E38\u0E21\u0E21\u0E19; \u0E21\u0E35\u0E42\u0E2B\u0E21\u0E14 '\u0E44\u0E14\u0E04\u0E31\u0E17\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B' \u0E2A\u0E23\u0E49\u0E32\u0E07\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14\u0E15\u0E32\u0E21\u0E02\u0E2D\u0E1A\u0E25\u0E32\u0E22/\u0E23\u0E39\u0E1B PNG \u0E1E\u0E37\u0E49\u0E19\u0E43\u0E2A\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 \u0E41\u0E1A\u0E1A\u0E21\u0E35\u0E02\u0E2D\u0E1A\u0E02\u0E32\u0E27 (\u0E23\u0E30\u0E22\u0E30 1\u20138 \u0E21\u0E21.) \u0E2B\u0E23\u0E37\u0E2D\u0E44\u0E21\u0E48\u0E21\u0E35\u0E02\u0E2D\u0E1A\u0E02\u0E32\u0E27 + \u0E15\u0E23\u0E27\u0E08\u0E44\u0E1F\u0E25\u0E4C\u0E15\u0E32\u0E21\u0E02\u0E49\u0E2D\u0E08\u0E33\u0E01\u0E31\u0E14\u0E1C\u0E25\u0E34\u0E15\u0E44\u0E14\u0E04\u0E31\u0E17 (\u0E2B\u0E48\u0E32\u0E07\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14/\u0E40\u0E1C\u0E37\u0E48\u0E2D\u0E2A\u0E35 \u22651 \u0E21\u0E21., \u0E23\u0E30\u0E22\u0E30\u0E23\u0E30\u0E2B\u0E27\u0E48\u0E32\u0E07\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14 \u22652 \u0E21\u0E21., \u0E0A\u0E48\u0E2D\u0E07\u0E40\u0E08\u0E32\u0E30 \u22652 \u0E21\u0E21., \u0E44\u0E21\u0E48\u0E21\u0E35\u0E21\u0E38\u0E21\u0E2B\u0E31\u0E01\u0E28\u0E2D\u0E01) + \u0E41\u0E1C\u0E48\u0E19\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E2B\u0E25\u0E32\u0E22\u0E14\u0E27\u0E07 (\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E41\u0E1C\u0E48\u0E19 A6/A5/A4 \u2192 \u0E40\u0E23\u0E35\u0E22\u0E07\u0E14\u0E27\u0E07\u0E17\u0E35\u0E48\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E0B\u0E49\u0E33\u0E40\u0E15\u0E47\u0E21\u0E41\u0E1C\u0E48\u0E19\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 \u0E40\u0E27\u0E49\u0E19\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14 2 \u0E21\u0E21. \u0E02\u0E2D\u0E1A\u0E41\u0E1C\u0E48\u0E19 5 \u0E21\u0E21. \u0E2B\u0E21\u0E38\u0E19\u0E44\u0E14\u0E49 \u0E1A\u0E2D\u0E01\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E27\u0E07/\u0E41\u0E1C\u0E48\u0E19 \u0E41\u0E25\u0E30\u0E41\u0E1C\u0E48\u0E19\u0E15\u0E48\u0E2D A3; \u0E2B\u0E23\u0E37\u0E2D\u0E01\u0E33\u0E2B\u0E19\u0E14\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E27\u0E07\u0E15\u0E48\u0E2D\u0E41\u0E1C\u0E48\u0E19\u0E41\u0E25\u0E49\u0E27\u0E23\u0E30\u0E1A\u0E1A\u0E2B\u0E32\u0E02\u0E19\u0E32\u0E14\u0E14\u0E27\u0E07\u0E43\u0E2B\u0E0D\u0E48\u0E2A\u0E38\u0E14\u0E17\u0E35\u0E48\u0E43\u0E2A\u0E48\u0E44\u0E14\u0E49 \u0E22\u0E48\u0E2D/\u0E02\u0E22\u0E32\u0E22\u0E25\u0E32\u0E22\u0E15\u0E32\u0E21\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 (\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E40\u0E25\u0E47\u0E01\u0E2A\u0E38\u0E14 10 \u0E21\u0E21.); \u0E44\u0E1F\u0E25\u0E4C\u0E2A\u0E48\u0E07\u0E2D\u0E2D\u0E01\u0E40\u0E1B\u0E47\u0E19\u0E17\u0E31\u0E49\u0E07\u0E41\u0E1C\u0E48\u0E19) \u2014 \u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI; \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E22\u0E32\u0E01\u0E44\u0E14\u0E49\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E15\u0E31\u0E14\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01 template sticker \u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E1B\u0E34\u0E14 '\u0E44\u0E14\u0E04\u0E31\u0E17: \u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B' \u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A), \u0E41\u0E25\u0E30\u0E16\u0E38\u0E07\u0E1F\u0E34\u0E25\u0E4C\u0E21 (\u0E27\u0E31\u0E2A\u0E14\u0E38 pouch-* \u2192 dieline \u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E41\u0E1A\u0E19; \u0E21\u0E35 6 \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E49\u0E1C\u0E39\u0E49\u0E43\u0E0A\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A: \u0E16\u0E38\u0E07\u0E15\u0E31\u0E49\u0E07\u0E44\u0E14\u0E49 doypack (\u0E01\u0E49\u0E19\u0E15\u0E31\u0E49\u0E07 \u0E43\u0E0A\u0E49 D=\u0E25\u0E36\u0E01\u0E01\u0E49\u0E19), \u0E0B\u0E2D\u0E07\u0E41\u0E1A\u0E19 3 \u0E14\u0E49\u0E32\u0E19 (\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E49\u0E19 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 D \u2014 \u0E02\u0E2D\u0E07\u0E40\u0E25\u0E47\u0E01/\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E48\u0E32\u0E07/\u0E21\u0E32\u0E2A\u0E4C\u0E01/\u0E0B\u0E2D\u0E07\u0E0B\u0E2D\u0E2A), \u0E0B\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E07\u0E08\u0E35\u0E1A brick (\u0E16\u0E38\u0E07\u0E01\u0E32\u0E41\u0E1F\u0E04\u0E25\u0E32\u0E2A\u0E2A\u0E34\u0E01 \u0E17\u0E23\u0E07\u0E41\u0E17\u0E48\u0E07 \u0E43\u0E0A\u0E49 D=\u0E08\u0E35\u0E1A\u0E02\u0E49\u0E32\u0E07), \u0E16\u0E38\u0E07\u0E01\u0E49\u0E19\u0E41\u0E1A\u0E19\u0E15\u0E31\u0E49\u0E07\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21 box/quad-seal (\u0E01\u0E32\u0E41\u0E1F\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E15\u0E31\u0E49\u0E07\u0E17\u0E23\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07 \u0E43\u0E0A\u0E49 D), \u0E0B\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E01\u0E25\u0E32\u0E07 pillow (\u0E16\u0E38\u0E07\u0E02\u0E19\u0E21/\u0E0A\u0E34\u0E1B \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 D), \u0E41\u0E25\u0E30 \u0E16\u0E38\u0E07\u0E21\u0E35\u0E08\u0E38\u0E01 spout (\u0E02\u0E2D\u0E07\u0E40\u0E2B\u0E25\u0E27/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E14\u0E37\u0E48\u0E21 \u0E21\u0E35\u0E08\u0E38\u0E01+\u0E1D\u0E32 \u0E43\u0E0A\u0E49 D=\u0E01\u0E49\u0E19) + \u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E40\u0E2A\u0E23\u0E34\u0E21 (\u0E0B\u0E34\u0E1B\u0E25\u0E47\u0E2D\u0E01/\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01 \u2014 \u0E1B\u0E23\u0E31\u0E1A\u0E23\u0E30\u0E22\u0E30\u0E0B\u0E34\u0E1B\u0E41\u0E25\u0E30\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01\u0E08\u0E32\u0E01\u0E02\u0E2D\u0E1A\u0E1A\u0E19\u0E44\u0E14\u0E49 \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E15\u0E23\u0E27\u0E08\u0E25\u0E33\u0E14\u0E31\u0E1A\u0E0B\u0E35\u0E25\u2192\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01\u2192\u0E0B\u0E34\u0E1B \u0E41\u0E25\u0E30\u0E01\u0E32\u0E23\u0E17\u0E31\u0E1A\u0E27\u0E32\u0E25\u0E4C\u0E27/\u0E08\u0E38\u0E01/\u0E17\u0E35\u0E48\u0E23\u0E31\u0E14\u0E1B\u0E32\u0E01, \u0E23\u0E39\u0E41\u0E02\u0E27\u0E19 euro-hole, \u0E27\u0E32\u0E25\u0E4C\u0E27\u0E01\u0E32\u0E41\u0E1F, \u0E17\u0E35\u0E48\u0E23\u0E31\u0E14\u0E1B\u0E32\u0E01 tin-tie) \u2014 \u0E17\u0E31\u0E49\u0E07\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E16\u0E38\u0E07\u0E41\u0E25\u0E30\u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E40\u0E2A\u0E23\u0E34\u0E21\u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI; \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E0B\u0E2D\u0E07\u0E41\u0E1A\u0E1A\u0E40\u0E08\u0E32\u0E30\u0E08\u0E07/\u0E21\u0E35\u0E0B\u0E34\u0E1B/\u0E21\u0E35\u0E27\u0E32\u0E25\u0E4C\u0E27 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E27\u0E31\u0E2A\u0E14\u0E38\u0E16\u0E38\u0E07\u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A/\u0E40\u0E1B\u0E34\u0E14\u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A), \u0E41\u0E25\u0E30\u0E23\u0E39\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28 (vent holes) \u2014 \u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E01\u0E25\u0E21\u0E40\u0E1B\u0E47\u0E19\u0E01\u0E23\u0E34\u0E14\u0E1A\u0E19\u0E1C\u0E19\u0E31\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E31\u0E1A (tuck-end/mailer/fefco-0427/rsc/tray/gable) \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E2A\u0E48\u0E07\u0E1C\u0E25\u0E44\u0E21\u0E49/\u0E1C\u0E31\u0E01/\u0E02\u0E2D\u0E07\u0E2A\u0E14 \u0E40\u0E02\u0E49\u0E32\u0E17\u0E31\u0E49\u0E07 3D \u0E41\u0E25\u0E30\u0E44\u0E1F\u0E25\u0E4C\u0E15\u0E31\u0E14 (DXF/PDF); \u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A (\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E1C\u0E19\u0E31\u0E07+\u0E02\u0E19\u0E32\u0E14\u0E23\u0E39+\u0E08\u0E33\u0E19\u0E27\u0E19\u0E41\u0E16\u0E27/\u0E04\u0E2D\u0E25\u0E31\u0E21\u0E19\u0E4C) \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI \u2014 \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28/\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1C\u0E25\u0E44\u0E21\u0E49\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E31\u0E1A\u0E17\u0E35\u0E48\u0E40\u0E2B\u0E21\u0E32\u0E30 (\u0E40\u0E0A\u0E48\u0E19 rsc/tray) \u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E23\u0E39\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28\u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A
 \u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E22\u0E31\u0E07\u0E17\u0E33\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49: \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E40\u0E0A\u0E37\u0E2D\u0E01/\u0E1E\u0E25\u0E32\u0E2A\u0E15\u0E34\u0E01, \u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E43\u0E2A, \u0E15\u0E31\u0E27\u0E25\u0E47\u0E2D\u0E01\u0E1E\u0E34\u0E40\u0E28\u0E29, \u0E41\u0E1C\u0E48\u0E19\u0E01\u0E31\u0E49\u0E19\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, \u0E17\u0E23\u0E07\u0E20\u0E32\u0E0A\u0E19\u0E30\u0E41\u0E1A\u0E1A\u0E01\u0E33\u0E2B\u0E19\u0E14\u0E40\u0E2D\u0E07 (\u0E42\u0E1B\u0E23\u0E44\u0E1F\u0E25\u0E4C fix \u0E15\u0E32\u0E21\u0E0A\u0E19\u0E34\u0E14\u0E27\u0E31\u0E2A\u0E14\u0E38) \u0E2F\u0E25\u0E2F \u2014 \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E2A\u0E34\u0E48\u0E07\u0E40\u0E2B\u0E25\u0E48\u0E32\u0E19\u0E35\u0E49 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2A\u0E34\u0E48\u0E07\u0E43\u0E01\u0E25\u0E49\u0E40\u0E04\u0E35\u0E22\u0E07\u0E17\u0E35\u0E48\u0E21\u0E35 (\u0E40\u0E0A\u0E48\u0E19 \u0E02\u0E2D\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27/\u0E17\u0E35\u0E48\u0E08\u0E31\u0E1A \u2192 handle=true) \u0E41\u0E25\u0E30\u0E40\u0E02\u0E35\u0E22\u0E19\u0E43\u0E19 reasoning \u0E15\u0E23\u0E07\u0E46 \u0E27\u0E48\u0E32\u0E23\u0E30\u0E1A\u0E1A\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E02\u0E2D\u0E41\u0E1A\u0E1A\u0E40\u0E1B\u0E4A\u0E30\u0E46 \u0E2B\u0E49\u0E32\u0E21\u0E2D\u0E49\u0E32\u0E07\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E17\u0E33\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E17\u0E33\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E43\u0E2B\u0E49\u0E41\u0E25\u0E49\u0E27
 
 ## \u0E23\u0E39\u0E1B\u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07\u0E08\u0E32\u0E01\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32 (\u0E16\u0E49\u0E32\u0E21\u0E35)
@@ -58234,8 +58655,12 @@ function buildUserContent(prompt, current) {
 
 \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14\u0E08\u0E32\u0E01\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32: ${prompt}` : prompt;
 }
-async function askClaude(apiKey, model, prompt, current, image) {
-  const client = new Anthropic({ apiKey });
+async function askClaude(apiKey, model, prompt, current, image, limits) {
+  const client = new Anthropic({
+    apiKey,
+    ...limits?.timeoutMs !== void 0 ? { timeout: limits.timeoutMs } : {},
+    ...limits?.maxRetries !== void 0 ? { maxRetries: limits.maxRetries } : {}
+  });
   const content = [];
   if (image) {
     content.push({
@@ -58276,13 +58701,15 @@ var AiProviderError = class extends Error {
     this.name = "AiProviderError";
   }
 };
+var CLOUD_AI_LIMITS = { timeoutMs: 5e4, maxRetries: 0 };
 var AnthropicAiService = class {
-  constructor(model = "claude-opus-4-8") {
+  constructor(model = "claude-opus-4-8", limits = CLOUD_AI_LIMITS) {
     this.model = model;
+    this.limits = limits;
   }
   async generateBoxSpec(apiKey, input2) {
     try {
-      return await askClaude(apiKey, this.model, input2.prompt, input2.current, input2.image);
+      return await askClaude(apiKey, this.model, input2.prompt, input2.current, input2.image, this.limits);
     } catch (error62) {
       if (error62 instanceof Anthropic.AuthenticationError) throw new AiProviderError("authentication");
       if (error62 instanceof Anthropic.RateLimitError) throw new AiProviderError("rate-limit");
@@ -58314,6 +58741,39 @@ var assetDownloadRequestSchema = external_exports.object({
     }
   })
 }).strict();
+
+// server/modules/billing/billingService.ts
+var BillingService = class {
+  constructor(repository, options) {
+    this.repository = repository;
+    this.options = options;
+  }
+  withDevFlag(entitlements) {
+    return { ...entitlements, devFulfilAvailable: this.options.devFulfilEnabled };
+  }
+  async getEntitlements(actor, workspaceId) {
+    return this.withDevFlag(await this.repository.getEntitlements(actor, workspaceId));
+  }
+  async authorizeExport(actor, projectId) {
+    const authorization = await this.repository.authorizeExport(actor, projectId);
+    return { ...authorization, entitlements: this.withDevFlag(authorization.entitlements) };
+  }
+  createOrder(actor, input2) {
+    return this.repository.createOrder(actor, input2);
+  }
+  async devFulfilOrder(actor, orderId, requestId) {
+    if (!this.options.devFulfilEnabled) {
+      throw new HttpError(404, "NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A API endpoint \u0E19\u0E35\u0E49");
+    }
+    return this.repository.fulfilOrder(actor, orderId, "dev", requestId);
+  }
+  reserveAiCredit(actor, workspaceId, operationId) {
+    return this.repository.reserveAiCredit(actor, workspaceId, operationId);
+  }
+  settleAiRequest(actor, requestId, outcome) {
+    return this.repository.settleAiRequest(actor, requestId, outcome);
+  }
+};
 
 // server/modules/projects/projectService.ts
 var ProjectService = class {
@@ -58439,6 +58899,18 @@ function rejectDeleteBody(req) {
     throw new HttpError(400, "INVALID_REQUEST", "DELETE endpoint \u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E23\u0E31\u0E1A body");
   }
 }
+async function rejectNonEmptyBody(req) {
+  const contentLength = Number(headerValue(req, "content-length") ?? 0);
+  if (req.body === void 0 && contentLength <= 0 && !headerValue(req, "transfer-encoding")) return;
+  requireJsonContentType(req);
+  const body = await readJsonBody(req);
+  if (typeof body !== "object" || body === null || Array.isArray(body) || Object.keys(body).length > 0) {
+    throw new HttpError(422, "VALIDATION_ERROR", "endpoint \u0E19\u0E35\u0E49\u0E23\u0E31\u0E1A\u0E40\u0E09\u0E1E\u0E32\u0E30 body \u0E27\u0E48\u0E32\u0E07\u0E2B\u0E23\u0E37\u0E2D {}");
+  }
+}
+function isDevFulfilEnvironment(config2) {
+  return config2.appEnv === "development" || config2.appEnv === "test";
+}
 function validationError(error62) {
   return new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07", {
     issues: error62.issues.slice(0, 20).map((issue2) => ({
@@ -58455,7 +58927,10 @@ function createApiRouter(config2, dependencies = {}) {
   const sessionService = dependencies.sessionService === void 0 ? config2.supabase && createSupabaseSessionService(config2.supabase) : dependencies.sessionService;
   const projectService = dependencies.projectService === void 0 ? config2.supabase && new ProjectService(createSupabaseProjectRepository(config2.supabase)) : dependencies.projectService;
   const assetService = dependencies.assetService === void 0 ? config2.supabase && createSupabaseAssetService(config2.supabase) : dependencies.assetService;
-  const aiService = dependencies.aiService === void 0 ? new AnthropicAiService() : dependencies.aiService;
+  const aiService = dependencies.aiService === void 0 ? new AnthropicAiService(config2.ai?.model) : dependencies.aiService;
+  const billingService = dependencies.billingService === void 0 ? config2.supabase && new BillingService(createSupabaseBillingRepository(config2.supabase), {
+    devFulfilEnabled: isDevFulfilEnvironment(config2)
+  }) : dependencies.billingService;
   return async (req, res) => {
     const requestId = randomUUID3();
     const path5 = requestPath(req);
@@ -58515,30 +58990,12 @@ function createApiRouter(config2, dependencies = {}) {
           res.setHeader("allow", "POST");
           throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
         }
-        if (!sessionService || !aiService) {
+        if (!sessionService || !aiService || !billingService) {
           throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 AI \u0E2B\u0E23\u0E37\u0E2D Supabase");
         }
         requireJsonContentType(req);
-        await sessionService.authenticate(bearerToken(req), requestId);
-        const apiKey = readRequestApiKey(req.headers);
-        if (apiKey === void 0) {
-          throw new HttpError(422, "AI_API_KEY_REQUIRED", "\u0E01\u0E23\u0E38\u0E13\u0E32\u0E43\u0E2A\u0E48 Anthropic API key");
-        }
-        if (apiKey === null) {
-          throw new HttpError(400, "AI_API_KEY_INVALID", "\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A Anthropic API key \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
-        }
-        const body = await readJsonBody(req, 6 * 1024 * 1024);
-        if (typeof body !== "object" || body === null || Array.isArray(body)) {
-          throw new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 AI \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
-        }
-        const input2 = body;
-        const allowedKeys = /* @__PURE__ */ new Set(["prompt", "current", "image"]);
-        if (Object.keys(input2).some((key) => !allowedKeys.has(key))) {
-          throw new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 AI \u0E21\u0E35 field \u0E17\u0E35\u0E48\u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A");
-        }
-        if (typeof input2.prompt !== "string" || !input2.prompt.trim() || input2.prompt.length > 2e3) {
-          throw new HttpError(422, "VALIDATION_ERROR", "prompt \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21 1-2000 \u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23");
-        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId);
+        const input2 = parseOrThrow(aiBoxSpecRequestSchema.safeParse(await readJsonBody(req, 6 * 1024 * 1024)));
         const current = parseCurrent(input2.current);
         if (input2.current !== void 0 && !current) {
           throw new HttpError(422, "VALIDATION_ERROR", "\u0E2A\u0E40\u0E1B\u0E01\u0E1B\u0E31\u0E08\u0E08\u0E38\u0E1A\u0E31\u0E19\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
@@ -58547,17 +59004,38 @@ function createApiRouter(config2, dependencies = {}) {
         if (input2.image !== void 0 && !image) {
           throw new HttpError(422, "VALIDATION_ERROR", "\u0E23\u0E39\u0E1B\u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E2B\u0E23\u0E37\u0E2D\u0E43\u0E2B\u0E0D\u0E48\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B");
         }
-        const data = await aiService.generateBoxSpec(apiKey, {
-          prompt: input2.prompt.trim(),
-          ...current ? { current } : {},
-          ...image ? { image } : {}
-        });
-        sendJson(res, 200, { data, requestId }, requestId);
+        const serverAi = config2.ai;
+        if (!serverAi) {
+          throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E04\u0E35\u0E22\u0E4C AI");
+        }
+        const reservation = await billingService.reserveAiCredit(actor, input2.workspaceId, input2.operationId);
+        let data;
+        try {
+          data = await aiService.generateBoxSpec(serverAi.anthropicApiKey, {
+            prompt: input2.prompt.trim(),
+            ...current ? { current } : {},
+            ...image ? { image } : {}
+          });
+        } catch (providerError) {
+          try {
+            await billingService.settleAiRequest(actor, reservation.requestId, "failed");
+          } catch (refundError) {
+            console.warn(`[${requestId}] \u0E04\u0E37\u0E19\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 ai_request ${reservation.requestId} \u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 (\u0E04\u0E49\u0E32\u0E07\u0E2A\u0E16\u0E32\u0E19\u0E30 reserved)`, refundError);
+          }
+          throw providerError;
+        }
+        let credits = reservation.credits;
+        try {
+          credits = (await billingService.settleAiRequest(actor, reservation.requestId, "succeeded")).credits;
+        } catch (settleError) {
+          console.warn(`[${requestId}] settle ai_request ${reservation.requestId} \u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 (\u0E04\u0E49\u0E32\u0E07\u0E2A\u0E16\u0E32\u0E19\u0E30 reserved)`, settleError);
+        }
+        sendJson(res, 200, { data: { ...data, credits }, requestId }, requestId);
       } catch (error63) {
         let httpError;
         if (error63 instanceof HttpError) httpError = error63;
         else if (error63 instanceof AiProviderError && error63.kind === "authentication") {
-          httpError = new HttpError(401, "AI_API_KEY_INVALID", "Anthropic API key \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+          httpError = new HttpError(503, "CONFIGURATION_ERROR", "\u0E04\u0E35\u0E22\u0E4C AI \u0E02\u0E2D\u0E07 server \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
         } else if (error63 instanceof AiProviderError && error63.kind === "rate-limit") {
           httpError = new HttpError(429, "AI_RATE_LIMITED", "\u0E40\u0E23\u0E35\u0E22\u0E01 AI \u0E16\u0E35\u0E48\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48");
         } else {
@@ -58694,6 +59172,99 @@ function createApiRouter(config2, dependencies = {}) {
         }
       } catch (error63) {
         const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E14\u0E33\u0E40\u0E19\u0E34\u0E19\u0E01\u0E32\u0E23\u0E01\u0E31\u0E1A\u0E44\u0E1F\u0E25\u0E4C\u0E23\u0E39\u0E1B\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
+    if (path5 === "/api/v1/billing/entitlements") {
+      try {
+        if (req.method !== "GET") {
+          res.setHeader("allow", "GET");
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!sessionService || !billingService) {
+          throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Supabase");
+        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId);
+        const url2 = requestUrl(req);
+        if ([...url2.searchParams.keys()].some((key) => key !== "workspaceId")) {
+          throw new HttpError(422, "VALIDATION_ERROR", "query parameter \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+        }
+        if (url2.searchParams.getAll("workspaceId").length > 1) {
+          throw new HttpError(422, "VALIDATION_ERROR", "query parameter \u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E0B\u0E49\u0E33");
+        }
+        const query = parseOrThrow(entitlementsQuerySchema.safeParse({
+          workspaceId: url2.searchParams.get("workspaceId") ?? void 0
+        }));
+        const data = await billingService.getEntitlements(actor, query.workspaceId);
+        sendJson(res, 200, { data, requestId }, requestId);
+      } catch (error63) {
+        const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E42\u0E2B\u0E25\u0E14\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
+    if (path5 === "/api/v1/billing/orders") {
+      try {
+        if (req.method !== "POST") {
+          res.setHeader("allow", "POST");
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!sessionService || !billingService) {
+          throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Supabase");
+        }
+        requireJsonContentType(req);
+        const actor = await sessionService.authenticate(bearerToken(req), requestId);
+        const input2 = parseOrThrow(createOrderInputSchema.safeParse(await readJsonBody(req)));
+        const data = await billingService.createOrder(actor, input2);
+        sendJson(res, 201, { data, requestId }, requestId);
+      } catch (error63) {
+        const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E0B\u0E37\u0E49\u0E2D\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
+    const devFulfilMatch = /^\/api\/v1\/billing\/orders\/([^/]+)\/dev-fulfil$/.exec(path5);
+    if (devFulfilMatch) {
+      try {
+        if (!isDevFulfilEnvironment(config2)) {
+          throw new HttpError(404, "NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A API endpoint \u0E19\u0E35\u0E49");
+        }
+        if (req.method !== "POST") {
+          res.setHeader("allow", "POST");
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!sessionService || !billingService) {
+          throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Supabase");
+        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId);
+        const orderId = parseOrThrow(orderIdSchema.safeParse(devFulfilMatch[1]));
+        await rejectNonEmptyBody(req);
+        const data = await billingService.devFulfilOrder(actor, orderId, requestId);
+        sendJson(res, 200, { data, requestId }, requestId);
+      } catch (error63) {
+        const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E08\u0E33\u0E25\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
+    const exportAuthorizationMatch = /^\/api\/v1\/projects\/([^/]+)\/export-authorizations$/.exec(path5);
+    if (exportAuthorizationMatch) {
+      try {
+        if (req.method !== "POST") {
+          res.setHeader("allow", "POST");
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!sessionService || !billingService) {
+          throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Supabase");
+        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId);
+        const projectId = parseOrThrow(projectIdSchema.safeParse(exportAuthorizationMatch[1]));
+        await rejectNonEmptyBody(req);
+        const data = await billingService.authorizeExport(actor, projectId);
+        sendJson(res, 200, { data, requestId }, requestId);
+      } catch (error63) {
+        const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E14\u0E32\u0E27\u0E19\u0E4C\u0E42\u0E2B\u0E25\u0E14\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
       }
       return;

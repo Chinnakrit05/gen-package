@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { useThree } from '@react-three/fiber'
 import type { Deco, FillImage } from '../core/artwork'
 import { textureScale } from '../core/textureRes'
+import { drawWatermark } from '../core/watermark'
 
 // texture ลาย (แผ่นคลี่/ฉลาก/ฟิล์มถุง) ที่วาดลง canvas แล้วแปะบนโมเดล 3D — ใช้ร่วมทุก viewer
 //
@@ -26,8 +27,10 @@ export function useArtTexture(opts: {
   draw: (ctx: CanvasRenderingContext2D, s: number, imgOf: ImgOf) => void // วาดทั้งแผ่นที่ s px/มม.
   deps: unknown[] // ค่าอื่นที่มีผลต่อภาพ (สีพื้น/สีวัสดุ ฯลฯ)
   configure?: (t: THREE.CanvasTexture) => void // ตั้งค่าเฉพาะ viewer (flipY, repeat ฯลฯ)
+  // ลายน้ำพรีวิว (Freemium) — ประทับทับหลัง draw ทั้งแผ่น; null/ไม่ส่ง = ไม่มี (ไม่ไปถึงไฟล์ส่งออกเพราะ texture ใช้แค่ 3D)
+  watermark?: string | null
 }): THREE.CanvasTexture | null {
-  const { sheetW, sheetH, decos, fillImage, enabled, draw, deps, configure } = opts
+  const { sheetW, sheetH, decos, fillImage, enabled, draw, deps, configure, watermark } = opts
   const gl = useThree((st) => st.gl)
   const [tex, setTex] = useState<THREE.CanvasTexture | null>(null)
   const canvases = useRef<{ draft?: HTMLCanvasElement; full?: HTMLCanvasElement }>({})
@@ -87,6 +90,12 @@ export function useArtTexture(opts: {
       ctx.clearRect(0, 0, w, h)
       ctx.save()
       draw(ctx, s, (src) => imgCache.current.get(src))
+      // ลายน้ำทับหลังสุด (หลัง inkOnClearFilm ของฟิล์มใสด้วย) — อยู่บน texture 3D เท่านั้น
+      if (watermark) {
+        ctx.save()
+        drawWatermark(ctx, sheetW, sheetH, s, watermark)
+        ctx.restore()
+      }
       ctx.restore()
       const target = canvas
       // ห้าม dispose ของเก่าตรงนี้ — StrictMode เรียกตัวอัปเดตซ้ำได้; effect ด้านล่างคืนหน่วยความจำแทน
@@ -113,7 +122,7 @@ export function useArtTexture(opts: {
     }
     // draw/configure เป็นฟังก์ชันใหม่ทุก render — ค่าที่มีผลต่อภาพอยู่ใน deps แล้ว
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decos, imgReady, enabled, sheetW, sheetH, ...deps])
+  }, [decos, imgReady, enabled, sheetW, sheetH, watermark, ...deps])
 
   useEffect(() => () => window.clearTimeout(settleTimer.current), [])
   // คืนหน่วยความจำเมื่อเปลี่ยน texture หรือ viewer ถูกถอด

@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { Entitlements } from '../../../shared/contracts/billing'
 import type { CloudProject, ProjectSummary } from '../../../shared/contracts/projects'
 import App, { type CloudProjectBridge, type ProjectStoreSnapshot } from '../../App'
 import { LoadingStage } from '../../components/LoadingBoundary'
 import { freshProject, type Project } from '../../core/project'
 import { requestCloudBoxSpec } from '../../services/api/ai'
+import {
+  authorizeExport as authorizeRemoteExport,
+  createOrder as createRemoteOrder,
+  devFulfilOrder as devFulfilRemoteOrder,
+  getEntitlements,
+} from '../../services/api/billing'
+import { ApiClientError } from '../../services/api/client'
 import {
   createProject as createRemoteProject,
   deleteProject as deleteRemoteProject,
@@ -65,6 +73,8 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
   const [migration, setMigration] = useState<LegacyMigrationJournal | null>(null)
   const [migrationBusy, setMigrationBusy] = useState(false)
   const [migrationError, setMigrationError] = useState<string | null>(null)
+  // สิทธิ์แพ็กเกจ/เครดิต AI ของ workspace — null = โหลดไม่ได้ (App ปฏิบัติเหมือน Freemium แต่ยังเปิดงานได้)
+  const [entitlements, setEntitlements] = useState<Entitlements | null>(null)
   const initialCreateOperationId = useRef(crypto.randomUUID())
   const scope = useMemo(() => ({ appUserId: props.appUserId, workspaceId: props.workspaceId }), [props.appUserId, props.workspaceId])
   const clientId = useMemo(() => getCloudDraftClientId(), [])
@@ -273,7 +283,17 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
           cloud = await getProject(props.apiBaseUrl, tokenRef.current, summaries[0].id, abortController.signal)
         }
         const project = await controller.open(cloud)
-        if (active) setWorkspace({ status: 'ready', initialProject: project })
+        // สิทธิ์แพ็กเกจ/เครดิตก่อนตั้ง ready — โหลดไม่ได้ (ApiClientError/เครือข่าย) = null → Freemium แต่เปิดงานได้
+        const loadedEntitlements = await getEntitlements(
+          props.apiBaseUrl,
+          tokenRef.current,
+          props.workspaceId,
+          abortController.signal,
+        ).catch(() => null)
+        if (active) {
+          setEntitlements(loadedEntitlements)
+          setWorkspace({ status: 'ready', initialProject: project })
+        }
       } catch (error) {
         if (active && !abortController.signal.aborted && !navigator.onLine) {
           const drafts = (await store.list(scope))
@@ -303,7 +323,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       unsubscribe()
       controller.dispose()
     }
-  }, [controller, createFromEditor, mutations, props.apiBaseUrl, refreshItems])
+  }, [controller, createFromEditor, mutations, props.apiBaseUrl, props.workspaceId, refreshItems])
 
   useEffect(() => {
     const update = () => {
@@ -344,10 +364,39 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     controller.setOnline(navigator.onLine)
   }, [controller, props.accessToken])
 
+  // โหลดสิทธิ์ใหม่ (หลังชำระ/จำลองการชำระ) — ล้มเหลวคง state เดิมไว้และคืน null
+  const refreshEntitlements = useCallback(async (): Promise<Entitlements | null> => {
+    try {
+      const next = await getEntitlements(props.apiBaseUrl, tokenRef.current, props.workspaceId)
+      setEntitlements(next)
+      return next
+    } catch {
+      return null
+    }
+  }, [props.apiBaseUrl, props.workspaceId])
+
   const bridge = useMemo<CloudProjectBridge>(() => ({
     items,
     online,
     saveState,
+    entitlements,
+    refreshEntitlements,
+    authorizeExport: async (projectId) => {
+      const authorization = await authorizeRemoteExport(props.apiBaseUrl, tokenRef.current, projectId)
+      setEntitlements(authorization.entitlements)
+      return authorization
+    },
+    createOrder: (kind, projectId) => createRemoteOrder(props.apiBaseUrl, tokenRef.current, {
+      workspaceId: props.workspaceId,
+      operationId: crypto.randomUUID(),
+      kind,
+      projectId,
+    }),
+    devFulfilOrder: async (orderId) => {
+      const order = await devFulfilRemoteOrder(props.apiBaseUrl, tokenRef.current, orderId)
+      await refreshEntitlements()
+      return order
+    },
     onProjectChange: async (project) => {
       setItems((current) => current.map((item) => item.id === project.id
         ? { ...item, name: project.name, updatedAt: new Date(project.updatedAt).toISOString() }
@@ -433,18 +482,28 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     },
     retrySave: () => controller.retry(),
     subscribeRemoteProject,
-    requestAiSpec: (prompt, current, imageBase64, apiKey) => {
-      if (!apiKey) throw new Error('กรุณาใส่ Anthropic API key')
-      return requestCloudBoxSpec(
-        props.apiBaseUrl,
-        tokenRef.current,
-        apiKey,
-        prompt,
-        current,
-        imageBase64,
-      )
+    // AI บน cloud: คีย์ของระบบฝั่ง server, หัก 1 เครดิต/คำขอ (operationId ใหม่ทุกครั้ง) — อัปเดตเครดิตจาก response
+    requestAiSpec: async (prompt, current, imageBase64) => {
+      try {
+        const { credits, ...spec } = await requestCloudBoxSpec(props.apiBaseUrl, tokenRef.current, {
+          workspaceId: props.workspaceId,
+          operationId: crypto.randomUUID(),
+          prompt,
+          current,
+          imageBase64,
+        })
+        setEntitlements((current) => (current ? { ...current, credits } : current))
+        return spec
+      } catch (error) {
+        // เครดิตหมด: server แนบเครดิตคงเหลือมาใน details → ให้ UI ตรงกับ server ทันที
+        if (error instanceof ApiClientError && typeof error.details?.credits === 'number') {
+          const credits = error.details.credits
+          setEntitlements((current) => (current ? { ...current, credits } : current))
+        }
+        throw error
+      }
     },
-  }), [clientId, controller, createFromEditor, items, mutations, online, props.apiBaseUrl, refreshItems, saveState, scope, store, subscribeRemoteProject])
+  }), [clientId, controller, createFromEditor, entitlements, items, mutations, online, props.apiBaseUrl, props.workspaceId, refreshEntitlements, refreshItems, saveState, scope, store, subscribeRemoteProject])
 
   if (workspace.status === 'loading') {
     return <LoadingStage title="กำลังเปิดงาน" message="กำลังโหลดโปรเจกต์และฉบับร่างล่าสุด…" />

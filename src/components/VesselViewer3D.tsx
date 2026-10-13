@@ -20,6 +20,7 @@ function useLabelTexture(
   decos: Deco[],
   fillColor: string | null | undefined,
   fillImage: FillImage | null | undefined,
+  watermark: string | null | undefined,
 ) {
   const { width, height } = vessel.label
   return useArtTexture({
@@ -28,6 +29,7 @@ function useLabelTexture(
     decos,
     fillImage,
     enabled: true,
+    watermark,
     deps: [fillColor, fillImage, vessel.labelR],
     // โชว์เฉพาะช่วงเส้นรอบวงจริง — หางทับซ้อน (กาว) มุดใต้รอยต่อ มองไม่เห็นบนขวด
     configure: (t) => {
@@ -67,6 +69,7 @@ function VesselModel({
   fillImage,
   dims,
   imperial,
+  watermark,
 }: {
   vessel: Vessel
   mat: Material
@@ -75,8 +78,9 @@ function VesselModel({
   fillImage: FillImage | null | undefined
   dims?: Dim3D[]
   imperial?: boolean
+  watermark?: string | null
 }) {
-  const tex = useLabelTexture(vessel, decos, fillColor, fillImage)
+  const tex = useLabelTexture(vessel, decos, fillColor, fillImage, watermark)
 
   // three คอมไพล์ shader ตาม define ตอนสร้าง — พอ map เปลี่ยนจาก null → texture
   // ต้องสั่ง needsUpdate ให้ recompile ไม่งั้นลาย/สีบนฉลากจะไม่ขึ้น (เหมือน PanelMesh ของกล่อง)
@@ -301,6 +305,7 @@ export function VesselViewer3D({
   dims,
   imperial,
   lightMode,
+  watermark,
 }: {
   vessel: Vessel
   mat: Material
@@ -310,6 +315,7 @@ export function VesselViewer3D({
   dims?: Dim3D[]
   imperial?: boolean
   lightMode?: LightMode
+  watermark?: string | null
 }) {
   const dist = Math.max(vessel.H, vessel.labelR * 4) * 2.2
   return (
@@ -321,7 +327,7 @@ export function VesselViewer3D({
     >
       <color attach="background" args={['#ffffff']} />
       <SceneLighting mode={lightMode ?? 'soft'} />
-      <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} />
+      <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} watermark={watermark} />
       <OrbitControls makeDefault enableDamping />
     </Canvas>
   )

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PackIt paywall / watermark fixture</title>
+    <style>
+      /* แถบสลับสถานะ (ลอยมุมล่างซ้าย เหนือทุกอย่างรวม modal) — ไม่ใช่ส่วนของแอป */
+      .fixture-bar { position: fixed; left: 12px; bottom: 12px; z-index: 1000; display: flex; flex-wrap: wrap; gap: 6px; max-width: min(560px, calc(100% - 24px)); padding: 10px 12px; background: #fff; color: #154049; border: 1px solid #aac4c8; border-radius: 12px; font: 12px/1.5 sans-serif; box-shadow: 0 10px 30px rgba(20, 75, 85, 0.25); }
+      .fixture-bar button { width: auto; padding: 5px 10px; border: 1px solid #aac4c8; border-radius: 999px; background: #f2f7f7; color: #154049; font: inherit; cursor: pointer; }
+      .fixture-bar button[aria-pressed="true"] { background: #17677a; border-color: #17677a; color: #fff; }
+      .fixture-bar .fixture-state { width: 100%; color: #4c5c5f; }
+      .fixture-bar .fixture-state b { color: #154049; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./paywall.tsx"></script>
+  </body>
+</html>

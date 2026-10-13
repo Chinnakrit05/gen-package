@@ -1,0 +1,67 @@
+// สัญญา billing/entitlement ระหว่าง server กับ client — ดู docs/billing-freemium-pro.md
+// ราคาและเครดิตมาจาก server (app_private.plan_catalog) เท่านั้น ห้าม client ส่งค่าเหล่านี้กลับมา
+
+export type PlanCode = 'free' | 'pro'
+
+export type OrderKind = 'design' | 'pro'
+
+export interface CatalogItem {
+  kind: OrderKind
+  amountMinor: number // สตางค์
+  currency: 'THB'
+  credits: number // เครดิต AI ที่ได้รับเมื่อชำระ
+  periodDays: number | null // รอบสมาชิก (null = ซื้อขาด)
+}
+
+export interface BillingCatalog {
+  design: CatalogItem
+  pro: CatalogItem
+}
+
+export interface Entitlements {
+  workspaceId: string
+  plan: PlanCode
+  proUntil: string | null // ISO; null เมื่อไม่ใช่ Pro
+  credits: number
+  licensedProjectIds: string[]
+  catalog: BillingCatalog
+  devFulfilAvailable: boolean // server อยู่ใน development/test จึงจำลองการชำระได้
+}
+
+export type LicenseSource = 'purchase' | 'pro' | 'admin'
+
+export interface ExportAuthorization {
+  projectId: string
+  source: LicenseSource
+  entitlements: Entitlements
+}
+
+export interface CreateOrderInput {
+  workspaceId: string
+  operationId: string
+  kind: OrderKind
+  projectId?: string // จำเป็นเมื่อ kind = 'design'
+}
+
+export type OrderStatus = 'pending' | 'paid' | 'canceled'
+
+export interface Order {
+  id: string
+  workspaceId: string
+  kind: OrderKind
+  projectId: string | null
+  amountMinor: number
+  currency: 'THB'
+  credits: number
+  status: OrderStatus
+  provider: string // 'none' จนกว่าจะเลือกผู้ให้บริการ; 'dev' = จำลอง
+  providerRef: string | null
+  checkoutUrl: string | null // null จนกว่าจะมีผู้ให้บริการชำระเงิน
+  createdAt: string
+  paidAt: string | null
+}
+
+// response ของ AI route บน cloud = สเปกกล่อง + เครดิตคงเหลือหลังหัก
+export interface AiCreditsReceipt {
+  credits: number
+}

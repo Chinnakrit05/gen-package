@@ -391,9 +391,16 @@ export async function askClaude(
   prompt: string,
   current?: CurrentSpec,
   image?: RefImage,
+  limits?: { timeoutMs?: number; maxRetries?: number },
 ): Promise<BoxSpecResult> {
   // BYOK requests must never reuse a client created with another user's key.
-  const client = new Anthropic({ apiKey })
+  // limits: cloud จำกัดเวลาให้สั้นกว่าเวลาสูงสุดของ serverless function เพื่อให้ timeout กลายเป็น
+  // AiProviderError แล้วเข้าทางคืนเครดิต (ค่าเริ่มต้นของ SDK 10 นาที + retry 2 ครั้ง นานกว่า function จะอยู่ได้)
+  const client = new Anthropic({
+    apiKey,
+    ...(limits?.timeoutMs !== undefined ? { timeout: limits.timeoutMs } : {}),
+    ...(limits?.maxRetries !== undefined ? { maxRetries: limits.maxRetries } : {}),
+  })
   const content: Anthropic.ContentBlockParam[] = []
   if (image) {
     content.push({

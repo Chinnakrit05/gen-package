@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { requestBoxSpec, type AiBoxSpec, type CurrentSpec } from '../core/ai'
+import { ApiClientError } from '../services/api/client'
 
 const QUICK_ADJUSTS = [
   { label: 'หรูขึ้น', prompt: 'ปรับให้ดูหรูพรีเมียมขึ้น' },
@@ -38,7 +39,12 @@ interface PromptBarProps {
   onApply: (spec: AiBoxSpec, label: string) => void
   onLoadingChange: (loading: boolean) => void
   disabledReason?: string
-  apiKeyRequired?: boolean
+  // true เฉพาะ local-demo = โชว์ช่อง Anthropic API key (BYOK ไป legacy /api/box-spec); cloud ใช้คีย์ของระบบ ไม่ส่งคีย์เลย
+  allowApiKey?: boolean
+  // เครดิต AI คงเหลือ (cloud) — โชว์ในหัวแถบ; ไม่ส่ง = ไม่แสดง (local ไม่มีเครดิต)
+  credits?: number | null
+  // แจ้งรหัส error จาก API (เช่น AI_CREDITS_EXHAUSTED) ให้ App เปิด paywall ก่อนขึ้นข้อความ error
+  onError?: (code: string, message: string) => void
   requestSpec?: typeof requestBoxSpec
 }
 
@@ -48,7 +54,9 @@ export function PromptBar({
   onApply,
   onLoadingChange,
   disabledReason,
-  apiKeyRequired = false,
+  allowApiKey = false,
+  credits,
+  onError,
   requestSpec = requestBoxSpec,
 }: PromptBarProps) {
   const [text, setText] = useState('')
@@ -97,7 +105,7 @@ export function PromptBar({
   }
 
   const run = async (prompt: string, withCurrent: boolean, label: string): Promise<boolean> => {
-    if (!prompt.trim() || loading || (apiKeyRequired && !apiKey.trim())) return false
+    if (!prompt.trim() || loading) return false
     setBusy(true)
     setError(null)
     setResult(null)
@@ -106,14 +114,17 @@ export function PromptBar({
         prompt,
         withCurrent ? current : undefined,
         image?.base64,
-        apiKey.trim() || undefined,
+        // คีย์ส่งเฉพาะโหมดที่อนุญาต (local-demo) — cloud ไม่มีทางส่งคีย์แม้ state จะมีค่าค้าง
+        allowApiKey ? apiKey.trim() || undefined : undefined,
       )
       setResult(spec)
       onApply(spec, label)
       setImage(null)
       return true
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด')
+      const message = e instanceof Error ? e.message : 'เกิดข้อผิดพลาด'
+      if (e instanceof ApiClientError) onError?.(e.code, message)
+      setError(message)
       return false
     } finally {
       setBusy(false)
@@ -121,6 +132,7 @@ export function PromptBar({
   }
 
   const showChips = result && (result.assumptions.length > 0 || result.layoutNote !== '-')
+  const creditsLabel = credits === undefined || credits === null ? null : `เครดิต AI: ${credits}`
 
   // ปุ่มทริกเกอร์อยู่บน header (หน้าปุ่มโหมดมืด) คลิกแล้วแผงช่องพิมพ์หย่อนลงมา
   return (
@@ -131,7 +143,7 @@ export function PromptBar({
         aria-expanded={open}
         aria-disabled={Boolean(disabledReason)}
         disabled={Boolean(disabledReason)}
-        title={disabledReason ?? 'สั่ง AI สร้าง/แก้กล่องด้วยข้อความ'}
+        title={disabledReason ?? (creditsLabel ? `สั่ง AI สร้าง/แก้กล่องด้วยข้อความ · ${creditsLabel}` : 'สั่ง AI สร้าง/แก้กล่องด้วยข้อความ')}
         onClick={() => setOpen((v) => !v)}
       >
         <span aria-hidden="true">✨</span> {disabledReason ? 'AI ยังไม่เปิดใช้' : 'สั่ง AI'}
@@ -141,10 +153,12 @@ export function PromptBar({
       <div className="promptbar card">
       <div className="pb-dockhead">
         <span className="pb-docktitle">✨ สั่ง AI สร้าง/แก้กล่อง</span>
+        {creditsLabel && <span className="pb-credits">{creditsLabel}</span>}
         <button type="button" className="pb-min" aria-label="ปิดแถบ AI" onClick={() => setOpen(false)}>
           ✕
         </button>
       </div>
+      {allowApiKey && (
       <div className="pb-keyrow">
         <label htmlFor="anthropic-api-key">Anthropic API key</label>
         <input
@@ -161,11 +175,10 @@ export function PromptBar({
           <button type="button" className="pb-keyclear" onClick={() => setApiKey('')}>ล้าง</button>
         )}
         <span id="anthropic-api-key-note" className="hint">
-          {apiKeyRequired
-            ? 'Cloud ต้องใช้คีย์ของคุณ คีย์อยู่เฉพาะแท็บนี้และส่งไป backend เมื่อกดสร้าง'
-            : 'ใช้เฉพาะแท็บนี้และส่งตรงไป backend ของแอปเมื่อกดสร้าง'}
+          ใช้เฉพาะแท็บนี้และส่งตรงไป backend ของแอปเมื่อกดสร้าง (ไม่ใส่ = ใช้คีย์/CLI ของเครื่อง)
         </span>
       </div>
+      )}
       <form
         className="pb-row"
         onSubmit={(e) => {
@@ -224,8 +237,8 @@ export function PromptBar({
                 <button
                   key={q.label}
                   role="menuitem"
-                  aria-disabled={loading || (apiKeyRequired && !apiKey.trim())}
-                  disabled={loading || (apiKeyRequired && !apiKey.trim())}
+                  aria-disabled={loading}
+                  disabled={loading}
                   onClick={() => {
                     setQuickOpen(false)
                     void run(q.prompt, true, q.label)
@@ -241,8 +254,8 @@ export function PromptBar({
         <button
           type="submit"
           className="primary pb-go"
-          aria-disabled={loading || !text.trim() || (apiKeyRequired && !apiKey.trim())}
-          disabled={loading || !text.trim() || (apiKeyRequired && !apiKey.trim())}
+          aria-disabled={loading || !text.trim()}
+          disabled={loading || !text.trim()}
         >
           {loading ? 'กำลังคิด…' : 'สร้างกล่อง'}
         </button>

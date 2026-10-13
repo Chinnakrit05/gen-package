@@ -126,7 +126,11 @@ import {
 } from './core/project'
 import { serializeProject, parseProjectFile, projectFileName } from './core/projectFile'
 import type { ProjectSummary } from '../shared/contracts/projects'
+import type { Entitlements, ExportAuthorization, Order, OrderKind } from '../shared/contracts/billing'
 import type { ProjectSaveState } from './services/projects/durableSaveQueue'
+import { ApiClientError } from './services/api/client'
+import { PaywallModal } from './components/PaywallModal'
+import { WATERMARK_ALPHA, WATERMARK_TEXT, watermarkTiles } from './core/watermark'
 import { rasterizeTrustedPreset } from './services/projects/trustedPresetRasterizer'
 import { PRESETS, PRESET_CATS, presetById, presetDataUrl, type Preset } from './core/presets'
 import {
@@ -290,12 +294,15 @@ function StickerSheetPreview({
   piece,
   thumb,
   fillColor,
+  watermark = null,
 }: {
   layout: SheetLayout
   sheetDieline: Dieline
   piece: Dieline
   thumb: string | null
   fillColor: string | null
+  // ลายน้ำพรีวิว (Freemium) ทับทั้งแผ่น — พรีวิวเท่านั้น ไม่ไปถึงไฟล์ส่งออก
+  watermark?: string | null
 }) {
   const c = artClipBox(cutBox(piece))
   const { w, h } = layout.sheet
@@ -320,6 +327,30 @@ function StickerSheetPreview({
       {sd.segments.map((sg, i) => (
         <path key={i} d={sg.d} fill="none" stroke="#e30613" strokeWidth={0.45} />
       ))}
+      {watermark && (
+        <g className="watermark" pointerEvents="none" aria-hidden="true">
+          {watermarkTiles(w, h).map((tile, i) => (
+            <text
+              key={i}
+              x={tile.x}
+              y={tile.y}
+              transform={`rotate(${tile.angle} ${tile.x} ${tile.y})`}
+              fontSize={tile.size}
+              fontWeight={700}
+              fill="#111"
+              stroke="#fff"
+              strokeWidth={tile.size * 0.04}
+              strokeLinejoin="round"
+              paintOrder="stroke"
+              opacity={WATERMARK_ALPHA}
+              textAnchor="middle"
+              dominantBaseline="central"
+            >
+              {watermark}
+            </text>
+          ))}
+        </g>
+      )}
     </svg>
   )
 }
@@ -924,12 +955,19 @@ export interface CloudProjectBridge {
   resolveConflict(current: Project, action: 'reload' | 'copy'): Promise<Project>
   retrySave(): Promise<void>
   subscribeRemoteProject(listener: (project: Project) => void): () => void
+  // AI บน cloud ใช้คีย์ของระบบ (ไม่รับคีย์ผู้ใช้) หัก 1 เครดิต/คำขอ — bridge อัปเดต entitlements.credits เอง
   requestAiSpec: (
     prompt: string,
     current?: CurrentSpec,
     imageBase64?: string,
-    apiKey?: string,
   ) => Promise<AiBoxSpec>
+  // --- billing/entitlement (ดู docs/billing-freemium-pro.md §4) — null = โหลดไม่ได้ ปฏิบัติเหมือน Freemium ---
+  entitlements: Entitlements | null
+  refreshEntitlements(): Promise<Entitlements | null>
+  // ขอสิทธิ์ดาวน์โหลดไฟล์ผลิตของแบบ (server ตัดสิน) — โยน ApiClientError PAYMENT_REQUIRED เมื่อต้องซื้อ
+  authorizeExport(projectId: string): Promise<ExportAuthorization>
+  createOrder(kind: OrderKind, projectId?: string): Promise<Order>
+  devFulfilOrder(orderId: string): Promise<Order>
 }
 
 function cloudSaveLabel(state: ProjectSaveState): string {
@@ -1165,6 +1203,27 @@ export default function App({
     }
   }, [lang])
   const t = (th: string, en: string) => (lang === 'en' ? en : th)
+  // --- ด่านสิทธิ์แพ็กเกจ (cloud เท่านั้น; local-demo ไม่มี paywall/ลายน้ำ) — server ตัดสินสิทธิ์จริงทุกครั้ง
+  // entitlements null (โหลดไม่ได้) = ปฏิบัติเหมือน Freemium; ลายน้ำบนพรีวิวเมื่อไม่ใช่ Pro และแบบนี้ยังไม่ซื้อ
+  const entitlements = cloud?.entitlements ?? null
+  const gatePlan = entitlements?.plan ?? 'free'
+  const gateCredits = entitlements?.credits ?? 0
+  const licensed = useMemo(() => new Set(entitlements?.licensedProjectIds ?? []), [entitlements])
+  const watermarkOn = cloud !== undefined && gatePlan !== 'pro' && !licensed.has(activeId)
+  const watermark = watermarkOn ? WATERMARK_TEXT[lang] : null
+  const designPrice = Math.round((entitlements?.catalog.design.amountMinor ?? 14900) / 100)
+  const proUntilLabel = entitlements?.proUntil
+    ? new Date(entitlements.proUntil).toLocaleDateString(lang === 'en' ? 'en-GB' : 'th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
+    : ''
+  // paywall ที่เปิดอยู่ + action ที่ค้าง (ดาวน์โหลด) ทำต่อหลังได้สิทธิ์
+  const [paywall, setPaywall] = useState<{ kind: OrderKind; after?: () => void | Promise<void> } | null>(null)
+  const [paywallBusy, setPaywallBusy] = useState(false)
+  // ป้ายราคาบนปุ่มดาวน์โหลดเมื่อยังไม่มีสิทธิ์ (cloud + ไม่ใช่ Pro + แบบนี้ยังไม่ซื้อ)
+  const exportLock = cloud && watermarkOn ? (
+    <span className="export-lock" title={t('ต้องซื้อแบบนี้หรือสมัคร Pro ก่อนดาวน์โหลด', 'Buy this design or go Pro to download')}>
+      {designPrice} ฿
+    </span>
+  ) : null
   // หน่วยวัดช่องขนาด (มม./นิ้ว) — ค่าจริงเก็บเป็น มม. เสมอ สลับแค่การแสดงผล
   const [unit, setUnit] = useState<'mm' | 'in'>(() => {
     try {
@@ -2212,6 +2271,28 @@ export default function App({
     saveFile(bytes, 'application/pdf', 'spec.pdf')
   }
 
+  // ดาวน์โหลดไฟล์ผลิต (ใบสเปก/DXF/PDF/SVG) ผ่านด่านสิทธิ์: local → ทำทันที; cloud → authorizeExport ก่อนเสมอ
+  // (server ตัดสิน; Pro ได้ license อัตโนมัติ) → ไม่มีสิทธิ์ (402 PAYMENT_REQUIRED) → เปิด paywall รายแบบ
+  // แล้วทำต่อหลังชำระ/จำลองการชำระ; .genpkg.json (exportProject) ไม่ผ่านด่านนี้โดยเจตนา
+  const gatedDownload = async (run: () => void | Promise<void>) => {
+    if (!cloud) {
+      await run()
+      return
+    }
+    try {
+      await cloud.authorizeExport(activeId)
+      await run()
+    } catch (e) {
+      if (e instanceof ApiClientError && e.code === 'PAYMENT_REQUIRED') {
+        // สิทธิ์ฝั่ง client อาจค้าง (เช่น Pro หมดอายุระหว่างเปิดแท็บ) — ซิงก์ชิป/ลายน้ำ/ป้ายราคาใหม่ข้างหลัง modal
+        void cloud.refreshEntitlements()
+        setPaywall({ kind: 'design', after: run })
+        return
+      }
+      window.alert(e instanceof Error ? e.message : t('ขอสิทธิ์ดาวน์โหลดไม่สำเร็จ', 'Could not authorize the download'))
+    }
+  }
+
   const addImage = async (file: File | undefined) => {
     if (!file || !dieline) return
     if (cloud && !cloud.online) {
@@ -2668,11 +2749,12 @@ export default function App({
             imperial={imperial}
             dimVariant="lines"
             lightMode={lightMode3d}
+            watermark={watermark}
           />
         ) : kind === 'vessel' ? (
-          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} lightMode={lightMode3d} />
+          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} lightMode={lightMode3d} watermark={watermark} />
         ) : (
-          <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} dimVariant="lines" lightMode={lightMode3d} />
+          <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} dimVariant="lines" lightMode={lightMode3d} watermark={watermark} />
         )}
       </Suspense>
       {!pip3dCompact && (
@@ -2777,6 +2859,7 @@ export default function App({
           onSwitch={(id) => void switchProject(id)}
           onRename={renameProject}
           onDelete={deleteProject}
+          licensedIds={cloud ? licensed : undefined}
         />
         {cloud && (
           <div className="cloud-save-wrap">
@@ -2831,12 +2914,34 @@ export default function App({
             )}
           </div>
         )}
+        {cloud && (
+          /* ชิปแพ็กเกจ: Freemium / Pro ถึงวันที่ + เครดิต AI คงเหลือ — กดเปิด paywall แบบ Pro */
+          <button
+            type="button"
+            className={`plan-chip${gatePlan === 'pro' ? ' pro' : ''}`}
+            title={t('แพ็กเกจและเครดิต AI — กดเพื่อดู/สมัคร Pro', 'Plan & AI credits — open to see/upgrade to Pro')}
+            onClick={() => setPaywall({ kind: 'pro' })}
+          >
+            <b>{gatePlan === 'pro' ? t(`Pro · ถึง ${proUntilLabel}`, `Pro · until ${proUntilLabel}`) : t('Freemium', 'Freemium')}</b>
+            <span>{t(`เครดิต AI ${gateCredits}`, `AI credits ${gateCredits}`)}</span>
+            {gatePlan !== 'pro' && <span className="plan-chip-upgrade">{t('อัปเกรด Pro', 'Upgrade to Pro')}</span>}
+          </button>
+        )}
         <PromptBar
           current={{ template: templateId, materialId, W, D, H, handle }}
           hasDesign={history.length > 0}
           onApply={applySpec}
           onLoadingChange={setAiBusy}
-          apiKeyRequired={Boolean(cloud)}
+          allowApiKey={!cloud}
+          credits={cloud ? gateCredits : undefined}
+          disabledReason={
+            cloud && gateCredits === 0
+              ? t(`ต้องมีเครดิต AI — ซื้อแบบนี้ ${designPrice} บาท หรือสมัคร Pro`, `AI credits required — buy this design (${designPrice} THB) or go Pro`)
+              : undefined
+          }
+          onError={(code) => {
+            if (code === 'AI_CREDITS_EXHAUSTED') setPaywall({ kind: 'design' })
+          }}
           requestSpec={cloud?.requestAiSpec}
         />
         <button
@@ -3374,6 +3479,7 @@ export default function App({
                     piece={dieline}
                     thumb={stickerThumb}
                     fillColor={fillImage ? null : fillColor}
+                    watermark={watermark}
                   />
                   <div className="sheet-stats">
                     <b>
@@ -5051,33 +5157,38 @@ export default function App({
                   </div>
                 )}
                 <div className="export-list">
-                  <button className="export-item primary" onClick={() => void downloadSpecSheet()}>
+                  {/* ไฟล์ผลิตทั้ง 4 ผ่าน gatedDownload (cloud: server ตัดสินสิทธิ์ก่อนสร้างไฟล์) — ป้ายราคาเมื่อยังไม่มีสิทธิ์ */}
+                  <button className="export-item primary" onClick={() => void gatedDownload(downloadSpecSheet)}>
                     <span className="export-badge">PDF</span>
                     <span className="export-body">
                       <span className="export-name">ใบสเปกขอราคา</span>
                       <span className="export-desc">สรุปขนาด/วัสดุ/จำนวน/ข้อสันนิษฐาน + แบบย่อ — ส่งโรงงานขอราคาได้เลย</span>
                     </span>
+                    {exportLock}
                   </button>
-                  <button className="export-item" onClick={downloadDXF}>
+                  <button className="export-item" onClick={() => void gatedDownload(downloadDXF)}>
                     <span className="export-badge">DXF</span>
                     <span className="export-body">
                       <span className="export-name">ไฟล์ผลิต · ส่งโรงไดคัท</span>
                       <span className="export-desc">เลเยอร์ CUT/CREASE แยก · หน่วย มม. · ไม่มีเส้นบอกขนาด</span>
                     </span>
+                    {exportLock}
                   </button>
-                  <button className="export-item" onClick={() => void downloadPDF()}>
+                  <button className="export-item" onClick={() => void gatedDownload(downloadPDF)}>
                     <span className="export-badge">PDF</span>
                     <span className="export-body">
                       <span className="export-name">แบบพิมพ์ 1:1</span>
                       <span className="export-desc">ลายพิมพ์ฝัง 300 dpi · เลเยอร์ artwork/cut/crease/dims ปิด-เปิดได้ใน Acrobat</span>
                     </span>
+                    {exportLock}
                   </button>
-                  <button className="export-item" onClick={downloadSVG}>
+                  <button className="export-item" onClick={() => void gatedDownload(downloadSVG)}>
                     <span className="export-badge">SVG</span>
                     <span className="export-body">
                       <span className="export-name">dieline เวกเตอร์</span>
                       <span className="export-desc">เปิด/แก้ต่อใน Illustrator, CorelDRAW, Inkscape</span>
                     </span>
+                    {exportLock}
                   </button>
                 </div>
                 <p className="hint">
@@ -5347,6 +5458,7 @@ export default function App({
                 lowResDpi={lowResMap}
                 fillLowDpi={fillLowDpi}
                 clearFilm={isSticker && !!mat.clear}
+                watermark={watermark}
               />
               <span className="bp-legend">
                 <i className="sw-cut" /> เส้นตัด
@@ -5408,6 +5520,38 @@ export default function App({
             setNameModal(null)
           }}
           onCancel={() => setNameModal(null)}
+        />
+      )}
+      {/* paywall (cloud): ซื้อรายแบบ/สมัคร Pro — หลังชำระ (จำลอง) ทำ action ที่ค้างต่อผ่านด่านสิทธิ์อีกครั้ง */}
+      {cloud && paywall && (
+        <PaywallModal
+          key={paywall.kind}
+          kind={paywall.kind}
+          entitlements={cloud.entitlements}
+          projectName={activeName}
+          busy={paywallBusy}
+          onClose={() => {
+            if (!paywallBusy) setPaywall(null)
+          }}
+          onPurchase={(kind) => cloud.createOrder(kind, kind === 'design' ? activeId : undefined)}
+          onDevFulfil={async (orderId) => {
+            setPaywallBusy(true)
+            try {
+              await cloud.devFulfilOrder(orderId)
+            } finally {
+              setPaywallBusy(false)
+            }
+            const after = paywall.after
+            setPaywall(null)
+            if (after) await gatedDownload(after)
+          }}
+          onAlreadyLicensed={() => {
+            const after = paywall.after
+            setPaywall(null)
+            void cloud.refreshEntitlements().then(() => {
+              if (after) void gatedDownload(after)
+            })
+          }}
         />
       )}
     </div>

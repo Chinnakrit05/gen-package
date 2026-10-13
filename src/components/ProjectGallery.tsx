@@ -50,6 +50,8 @@ interface ProjectGalleryProps {
   onSwitch: (id: string) => void
   onRename: () => void
   onDelete: (id: string) => void
+  // cloud: id ของแบบที่ซื้อแล้ว/ได้สิทธิ์ดาวน์โหลด → ป้าย "ซื้อแล้ว" บนการ์ดและปุ่มเลือกงาน
+  licensedIds?: ReadonlySet<string>
 }
 
 function projectKind(project?: Project): 'box' | 'vessel' | 'pouch' | 'card' | 'unknown' {
@@ -80,7 +82,7 @@ function ProjectThumb({ project }: { project?: Project }) {
 
 export function ProjectGallery({
   items, activeId, activeProject, busy, createDisabled, deleteDisabled,
-  onCreate, onSwitch, onRename, onDelete,
+  onCreate, onSwitch, onRename, onDelete, licensedIds,
 }: ProjectGalleryProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -160,6 +162,9 @@ export function ProjectGallery({
         <span className="project-gallery-trigger-icon"><LayoutGrid size={18} aria-hidden="true" /></span>
         <span className="project-gallery-trigger-copy">
           <strong>{current?.name ?? 'งาน'}</strong>
+          {current && licensedIds?.has(current.id) && (
+            <span className="project-gallery-licensed" title="ซื้อแล้ว — ดาวน์โหลดไฟล์ผลิตได้">ซื้อแล้ว</span>
+          )}
         </span>
         <span className="project-gallery-count">{allItems.length} งาน</span>
         <ChevronDown className="project-gallery-chevron" size={17} aria-hidden="true" />
@@ -222,6 +227,7 @@ export function ProjectGallery({
                       >
                         <ProjectThumb project={item.detail} />
                         {active && <span className="project-gallery-active-tag" aria-hidden="true">เปิดอยู่</span>}
+                        {licensedIds?.has(item.id) && <span className="project-gallery-licensed" title="ซื้อแล้ว — ดาวน์โหลดไฟล์ผลิตได้">ซื้อแล้ว</span>}
                         <span className="project-gallery-card-body">
                           <span className="project-gallery-card-name">{item.name}</span>
                           <span className="project-gallery-card-meta">{typeLabel ?? 'โปรเจกต์'}</span>
