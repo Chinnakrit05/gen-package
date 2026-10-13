@@ -2846,7 +2846,7 @@ export default function App({
   return (
     <LangCtx.Provider value={lang}>
     <div className="app">
-      <header ref={headerRef}>
+      <header ref={headerRef} className={cloud ? 'with-plan' : undefined}>
         <h1>PackIt</h1>
         <ProjectGallery
           items={cloud?.items ?? projects}
@@ -2923,7 +2923,10 @@ export default function App({
             onClick={() => setPaywall({ kind: 'pro' })}
           >
             <b>{gatePlan === 'pro' ? t(`Pro · ถึง ${proUntilLabel}`, `Pro · until ${proUntilLabel}`) : t('Freemium', 'Freemium')}</b>
-            <span>{t(`เครดิต AI ${gateCredits}`, `AI credits ${gateCredits}`)}</span>
+            <span className="plan-chip-credits">
+              <span className="plan-chip-long">{t('เครดิต AI', 'AI credits')}</span>
+              <span className="plan-chip-short">AI</span> {gateCredits}
+            </span>
             {gatePlan !== 'pro' && <span className="plan-chip-upgrade">{t('อัปเกรด Pro', 'Upgrade to Pro')}</span>}
           </button>
         )}

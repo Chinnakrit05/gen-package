@@ -4191,6 +4191,53 @@ aside .art-actions .file-pick:only-child {
   font-weight: 700;
 }
 
+/* header ของ cloud มีชิปแพ็กเกจเพิ่ม — จัดให้ไม่เบียดตัวเลือกงานจนทับกัน (local-demo ไม่มีคลาสนี้ หน้าตาเดิม) */
+.plan-chip-short {
+  display: none;
+}
+/* ชิปบอกเครดิตแล้ว ข้อความยาวใต้ปุ่ม AI จึงซ่อนจากสายตา (title ของปุ่มและ screen reader ยังได้เหตุผลครบ) */
+header.with-plan .pb-disabled-note {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 1280px) {
+  header.with-plan .plan-chip-long {
+    display: none;
+  }
+  header.with-plan .plan-chip-short {
+    display: inline;
+  }
+  header.with-plan .logout-btn {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+  }
+  header.with-plan .logout-btn svg {
+    display: block;
+  }
+  header.with-plan .logout-btn span {
+    display: none;
+  }
+}
+/* แคบลงอีก: ตัวเลือกงานลงบรรทัดของตัวเองเต็มกว้าง (แบบเดียวกับมือถือ ≤820) */
+@media (max-width: 1100px) {
+  header.with-plan {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  header.with-plan .projects {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+
 /* ป้ายราคาบนปุ่มดาวน์โหลดเมื่อยังไม่มีสิทธิ์ (ชิดขวาของปุ่ม) */
 .export-item .export-lock {
   margin-left: auto;
