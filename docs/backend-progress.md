@@ -313,5 +313,5 @@ Known gap: ต้องทดสอบ route นี้บน Vercel preview ด�
 - `db push --dry-run` แสดงเฉพาะ `20261013000600_billing.sql` ไม่มี seed/role แล้ว push ด้วย `--skip-vault` (config.toml ไม่มี vault อยู่แล้ว); staging Postgres 17.6 เท่ากับที่ทดสอบใน local
 - `npm run staging:readiness` PASS ทุกข้อ (6 migrations ตรงกัน, up to date, bucket/Auth config ตรง); `inspect db table-stats` เห็นตาราง billing 7 ตาราง (`plan_catalog` 2 แถว) และข้อมูลเดิม (projects ~48, app users 13) ไม่เปลี่ยน
 - แอป staging ที่ deploy อยู่ (โค้ด main เดิม) ยังปกติ: root/health 200, `/api/v1/projects` ไม่ login 401 — migration เป็นแบบเพิ่มอย่างเดียวจึงไม่กระทบโค้ดเก่า
-- ขั้นถัดไปก่อน merge: ตั้ง `ANTHROPIC_API_KEY`/`BOX_SPEC_MODEL` + วงเงินที่ Anthropic, ตรวจ `APP_ENV=staging` ทุก environment ของ Vercel รวม Preview
+- ขั้นถัดไปก่อน merge: ตรวจ `APP_ENV=staging` ทุก environment ของ Vercel รวม Preview; `ANTHROPIC_API_KEY`/`BOX_SPEC_MODEL` ยังไม่ตั้ง (ไม่บังคับ — ไม่มีคีย์ = AI บน cloud ตอบ 503 ก่อนจองเครดิต และระหว่างยังไม่เปิดขายทุกคนมีเครดิต 0 ปุ่ม AI จึงเปิดหน้าแพ็กเกจแทน); ตั้งเมื่อพร้อมเปิด AI พร้อมวงเงินที่ Anthropic
 
