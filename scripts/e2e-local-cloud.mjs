@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { spawn, spawnSync } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import { chromium } from 'playwright-core'
@@ -174,10 +175,12 @@ try {
 
   await context.setOffline(true)
   await page.getByText(/ออฟไลน์/).waitFor({ state: 'visible' })
-  assert(await page.getByRole('button', { name: '+ งานใหม่' }).isDisabled(), 'offline create button remained enabled')
-  const deleteButtons = page.getByRole('button', { name: /^ลบงาน / })
+  assert(await page.getByRole('button', { name: 'สร้างงาน', exact: true }).isDisabled(), 'offline create button remained enabled')
+  const offlineGallery = await openGallery(page)
+  const deleteButtons = offlineGallery.getByRole('button', { name: /^ลบงาน / })
   assert(await deleteButtons.count() > 0, 'project delete controls were not rendered')
   assert(await deleteButtons.evaluateAll((buttons) => buttons.every((button) => button.disabled)), 'offline delete remained enabled')
+  await closeGallery(page)
 
   await page.getByRole('tab', { name: 'ตกแต่ง' }).click()
   const addArtwork = page.getByRole('button', { name: 'เพิ่มองค์ประกอบ' })
@@ -281,7 +284,7 @@ try {
   }
   await page.route(`${APP_ORIGIN}/api/v1/projects`, createRoute)
   const createAlert = page.waitForEvent('dialog')
-  await page.getByRole('button', { name: '+ งานใหม่' }).click()
+  await page.getByRole('button', { name: 'สร้างงาน', exact: true }).click()
   const nameDialog = page.getByRole('dialog', { name: 'ตั้งชื่องานใหม่' })
   await nameDialog.getByLabel('ตั้งชื่องานใหม่').fill(durableName)
   await nameDialog.getByRole('button', { name: 'ตกลง' }).click()
@@ -297,7 +300,8 @@ try {
     return rows[0]?.id ?? null
   })
   await page.reload({ waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: durableName, exact: true }).waitFor({ state: 'visible', timeout: 30_000 })
+  const replayGallery = await openGallery(page)
+  await galleryCard(replayGallery, durableName).waitFor({ state: 'visible', timeout: 30_000 })
   const [createReplayEvidence] = await sql`
     select
       (select count(*)::integer from app_private.projects where id = ${durableProjectId}) as projects,
@@ -306,7 +310,11 @@ try {
   `
   assert(createReplayEvidence.projects === 1 && createReplayEvidence.operations === 1, 'durable create replay duplicated data')
 
-  await page.getByRole('button', { name: durableName, exact: true }).click()
+  const durableCard = galleryCard(replayGallery, durableName)
+  if ((await durableCard.getAttribute('aria-label'))?.startsWith('เปิดงาน ')) await durableCard.click()
+  else await closeGallery(page)
+  await page.getByRole('button', { name: new RegExp(`^เลือกงาน ปัจจุบัน ${escapeRegExp(durableName)} `) })
+    .waitFor({ state: 'visible', timeout: 30_000 })
   let deleteResponseDropped = false
   const deleteRouteUrl = `${APP_ORIGIN}/api/v1/projects/${durableProjectId}`
   const deleteRoute = async (route) => {
@@ -326,14 +334,16 @@ try {
     void dialog.accept()
   }
   page.on('dialog', acceptDeleteDialogs)
-  await page.getByRole('button', { name: `ลบงาน ${durableName}` }).click()
+  await (await openGallery(page)).getByRole('button', { name: `ลบงาน ${durableName}` }).click()
   await waitForValue(() => deleteResponseDropped && deleteDialogs.some((dialog) => dialog.type === 'alert') ? true : null)
   page.off('dialog', acceptDeleteDialogs)
   await page.unroute(deleteRouteUrl, deleteRoute)
   await page.reload({ waitUntil: 'networkidle' })
+  const afterDeleteGallery = await openGallery(page)
   await waitForValue(async () => (
-    await page.getByRole('button', { name: durableName, exact: true }).count()
+    await galleryCard(afterDeleteGallery, durableName).count()
   ) === 0 ? true : null)
+  await closeGallery(page)
   const [deleteReplayEvidence] = await sql`
     select
       (select count(*)::integer from app_private.projects
@@ -344,11 +354,54 @@ try {
   assert(deleteReplayEvidence.deleted_projects === 1 && deleteReplayEvidence.operations === 1, 'durable delete replay duplicated data')
   const pendingMutations = await countPendingMutations(page, appUserId)
   assert(pendingMutations === 0, 'durable create/delete journal did not clear after replay')
+
+  // แพ็กเกจ (APP_ENV development = เปิดขาย + จำลองการชำระได้): Freemium ดาวน์โหลดไฟล์ผลิตไม่ได้ → paywall
+  // → สั่งซื้อรายแบบ → จำลองการชำระ → ได้ไฟล์จริงที่ไม่มีลายน้ำ; สิทธิ์/เครดิตตรวจจากฐานข้อมูล
+  await page.getByRole('tab', { name: 'ส่งออก' }).click()
+  const downloadGroup = page.getByRole('button', { name: 'ดาวน์โหลดไฟล์' })
+  if (await downloadGroup.getAttribute('aria-expanded') !== 'true') await downloadGroup.click()
+  await waitForValue(async () => (await page.locator('.dieline-svg .watermark text').count()) > 0 ? true : null, 20_000)
+  assert(await page.locator('.export-item .export-lock').count() === 4, 'Freemium export buttons did not show the price badge')
+  const svgExport = page.locator('.export-item').filter({ hasText: 'dieline เวกเตอร์' })
+  await svgExport.click()
+  const paywall = page.locator('.paywall-modal')
+  await paywall.waitFor({ state: 'visible', timeout: 20_000 })
+  const [ordersBeforePay] = await sql`select count(*)::integer as count from app_private.orders where purchaser_user_id = ${appUserId}`
+  assert(ordersBeforePay.count === 0, 'paywall created an order before the user pressed pay')
+  await paywall.getByRole('button', { name: /^ชำระ / }).click()
+  const pendingOrder = await waitForValue(async () => {
+    const rows = await sql`select id, project_id, status, provider from app_private.orders
+      where purchaser_user_id = ${appUserId} and kind = 'design'`
+    return rows[0] ?? null
+  })
+  assert(pendingOrder.status === 'pending' && pendingOrder.provider === 'none', 'design order was not created as pending without a provider')
+  const paidDownload = page.waitForEvent('download', { timeout: 30_000 })
+  await paywall.getByRole('button', { name: 'จำลองการชำระ (dev)' }).click()
+  const download = await paidDownload
+  assert(download.suggestedFilename().endsWith('.svg'), `paid download was not the SVG: ${download.suggestedFilename()}`)
+  const exportedSvg = await readFile(await download.path(), 'utf8')
+  assert(exportedSvg.includes('<svg'), 'paid download was not an SVG document')
+  assert(!exportedSvg.includes('PackIt · ตัวอย่าง') && !exportedSvg.includes('PackIt · PREVIEW'), 'exported SVG contained the preview watermark')
+  const [billingEvidence] = await sql`
+    select
+      (select status from app_private.orders where id = ${pendingOrder.id}) as order_status,
+      (select provider from app_private.orders where id = ${pendingOrder.id}) as order_provider,
+      (select source from app_private.design_licenses where project_id = ${pendingOrder.project_id}) as license_source,
+      (select balance from app_private.credit_balances where workspace_id = (
+        select workspace_id from app_private.orders where id = ${pendingOrder.id})) as credits
+  `
+  assert(billingEvidence.order_status === 'paid' && billingEvidence.order_provider === 'dev', 'dev fulfil did not mark the order paid')
+  assert(billingEvidence.license_source === 'purchase', 'dev fulfil did not grant the design license')
+  assert(billingEvidence.credits === 10, `design purchase did not add the catalog credits (balance ${billingEvidence.credits})`)
+  await waitForValue(async () => (await page.locator('.dieline-svg .watermark').count()) === 0 ? true : null, 20_000)
+  assert(await page.locator('.export-item .export-lock').count() === 0, 'price badges remained after purchase')
+  assert(await page.locator('.project-gallery-trigger .project-gallery-licensed').count() === 1, 'purchased tag missing on the active project')
+  assert(/AI(?: credits)? 10\b|เครดิต AI 10\b/.test(await page.locator('.plan-chip').innerText()), 'plan chip did not show the bonus credits')
   assert(browserErrors.length === 0, `browser page errors: ${browserErrors.join(' | ')}`)
 
   await context.close()
   process.stdout.write('Local cloud browser E2E: PASS\n')
-  process.stdout.write('Verified auth/account isolation, legacy migration, portable assets, cross-tab conflict, offline restrictions/reconnect, and lost-response mutation replay.\n')
+  process.stdout.write('Verified auth/account isolation, legacy migration, portable assets, cross-tab conflict, offline restrictions/reconnect, lost-response mutation replay, and the Freemium paywall → order → dev payment → watermark-free download flow.\n')
 } finally {
   await browser?.close().catch(() => undefined)
   if (server) stopProcess(server)
@@ -451,6 +504,29 @@ async function countPendingMutations(page, userId) {
     database.close()
     return records.filter((record) => record.scope?.appUserId === appUserId).length
   }, userId)
+}
+
+// แกลเลอรีงาน (popup): ปุ่มสลับ/ลบงานอยู่ใน dialog "งานทั้งหมด" ซึ่ง render เฉพาะตอนเปิด
+async function openGallery(page) {
+  const dialog = page.getByRole('dialog', { name: 'งานทั้งหมด' })
+  if (await dialog.count() === 0) await page.getByRole('button', { name: /^เลือกงาน / }).click()
+  await dialog.waitFor({ state: 'visible', timeout: 20_000 })
+  return dialog
+}
+
+async function closeGallery(page) {
+  const dialog = page.getByRole('dialog', { name: 'งานทั้งหมด' })
+  if (await dialog.count() === 0) return
+  await dialog.getByRole('button', { name: 'ปิดรายการงาน' }).click()
+  await dialog.waitFor({ state: 'detached', timeout: 20_000 })
+}
+
+function galleryCard(gallery, name) {
+  return gallery.getByRole('button', { name: new RegExp(`^(?:งานปัจจุบัน|เปิดงาน) ${escapeRegExp(name)}$`) })
+}
+
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 async function waitForInputValue(locator, expected) {

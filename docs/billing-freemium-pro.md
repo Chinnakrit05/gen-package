@@ -92,7 +92,8 @@ Log ฝั่ง server (`server/logging.ts`): JSON บรรทัดเดี�
 - `server/http/router.test.ts`: AI route ใหม่ (ไม่มี BYOK, 503 ไม่มีคีย์, 402 เครดิตหมด, settle failed เมื่อ provider ล้ม, response มี `credits`), billing routes กับ fake `BillingService`, dev-fulfil 404 บน staging/production
 - pgTAP `supabase/tests/database/0006_billing.test.sql` `plan(131)` (ตาราง/RLS/grant/catalog, order idempotent, fulfil ให้ license+เครดิต ครั้งเดียวแม้เรียกซ้ำ, authorize_export ปฏิเสธ→อนุญาต, Pro สร้าง license `pro`, reserve หัก/exhausted/refund, sweep 15 นาที, เก็บการใช้งานตอน settle, cap 2 คำขอ)
 - `server/adapters/supabase/billingRepository.test.ts` (ทุกข้อความ P0001 → HTTP), `server/logging.test.ts` (ตัดความลับ), `src/core/designLicense.test.ts`, `src/services/api/client.test.ts` (`NETWORK_ERROR`)
-- `tests/integration/billing.lifecycle.test.ts` (ต้องมี Supabase local — รอบนี้รันไม่ได้)
+- `tests/integration/billing.lifecycle.test.ts` (ต้องมี Supabase local; PASS 14 ต.ค. 2026)
+- `scripts/e2e-local-cloud.mjs` ขั้น paywall: Freemium ดาวน์โหลด → paywall → สั่งซื้อรายแบบ → จำลองชำระ → ได้ SVG ไม่มีลายน้ำ + ตรวจ license `purchase`/เครดิตใน DB
 - รายการลบตารางใน `scripts/e2e-local-cloud.mjs`, `scripts/verify-local-http.mjs`, `scripts/cleanup-local-test-fixtures.mjs`, `scripts/report-local-cleanup.mjs`, `tests/integration/*.test.ts` ต้องเพิ่ม `design_licenses`, `orders`, `subscriptions`, `ai_requests`, `credit_ledger`, `credit_balances` (ลบก่อน `projects`/`workspace_members`); `verify-local-http.mjs` เปลี่ยนความคาดหวัง AI route (ไม่มี bearer → 401; มี bearer แต่ server ไม่มีคีย์ → 503) และ billing smoke ตรวจ `purchasesEnabled`, export-authorizations 402 ตอนฟรี → 200 หลัง dev-fulfil Pro
 - `npm run build:api` หลังแก้ server แล้ว commit `api/backend.js`
 - env: `.env.example`/`.env.cloud.example`/README อธิบาย `ANTHROPIC_API_KEY` สำหรับ AI บน cloud

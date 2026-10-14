@@ -296,3 +296,12 @@ Known gap: ต้องทดสอบ route นี้บน Vercel preview ด�
 - ตรวจแล้ว: `npx tsc --noEmit` PASS, `npm test` **81 files, 964 passed + 1 skipped**, `npm run build` PASS; ตรวจด้วยตาใน fixture ทั้งสถานะยังไม่เปิดขาย, ออฟไลน์, โหลดแพ็กเกจไม่สำเร็จ, AI เครดิต 0 และยืนยันว่า local-demo ไม่มีชิป/ลายน้ำ/ป้ายราคาเหมือนเดิม
 - **NOT RUN**: pgTAP `0006_billing.test.sql` (`plan(131)`), `tests/integration/billing.lifecycle.test.ts`, `test:http:local` (รวม export-authorizations 402 → 200) และรายงานต้นทุนกับฐานข้อมูลจริง
 
+## รันเทสต์ที่ต้องใช้ Docker — 14 ตุลาคม 2026
+
+สถานะ: **PASS ครบทุกชุด local บน macOS (Docker Desktop, Supabase CLI 2.117.0, Postgres 17.6)**
+
+- `supabase start` / `db:reset`: migration ทั้ง 6 รวม billing ลงฐานข้อมูลจริงได้โดยไม่ต้องแก้
+- `db:test` 6 files / 264 assertions, `db:test:integration` 7 files / 18 tests, `db:test:restore`, `test:http:local` (dev + preview), `ops:cleanup:report` และ `ops:ai-usage:report` ผ่านทั้งหมด; รายงานต้นทุน AI ตรวจกับข้อมูลตัวอย่างชั่วคราวแล้วตัวเลขตรงที่คำนวณมือ
+- `test:e2e:local` ผ่าน 2 รอบติด หลังแก้ selector ที่เก่าตั้งแต่แกลเลอรีงาน (`d89625f`) และเพิ่มขั้น paywall end-to-end (Freemium ดาวน์โหลด → paywall → สั่งซื้อ → จำลองชำระ → ได้ SVG ไม่มีลายน้ำ + ตรวจ license/เครดิตใน DB); บน macOS ต้องตั้ง `PACKIT_E2E_CHROME` เป็น path ของ Chrome
+- บนเครื่องนี้ Supabase ของโปรเจกต์อื่นใช้พอร์ต 54321–54327 เดียวกัน จึงต้องหยุดโปรเจกต์นั้นชั่วคราวก่อน `supabase start` (ข้อมูลไม่หาย)
+
