@@ -374,10 +374,12 @@ describe('API router', () => {
   })
 
   it.each([
-    ['provider', 502, 'AI_PROVIDER_UNAVAILABLE'],
-    ['rate-limit', 429, 'AI_RATE_LIMITED'],
-    ['authentication', 503, 'CONFIGURATION_ERROR'],
-  ] as const)('refunds the reservation when the provider fails with %s', async (kind, status, code) => {
+    ['provider', 502, 'AI_PROVIDER_UNAVAILABLE', 'บริการ AI ขัดข้อง ลองใหม่อีกครั้ง'],
+    ['rate-limit', 429, 'AI_RATE_LIMITED', 'เรียก AI ถี่เกินไป รอสักครู่แล้วลองใหม่'],
+    ['authentication', 503, 'CONFIGURATION_ERROR', 'คีย์ AI ของ server ไม่ถูกต้อง'],
+    // โมเดลปฏิเสธ (stop_reason refusal): คืนเครดิตเหมือน provider ล้ม แต่บอกให้ปรับคำอธิบายแทน "ลองใหม่"
+    ['refusal', 502, 'AI_PROVIDER_UNAVAILABLE', 'AI ไม่รับคำขอนี้ ลองปรับคำอธิบายแล้วส่งใหม่'],
+  ] as const)('refunds the reservation when the provider fails with %s', async (kind, status, code, message) => {
     const settled: unknown[] = []
     const configuredRouter = billingRouter(billingRepositoryStub({
       reserveAiCredit: async () => ({ requestId: aiRequestId, credits: 4 }),
@@ -400,7 +402,7 @@ describe('API router', () => {
 
     expect(target.res.statusCode).toBe(status)
     const body = target.readBody()
-    expect(body).toMatchObject({ error: { code } })
+    expect(body).toMatchObject({ error: { code, message } })
     expect(JSON.stringify(body)).not.toContain(serverAiKey)
     expect(settled).toEqual([[aiRequestId, 'failed', { hasImage: false }]])
 

@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import {
   askClaudeWithUsage,
+  BoxSpecResponseError,
   type BoxSpecResult,
   type ClaudeUsage,
   type CurrentSpec,
@@ -27,7 +28,8 @@ export interface AiService {
   generateBoxSpec(apiKey: string, input: AiBoxSpecInput): Promise<AiBoxSpecOutput>
 }
 
-export type AiProviderFailureKind = 'authentication' | 'rate-limit' | 'provider' | 'internal'
+// refusal = โมเดลตอบ stop_reason "refusal" (ส่งซ้ำแบบเดิมก็ไม่ผ่าน ต้องปรับคำขอ) — คืนเครดิตเหมือน provider ล้ม
+export type AiProviderFailureKind = 'authentication' | 'rate-limit' | 'refusal' | 'provider' | 'internal'
 
 export class AiProviderError extends Error {
   // providerMessage = ข้อความจากต้นทางที่ผ่าน redact แล้ว ไว้ให้ router log (ไม่ส่งถึง client)
@@ -54,6 +56,10 @@ export class AnthropicAiService implements AiService {
     try {
       return await askClaudeWithUsage(apiKey, this.model, input.prompt, input.current, input.image, this.limits)
     } catch (error) {
+      // ตอบกลับมาแต่ไม่มีสเปก: refusal แยกข้อความให้ผู้ใช้ปรับคำขอ; JSON ถูกตัด/ไม่มี JSON ถือเป็น provider ล้ม
+      if (error instanceof BoxSpecResponseError) {
+        throw new AiProviderError(error.reason === 'refusal' ? 'refusal' : 'provider', error)
+      }
       if (error instanceof Anthropic.AuthenticationError) throw new AiProviderError('authentication', error)
       if (error instanceof Anthropic.RateLimitError) throw new AiProviderError('rate-limit', error)
       if (error instanceof Anthropic.APIError) throw new AiProviderError('provider', error)

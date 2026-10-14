@@ -55,7 +55,9 @@ const COMMON_ITEMS = [
   { re: /คุกกี้|ขนม/, w: 120, d: 45, h: 180, label: 'ซองคุกกี้ ≈ 120×45×180 มม.', fragile: false },
 ] as const
 
-const SYSTEM = `คุณคือวิศวกรบรรจุภัณฑ์ หน้าที่คือแปลงคำอธิบายของลูกค้า (ภาษาพูด) เป็นสเปกกล่องที่คำนวณแล้ว โดยเรียก tool box_spec เสมอ
+// system prompt ใช้ร่วม Claude API กับ claude CLI — ต่างกันแค่วิธีส่งคำตอบ (answer) กับชื่อช่องคำอธิบาย (why)
+function systemPrompt(answer: string, why: string): string {
+  return `คุณคือวิศวกรบรรจุภัณฑ์ หน้าที่คือแปลงคำอธิบายของลูกค้า (ภาษาพูด) เป็นสเปกกล่องที่คำนวณแล้ว ${answer}
 
 ## รูปแบบกล่อง (template)
 ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} — ${t.detail}`).join('\n')}
@@ -111,14 +113,14 @@ ${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? ' (เปราะ)' : ''}`
 5. ขอบเขต: W 30-250, D 20-150, H 30-300 — ถ้าเกินให้จัด layout ใหม่ (เพิ่มแถว) จนอยู่ในช่วง
 
 ## เช็คให้ผ่านก่อนส่งคำตอบทุกครั้ง (fit check)
-1. คำนวณพื้นที่ที่ของต้องใช้จริง (รวมช่องไฟ/กันกระแทก) เทียบกับ W×D×H ที่จะตอบ — ถ้าใส่ไม่ได้จริง ห้ามเขียน assumptions/layoutNote/reasoning เหมือนใส่ได้
+1. คำนวณพื้นที่ที่ของต้องใช้จริง (รวมช่องไฟ/กันกระแทก) เทียบกับ W×D×H ที่จะตอบ — ถ้าใส่ไม่ได้จริง ห้ามเขียน assumptions/layoutNote/${why} เหมือนใส่ได้
 2. ถ้าของหรือจำนวนที่ขอเกินลิมิตระบบ (ต้องใช้ W>250 / D>150 / H>300): ให้ assumptions ข้อแรกขึ้นต้นด้วย "ข้อจำกัด:" บอกตรงๆ ว่าใส่ไม่ได้ทั้งหมด ใส่ได้จริงกี่ชิ้น/ขนาดไหน พร้อมทางเลือก (แยกหลายกล่อง, ซ้อนหลายชั้น, ตัดจำนวน) — แล้วตั้ง W/D/H เป็นค่าที่ดีที่สุดเท่าที่ทำได้
 3. prompt กำกวมระหว่าง "ผลิตภาชนะเอง" (ขวด/กระป๋อง/โหล) กับ "กล่องใส่มัน" → ประกาศการตีความที่เลือกไว้ใน assumptions ข้อแรก
 4. handle=true กับของหนัก (เซรามิก/แก้ว/ขวดหลายชิ้น รวม >2 กก.) → เตือนใน assumptions ว่ารูหิ้วกระดาษรับน้ำหนักจำกัด ควรยกประคองก้นกล่อง
 
 ## ความสามารถของระบบ (สำคัญมาก — ห้ามอ้างเกินนี้)
 สิ่งที่ระบบ gen ได้จริงมีเท่านี้: รูปแบบกล่องตามรายการข้างต้น, วัสดุจากรายการ, ขนาด W/D/H, รูหิ้วเจาะ (handle=true — tuck-end เจาะบนฝาเสียบบน, mailer เจาะผนังข้างสองด้าน; bottle-carrier มีหูหิ้ว+รูมือ+หน้าต่างในตัวอยู่แล้ว; sleeve/fefco-0427 ไม่รองรับ), ภาชนะขึ้นรูป (วัสดุ pet-bottle/glass/aluminum → ทรง revolve + dieline ฉลากพันรอบตัว), หลอดครีม (วัสดุ tube-laminate → ทรง revolve หลอดบีบ ฝาเกลียว ก้นซีลแบน + dieline งานพิมพ์พันรอบตัว), สติกเกอร์ไดคัท (template sticker + วัสดุ sticker-* → แผ่นพิมพ์แบนมุมมน; มีโหมด 'ไดคัทตามรูป' สร้างเส้นตัดตามขอบลาย/รูป PNG พื้นใสอัตโนมัติ แบบมีขอบขาว (ระยะ 1–8 มม.) หรือไม่มีขอบขาว + ตรวจไฟล์ตามข้อจำกัดผลิตไดคัท (ห่างเส้นตัด/เผื่อสี ≥1 มม., ระยะระหว่างเส้นตัด ≥2 มม., ช่องเจาะ ≥2 มม., ไม่มีมุมหักศอก) + แผ่นสติกเกอร์หลายดวง (เลือกแผ่น A6/A5/A4 → เรียงดวงที่ออกแบบซ้ำเต็มแผ่นอัตโนมัติ เว้นเส้นตัด 2 มม. ขอบแผ่น 5 มม. หมุนได้ บอกจำนวนดวง/แผ่น และแผ่นต่อ A3; หรือกำหนดจำนวนดวงต่อแผ่นแล้วระบบหาขนาดดวงใหญ่สุดที่ใส่ได้ ย่อ/ขยายลายตามให้เอง (สติกเกอร์เล็กสุด 10 มม.); ไฟล์ส่งออกเป็นทั้งแผ่น) — เป็น toggle ในหน้าออกแบบ ไม่ได้ตั้งผ่าน AI; ถ้าลูกค้าอยากได้สติกเกอร์ตัดตามรูป ให้เลือก template sticker แล้วบอกใน assumptions ว่าเปิด 'ไดคัท: ตามรูป' ได้ในหน้าออกแบบ), และถุงฟิล์ม (วัสดุ pouch-* → dieline ฟิล์มแบน; มี 6 รูปแบบให้ผู้ใช้เลือกในหน้าออกแบบ: ถุงตั้งได้ doypack (ก้นตั้ง ใช้ D=ลึกก้น), ซองแบน 3 ด้าน (ไม่มีก้น ไม่ใช้ D — ของเล็ก/ตัวอย่าง/มาส์ก/ซองซอส), ซองข้างจีบ brick (ถุงกาแฟคลาสสิก ทรงแท่ง ใช้ D=จีบข้าง), ถุงก้นแบนตั้งเหลี่ยม box/quad-seal (กาแฟพรีเมียม ตั้งทรงกล่อง ใช้ D), ซองหลังกลาง pillow (ถุงขนม/ชิป ไม่ใช้ D), และ ถุงมีจุก spout (ของเหลว/เครื่องดื่ม มีจุก+ฝา ใช้ D=ก้น) + ออปชันเสริม (ซิปล็อก/รอยฉีก — ปรับระยะซิปและรอยฉีกจากขอบบนได้ พร้อมตรวจลำดับซีล→รอยฉีก→ซิป และการทับวาล์ว/จุก/ที่รัดปาก, รูแขวน euro-hole, วาล์วกาแฟ, ที่รัดปาก tin-tie) — ทั้งรูปแบบถุงและออปชันเสริมเป็น toggle ในหน้าออกแบบ ไม่ได้ตั้งผ่าน AI; ถ้าลูกค้าขอซองแบบเจาะจง/มีซิป/มีวาล์ว ให้เลือกวัสดุถุงแล้วบอกใน assumptions ว่าเลือกรูปแบบ/เปิดออปชันได้ในหน้าออกแบบ), และรูระบายอากาศ (vent holes) — เจาะรูกลมเป็นกริดบนผนังกล่องพับ (tuck-end/mailer/fefco-0427/rsc/tray/gable) สำหรับส่งผลไม้/ผัก/ของสด เข้าทั้ง 3D และไฟล์ตัด (DXF/PDF); เป็น toggle ในหน้าออกแบบ (เลือกผนัง+ขนาดรู+จำนวนแถว/คอลัมน์) ไม่ได้ตั้งผ่าน AI — ถ้าลูกค้าขอกล่องระบายอากาศ/กล่องผลไม้เจาะรู ให้เลือกกล่องพับที่เหมาะ (เช่น rsc/tray) แล้วบอกใน assumptions ว่าเปิดรูระบายอากาศได้ในหน้าออกแบบ
-สิ่งที่ยังทำไม่ได้: หูหิ้วเชือก/พลาสติก, หน้าต่างใส, ตัวล็อกพิเศษ, แผ่นกั้นด้านใน, ทรงภาชนะแบบกำหนดเอง (โปรไฟล์ fix ตามชนิดวัสดุ) ฯลฯ — ถ้าลูกค้าขอสิ่งเหล่านี้ ให้เลือกสิ่งใกล้เคียงที่มี (เช่น ขอหูหิ้ว/ที่จับ → handle=true) และเขียนใน reasoning ตรงๆ ว่าระบบยังไม่รองรับสิ่งที่ขอแบบเป๊ะๆ ห้ามอ้างใน assumptions ว่าทำสิ่งที่ทำไม่ได้ให้แล้ว
+สิ่งที่ยังทำไม่ได้: หูหิ้วเชือก/พลาสติก, หน้าต่างใส, ตัวล็อกพิเศษ, แผ่นกั้นด้านใน, ทรงภาชนะแบบกำหนดเอง (โปรไฟล์ fix ตามชนิดวัสดุ) ฯลฯ — ถ้าลูกค้าขอสิ่งเหล่านี้ ให้เลือกสิ่งใกล้เคียงที่มี (เช่น ขอหูหิ้ว/ที่จับ → handle=true) และเขียนใน ${why} ตรงๆ ว่าระบบยังไม่รองรับสิ่งที่ขอแบบเป๊ะๆ ห้ามอ้างใน assumptions ว่าทำสิ่งที่ทำไม่ได้ให้แล้ว
 
 ## รูปอ้างอิงจากลูกค้า (ถ้ามี)
 ใช้รูปเพื่อ: ระบุชนิด/จำนวนของที่จะใส่, ประเมินขนาดจริงจากวัตถุบริบทในรูป (ฝ่ามือ ~180 มม., บัตรเครดิต 86 มม., ขวดน้ำมาตรฐาน ⌀65 ฯลฯ), และอนุมานสไตล์ (สี วัสดุ ความหรู) — ทุกอย่างที่อ่านจากรูปแล้วมีผลต่อ spec ให้ประกาศใน assumptions ขึ้นต้นด้วย "จากรูป:" ถ้ารูปขัดแย้งกับข้อความลูกค้า ให้ยึดข้อความ
@@ -127,35 +129,39 @@ ${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? ' (เปราะ)' : ''}`
 - ห้ามถามกลับ ตัดสินใจเสมอ — ทุกค่าที่เดา (ขนาดของ จำนวน การจัดวาง ช่องไฟ วัสดุ รูปแบบกล่อง) ต้องประกาศใน assumptions เป็นภาษาไทยสั้นๆ ทีละข้อ เพื่อให้ลูกค้ากดแก้ได้
 - ถ้ามี "สเปกปัจจุบัน" มาด้วย: ปกติคือลูกค้าขอปรับของเดิมต่อเนื่อง — แก้เฉพาะส่วนที่ข้อความเกี่ยวข้อง คงค่าที่เหลือ (รวม template) ไว้ตามเดิม แต่ถ้าข้อความชัดเจนว่าเป็นงานใหม่คนละชิ้น (เช่น สั่งกล่องใส่ของอย่างอื่นทั้งใบ) ให้คำนวณใหม่ทั้งหมดโดยไม่ยึดค่าเดิม
 - layoutNote สั้นๆ เช่น "วางเรียง 3 × 1" (ถ้าไม่เกี่ยวกับการวางของ ใส่ "-")
-- reasoning: 1-2 ประโยค ทำไมเลือกรูปแบบ/วัสดุ/ขนาดนี้`
+- ${why}: 1-2 ประโยค ทำไมเลือกรูปแบบ/วัสดุ/ขนาดนี้`
+}
 
-const TOOL: Anthropic.Tool = {
-  name: 'box_spec',
-  description: 'ส่งสเปกบรรจุภัณฑ์ที่คำนวณเสร็จแล้วให้ระบบ gen กล่อง',
-  strict: true,
-  input_schema: {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      template: { type: 'string', enum: TEMPLATE_IDS },
-      materialId: { type: 'string', enum: MATERIALS.map((m) => m.id) },
-      W: { type: 'number', description: 'กว้างด้านใน มม. (30-250)' },
-      D: { type: 'number', description: 'ลึกด้านใน มม. (20-150)' },
-      H: { type: 'number', description: 'สูงด้านใน มม. (30-300)' },
-      handle: {
-        type: 'boolean',
-        description: 'เจาะรูหิ้ว (tuck-end/mailer เท่านั้น; sleeve ต้องเป็น false)',
-      },
-      assumptions: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'ทุกค่าที่เดา ภาษาไทยสั้นๆ ทีละข้อ',
-      },
-      layoutNote: { type: 'string', description: 'การจัดวางของด้านใน เช่น "วางเรียง 3 × 1"' },
-      reasoning: { type: 'string', description: 'เหตุผลสั้นๆ ที่เลือกรูปแบบ/วัสดุ/ขนาดนี้' },
+// claude CLI: ข้อความเดิมทุกตัวอักษร (ต่อท้ายด้วย JSON_INSTRUCTION)
+const SYSTEM = systemPrompt('โดยเรียก tool box_spec เสมอ', 'reasoning')
+// Claude API: structured outputs บังคับ JSON ตาม BOX_SPEC_SCHEMA — ช่องคำอธิบายชื่อ explanation (ดูเหตุผลที่ schema)
+const API_SYSTEM = systemPrompt('โดยตอบเป็น JSON ตาม schema ที่ระบบกำหนดเสมอ', 'explanation')
+
+// สเปกที่โมเดลต้องตอบ (output_config.format) — ใช้ชื่อ explanation แทน reasoning เพราะช่อง JSON ชื่อ
+// reasoning/thinking เป็นตัวกระตุ้น refusal หมวด reasoning_extraction ที่พบบ่อย (Opus/Sonnet 5.5: คิดเงินแม้ไม่มี output
+// และไม่มีรุ่น fallback) — parse แล้วแปลงกลับเป็น BoxSpecResult.reasoning
+const BOX_SPEC_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    template: { type: 'string', enum: TEMPLATE_IDS },
+    materialId: { type: 'string', enum: MATERIALS.map((m) => m.id) },
+    W: { type: 'number', description: 'กว้างด้านใน มม. (30-250)' },
+    D: { type: 'number', description: 'ลึกด้านใน มม. (20-150)' },
+    H: { type: 'number', description: 'สูงด้านใน มม. (30-300)' },
+    handle: {
+      type: 'boolean',
+      description: 'เจาะรูหิ้ว (tuck-end/mailer เท่านั้น; sleeve ต้องเป็น false)',
     },
-    required: ['template', 'materialId', 'W', 'D', 'H', 'handle', 'assumptions', 'layoutNote', 'reasoning'],
+    assumptions: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'ทุกค่าที่เดา ภาษาไทยสั้นๆ ทีละข้อ',
+    },
+    layoutNote: { type: 'string', description: 'การจัดวางของด้านใน เช่น "วางเรียง 3 × 1"' },
+    explanation: { type: 'string', description: 'คำอธิบายสั้นๆ 1-2 ประโยคถึงลูกค้า ว่าทำไมเลือกรูปแบบ/วัสดุ/ขนาดนี้' },
   },
+  required: ['template', 'materialId', 'W', 'D', 'H', 'handle', 'assumptions', 'layoutNote', 'explanation'],
 }
 
 function sanitize(raw: Record<string, unknown>, mock: boolean): BoxSpecResult {
@@ -395,8 +401,102 @@ export interface ClaudeUsage {
 
 export interface BoxSpecWithUsage {
   spec: BoxSpecResult
-  model: string // โมเดลที่ provider ตอบจริง (อาจเป็น id เต็มของ alias ที่ขอ)
+  model: string // โมเดลที่ provider ตอบจริง (อาจเป็น id เต็มของ alias ที่ขอ หรือรุ่น fallback)
   usage: ClaudeUsage
+}
+
+// --- backend: Claude API (structured outputs) ---
+// เดิมบังคับเรียก tool box_spec (tool_choice แบบ tool) แค่เพื่อเอา JSON กลับมา แต่ Opus 5.5 / Sonnet 5.5 ตอบ 400
+// กับ tool_choice แบบ tool/any จึงใช้ output_config.format แทน — ทุกรุ่นที่ใช้ได้รับรูปแบบนี้และบังคับ JSON ตาม schema
+// (ไม่มีกรณีโมเดลไม่เรียก tool ให้ต้อง retry); ไม่ส่ง thinking: รุ่น 4.x = ไม่คิดเหมือนเดิม, รุ่น 5.x = adaptive
+// ตามค่าเริ่มต้น (Opus/Sonnet 5.5 ส่ง disabled แล้ว 400)
+
+// thinking นับรวมใน max_tokens (รุ่น 5.x คิดก่อนตอบ) — 16000 คือค่าแนะนำของคำขอแบบไม่ stream;
+// จ่ายเฉพาะโทเคนที่ใช้จริง และบน cloud ถูกตัดที่ timeout 50 วินาทีอยู่แล้ว (เดิม 2048 พอสำหรับ Opus 4.8 ที่ไม่คิด)
+const MAX_TOKENS = 16_000
+
+// รุ่นตระกูล 5 คิดเป็นค่าเริ่มต้น (Opus 5.5 ปิดไม่ได้) จึงคุมความเร็ว/ต้นทุนด้วย effort — งานนี้แปลงข้อความเป็นสเปกสั้น ๆ
+// จึงใช้ low (ค่าเริ่มต้นของ API: Opus 5.5 / Haiku 5.5 = medium, Sonnet 5.5 = high)
+const THINKS_BY_DEFAULT = /^claude-[a-z]+-5(?:-\d+)?$/
+
+// รุ่นที่ claude-api skill ให้เปิด server-side fallback เป็นค่าเริ่มต้น — Haiku 5.5 ไม่มี server-side fallback
+// (แบบ list ตอบ 400) และ Opus 4.8 เป็นปลายทาง fallback เอง จึงไม่อยู่ในชุดนี้
+const SERVER_FALLBACK_MODELS = new Set(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-opus-5', 'claude-fable-5-1'])
+const SERVER_FALLBACK_BETA = 'server-side-fallback-2026-07-01'
+
+export interface BoxSpecModelOptions {
+  effort?: 'low'
+  serverFallback: boolean
+}
+
+// ตัวเลือกคำขอตามรุ่นใน BOX_SPEC_MODEL — ทดสอบรูปแบบคำขอ 4 รุ่น (opus-4-8 / opus-5-5 / sonnet-5-5 / haiku-5-5);
+// รุ่นอื่นได้คำขอตามตระกูลของมัน
+export function boxSpecModelOptions(model: string): BoxSpecModelOptions {
+  return {
+    ...(THINKS_BY_DEFAULT.test(model) ? { effort: 'low' as const } : {}),
+    serverFallback: SERVER_FALLBACK_MODELS.has(model),
+  }
+}
+
+// โมเดลตอบกลับมาแต่ไม่มีสเปกให้ใช้ — cloud ถือเป็น provider ล้ม (คืนเครดิต): refusal = classifier/โมเดลปฏิเสธ
+// (ส่งซ้ำแบบเดิมก็ไม่ผ่าน), max_tokens = JSON ถูกตัดกลางทาง, no_output = ไม่มี JSON object ในคำตอบ
+export type BoxSpecFailure = 'refusal' | 'max_tokens' | 'no_output'
+
+export class BoxSpecResponseError extends Error {
+  constructor(
+    readonly reason: BoxSpecFailure,
+    readonly category: string | null = null, // stop_details.category ของ refusal (null ได้ตามปกติ)
+  ) {
+    super(
+      reason === 'refusal'
+        ? `โมเดลปฏิเสธคำขอ (stop_reason=refusal, category=${category ?? 'null'})`
+        : reason === 'max_tokens'
+          ? 'คำตอบถูกตัดที่ max_tokens ก่อน JSON ครบ'
+          : 'ไม่พบ JSON สเปกในคำตอบของโมเดล',
+    )
+    this.name = 'BoxSpecResponseError'
+  }
+}
+
+// ส่วนของ response ที่ใช้ — รับได้ทั้ง Message (GA) และ BetaMessage (ทาง fallback ซึ่งมี block type fallback เพิ่ม)
+interface BoxSpecMessage {
+  model: string
+  stop_reason: string | null
+  stop_details?: { category?: string | null } | null
+  content: ReadonlyArray<{ type: string; text?: string }>
+  usage: {
+    input_tokens: number
+    output_tokens: number
+    cache_read_input_tokens?: number | null
+    cache_creation_input_tokens?: number | null
+  }
+}
+
+function parseBoxSpecMessage(msg: BoxSpecMessage): BoxSpecWithUsage {
+  // ดู stop_reason ก่อนอ่าน content เสมอ: refusal มาได้ทั้งก่อนมี output (content ว่าง) และกลางคำตอบ
+  if (msg.stop_reason === 'refusal') throw new BoxSpecResponseError('refusal', msg.stop_details?.category ?? null)
+  if (msg.stop_reason === 'max_tokens') throw new BoxSpecResponseError('max_tokens')
+  // JSON อยู่ใน text block — อ่านตาม type ไม่ใช่ตำแหน่ง (ข้าม thinking ที่มาก่อน และ block fallback)
+  const text = msg.content.map((b) => (b.type === 'text' ? (b.text ?? '') : '')).join('')
+  let raw: unknown = null
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    // ตกไป no_output ด้านล่าง
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new BoxSpecResponseError('no_output')
+  const { explanation, ...fields } = raw as Record<string, unknown>
+  return {
+    spec: sanitize({ ...fields, reasoning: explanation }, false),
+    model: msg.model,
+    // usage ระดับบนคือรอบที่ตอบ — รอบที่ถูกปฏิเสธก่อน fallback อยู่ใน usage.iterations ไม่ได้รวมตรงนี้
+    usage: {
+      inputTokens: msg.usage.input_tokens,
+      outputTokens: msg.usage.output_tokens,
+      cacheReadTokens: msg.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: msg.usage.cache_creation_input_tokens ?? 0,
+    },
+  }
 }
 
 // legacy /api/box-spec และ server/handler.ts ใช้ askClaude (ทิ้ง usage); cloud ใช้ askClaudeWithUsage
@@ -427,7 +527,7 @@ export async function askClaudeWithUsage(
     ...(limits?.timeoutMs !== undefined ? { timeout: limits.timeoutMs } : {}),
     ...(limits?.maxRetries !== undefined ? { maxRetries: limits.maxRetries } : {}),
   })
-  const content: Anthropic.ContentBlockParam[] = []
+  const content: Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam> = []
   if (image) {
     content.push({
       type: 'image',
@@ -440,29 +540,29 @@ export async function askClaudeWithUsage(
   }
   content.push({ type: 'text', text: buildUserContent(prompt, current) })
 
-  const msg = await client.messages.create({
+  const options = boxSpecModelOptions(model)
+  const params = {
     model,
-    max_tokens: 2048,
-    system: SYSTEM,
-    tools: [TOOL],
-    tool_choice: { type: 'tool', name: 'box_spec' },
-    messages: [{ role: 'user', content }],
-  })
-
-  const block = msg.content.find(
-    (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'box_spec',
-  )
-  if (!block) throw new Error('ไม่พบผลลัพธ์จากโมเดล')
-  return {
-    spec: sanitize(block.input as Record<string, unknown>, false),
-    model: msg.model,
-    usage: {
-      inputTokens: msg.usage.input_tokens,
-      outputTokens: msg.usage.output_tokens,
-      cacheReadTokens: msg.usage.cache_read_input_tokens ?? 0,
-      cacheCreationTokens: msg.usage.cache_creation_input_tokens ?? 0,
+    max_tokens: MAX_TOKENS,
+    system: API_SYSTEM,
+    messages: [{ role: 'user' as const, content }],
+    output_config: {
+      format: { type: 'json_schema' as const, schema: BOX_SPEC_SCHEMA },
+      ...(options.effort ? { effort: options.effort } : {}),
     },
   }
+  if (!options.serverFallback) return parseBoxSpecMessage(await client.messages.create(params))
+
+  // refusal จาก safety classifier → API ส่งต่อให้รุ่นที่ Anthropic แนะนำตามหมวดในคำขอเดียว (msg.model = รุ่นที่ตอบ)
+  const fallbackParams: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming = {
+    ...params,
+    betas: [SERVER_FALLBACK_BETA],
+    // SDK 0.111 รู้จักแค่ fallbacks แบบ list แต่ "default" ส่งผ่าน body ได้ตรง ๆ — อัปเกรด SDK แล้ว tsc จะฟ้อง
+    // ว่า directive ข้างล่างไม่จำเป็น ให้ถอดออก
+    // @ts-expect-error fallbacks: "default" ยังไม่อยู่ใน type ของ SDK 0.111
+    fallbacks: 'default',
+  }
+  return parseBoxSpecMessage(await client.beta.messages.create(fallbackParams))
 }
 
 // --- backend: claude CLI (ใช้ login ของ Claude Code ในเครื่อง ไม่ต้องมี API key) ---
