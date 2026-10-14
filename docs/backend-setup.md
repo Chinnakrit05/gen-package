@@ -140,7 +140,7 @@ npm run ops:cleanup:report
 staging แยกถูกสร้างและ link แล้ว ขั้นตอนที่ทำเสร็จและขั้นตอนที่ยังต้องใช้ deployment/provider access มีดังนี้:
 
 1. **DONE** link เฉพาะ `gen-package-staging` (`feuwdzgixarxpsscrwxp`); ห้ามใช้ production ref
-2. **DONE** ตรวจ dry-run แล้ว push migrations 5 รายการ; `npm run staging:readiness` ยืนยัน remote up to date แบบ read-only
+2. **DONE** ตรวจ dry-run แล้ว push migrations 5 รายการ (19 ก.ย. 2026) และ migration billing `20261013000600_billing.sql` (14 ต.ค. 2026 — dry run แสดงไฟล์เดียว ไม่มี seed/role, ใช้ `--skip-vault`); `npm run staging:readiness` ยืนยัน remote up to date แบบ read-only
 3. **DONE** สร้าง private buckets, ตั้ง local Site URL/Redirect URLs, เปิด Google provider และทดสอบ callback/PKCE/server bootstrap กับ remote staging แล้ว
 4. **DONE** ตั้ง Vercel staging config: frontend ใช้ publishable key; `SUPABASE_SECRET_KEY` เป็น Secret ฝั่ง server; ยังต้องตรวจ Storage CORS ด้วย staging origin จริง
 5. Google login/bootstrap และเปิดงานผ่านบน Vercel แล้ว; create/save/reload, PNG signed upload/download และ legacy migration ผ่านจาก local cloud-mode app; ยังเหลือ deployed write/upload flows, authenticated 413 และ Storage CORS
@@ -149,7 +149,7 @@ staging แยกถูกสร้างและ link แล้ว ขั้�
 ## Remote/staging status
 
 - Supabase project `gen-package-staging` ใน Singapore: **ACTIVE_HEALTHY และ link แล้ว**
-- migrations 5 รายการ: **PUSHED / local-remote parity PASS**
+- migrations 6 รายการ (รวม billing): **PUSHED / local-remote parity PASS (14 ตุลาคม 2026)** — staging ใช้ Postgres 17.6 เท่ากับ local; `inspect db table-stats` เห็นตาราง billing ครบ 7 ตาราง (`plan_catalog` 2 แถว ตารางอื่นว่าง) และข้อมูลเดิมไม่เปลี่ยน; แอปที่ deploy อยู่ (โค้ด main เดิม) ยังตอบ root/health 200 และ 401 เมื่อไม่ login
 - private buckets `packit-staging` และ `packit-assets`: **CREATED** — PNG/JPEG, 10 MiB; ไม่มี broad browser Storage policy โดยตั้งใจ เพราะ browser ใช้ API-issued signed URL
 - Auth Site URL: `https://packit-design.vercel.app`; Redirect URLs มีโดเมนใหม่นี้, `https://gen-package-staging.vercel.app` และ local `127.0.0.1:5173`/`localhost:5173`: **CONFIGURED**
 - Google OAuth provider/callback: **PASS remote + local app** — Google client และ test user ตั้งแล้ว; PKCE callback กลับ `127.0.0.1:5173`, server bootstrap และ editor mount สำเร็จ (Google app ยังเป็น Testing)
@@ -195,6 +195,6 @@ npm run staging:readiness
 - cloud-mode HTTP smoke: **PASS** — root 200, missing/forged bearer 401 JSON, legacy `/api/box-spec` 410
 - Google OAuth บน remote/staging: **PASS** — provider, callback, PKCE, token verification, personal-workspace bootstrap และ editor mount ผ่านจาก local cloud-mode app; ไม่บันทึก credentials/tokens ลง Git
 - Remote/staging foundation: **PASS** — project healthy/link, migration parity, private buckets, Auth URLs, Google login/bootstrap, local-origin project create/save/reload, private asset upload/download และ legacy migration; deployment-dependent smoke **PARTIAL** ตามขอบเขตด้านบน
-- Billing / Freemium-Pro: ชุด local ทั้งหมดข้างบน **PASS เมื่อ 14 ตุลาคม 2026**; staging ยังไม่ได้ push migration billing และยังไม่ได้ตั้ง `ANTHROPIC_API_KEY` ใน Vercel (ขั้นตอนอยู่ใน PR Chinnakrit05/gen-package#4)
+- Billing / Freemium-Pro: ชุด local ทั้งหมดข้างบน **PASS เมื่อ 14 ตุลาคม 2026**; migration billing **push ขึ้น staging แล้ว (14 ตุลาคม 2026)**; ยังไม่ได้ตั้ง `ANTHROPIC_API_KEY`/`BOX_SPEC_MODEL` ใน Vercel และยังไม่ merge โค้ด (ขั้นตอนอยู่ใน PR Chinnakrit05/gen-package#4)
 
 ดู checklist รายกรณีและ evidence ที่ [backend-acceptance-phase1.md](backend-acceptance-phase1.md)

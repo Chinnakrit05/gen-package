@@ -305,3 +305,13 @@ Known gap: ต้องทดสอบ route นี้บน Vercel preview ด�
 - `test:e2e:local` ผ่าน 2 รอบติด หลังแก้ selector ที่เก่าตั้งแต่แกลเลอรีงาน (`d89625f`) และเพิ่มขั้น paywall end-to-end (Freemium ดาวน์โหลด → paywall → สั่งซื้อ → จำลองชำระ → ได้ SVG ไม่มีลายน้ำ + ตรวจ license/เครดิตใน DB); บน macOS ต้องตั้ง `PACKIT_E2E_CHROME` เป็น path ของ Chrome
 - บนเครื่องนี้ Supabase ของโปรเจกต์อื่นใช้พอร์ต 54321–54327 เดียวกัน จึงต้องหยุดโปรเจกต์นั้นชั่วคราวก่อน `supabase start` (ข้อมูลไม่หาย)
 
+## ลง migration billing บน staging — 14 ตุลาคม 2026
+
+สถานะ: **PUSHED / parity PASS** — ยังไม่ merge โค้ดและยังไม่ได้ตั้งคีย์ AI ใน Vercel
+
+- link `gen-package-staging` (`feuwdzgixarxpsscrwxp`) จากเครื่อง macOS ด้วย access token ของเจ้าของ (CLI ใช้ login role ชั่วคราว ไม่ต้องใช้รหัสผ่านฐานข้อมูล); บัญชีเห็นอีกโปรเจกต์ `jaitang` ซึ่งไม่ได้แตะ
+- `db push --dry-run` แสดงเฉพาะ `20261013000600_billing.sql` ไม่มี seed/role แล้ว push ด้วย `--skip-vault` (config.toml ไม่มี vault อยู่แล้ว); staging Postgres 17.6 เท่ากับที่ทดสอบใน local
+- `npm run staging:readiness` PASS ทุกข้อ (6 migrations ตรงกัน, up to date, bucket/Auth config ตรง); `inspect db table-stats` เห็นตาราง billing 7 ตาราง (`plan_catalog` 2 แถว) และข้อมูลเดิม (projects ~48, app users 13) ไม่เปลี่ยน
+- แอป staging ที่ deploy อยู่ (โค้ด main เดิม) ยังปกติ: root/health 200, `/api/v1/projects` ไม่ login 401 — migration เป็นแบบเพิ่มอย่างเดียวจึงไม่กระทบโค้ดเก่า
+- ขั้นถัดไปก่อน merge: ตั้ง `ANTHROPIC_API_KEY`/`BOX_SPEC_MODEL` + วงเงินที่ Anthropic, ตรวจ `APP_ENV=staging` ทุก environment ของ Vercel รวม Preview
+
