@@ -46,6 +46,8 @@ function repositoryStub(overrides: Partial<BillingRepository> = {}): BillingRepo
   return {
     getEntitlements: async () => stored,
     authorizeExport: async () => { throw new Error('must not be called') },
+    ensureOpenAccess: async () => { throw new Error('must not be called') },
+    authorizeOpenAccessExport: async () => { throw new Error('must not be called') },
     reserveAiCredit: async () => { throw new Error('must not be called') },
     settleAiRequest: async () => { throw new Error('must not be called') },
     createOrder: async () => { throw new Error('must not be called') },
@@ -69,19 +71,55 @@ describe('BillingService', () => {
     for (const [devFulfilEnabled, purchasesEnabled] of [[true, true], [false, false], [true, false]] as const) {
       const service = new BillingService(repositoryStub({
         authorizeExport: async () => ({ projectId, source: 'pro', entitlements: stored }),
-      }), { devFulfilEnabled, purchasesEnabled })
+      }), { devFulfilEnabled, purchasesEnabled, openAccess: false })
 
       expect(await service.getEntitlements(actor, workspaceId)).toEqual({
         ...stored,
         devFulfilAvailable: devFulfilEnabled,
         purchasesEnabled,
+        openAccess: false,
       })
       expect(await service.authorizeExport(actor, projectId)).toEqual({
         projectId,
         source: 'pro',
-        entitlements: { ...stored, devFulfilAvailable: devFulfilEnabled, purchasesEnabled },
+        entitlements: { ...stored, devFulfilAvailable: devFulfilEnabled, purchasesEnabled, openAccess: false },
       })
     }
+  })
+
+  it('serves entitlements, exports and AI credits through the open-access RPCs when open access is on', async () => {
+    const calls: unknown[] = []
+    const open: StoredEntitlements = { ...stored, plan: 'pro', proUntil: '2026-11-14T00:00:00.000Z', credits: 100 }
+    const service = new BillingService(repositoryStub({
+      ensureOpenAccess: async (resolvedActor, resolvedWorkspaceId) => {
+        calls.push(['ensure', resolvedActor.userId, resolvedWorkspaceId])
+        return open
+      },
+      authorizeOpenAccessExport: async (resolvedActor, resolvedProjectId) => {
+        calls.push(['export', resolvedActor.userId, resolvedProjectId])
+        return { projectId: resolvedProjectId, source: 'pro', entitlements: open }
+      },
+      reserveAiCredit: async (_actor, resolvedWorkspaceId, resolvedOperationId) => {
+        calls.push(['reserve', resolvedWorkspaceId, resolvedOperationId])
+        return { requestId: aiRequestId, credits: 99 }
+      },
+    }), { devFulfilEnabled: false, purchasesEnabled: false, openAccess: true })
+
+    const flags = { devFulfilAvailable: false, purchasesEnabled: false, openAccess: true }
+    expect(await service.getEntitlements(actor, workspaceId)).toEqual({ ...open, ...flags })
+    expect(await service.authorizeExport(actor, projectId)).toEqual({
+      projectId,
+      source: 'pro',
+      entitlements: { ...open, ...flags },
+    })
+    expect(await service.reserveAiCredit(actor, workspaceId, operationId)).toEqual({ requestId: aiRequestId, credits: 99 })
+    // getEntitlements/authorizeExport แบบ paywall ไม่ถูกเรียกเลย (stub โยน error ถ้าถูกเรียก)
+    expect(calls).toEqual([
+      ['ensure', actor.userId, workspaceId],
+      ['export', actor.userId, projectId],
+      ['ensure', actor.userId, workspaceId],
+      ['reserve', workspaceId, operationId],
+    ])
   })
 
   it('refuses orders with 503 PURCHASE_UNAVAILABLE before touching the repository when purchases are off', async () => {
@@ -91,7 +129,7 @@ describe('BillingService', () => {
         called = true
         throw new Error('must not be called')
       },
-    }), { devFulfilEnabled: false, purchasesEnabled: false })
+    }), { devFulfilEnabled: false, purchasesEnabled: false, openAccess: false })
 
     const failure = await service.createOrder(actor, { workspaceId, operationId, kind: 'pro' })
       .then(() => null, (error: unknown) => error)
@@ -108,7 +146,7 @@ describe('BillingService', () => {
         called = true
         throw new Error('must not be called')
       },
-    }), { devFulfilEnabled: false, purchasesEnabled: false })
+    }), { devFulfilEnabled: false, purchasesEnabled: false, openAccess: false })
 
     const failure = await service.devFulfilOrder(actor, orderId, 'request-1').then(() => null, (error: unknown) => error)
     expect(failure).toBeInstanceOf(HttpError)
@@ -123,7 +161,7 @@ describe('BillingService', () => {
         calls.push([resolvedActor?.userId, resolvedOrderId, provider, providerRef])
         return paidOrder
       },
-    }), { devFulfilEnabled: true, purchasesEnabled: true })
+    }), { devFulfilEnabled: true, purchasesEnabled: true, openAccess: false })
 
     expect(await service.devFulfilOrder(actor, orderId, 'request-1')).toBe(paidOrder)
     expect(calls).toEqual([[actor.userId, orderId, 'dev', 'request-1']])
@@ -155,7 +193,7 @@ describe('BillingService', () => {
         calls.push(['settle', resolvedActor.userId, requestId, outcome, usage])
         return { credits: 3 }
       },
-    }), { devFulfilEnabled: true, purchasesEnabled: true })
+    }), { devFulfilEnabled: true, purchasesEnabled: true, openAccess: false })
 
     const input = { workspaceId, operationId, kind: 'design' as const, projectId }
     const usage = {

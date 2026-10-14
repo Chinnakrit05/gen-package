@@ -5,9 +5,31 @@ import {
   WATERMARK_SIZE_MIN,
   WATERMARK_TEXT,
   drawWatermark,
+  previewWatermarked,
   watermarkSize,
   watermarkTiles,
 } from './watermark'
+
+describe('previewWatermarked', () => {
+  const free = { plan: 'free' as const, openAccess: false, licensedProjectIds: ['bought'] }
+
+  it('watermarks only designs a known Freemium workspace has not bought', () => {
+    expect(previewWatermarked(free, true, 'draft')).toBe(true)
+    expect(previewWatermarked(free, true, 'bought')).toBe(false)
+    expect(previewWatermarked({ ...free, plan: 'pro' }, true, 'draft')).toBe(false)
+  })
+
+  it('never watermarks during open access, even if the plan still reads free', () => {
+    expect(previewWatermarked({ ...free, plan: 'pro', openAccess: true }, true, 'draft')).toBe(false)
+    expect(previewWatermarked({ ...free, openAccess: true }, true, 'draft')).toBe(false)
+  })
+
+  it('does not watermark while entitlements are loading or failed to load', () => {
+    expect(previewWatermarked(null, false, 'draft')).toBe(false)
+    expect(previewWatermarked(null, true, 'draft')).toBe(false)
+    expect(previewWatermarked(free, false, 'draft')).toBe(false)
+  })
+})
 
 const inside = (w: number, h: number) => {
   const tiles = watermarkTiles(w, h)

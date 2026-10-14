@@ -30,7 +30,7 @@ try {
   }
 
   process.stdout.write('Local dev/preview HTTP parity: PASS\n')
-  process.stdout.write('Verified JSON 401/404/405/410/413, Cloud AI auth/server-key/validation guards, billing entitlements (purchasesEnabled) + export authorization 402→200 + pro order dev-fulfil, expired/foreign bearer rejection, direct Data API denial, and request IDs.\n')
+  process.stdout.write('Verified JSON 401/404/405/410/413, Cloud AI auth/server-key/validation guards, billing entitlements (purchasesEnabled, openAccess off) + export authorization 402→200 + pro order dev-fulfil, expired/foreign bearer rejection, direct Data API denial, and request IDs.\n')
 } finally {
   for (const fixture of fixtures) {
     if (!fixture.appUserId && fixture.authUserId) {
@@ -132,7 +132,8 @@ async function verifyApiContract(mode, accessToken) {
 
   // billing: workspace ใหม่เป็น Freemium → ดาวน์โหลดไฟล์ผลิตไม่ได้ (402) → สั่ง Pro → จำลองจ่าย (APP_ENV=development)
   // → เป็น Pro พร้อมเครดิต และดาวน์โหลดแบบเดิมได้ (200, license 'pro')
-  // APP_ENV=development จึงเปิดขาย (purchasesEnabled) — staging/production ยังปิดจนกว่าจะมีผู้ให้บริการชำระเงิน
+  // APP_ENV=development จึงเปิดขาย (purchasesEnabled) และไม่มี open access — staging/production ยังปิดการขาย
+  // จนกว่าจะมีผู้ให้บริการชำระเงิน และระหว่างนั้นทุก workspace ได้รอบ Pro ฟรี (openAccess)
   const entitlementsPath = `/api/v1/billing/entitlements?workspaceId=${encodeURIComponent(workspaceId)}`
   await expectJson(
     request(entitlementsPath, { headers: { authorization: `Bearer ${accessToken}` } }),
@@ -141,7 +142,8 @@ async function verifyApiContract(mode, accessToken) {
       && body.data?.plan === 'free'
       && body.data?.credits === 0
       && body.data?.devFulfilAvailable === true
-      && body.data?.purchasesEnabled === true,
+      && body.data?.purchasesEnabled === true
+      && body.data?.openAccess === false,
     `${mode} fresh entitlements`,
   )
   // เอกสารขั้นต่ำที่ผ่าน cloudProjectDocumentSchema (server/modules/projects/validation.ts)

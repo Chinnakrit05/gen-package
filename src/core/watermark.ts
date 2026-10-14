@@ -1,6 +1,19 @@
 // ลายน้ำบนพรีวิว (Freemium) — ข้อความซ้ำเฉียง −30° คลุมทั้งแผ่น ใช้ร่วม 3 พื้นผิว:
 // blueprint (SVG <text>), texture 3D (canvas) และแผ่นสติกเกอร์ (SVG) — คำนวณตำแหน่งชุดเดียวกัน
 // ห้ามทำเป็น Deco: Deco ไหลเข้า snap/DPI/contour/ไฟล์ส่งออก ส่วนลายน้ำต้องอยู่บนพรีวิวเท่านั้น
+import type { Entitlements } from '../../shared/contracts/billing'
+
+// ติดลายน้ำบนพรีวิว cloud หรือไม่: เฉพาะเมื่อโหลดสิทธิ์สำเร็จแล้ว (ready) รู้แน่ว่าไม่ใช่ Pro ไม่ใช่ช่วงเปิดใช้ฟรี
+// และแบบนี้ยังไม่ซื้อ — ระหว่างโหลดหรือโหลดไม่ได้ไม่ติด จึงไม่โผล่แวบก่อนรู้ว่าเป็น Pro/ใช้ฟรี
+// (ลายน้ำเป็นแค่เครื่องเตือนบนพรีวิว ไฟล์ผลิตยังต้องขอสิทธิ์จาก server ทุกครั้ง)
+export function previewWatermarked(
+  entitlements: Pick<Entitlements, 'plan' | 'openAccess' | 'licensedProjectIds'> | null,
+  ready: boolean,
+  projectId: string,
+): boolean {
+  if (!ready || !entitlements || entitlements.openAccess || entitlements.plan === 'pro') return false
+  return !entitlements.licensedProjectIds.includes(projectId)
+}
 
 export interface WatermarkTile {
   x: number // มม. (จุดกึ่งกลางข้อความ)

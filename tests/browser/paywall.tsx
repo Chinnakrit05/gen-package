@@ -4,6 +4,8 @@
 // Toggles: "purchases off" (= staging/production today: no pay/renew buttons, 503 PURCHASE_UNAVAILABLE),
 // "offline" (download buttons disabled, server calls fail with NETWORK_ERROR) and "plan error"
 // (entitlements failed to load: chip shows Retry, refresh keeps failing until the toggle is off).
+// Scenario "open-access" = staging/production today: everyone on a free Pro period, no watermark anywhere,
+// downloads authorized without licenses, purchases off.
 import { StrictMode, useCallback, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { BillingCatalog, Entitlements, Order, OrderKind } from '../../shared/contracts/billing'
@@ -19,8 +21,8 @@ import '@fontsource/noto-sans-thai/700.css'
 import '@fontsource/prompt/400.css'
 import '../../src/app.css'
 
-type Scenario = 'free' | 'free+licensed' | 'free+credits' | 'pro' | 'pro-no-credits'
-const SCENARIOS: Scenario[] = ['free', 'free+licensed', 'free+credits', 'pro', 'pro-no-credits']
+type Scenario = 'free' | 'free+licensed' | 'free+credits' | 'pro' | 'pro-no-credits' | 'open-access'
+const SCENARIOS: Scenario[] = ['free', 'free+licensed', 'free+credits', 'pro', 'pro-no-credits', 'open-access']
 const WORKSPACE = 'fixture-workspace'
 const DAY_MS = 86_400_000
 const CATALOG: BillingCatalog = {
@@ -40,7 +42,8 @@ function makeState(scenario: Scenario): FakeState {
   const second = freshProject(2)
   second.name = 'ฉลากน้ำผึ้ง'
   second.live = { ...second.live, materialId: 'pet-bottle' }
-  const pro = scenario.startsWith('pro')
+  const openAccess = scenario === 'open-access'
+  const pro = scenario.startsWith('pro') || openAccess
   return {
     projects: [first, second],
     orders: new Map(),
@@ -48,11 +51,12 @@ function makeState(scenario: Scenario): FakeState {
       workspaceId: WORKSPACE,
       plan: pro ? 'pro' : 'free',
       proUntil: pro ? new Date(Date.now() + 30 * DAY_MS).toISOString() : null,
-      credits: scenario === 'free+credits' ? 5 : scenario === 'pro' ? 100 : 0,
+      credits: scenario === 'free+credits' ? 5 : scenario === 'pro' || openAccess ? 100 : 0,
       licensedProjectIds: scenario === 'free+licensed' ? [first.id] : [],
       catalog: CATALOG,
       devFulfilAvailable: true,
       purchasesEnabled: true,
+      openAccess,
     },
   }
 }
@@ -74,13 +78,16 @@ const summaries = (state: FakeState): ProjectSummary[] => state.projects.map((pr
 }))
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
-// ยังไม่เปิดขาย = เหมือน server staging/production ตอนนี้: ไม่เปิดขายและจำลองการชำระไม่ได้
-const snapshot = (state: FakeState, flags: Flags): Entitlements => ({
-  ...state.entitlements,
-  licensedProjectIds: [...state.entitlements.licensedProjectIds],
-  purchasesEnabled: !flags.purchasesOff,
-  devFulfilAvailable: !flags.purchasesOff && state.entitlements.devFulfilAvailable,
-})
+// ยังไม่เปิดขาย = เหมือน server staging/production ตอนนี้: ไม่เปิดขายและจำลองการชำระไม่ได้ (open access ก็ปิดการขายเสมอ)
+const snapshot = (state: FakeState, flags: Flags): Entitlements => {
+  const selling = !flags.purchasesOff && !state.entitlements.openAccess
+  return {
+    ...state.entitlements,
+    licensedProjectIds: [...state.entitlements.licensedProjectIds],
+    purchasesEnabled: selling,
+    devFulfilAvailable: selling && state.entitlements.devFulfilAvailable,
+  }
+}
 
 const networkError = () => new ApiClientError(0, 'NETWORK_ERROR', 'เชื่อมต่อ server ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองใหม่')
 
@@ -177,6 +184,8 @@ function buildBridge(state: FakeState, flagsRef: { current: Flags }, bump: () =>
       await delay(200)
       online()
       if (licensed(projectId)) return { projectId, source: 'purchase', entitlements: snapshot(state, flagsRef.current) }
+      // open access: ได้สิทธิ์จากรอบ Pro ฟรีโดยไม่ออก license ถาวร (authorize_open_access_export)
+      if (ent.openAccess) return { projectId, source: 'pro', entitlements: snapshot(state, flagsRef.current) }
       if (isPro()) {
         grant(projectId)
         bump()
@@ -190,7 +199,7 @@ function buildBridge(state: FakeState, flagsRef: { current: Flags }, bump: () =>
     createOrder: async (kind: OrderKind, projectId?: string) => {
       await delay(200)
       online()
-      if (flagsRef.current.purchasesOff) {
+      if (flagsRef.current.purchasesOff || ent.openAccess) {
         throw new ApiClientError(503, 'PURCHASE_UNAVAILABLE', 'ยังไม่เปิดขาย — ยังไม่มีผู้ให้บริการชำระเงิน')
       }
       if (kind === 'design') {
@@ -300,7 +309,8 @@ function Fixture() {
         </button>
         <span className="fixture-state">
           <b>{ent.plan}</b>{ent.proUntil ? ` ถึง ${new Date(ent.proUntil).toLocaleDateString('th-TH')}` : ''} · เครดิต {ent.credits} ·
-          ซื้อแล้ว {ent.licensedProjectIds.length} แบบ · orders {state.orders.size} · ขาย {flags.purchasesOff ? 'ปิด' : 'เปิด (dev)'} ·
+          ซื้อแล้ว {ent.licensedProjectIds.length} แบบ · orders {state.orders.size} · ขาย {flags.purchasesOff || ent.openAccess ? 'ปิด' : 'เปิด (dev)'} ·
+          {ent.openAccess ? ' เปิดใช้ฟรี (open access) ·' : ''}
           {' '}{flags.offline ? 'ออฟไลน์' : 'ออนไลน์'} · สิทธิ์ {bridge.entitlementsStatus} — ลายน้ำ/ป้าย 149 ฿/paywall ต้องตามสถานะนี้
         </span>
       </div>

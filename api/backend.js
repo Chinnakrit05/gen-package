@@ -54618,6 +54618,26 @@ var SupabaseBillingRepository = class {
     if (!parsed.success) throw this.contractError("authorize_export", actor, parsed.error);
     return parsed.data;
   }
+  async ensureOpenAccess(actor, workspaceId) {
+    const { data, error: error62 } = await this.client.rpc("ensure_open_access", {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId
+    });
+    if (error62) throw this.databaseError(error62, "ensure_open_access", actor);
+    const parsed = entitlementsResultSchema.safeParse(data);
+    if (!parsed.success) throw this.contractError("ensure_open_access", actor, parsed.error);
+    return parsed.data;
+  }
+  async authorizeOpenAccessExport(actor, projectId) {
+    const { data, error: error62 } = await this.client.rpc("authorize_open_access_export", {
+      p_actor_user_id: actor.userId,
+      p_project_id: projectId
+    });
+    if (error62) throw this.databaseError(error62, "authorize_open_access_export", actor, { projectId });
+    const parsed = exportAuthorizationResultSchema.safeParse(data);
+    if (!parsed.success) throw this.contractError("authorize_open_access_export", actor, parsed.error);
+    return parsed.data;
+  }
   async reserveAiCredit(actor, workspaceId, operationId) {
     const { data, error: error62 } = await this.client.rpc("reserve_ai_credit", {
       p_actor_user_id: actor.userId,
@@ -58833,14 +58853,16 @@ var BillingService = class {
     return {
       ...entitlements,
       devFulfilAvailable: this.options.devFulfilEnabled,
-      purchasesEnabled: this.options.purchasesEnabled
+      purchasesEnabled: this.options.purchasesEnabled,
+      openAccess: this.options.openAccess
     };
   }
   async getEntitlements(actor, workspaceId) {
-    return this.withServerFlags(await this.repository.getEntitlements(actor, workspaceId));
+    const stored = this.options.openAccess ? await this.repository.ensureOpenAccess(actor, workspaceId) : await this.repository.getEntitlements(actor, workspaceId);
+    return this.withServerFlags(stored);
   }
   async authorizeExport(actor, projectId) {
-    const authorization = await this.repository.authorizeExport(actor, projectId);
+    const authorization = this.options.openAccess ? await this.repository.authorizeOpenAccessExport(actor, projectId) : await this.repository.authorizeExport(actor, projectId);
     return { ...authorization, entitlements: this.withServerFlags(authorization.entitlements) };
   }
   async createOrder(actor, input2) {
@@ -58871,7 +58893,8 @@ var BillingService = class {
     });
     return order;
   }
-  reserveAiCredit(actor, workspaceId, operationId) {
+  async reserveAiCredit(actor, workspaceId, operationId) {
+    if (this.options.openAccess) await this.repository.ensureOpenAccess(actor, workspaceId);
     return this.repository.reserveAiCredit(actor, workspaceId, operationId);
   }
   settleAiRequest(actor, requestId, outcome, usage) {
@@ -59018,10 +59041,14 @@ function isDevFulfilEnvironment(config2) {
 function isPurchaseEnabled(config2) {
   return isDevFulfilEnvironment(config2);
 }
+function isOpenAccess(config2) {
+  return !isPurchaseEnabled(config2);
+}
 function billingFlags(config2) {
   return {
     devFulfilEnabled: isDevFulfilEnvironment(config2),
-    purchasesEnabled: isPurchaseEnabled(config2)
+    purchasesEnabled: isPurchaseEnabled(config2),
+    openAccess: isOpenAccess(config2)
   };
 }
 function unexpectedError(requestId, route, error62, fallback) {
