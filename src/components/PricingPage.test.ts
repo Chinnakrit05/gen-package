@@ -110,6 +110,32 @@ describe('PricingPage', () => {
     expect(markup).not.toContain('ติดต่อผู้ดูแล')
   })
 
+  it('tells open-access members that Pro is free for now, with the allowance and what happens after', () => {
+    const markup = render(member({ plan: 'pro', proUntilLabel: '14 พ.ย. 2569', credits: 100, openAccess: true }), catalog, false)
+    expect(markup).toContain('ตอนนี้ใช้ Pro ได้ฟรี')
+    expect(markup).toContain('ได้เครดิต AI 100 เครดิตทุก 30 วัน')
+    expect(markup).toContain('แบบที่ยังไม่ได้ซื้อจะกลับไปใช้กติกาปกติ')
+    expect(markup).toContain('ใช้ฟรีอยู่')
+    expect(markup).toContain('ใช้ฟรีช่วงนี้')
+    // รอบฟรีต่อเอง ไม่ใช่วันหมดอายุ/การต่ออายุแบบจ่ายเงิน และไม่มีป้าย "ยังไม่เปิดขาย" ซ้อน
+    expect(markup).not.toContain('ถึง 14 พ.ย. 2569')
+    expect(markup).not.toContain('ต่ออายุได้เมื่อเปิดขาย')
+    expect(markup).not.toContain('ระบบชำระเงินจะเปิดเร็ว ๆ นี้ ตอนนี้ออกแบบและดูพรีวิวได้ฟรี')
+    expect(markup).toContain('ระหว่างนี้ทุกบัญชีใช้ Pro ได้ฟรี')
+    expect(ctaLabels(markup)).toEqual([
+      { label: 'รวมอยู่ใน Pro แล้ว', disabled: true },
+      { label: 'Pro ดาวน์โหลดได้ทุกแบบอยู่แล้ว', disabled: true },
+      { label: 'ต่อรอบให้อัตโนมัติ', disabled: true },
+    ])
+  })
+
+  it('renders the open-access notice in English', () => {
+    const markup = renderEn(member({ plan: 'pro', credits: 100, openAccess: true }), catalog, false)
+    expect(markup).toContain('Pro is free for now')
+    expect(markup).toContain('100 AI credits every 30 days')
+    expect(markup).toContain('Renews automatically')
+  })
+
   it('lets guests start for free but not buy while sales are closed (login page view)', () => {
     const markup = render({ kind: 'guest' }, null, false)
     expect(ctaLabels(markup)).toEqual([

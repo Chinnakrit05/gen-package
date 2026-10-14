@@ -149,11 +149,20 @@ export function isPurchaseEnabled(config: Pick<ServerConfig, 'appEnv'>): boolean
   return isDevFulfilEnvironment(config)
 }
 
-// สวิตช์ของ BillingService ตาม config — ทางเดียวที่ createApiRouter ใช้ (router.test ตรวจ staging/production = ปิด)
+// open access (เจ้าของผลิตภัณฑ์ตัดสินใจ 15 ต.ค. 2026): ระหว่างยังขายไม่ได้ ทุก workspace ใช้งานได้เหมือน Pro —
+// ดาวน์โหลดไฟล์ผลิตได้ทุกแบบ ไม่มีลายน้ำ เครดิต AI ตามโควตา Pro ต่อรอบ (supabase/migrations/20261015000700_open_access.sql)
+// ผูกกับ isPurchaseEnabled: เปิดขายเมื่อไรกลับเป็นกติกาปกติเอง; development/test ปิดไว้ให้เทสต์ paywall ยังตรวจกติกาปกติ
+export function isOpenAccess(config: Pick<ServerConfig, 'appEnv'>): boolean {
+  return !isPurchaseEnabled(config)
+}
+
+// สวิตช์ของ BillingService ตาม config — ทางเดียวที่ createApiRouter ใช้
+// (router.test ตรวจ staging/production = ปิดการขาย/จำลองจ่าย และเปิด open access)
 export function billingFlags(config: Pick<ServerConfig, 'appEnv'>): BillingServiceOptions {
   return {
     devFulfilEnabled: isDevFulfilEnvironment(config),
     purchasesEnabled: isPurchaseEnabled(config),
+    openAccess: isOpenAccess(config),
   }
 }
 

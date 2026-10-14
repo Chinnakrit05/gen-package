@@ -59,6 +59,13 @@ const storedEntitlements: StoredEntitlements = {
   licensedProjectIds: [],
   catalog,
 }
+// สิทธิ์ตอน open access = รอบ Pro ฟรี (ensure_open_access)
+const openEntitlements: StoredEntitlements = {
+  ...storedEntitlements,
+  plan: 'pro',
+  proUntil: '2026-11-14T00:00:00.000Z',
+  credits: 100,
+}
 const pendingOrder: Order = {
   id: orderId,
   workspaceId,
@@ -130,6 +137,8 @@ function billingRepositoryStub(overrides: Partial<BillingRepository> = {}): Bill
   return {
     getEntitlements: async () => storedEntitlements,
     authorizeExport: async () => { throw new Error('must not be called') },
+    ensureOpenAccess: async () => { throw new Error('must not be called') },
+    authorizeOpenAccessExport: async () => { throw new Error('must not be called') },
     reserveAiCredit: async () => { throw new Error('must not be called') },
     settleAiRequest: async () => { throw new Error('must not be called') },
     createOrder: async () => { throw new Error('must not be called') },
@@ -532,13 +541,18 @@ describe('API router', () => {
   })
 
   // เจ้าของผลิตภัณฑ์ 13 ต.ค. 2026: ยังไม่มีผู้ให้บริการชำระเงิน → staging/production ห้ามขาย/จำลองจ่าย
+  // 15 ต.ค. 2026: ระหว่างยังขายไม่ได้ staging/production เปิดสิทธิ์ Pro ให้ทุก workspace (open access)
   it.each([
     ['test', true],
     ['development', true],
     ['staging', false],
     ['production', false],
-  ] as const)('keeps purchases and dev fulfilment %s → %s', (appEnv, enabled) => {
-    expect(billingFlags({ appEnv })).toEqual({ devFulfilEnabled: enabled, purchasesEnabled: enabled })
+  ] as const)('keeps purchases and dev fulfilment %s → %s and opens access while not selling', (appEnv, enabled) => {
+    expect(billingFlags({ appEnv })).toEqual({
+      devFulfilEnabled: enabled,
+      purchasesEnabled: enabled,
+      openAccess: !enabled,
+    })
   })
 
   it.each([
@@ -546,8 +560,18 @@ describe('API router', () => {
     ['development', true],
     ['staging', false],
     ['production', false],
-  ] as const)('returns entitlements with devFulfilAvailable and purchasesEnabled reflecting appEnv %s', async (appEnv, enabled) => {
-    const configuredRouter = billingRouter(billingRepositoryStub(), { appEnv })
+  ] as const)('returns entitlements with the server flags reflecting appEnv %s', async (appEnv, enabled) => {
+    const calls: string[] = []
+    const configuredRouter = billingRouter(billingRepositoryStub({
+      getEntitlements: async () => {
+        calls.push('get_entitlements')
+        return storedEntitlements
+      },
+      ensureOpenAccess: async (resolvedActor, resolvedWorkspaceId) => {
+        calls.push(`ensure_open_access ${resolvedActor.userId} ${resolvedWorkspaceId}`)
+        return openEntitlements
+      },
+    }), { appEnv })
     const target = response()
     await configuredRouter(
       request('GET', `/api/v1/billing/entitlements?workspaceId=${workspaceId}`, 'Bearer token'),
@@ -555,8 +579,11 @@ describe('API router', () => {
     )
     expect(target.res.statusCode).toBe(200)
     expect(target.readBody()).toMatchObject({
-      data: { workspaceId, plan: 'free', credits: 3, catalog, devFulfilAvailable: enabled, purchasesEnabled: enabled },
+      data: enabled
+        ? { workspaceId, plan: 'free', credits: 3, catalog, devFulfilAvailable: true, purchasesEnabled: true, openAccess: false }
+        : { workspaceId, plan: 'pro', credits: 100, catalog, devFulfilAvailable: false, purchasesEnabled: false, openAccess: true },
     })
+    expect(calls).toEqual([enabled ? 'get_entitlements' : `ensure_open_access ${actor.userId} ${workspaceId}`])
 
     const rejected = response()
     await configuredRouter(
@@ -744,6 +771,64 @@ describe('API router', () => {
       body: { force: true },
     }, withPayload.res)
     expect(withPayload.res.statusCode).toBe(422)
+  })
+
+  it.each(['staging', 'production'] as const)(
+    'authorizes exports through open access in %s without the paywall RPC',
+    async (appEnv) => {
+      const calls: unknown[] = []
+      const configuredRouter = billingRouter(billingRepositoryStub({
+        authorizeOpenAccessExport: async (resolvedActor, resolvedProjectId) => {
+          calls.push([resolvedActor.userId, resolvedProjectId])
+          return { projectId: resolvedProjectId, source: 'pro', entitlements: openEntitlements }
+        },
+      }), { appEnv })
+
+      const target = response()
+      await configuredRouter(
+        request('POST', `/api/v1/projects/${projectId}/export-authorizations`, 'Bearer token'),
+        target.res,
+      )
+      expect(target.res.statusCode).toBe(200)
+      expect(calls).toEqual([[actor.userId, projectId]])
+      expect(target.readBody()).toMatchObject({
+        data: {
+          projectId,
+          source: 'pro',
+          entitlements: { plan: 'pro', licensedProjectIds: [], openAccess: true, purchasesEnabled: false },
+        },
+      })
+    },
+  )
+
+  it('renews the open-access period before reserving an AI credit', async () => {
+    const calls: unknown[] = []
+    const configuredRouter = billingRouter(billingRepositoryStub({
+      ensureOpenAccess: async (resolvedActor, resolvedWorkspaceId) => {
+        calls.push(['ensure', resolvedActor.userId, resolvedWorkspaceId])
+        return openEntitlements
+      },
+      reserveAiCredit: async (_actor, resolvedWorkspaceId) => {
+        calls.push(['reserve', resolvedWorkspaceId])
+        return { requestId: aiRequestId, credits: 99 }
+      },
+      settleAiRequest: async () => ({ credits: 99 }),
+    }), {
+      appEnv: 'staging',
+      ai: { anthropicApiKey: serverAiKey, model: 'm' },
+      aiService: {
+        async generateBoxSpec() {
+          calls.push(['generate'])
+          return { spec: boxSpec, model: aiModel, usage: aiUsage }
+        },
+      },
+    })
+    const target = response()
+    await configuredRouter(aiRequest({ workspaceId, operationId, prompt: 'กล่องของฝาก' }), target.res)
+
+    expect(target.res.statusCode).toBe(200)
+    expect(calls).toEqual([['ensure', actor.userId, workspaceId], ['reserve', workspaceId], ['generate']])
+    expect(target.readBody()).toMatchObject({ data: { credits: 99 } })
   })
 
   it('validates and creates a project for the actor resolved from the bearer token', async () => {

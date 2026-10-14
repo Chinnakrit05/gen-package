@@ -183,6 +183,28 @@ export class SupabaseBillingRepository implements BillingRepository {
     return parsed.data
   }
 
+  async ensureOpenAccess(actor: Actor, workspaceId: string): Promise<StoredEntitlements> {
+    const { data, error } = await this.client.rpc('ensure_open_access', {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId,
+    })
+    if (error) throw this.databaseError(error, 'ensure_open_access', actor)
+    const parsed = entitlementsResultSchema.safeParse(data)
+    if (!parsed.success) throw this.contractError('ensure_open_access', actor, parsed.error)
+    return parsed.data
+  }
+
+  async authorizeOpenAccessExport(actor: Actor, projectId: string): Promise<StoredExportAuthorization> {
+    const { data, error } = await this.client.rpc('authorize_open_access_export', {
+      p_actor_user_id: actor.userId,
+      p_project_id: projectId,
+    })
+    if (error) throw this.databaseError(error, 'authorize_open_access_export', actor, { projectId })
+    const parsed = exportAuthorizationResultSchema.safeParse(data)
+    if (!parsed.success) throw this.contractError('authorize_open_access_export', actor, parsed.error)
+    return parsed.data
+  }
+
   async reserveAiCredit(actor: Actor, workspaceId: string, operationId: string): Promise<AiCreditReservation> {
     const { data, error } = await this.client.rpc('reserve_ai_credit', {
       p_actor_user_id: actor.userId,

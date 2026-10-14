@@ -9,9 +9,10 @@ import { HttpError } from '../../http/errors'
 import { logServerEvent } from '../../logging'
 import type { Actor } from '../identity/actor'
 
-// ชั้นบริการ billing — กติกาอยู่ในฐานข้อมูล (RPC ใน supabase/migrations/20261013000600_billing.sql)
-// ชั้นนี้เติมเฉพาะสิ่งที่ DB ไม่รู้: devFulfilAvailable/purchasesEnabled ตาม config ของ server,
-// gate ของการจำลองชำระเงิน และ gate การเปิดขาย
+// ชั้นบริการ billing — กติกาอยู่ในฐานข้อมูล (RPC ใน supabase/migrations/20261013000600_billing.sql
+// และ 20261015000700_open_access.sql) ชั้นนี้เติมเฉพาะสิ่งที่ DB ไม่รู้: flag ตาม config ของ server
+// (devFulfilAvailable/purchasesEnabled/openAccess), gate ของการจำลองชำระเงิน, gate การเปิดขาย
+// และเลือก RPC ของ open access แทนกติกาปกติ
 
 export type AiRequestOutcome = 'succeeded' | 'failed'
 
@@ -26,8 +27,8 @@ export interface AiRequestUsage {
   cacheCreationTokens?: number | null
 }
 
-// Entitlements ตามที่ DB คืน — ยังไม่มี field ที่ server เติมเอง (devFulfilAvailable, purchasesEnabled)
-export type StoredEntitlements = Omit<Entitlements, 'devFulfilAvailable' | 'purchasesEnabled'>
+// Entitlements ตามที่ DB คืน — ยังไม่มี field ที่ server เติมเอง (devFulfilAvailable, purchasesEnabled, openAccess)
+export type StoredEntitlements = Omit<Entitlements, 'devFulfilAvailable' | 'purchasesEnabled' | 'openAccess'>
 
 export interface StoredExportAuthorization {
   projectId: string
@@ -47,6 +48,10 @@ export interface AiCreditSettlement {
 export interface BillingRepository {
   getEntitlements(actor: Actor, workspaceId: string): Promise<StoredEntitlements>
   authorizeExport(actor: Actor, projectId: string): Promise<StoredExportAuthorization>
+  // open access: เริ่มรอบ Pro ฟรีถ้า workspace ยังไม่มี Pro ที่ใช้งานอยู่ แล้วคืนสิทธิ์ (shape เดียวกับ getEntitlements)
+  ensureOpenAccess(actor: Actor, workspaceId: string): Promise<StoredEntitlements>
+  // open access: ตรวจโปรเจกต์/สมาชิก + รอบ Pro ฟรี โดยไม่ออก license ถาวร
+  authorizeOpenAccessExport(actor: Actor, projectId: string): Promise<StoredExportAuthorization>
   reserveAiCredit(actor: Actor, workspaceId: string, operationId: string): Promise<AiCreditReservation>
   settleAiRequest(
     actor: Actor,
@@ -65,6 +70,8 @@ export interface BillingServiceOptions {
   // เปิดให้สั่งซื้อ (POST /billing/orders) — ปิดอยู่ = 503 PURCHASE_UNAVAILABLE และ client ซ่อนปุ่มซื้อ
   // router เป็นคนตัดสินจาก config (ดู isPurchaseEnabled ใน server/http/router.ts)
   purchasesEnabled: boolean
+  // ทุก workspace ใช้งานได้เหมือน Pro (รอบ Pro ฟรี) แทน paywall — ดู isOpenAccess ใน server/http/router.ts
+  openAccess: boolean
 }
 
 export class BillingService {
@@ -78,15 +85,21 @@ export class BillingService {
       ...entitlements,
       devFulfilAvailable: this.options.devFulfilEnabled,
       purchasesEnabled: this.options.purchasesEnabled,
+      openAccess: this.options.openAccess,
     }
   }
 
   async getEntitlements(actor: Actor, workspaceId: string): Promise<Entitlements> {
-    return this.withServerFlags(await this.repository.getEntitlements(actor, workspaceId))
+    const stored = this.options.openAccess
+      ? await this.repository.ensureOpenAccess(actor, workspaceId)
+      : await this.repository.getEntitlements(actor, workspaceId)
+    return this.withServerFlags(stored)
   }
 
   async authorizeExport(actor: Actor, projectId: string): Promise<ExportAuthorization> {
-    const authorization = await this.repository.authorizeExport(actor, projectId)
+    const authorization = this.options.openAccess
+      ? await this.repository.authorizeOpenAccessExport(actor, projectId)
+      : await this.repository.authorizeExport(actor, projectId)
     return { ...authorization, entitlements: this.withServerFlags(authorization.entitlements) }
   }
 
@@ -122,7 +135,9 @@ export class BillingService {
     return order
   }
 
-  reserveAiCredit(actor: Actor, workspaceId: string, operationId: string): Promise<AiCreditReservation> {
+  async reserveAiCredit(actor: Actor, workspaceId: string, operationId: string): Promise<AiCreditReservation> {
+    // open access: ต่อรอบ Pro ฟรีที่หมดไปก่อนจอง — แท็บที่เปิดค้างข้ามรอบจะได้โควตาใหม่โดยไม่ต้องโหลดสิทธิ์ก่อน
+    if (this.options.openAccess) await this.repository.ensureOpenAccess(actor, workspaceId)
     return this.repository.reserveAiCredit(actor, workspaceId, operationId)
   }
 

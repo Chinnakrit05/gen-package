@@ -7,6 +7,7 @@ import postgres from 'postgres'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createSupabaseBillingRepository } from '../../server/adapters/supabase/billingRepository'
 import { createSupabaseProjectRepository } from '../../server/adapters/supabase/projectRepository'
+import { BillingService } from '../../server/modules/billing/billingService'
 import type { Actor } from '../../server/modules/identity/actor'
 import { ProjectService } from '../../server/modules/projects/projectService'
 import type { CloudProjectDocumentV1 } from '../../shared/contracts/projects'
@@ -49,6 +50,8 @@ describe('billing lifecycle: entitlements, orders, licenses and AI credits', () 
   let sql: ReturnType<typeof postgres>
   const userIds: string[] = []
   let billing: ReturnType<typeof createSupabaseBillingRepository>
+  let projects: ProjectService
+  let issuer: string
   let owner: BootstrapRow
   let other: BootstrapRow
   let ownerActor: Actor
@@ -63,7 +66,7 @@ describe('billing lifecycle: entitlements, orders, licenses and AI credits', () 
   beforeAll(async () => {
     status = readLocalStatus()
     sql = postgres(status.DB_URL, { max: 4 })
-    const issuer = `https://billing-integration-${randomUUID()}.test/auth/v1`
+    issuer = `https://billing-integration-${randomUUID()}.test/auth/v1`
     const [ownerRow] = await sql<BootstrapRow[]>`
       select * from public.bootstrap_personal_workspace(
         ${issuer}, 'owner', 'Billing owner', 'billing-owner@example.test'
@@ -83,7 +86,7 @@ describe('billing lifecycle: entitlements, orders, licenses and AI credits', () 
       issuer: `${status.API_URL}/auth/v1`,
     }
     billing = createSupabaseBillingRepository(config)
-    const projects = new ProjectService(createSupabaseProjectRepository(config))
+    projects = new ProjectService(createSupabaseProjectRepository(config))
     ownerActor = {
       userId: owner.app_user_id,
       identityIssuer: issuer,
@@ -475,5 +478,67 @@ describe('billing lifecycle: entitlements, orders, licenses and AI credits', () 
     })
     await expect(billing.reserveAiCredit(otherActor, other.personal_workspace_id, randomUUID()))
       .rejects.toMatchObject({ status: 402, code: 'AI_CREDITS_EXHAUSTED' })
+  })
+
+  // staging/production ระหว่างยังไม่เปิดขาย (isOpenAccess) — service ตัวจริงกับ RPC จริง บัญชีใหม่ที่ยังไม่เคยแตะ billing
+  it('serves every workspace as Pro without licenses or orders under open access', async () => {
+    const [freshRow] = await sql<BootstrapRow[]>`
+      select * from public.bootstrap_personal_workspace(
+        ${issuer}, 'open', 'Open access user', 'open-access@example.test'
+      )
+    `
+    userIds.push(freshRow.app_user_id)
+    const freshActor: Actor = {
+      userId: freshRow.app_user_id,
+      identityIssuer: issuer,
+      identitySubject: 'open',
+      requestId: randomUUID(),
+    }
+    const workspaceId = freshRow.personal_workspace_id
+    const design = await projects.create(freshActor, {
+      workspaceId,
+      operationId: randomUUID(),
+      name: 'Open access design',
+      documentSchemaVersion: 1,
+      document,
+    })
+    const service = new BillingService(billing, { devFulfilEnabled: false, purchasesEnabled: false, openAccess: true })
+
+    // ดาวน์โหลดก่อนเคยโหลดสิทธิ์ก็ได้ — export เริ่มรอบ Pro ฟรีให้เอง และไม่ออก license
+    const authorization = await service.authorizeExport(freshActor, design.id)
+    const allowance = authorization.entitlements.catalog.pro.credits
+    expect(authorization).toMatchObject({
+      projectId: design.id,
+      source: 'pro',
+      entitlements: { plan: 'pro', credits: allowance, licensedProjectIds: [], openAccess: true, purchasesEnabled: false },
+    })
+    expect(await sql`select 1 from app_private.design_licenses where project_id = ${design.id}`).toHaveLength(0)
+
+    const entitlements = await service.getEntitlements(freshActor, workspaceId)
+    expect(entitlements).toMatchObject({ plan: 'pro', credits: allowance, openAccess: true, devFulfilAvailable: false })
+    const proUntil = Date.parse(entitlements.proUntil ?? '')
+    expect(proUntil - Date.now()).toBeGreaterThan((entitlements.catalog.pro.periodDays! - 1) * DAY_MS)
+
+    // เครดิตของรอบฟรีหักตามปกติ ไม่ถูกเติมกลางรอบ
+    const reservation = await service.reserveAiCredit(freshActor, workspaceId, randomUUID())
+    expect(reservation.credits).toBe(allowance - 1)
+    await service.settleAiRequest(freshActor, reservation.requestId, 'succeeded', { hasImage: false, model: 'claude-test' })
+    expect((await service.getEntitlements(freshActor, workspaceId)).credits).toBe(allowance - 1)
+
+    const [counts] = await sql<{ complimentary: number; paid: number; orders: number }[]>`
+      select
+        (select count(*)::int from app_private.subscriptions where workspace_id = ${workspaceId} and order_id is null) as complimentary,
+        (select count(*)::int from app_private.subscriptions where workspace_id = ${workspaceId} and order_id is not null) as paid,
+        (select count(*)::int from app_private.orders where workspace_id = ${workspaceId}) as orders
+    `
+    expect(counts).toEqual({ complimentary: 1, paid: 0, orders: 0 })
+
+    // ยังขายไม่ได้ และคนอื่นยังมองไม่เห็น workspace/แบบนี้
+    await expect(service.createOrder(freshActor, { workspaceId, operationId: randomUUID(), kind: 'pro' }))
+      .rejects.toMatchObject({ status: 503, code: 'PURCHASE_UNAVAILABLE' })
+    await expect(service.getEntitlements(otherActor, workspaceId))
+      .rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' })
+    await expect(service.authorizeExport(otherActor, design.id))
+      .rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' })
   })
 })

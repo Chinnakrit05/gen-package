@@ -10,6 +10,8 @@ import { FALLBACK_AMOUNT_MINOR, formatBaht } from './PaywallModal'
 // จึงใช้ราคาสำรองเดียวกับ PaywallModal และไม่แสดงจำนวนเครดิต (ไม่เดาตัวเลขที่ผู้ดูแลปรับได้)
 // ยังไม่เปิดขาย (purchasesEnabled false — ผู้เยี่ยมชมเป็น false เสมอ): ปุ่มของแพ็กเกจที่ต้องจ่ายเป็น "เปิดขายเร็ว ๆ นี้"
 // แบบกดไม่ได้ (รวมต่ออายุ Pro) + ป้ายแจ้งใต้หัวหน้า + FAQ วิธีชำระบอกว่ายังไม่เปิด — ไม่มีข้อความให้ติดต่อผู้ดูแล
+// ช่วงเปิดใช้ฟรี (สมาชิกที่ openAccess): ป้ายใต้หัวหน้าบอกว่าใช้ Pro ได้ฟรีพร้อมโควตาเครดิต และแบบที่ยังไม่ซื้อ
+// จะกลับไปใช้กติกาปกติเมื่อเปิดขาย (ช่วงนี้ไม่ออกสิทธิ์ถาวร) — การ์ด Pro เป็น "ใช้ฟรีอยู่" ต่อรอบให้อัตโนมัติ
 
 export type PricingViewer =
   | { kind: 'guest' }
@@ -20,6 +22,8 @@ export type PricingViewer =
       credits: number
       projectName: string
       activeLicensed: boolean
+      // ช่วงเปิดใช้ฟรี (Entitlements.openAccess): plan เป็น 'pro' จากรอบ Pro ฟรีที่ต่อเองทุกรอบ
+      openAccess?: boolean
     }
 
 export interface PricingPageProps {
@@ -77,6 +81,7 @@ export function PricingPage({ viewer, catalog, purchasesEnabled, onClose, onChoo
   const guest = viewer.kind === 'guest'
   const member = viewer.kind === 'member' ? viewer : null
   const isPro = member?.plan === 'pro'
+  const openAccess = member?.openAccess === true
 
   const designMinor = catalog?.design.amountMinor ?? FALLBACK_AMOUNT_MINOR.design
   const proMinor = catalog?.pro.amountMinor ?? FALLBACK_AMOUNT_MINOR.pro
@@ -87,6 +92,16 @@ export function PricingPage({ viewer, catalog, purchasesEnabled, onClose, onChoo
   const periodDays = catalog?.pro.periodDays ?? 30
   // Pro คุ้มกว่าซื้อรายแบบเมื่อทำตั้งแต่ N แบบต่อรอบ (N×ราคาแบบ > ราคา Pro)
   const breakEven = Math.floor(proMinor / designMinor) + 1
+
+  const openAccessNote = proCredits !== null
+    ? t(
+      `ทุกบัญชีดาวน์โหลดไฟล์ผลิตได้ทุกแบบ ไม่มีลายน้ำ และได้เครดิต AI ${proCredits} เครดิตทุก ${periodDays} วัน — เมื่อเปิดขาย แบบที่ยังไม่ได้ซื้อจะกลับไปใช้กติกาปกติ`,
+      `Every account can download production files for any design, with no watermark and ${proCredits} AI credits every ${periodDays} days. Once sales open, designs you have not bought follow the normal rules.`,
+    )
+    : t(
+      `ทุกบัญชีดาวน์โหลดไฟล์ผลิตได้ทุกแบบ ไม่มีลายน้ำ และได้เครดิต AI ทุก ${periodDays} วัน — เมื่อเปิดขาย แบบที่ยังไม่ได้ซื้อจะกลับไปใช้กติกาปกติ`,
+      `Every account can download production files for any design, with no watermark and AI credits every ${periodDays} days. Once sales open, designs you have not bought follow the normal rules.`,
+    )
 
   const projectLabel = member ? `“${member.projectName}”` : ''
   const comingSoon = { label: t('เปิดขายเร็ว ๆ นี้', 'Coming soon'), disabled: true, primary: false }
@@ -165,7 +180,9 @@ export function PricingPage({ viewer, catalog, purchasesEnabled, onClose, onChoo
       ],
       cta: !purchasesEnabled
         ? isPro
-          ? { label: t('ต่ออายุได้เมื่อเปิดขาย', 'Renewal opens soon'), disabled: true, primary: false }
+          ? openAccess
+            ? { label: t('ต่อรอบให้อัตโนมัติ', 'Renews automatically'), disabled: true, primary: false }
+            : { label: t('ต่ออายุได้เมื่อเปิดขาย', 'Renewal opens soon'), disabled: true, primary: false }
           : comingSoon
         : guest
           ? { label: t('เข้าสู่ระบบเพื่อสมัคร Pro', 'Sign in to go Pro'), disabled: false, primary: true }
@@ -173,9 +190,11 @@ export function PricingPage({ viewer, catalog, purchasesEnabled, onClose, onChoo
             ? { label: t('ต่ออายุ Pro', 'Renew Pro'), disabled: false, primary: true }
             : { label: t('สมัคร Pro', 'Go Pro'), disabled: false, primary: true },
       current: isPro
-        ? member?.proUntilLabel
-          ? t(`ใช้อยู่ · ถึง ${member.proUntilLabel}`, `Active · until ${member.proUntilLabel}`)
-          : t('แพ็กเกจปัจจุบัน', 'Current plan')
+        ? openAccess
+          ? t('ใช้ฟรีอยู่', 'Free for now')
+          : member?.proUntilLabel
+            ? t(`ใช้อยู่ · ถึง ${member.proUntilLabel}`, `Active · until ${member.proUntilLabel}`)
+            : t('แพ็กเกจปัจจุบัน', 'Current plan')
         : null,
       featured: true,
       note: t(`คุ้มกว่าซื้อรายแบบ เมื่อทำตั้งแต่ ${breakEven} แบบต่อเดือน`, `Cheaper than per-design from ${breakEven} designs a month`),
@@ -240,10 +259,15 @@ export function PricingPage({ viewer, catalog, purchasesEnabled, onClose, onChoo
           'ระบบชำระเงินออนไลน์ยังไม่เปิดให้บริการ กดซื้อแล้วระบบจะสร้างคำสั่งซื้อไว้ให้ ติดต่อผู้ดูแลเพื่อเปิดสิทธิ์',
           'Online payment is not open yet. Pressing buy creates an order; contact the administrator to activate it.',
         )
-        : t(
-          'ยังไม่เปิดรับชำระเงิน เราจะประกาศให้ทราบเมื่อเปิดขาย ระหว่างนี้ออกแบบและดูพรีวิวได้ฟรีทุกอย่าง',
-          'Payments are not open yet — we will announce when sales open. Meanwhile, design and preview everything for free.',
-        ),
+        : openAccess
+          ? t(
+            'ยังไม่เปิดรับชำระเงิน เราจะประกาศให้ทราบเมื่อเปิดขาย ระหว่างนี้ทุกบัญชีใช้ Pro ได้ฟรี',
+            'Payments are not open yet — we will announce when sales open. Meanwhile, every account gets Pro for free.',
+          )
+          : t(
+            'ยังไม่เปิดรับชำระเงิน เราจะประกาศให้ทราบเมื่อเปิดขาย ระหว่างนี้ออกแบบและดูพรีวิวได้ฟรีทุกอย่าง',
+            'Payments are not open yet — we will announce when sales open. Meanwhile, design and preview everything for free.',
+          ),
     },
   ]
 
@@ -280,7 +304,12 @@ export function PricingPage({ viewer, catalog, purchasesEnabled, onClose, onChoo
               'Try unlimited packaging designs with 3D previews, then pay only for the design you send to print — or go Pro to download every design.',
             )}
           </p>
-          {!purchasesEnabled && (
+          {openAccess ? (
+            <div className="pricing-soon" role="note">
+              <b>{t('ตอนนี้ใช้ Pro ได้ฟรี', 'Pro is free for now')}</b>
+              <span>{openAccessNote}</span>
+            </div>
+          ) : !purchasesEnabled && (
             <div className="pricing-soon" role="note">
               <b>{t('ยังไม่เปิดขาย', 'Not on sale yet')}</b>
               <span>
@@ -294,7 +323,9 @@ export function PricingPage({ viewer, catalog, purchasesEnabled, onClose, onChoo
           {member && (
             <div className="pricing-status" role="status">
               <b>{isPro ? 'Pro' : 'Freemium'}</b>
-              {isPro && member.proUntilLabel && <span>{t(`ถึง ${member.proUntilLabel}`, `until ${member.proUntilLabel}`)}</span>}
+              {isPro && (openAccess
+                ? <span>{t('ใช้ฟรีช่วงนี้', 'free for now')}</span>
+                : member.proUntilLabel && <span>{t(`ถึง ${member.proUntilLabel}`, `until ${member.proUntilLabel}`)}</span>)}
               <span className="pricing-status-sep" aria-hidden="true">·</span>
               <span>{t(`เครดิต AI ${member.credits}`, `${member.credits} AI credits`)}</span>
             </div>

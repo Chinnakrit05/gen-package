@@ -17,6 +17,7 @@ const entitlements: Entitlements = {
   },
   devFulfilAvailable: true,
   purchasesEnabled: true,
+  openAccess: false,
 }
 
 const order: Order = {

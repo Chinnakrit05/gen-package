@@ -131,7 +131,7 @@ import type { ProjectSaveState } from './services/projects/durableSaveQueue'
 import { ApiClientError } from './services/api/client'
 import { PaywallModal } from './components/PaywallModal'
 import { PricingPage } from './components/PricingPage'
-import { WATERMARK_ALPHA, WATERMARK_TEXT, watermarkTiles } from './core/watermark'
+import { WATERMARK_ALPHA, WATERMARK_TEXT, previewWatermarked, watermarkTiles } from './core/watermark'
 import { deleteProjectConfirmText, designLicenseKnowledge, saveAsCopyConfirmText } from './core/designLicense'
 import { rasterizeTrustedPreset } from './services/projects/trustedPresetRasterizer'
 import { PRESETS, PRESET_CATS, presetById, presetDataUrl, type Preset } from './core/presets'
@@ -1211,14 +1211,17 @@ export default function App({
   }, [lang])
   const t = (th: string, en: string) => (lang === 'en' ? en : th)
   // --- ด่านสิทธิ์แพ็กเกจ (cloud เท่านั้น; local-demo ไม่มี paywall/ลายน้ำ) — server ตัดสินสิทธิ์จริงทุกครั้ง
-  // entitlements null (โหลดไม่ได้) = ปฏิบัติเหมือน Freemium; ลายน้ำบนพรีวิวเมื่อไม่ใช่ Pro และแบบนี้ยังไม่ซื้อ
+  // entitlements null (โหลดไม่ได้) = ปฏิบัติเหมือน Freemium ยกเว้นลายน้ำ (ดูด้านล่าง)
   const entitlements = cloud?.entitlements ?? null
   const gatePlan = entitlements?.plan ?? 'free'
   const gateCredits = entitlements?.credits ?? 0
   const licensed = useMemo(() => new Set(entitlements?.licensedProjectIds ?? []), [entitlements])
-  const watermarkOn = cloud !== undefined && gatePlan !== 'pro' && !licensed.has(activeId)
-  const watermark = watermarkOn ? WATERMARK_TEXT[lang] : null
   const entitlementsStatus: EntitlementsStatus = cloud?.entitlementsStatus ?? 'ready'
+  // ช่วงเปิดใช้ฟรี (server ตัดสิน, ตัดสินใจ 15 ต.ค. 2026): ทุกบัญชีได้รอบ Pro ฟรี — ไม่มีลายน้ำ/ป้ายราคาเลย
+  const openAccess = entitlements?.openAccess === true
+  // ลายน้ำ (และป้ายราคาบนปุ่มดาวน์โหลด) เฉพาะเมื่อโหลดสิทธิ์สำเร็จแล้วรู้แน่ว่ายังไม่มีสิทธิ์ — ดู previewWatermarked
+  const watermarkOn = cloud !== undefined && previewWatermarked(entitlements, entitlementsStatus === 'ready', activeId)
+  const watermark = watermarkOn ? WATERMARK_TEXT[lang] : null
   const designLicenseOf = (id: string) =>
     designLicenseKnowledge(id, licensed, cloud !== undefined, entitlementsStatus === 'ready')
   // ยังไม่เปิดขาย (server ตัดสิน; entitlements null = ไม่รู้ → ถือว่าไม่เปิด): ซ่อนทุกปุ่มที่ชวนซื้อ
@@ -2970,7 +2973,13 @@ export default function App({
             title={t('แพ็กเกจและเครดิต AI — กดเพื่อดูแพ็กเกจทั้งหมด', 'Plan & AI credits — open to compare plans')}
             onClick={() => setPricingOpen(true)}
           >
-            <b>{gatePlan === 'pro' ? t(`Pro · ถึง ${proUntilLabel}`, `Pro · until ${proUntilLabel}`) : t('Freemium', 'Freemium')}</b>
+            <b>
+              {gatePlan !== 'pro'
+                ? t('Freemium', 'Freemium')
+                : openAccess
+                  ? t('Pro · ใช้ฟรีช่วงนี้', 'Pro · free for now')
+                  : t(`Pro · ถึง ${proUntilLabel}`, `Pro · until ${proUntilLabel}`)}
+            </b>
             <span className="plan-chip-credits">
               <span className="plan-chip-long">{t('เครดิต AI', 'AI credits')}</span>
               <span className="plan-chip-short">AI</span> {gateCredits}
@@ -5607,6 +5616,7 @@ export default function App({
             credits: gateCredits,
             projectName: activeName,
             activeLicensed: licensed.has(activeId),
+            openAccess,
           }}
           catalog={entitlements?.catalog ?? null}
           purchasesEnabled={purchasesEnabled}
