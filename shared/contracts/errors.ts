@@ -1,10 +1,11 @@
 export const API_ERROR_CODES = [
-  'ASSET_NOT_READY',
-  'ASSET_QUOTA_EXCEEDED',
-  'AI_API_KEY_INVALID',
-  'AI_API_KEY_REQUIRED',
+  'AI_CREDITS_EXHAUSTED', // 402 — ไม่มีเครดิต AI (Freemium หรือใช้หมด) ดู docs/billing-freemium-pro.md
   'AI_PROVIDER_UNAVAILABLE',
   'AI_RATE_LIMITED',
+  'AI_REQUEST_IN_PROGRESS', // 409 — operationId เดิมยังจองเครดิตค้างอยู่
+  'ALREADY_LICENSED', // 409 — สั่งซื้อแบบที่ได้สิทธิ์ดาวน์โหลดแล้ว
+  'ASSET_NOT_READY',
+  'ASSET_QUOTA_EXCEEDED',
   'AUTH_REQUIRED',
   'BODY_TOO_LARGE',
   'CONFIGURATION_ERROR',
@@ -14,6 +15,10 @@ export const API_ERROR_CODES = [
   'LEGACY_SOURCE_CHANGED',
   'METHOD_NOT_ALLOWED',
   'NOT_FOUND',
+  'ORDER_NOT_FOUND',
+  'ORDER_NOT_PAYABLE', // 409 — order ถูกยกเลิกแล้ว
+  'PAYMENT_REQUIRED', // 402 — ดาวน์โหลดแบบนี้ต้องซื้อ 149 บาท หรือเป็น Pro
+  'PURCHASE_UNAVAILABLE', // 503 — ยังไม่เปิดขาย (ยังไม่มีผู้ให้บริการชำระเงิน) ดู Entitlements.purchasesEnabled
   'REVISION_CONFLICT',
   'SESSION_INVALID',
   'USER_NOT_ACTIVE',

@@ -1,8 +1,10 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { Login } from './components/Login'
+import { PricingPage } from './components/PricingPage'
 import { LoadingStage } from './components/LoadingBoundary'
 import type { ClientConfig } from './config'
+import { LangCtx, loadLang } from './i18n'
 import { bootstrapSession } from './services/api/session'
 import { createBrowserSupabaseClient } from './services/auth/supabaseAuth'
 import { WorkspaceBootstrapController, type WorkspaceBootstrapState } from './services/auth/workspaceBootstrap'
@@ -24,6 +26,9 @@ export function CloudRoot({ config, startupVariant }: { config: ClientConfig; st
   }, [])
   const [loginError, setLoginError] = useState<string | null>(null)
   const [loginBusy, setLoginBusy] = useState(false)
+  // หน้าแพ็กเกจสำหรับผู้ที่ยังไม่เข้าสู่ระบบ (ไม่มี catalog เพราะ endpoint ต้อง login — ใช้ราคาสำรอง)
+  // ผู้เยี่ยมชมไม่รู้ purchasesEnabled (ต้อง login) → ถือว่ายังไม่เปิดขาย: ปุ่มแพ็กเกจที่ต้องจ่ายเป็น "เปิดขายเร็ว ๆ นี้"
+  const [pricingOpen, setPricingOpen] = useState(false)
   const bootstrapController = useMemo(() => new WorkspaceBootstrapController<Session>({
     bootstrap: (accessToken, signal) => bootstrapSession(config.apiBaseUrl, accessToken, signal),
     refreshSession: async () => {
@@ -97,12 +102,30 @@ export function CloudRoot({ config, startupVariant }: { config: ClientConfig; st
     return <LoadingStage title="กำลังตรวจสอบบัญชี" message="กำลังเตรียมพื้นที่ทำงานของคุณ…" />
   }
   if (!session) {
+    if (pricingOpen) {
+      // หน้าเข้าสู่ระบบอยู่นอก App (ไม่มี LangCtx ของ App) — ใช้ภาษาที่ผู้ใช้เลือกไว้ล่าสุด
+      return (
+        <LangCtx.Provider value={loadLang()}>
+          <PricingPage
+            viewer={{ kind: 'guest' }}
+            catalog={null}
+            purchasesEnabled={false}
+            onClose={() => setPricingOpen(false)}
+            onChoose={() => {
+              setPricingOpen(false)
+              void signIn()
+            }}
+          />
+        </LangCtx.Provider>
+      )
+    }
     return (
       <Login
         onLogin={() => void signIn()}
         busy={loginBusy}
         error={loginError}
         finePrint="บัญชี Google ผ่าน Supabase Auth · session ถูกตรวจโดย server"
+        onShowPricing={() => setPricingOpen(true)}
       />
     )
   }

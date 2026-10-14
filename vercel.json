@@ -4,5 +4,10 @@
       "source": "/api/v1/:path*",
       "destination": "/api/backend?apiPath=:path*"
     }
-  ]
+  ],
+  "functions": {
+    "api/backend.js": {
+      "maxDuration": 60
+    }
+  }
 }

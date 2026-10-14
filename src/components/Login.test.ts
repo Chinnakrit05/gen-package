@@ -20,4 +20,11 @@ describe('Login mode labels', () => {
     expect(markup).toContain('Cloud account')
     expect(markup).not.toContain('เริ่มใช้งานบนเครื่องนี้')
   })
+
+  it('links to the pricing page only when a handler is provided', () => {
+    const withLink = renderToStaticMarkup(createElement(Login, { onLogin() {}, onShowPricing() {} }))
+    expect(withLink).toContain('ดูแพ็กเกจและราคา')
+    const without = renderToStaticMarkup(createElement(Login, { onLogin() {} }))
+    expect(without).not.toContain('ดูแพ็กเกจและราคา')
+  })
 })

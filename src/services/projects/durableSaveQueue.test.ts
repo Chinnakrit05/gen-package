@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SaveProjectInput, SaveReceipt } from '../../../shared/contracts/projects'
 import { freshProject, type Project } from '../../core/project'
+import { ApiClientError } from '../api/client'
 import { MemoryProjectDraftStore, projectDraftKey } from '../drafts/projectDraftStore'
 import { ProjectAssetSidecar, type AssetSidecarScope } from './cloudProjectCodec'
 import { DurableProjectSaveQueue, type DurableSaveQueueOptions } from './durableSaveQueue'
@@ -208,6 +209,25 @@ describe('durable project save queue', () => {
     expect(calls).toHaveLength(2)
     expect(calls[1].operationId).toBe(calls[0].operationId)
     expect(queue.getStatus()).toMatchObject({ state: 'clean', baseRevision: 2 })
+    queue.dispose()
+  })
+
+  it('retries a NETWORK_ERROR from the API client instead of parking the queue offline', async () => {
+    const store = new MemoryProjectDraftStore()
+    let attempts = 0
+    const save = vi.fn(async (input: SaveProjectInput): Promise<SaveReceipt> => {
+      attempts += 1
+      if (attempts === 1) throw new ApiClientError(0, 'NETWORK_ERROR', 'เชื่อมต่อ server ไม่ได้')
+      return receipt(input, 2)
+    })
+    const queue = new DurableProjectSaveQueue(queueOptions(store, save))
+    await queue.start()
+    await queue.capture(project(undefined, 660), new ProjectAssetSidecar(scope).snapshot())
+    await queue.flush()
+    expect(queue.getStatus().state).not.toBe('offline')
+    await vi.waitFor(() => expect(queue.getStatus()).toMatchObject({ state: 'clean', baseRevision: 2 }))
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(save.mock.calls[1][0].operationId).toBe(save.mock.calls[0][0].operationId)
     queue.dispose()
   })
 

@@ -3,7 +3,21 @@ import { loadServerConfig, ServerConfigError } from './config'
 
 describe('loadServerConfig', () => {
   it('uses safe development defaults without credentials', () => {
-    expect(loadServerConfig({})).toEqual({ appEnv: 'development', allowedOrigins: [], supabase: null })
+    expect(loadServerConfig({})).toEqual({ appEnv: 'development', allowedOrigins: [], supabase: null, ai: null })
+  })
+
+  it('reads the optional server AI key and model without requiring them anywhere', () => {
+    expect(loadServerConfig({ BOX_SPEC_MODEL: 'haiku' }).ai).toBeNull()
+    expect(loadServerConfig({ ANTHROPIC_API_KEY: ' sk-ant-test ' }).ai)
+      .toEqual({ anthropicApiKey: 'sk-ant-test', model: 'claude-opus-4-8' })
+    expect(loadServerConfig({ ANTHROPIC_API_KEY: 'sk-ant-test', BOX_SPEC_MODEL: ' haiku ' }).ai)
+      .toEqual({ anthropicApiKey: 'sk-ant-test', model: 'haiku' })
+    expect(loadServerConfig({
+      APP_ENV: 'production',
+      APP_ALLOWED_ORIGINS: 'https://packit.example',
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SECRET_KEY: 'secret',
+    }).ai).toBeNull()
   })
 
   it('requires an explicit origin allowlist outside local/test environments', () => {

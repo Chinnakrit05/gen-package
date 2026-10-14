@@ -68,6 +68,7 @@ function usePouchTexture(
   decos: Deco[],
   fillColor: string | null | undefined,
   fillImage: FillImage | null | undefined,
+  watermark: string | null | undefined,
 ) {
   const { width, height } = pouch.label
   return useArtTexture({
@@ -76,6 +77,7 @@ function usePouchTexture(
     decos,
     fillImage,
     enabled: true,
+    watermark,
     deps: [fillColor, fillImage],
     configure: (t) => {
       t.flipY = false // UV คำนวณเป็นพิกัดแผ่นคลี่ตรง ๆ (y ลง) จึงไม่ต้องพลิก
@@ -680,6 +682,7 @@ function PouchModel({
   dims,
   imperial,
   dimVariant,
+  watermark,
 }: {
   pouch: Pouch
   mat: Material
@@ -689,8 +692,9 @@ function PouchModel({
   dims?: Dim3D[]
   imperial?: boolean
   dimVariant?: 'lines' | 'badge'
+  watermark?: string | null
 }) {
-  const tex = usePouchTexture(pouch, decos, fillColor, fillImage)
+  const tex = usePouchTexture(pouch, decos, fillColor, fillImage, watermark)
   const geo = usePouchGeometry(pouch)
   useEffect(() => () => geo.dispose(), [geo])
 
@@ -974,6 +978,7 @@ export function PouchViewer3D({
   imperial,
   dimVariant,
   lightMode,
+  watermark,
 }: {
   pouch: Pouch
   mat: Material
@@ -984,6 +989,7 @@ export function PouchViewer3D({
   imperial?: boolean
   dimVariant?: 'lines' | 'badge'
   lightMode?: LightMode
+  watermark?: string | null
 }) {
   const dist = Math.max(pouch.H, pouch.W) * 2.6
   return (
@@ -995,7 +1001,7 @@ export function PouchViewer3D({
     >
       <color attach="background" args={['#ffffff']} />
       <SceneLighting mode={lightMode ?? 'soft'} />
-      <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} dimVariant={dimVariant} />
+      <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} dimVariant={dimVariant} watermark={watermark} />
       <OrbitControls makeDefault enableDamping />
     </Canvas>
   )

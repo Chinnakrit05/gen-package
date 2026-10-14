@@ -1,6 +1,6 @@
 # Backend implementation progress
 
-อัปเดตล่าสุด: 22 กันยายน 2026
+อัปเดตล่าสุด: 13 ตุลาคม 2026
 
 เอกสารนี้บันทึกผลที่รันจริง แยกจาก blueprint ใน `backend-implementation-spec.md`
 
@@ -269,3 +269,49 @@ Known gap: ต้องทดสอบ route นี้บน Vercel preview ด�
 - Normal Cloud build ด้วย dummy public/private sentinels ผ่าน และตรวจ frontend ว่ามี public config แต่ไม่มี server secret; ไม่ใช้ credentials จริงหรือเรียก remote Cloud ในการตรวจนี้
 - รันทดสอบเฉพาะ Windows/Node 24.19.0/npm 11.17.0; npm มี allow-scripts warning ของ esbuild แต่ install/tests/build ผ่านโดยไม่เปลี่ยน global approval policy; ยังมีคำเตือนขนาด 3D chunk เดิม
 - `origin/main` หลัง fetch ยังเป็น `8e0eea9` และรวมอยู่ใน feature history แล้ว; ไม่แก้ branch tracking, Vercel, Google, Supabase หรือ database นอกเครื่อง รายการก่อน merge อยู่ใน `docs/main-handoff.md` โดยต้องให้เจ้าของ Vercel ที่ติดตาม main ตรวจผลกระทบก่อน
+
+## Freemium / Pro paywall — 13 ตุลาคม 2026
+
+สถานะ: **implemented บน branch `claude/freemium-pro-packages-6050c9`; ตรวจได้เฉพาะส่วนที่ไม่ต้องใช้ Docker — pgTAP, integration และ local HTTP/E2E smoke ยัง NOT RUN; ยังไม่เลือก payment provider จึงไม่มีการรับเงินจริง**
+
+- กติกาที่เจ้าของผลิตภัณฑ์ตัดสินใจ: Freemium (ออกแบบ/ดู blueprint+3D ได้, AI 0 เครดิต, ดาวน์โหลดไฟล์ผลิตไม่ได้, ลายน้ำบนพรีวิว, `.genpkg.json` ยังใช้ได้) / ซื้อรายแบบ 149 บาทต่อ project id (ดาวน์โหลดแบบนั้น + เครดิต AI แถม) / Pro 399 บาท/เดือน (ทุกแบบ + เครดิตรายเดือน; แบบที่ได้สิทธิ์ตอนเป็น Pro ยังดาวน์โหลดได้หลังหมดอายุ) — รายละเอียดใน [billing-freemium-pro.md](billing-freemium-pro.md) ซึ่งแทนตัวเลขเดิม (390 → 399, AI ฟรี 5 → 0) ใน spec §10–§12; เพิ่มหมายเหตุวันที่ไว้ใน `backend-plan.md` และ `backend-implementation-spec.md` §11.3 โดยไม่แก้ข้อความเดิม
+- ฐานข้อมูล: migration `20261013000600_billing.sql` เพิ่ม `plan_catalog`, `orders`, `subscriptions`, `design_licenses`, `credit_balances`, `credit_ledger`, `ai_requests` ใน `app_private` (RLS/revoke/grant แบบเดิม) + RPC `get_entitlements` / `authorize_export` / `reserve_ai_credit` / `settle_ai_request` / `create_order` / `fulfil_order`; จำนวนเครดิตเป็น placeholder ในตาราง catalog (รายแบบ 10, Pro 100 ต่อ 30 วัน) แก้ได้โดยไม่แตะโค้ด
+- server: `GET /api/v1/billing/entitlements`, `POST /api/v1/projects/:id/export-authorizations` (402 `PAYMENT_REQUIRED` พร้อมราคา), `POST /api/v1/billing/orders` (201 pending, `provider = 'none'`, `checkoutUrl = null`), `POST /api/v1/billing/orders/:id/dev-fulfil` (เฉพาะ development/test; ที่อื่น 404); Cloud AI route ใช้ `ANTHROPIC_API_KEY` ของ server แทน BYOK (ถอด header คีย์และรหัส `AI_API_KEY_*`), หักเครดิตตอนจอง คืนเมื่อ provider ล้ม, ไม่มีคีย์ → 503 `CONFIGURATION_ERROR`, เครดิตหมด → 402 `AI_CREDITS_EXHAUSTED`
+- client: paywall modal สองโหมด (design/pro) อ่านราคาจาก catalog, ปุ่มดาวน์โหลดขอ authorization จาก server ก่อนสร้างไฟล์ทุกครั้ง, ชิปแพ็กเกจ/เครดิตใน header, ลายน้ำพรีวิวบน blueprint/3D/แผ่นสติกเกอร์ (ไม่ใช่ Deco, ไม่ไปถึงไฟล์ส่งออก); local-demo ไม่มี paywall/ลายน้ำ; fixture ตรวจด้วยตา `tests/browser/paywall.html` (fake bridge ไม่ต้องมี Supabase)
+- สคริปต์/เทสต์: cleanup ใน `e2e-local-cloud`, `verify-local-http`, `cleanup-local-test-fixtures` และ integration ทุกไฟล์ลบตาราง billing ก่อน `projects` (FK restrict); `report-local-cleanup` รายงานตัวนับ billing + `ai_requests` ค้าง reserved เกิน 15 นาที / orders ค้าง pending เกิน 1 วัน แบบอ่านอย่างเดียว; `verify-local-http` ใช้บัญชี fixture แยกต่อ mode (billing smoke เปลี่ยน workspace เป็น Pro) ตั้ง `ANTHROPIC_API_KEY` ว่างให้ child process และคาดหวัง AI route ใหม่ (401 ไม่มี bearer / 503 ไม่มีคีย์ server / 422 ไม่มี `operationId`) + billing smoke (free → สั่ง Pro → dev-fulfil → pro พร้อมเครดิต); เพิ่ม `tests/integration/billing.lifecycle.test.ts` (free/402/เครดิตหมด → ซื้อรายแบบ + fulfil ซ้ำ idempotent → จอง/คืนเครดิต → Pro license ตอน export + ต่ออายุ → order ยกเลิกจ่ายไม่ได้ → ผู้ใช้อื่นเห็น 404)
+- env/เอกสาร: `.env.example`, `.env.cloud.example`, README และ `backend-setup.md` อธิบาย `ANTHROPIC_API_KEY` + `BOX_SPEC_MODEL` เป็นคีย์ AI ของระบบบน cloud และว่า BYOK เหลือเฉพาะ local demo; `CLAUDE.md` เพิ่มหัวข้อ "แพ็กเกจ / billing"
+- หลัง adversarial review: เครดิตที่ค้าง `reserved` (function ถูก kill/คืนเครดิตไม่สำเร็จ) ถูกคืนเองตอนจองครั้งถัดไปหลัง 15 นาที; provider timeout 50 วินาทีไม่ retry และ `api/backend.js` `maxDuration` 60 ใน vercel.json; ผล AI กลับมาแล้วแต่ settle ล้ม → ยังตอบ 200 ไม่คืนเครดิต; paywall อยู่เหนือแผง AI (`.modal-overlay` z-index 300) มีโฟกัส/Esc/`aria-modal`; 402 ตอนดาวน์โหลดรีเฟรชสิทธิ์ฝั่ง client
+- ที่ตรวจได้โดยไม่ใช้ Docker (13 ตุลาคม 2026): `npx tsc --noEmit` PASS, `npm test` **76 files, 883 passed + 1 skipped**, `npm run build` PASS (คำเตือนขนาด 3D chunk เดิม), `node --check` ของทุกสคริปต์ PASS; fixture `tests/browser/paywall.html` ตรวจด้วยตาใน dev server ผ่าน (Freemium ชิป/ลายน้ำ blueprint+3D/ป้าย 149 ฿ → modal → สั่งซื้อ → จำลองชำระ → ป้ายหาย/เครดิต 10/แท็ก "ซื้อแล้ว"; Pro แสดงวันหมดอายุ)
+- **NOT RUN** (ต้องมี Docker/Supabase local ซึ่งไม่พร้อมบนเครื่องที่พัฒนา): `npm run db:reset`, `npm run db:test` (รวม `0006_billing.test.sql`), `npm run db:test:integration` (รวม billing lifecycle), `npm run test:http:local`, `npm run test:e2e:local`, `npm run ops:cleanup:report` — ต้องรันให้ผ่านก่อน merge; staging ต้อง push migration billing และตั้ง `ANTHROPIC_API_KEY` ใน Vercel ก่อน AI บน cloud จะใช้ได้
+- ไม่มี provider: ไม่มี checkout/webhook จริง, modal แจ้ง "ระบบชำระเงินยังไม่เปิดให้บริการ" และมีปุ่มจำลองการชำระเฉพาะ `APP_ENV` development/test; การเลือก provider, ภาษี/เอกสาร และ refund policy ยังเป็นคำถามเปิดตาม spec §11.3
+
+## ซ่อนการซื้อ + แก้ช่องว่างจากการตรวจ — 13 ตุลาคม 2026
+
+สถานะ: **implemented บน branch `claude/freemium-pro-packages-6050c9`; ส่วนที่ต้องใช้ Docker ยัง NOT RUN**
+
+- เจ้าของผลิตภัณฑ์ตัดสินใจซ่อนการซื้อจนกว่าจะมีผู้ให้บริการชำระเงิน: `Entitlements.purchasesEnabled` (true เฉพาะ development/test), `POST /billing/orders` → 503 `PURCHASE_UNAVAILABLE` บน staging/production; paywall, หน้าแพ็กเกจ (สมาชิก/ผู้เยี่ยมชม) และชิปแพ็กเกจไม่มีปุ่มซื้อ/ต่ออายุ แสดง "ยังไม่เปิดขาย" แทนข้อความ "ติดต่อผู้ดูแล"
+- AI: เก็บ model/โทเคน/แนบรูปต่อคำขอใน `ai_requests` (settle 9 พารามิเตอร์), จำกัดคำขอค้างต่อ workspace ไม่เกิน 2 (`AI_CONCURRENCY_LIMIT` → 429), สคริปต์ `npm run ops:ai-usage:report` สำหรับตั้งราคาเครดิตจากต้นทุนจริง; migration แก้ในไฟล์เดิมเพราะยังไม่เคย apply ที่ไหน
+- server log JSON บรรทัดเดียว (`server/logging.ts`) ตัดคีย์/token/อีเมล ครอบ 5xx ของ AI/billing และ order created/fulfilled; `mapBillingDatabaseError` มี unit test ครบทุกข้อความ
+- client: สิทธิ์รีเฟรชเมื่อออนไลน์/focus/เปิดหน้าแพ็กเกจ พร้อมสถานะ error + ลองใหม่; ปุ่ม AI ตอนเครดิต 0 เปิดหน้าแพ็กเกจแทนการปิดปุ่ม และไม่เสนอซื้อรายแบบให้ Pro; ออฟไลน์ปิดปุ่มดาวน์โหลดไฟล์ผลิตพร้อมคำใบ้ และ fetch ล้มเป็น `NETWORK_ERROR` อ่านเข้าใจได้; เตือนก่อนลบ/ทำสำเนางานที่ซื้อแล้ว; ข้อความใหม่แปลสองภาษา; fixture เพิ่ม purchases off / offline / plan error
+- ตรวจแล้ว: `npx tsc --noEmit` PASS, `npm test` **81 files, 964 passed + 1 skipped**, `npm run build` PASS; ตรวจด้วยตาใน fixture ทั้งสถานะยังไม่เปิดขาย, ออฟไลน์, โหลดแพ็กเกจไม่สำเร็จ, AI เครดิต 0 และยืนยันว่า local-demo ไม่มีชิป/ลายน้ำ/ป้ายราคาเหมือนเดิม
+- **NOT RUN**: pgTAP `0006_billing.test.sql` (`plan(131)`), `tests/integration/billing.lifecycle.test.ts`, `test:http:local` (รวม export-authorizations 402 → 200) และรายงานต้นทุนกับฐานข้อมูลจริง
+
+## รันเทสต์ที่ต้องใช้ Docker — 14 ตุลาคม 2026
+
+สถานะ: **PASS ครบทุกชุด local บน macOS (Docker Desktop, Supabase CLI 2.117.0, Postgres 17.6)**
+
+- `supabase start` / `db:reset`: migration ทั้ง 6 รวม billing ลงฐานข้อมูลจริงได้โดยไม่ต้องแก้
+- `db:test` 6 files / 264 assertions, `db:test:integration` 7 files / 18 tests, `db:test:restore`, `test:http:local` (dev + preview), `ops:cleanup:report` และ `ops:ai-usage:report` ผ่านทั้งหมด; รายงานต้นทุน AI ตรวจกับข้อมูลตัวอย่างชั่วคราวแล้วตัวเลขตรงที่คำนวณมือ
+- `test:e2e:local` ผ่าน 2 รอบติด หลังแก้ selector ที่เก่าตั้งแต่แกลเลอรีงาน (`d89625f`) และเพิ่มขั้น paywall end-to-end (Freemium ดาวน์โหลด → paywall → สั่งซื้อ → จำลองชำระ → ได้ SVG ไม่มีลายน้ำ + ตรวจ license/เครดิตใน DB); บน macOS ต้องตั้ง `PACKIT_E2E_CHROME` เป็น path ของ Chrome
+- บนเครื่องนี้ Supabase ของโปรเจกต์อื่นใช้พอร์ต 54321–54327 เดียวกัน จึงต้องหยุดโปรเจกต์นั้นชั่วคราวก่อน `supabase start` (ข้อมูลไม่หาย)
+
+## ลง migration billing บน staging — 14 ตุลาคม 2026
+
+สถานะ: **PUSHED / parity PASS** — ยังไม่ merge โค้ดและยังไม่ได้ตั้งคีย์ AI ใน Vercel
+
+- link `gen-package-staging` (`feuwdzgixarxpsscrwxp`) จากเครื่อง macOS ด้วย access token ของเจ้าของ (CLI ใช้ login role ชั่วคราว ไม่ต้องใช้รหัสผ่านฐานข้อมูล); บัญชีเห็นอีกโปรเจกต์ `jaitang` ซึ่งไม่ได้แตะ
+- `db push --dry-run` แสดงเฉพาะ `20261013000600_billing.sql` ไม่มี seed/role แล้ว push ด้วย `--skip-vault` (config.toml ไม่มี vault อยู่แล้ว); staging Postgres 17.6 เท่ากับที่ทดสอบใน local
+- `npm run staging:readiness` PASS ทุกข้อ (6 migrations ตรงกัน, up to date, bucket/Auth config ตรง); `inspect db table-stats` เห็นตาราง billing 7 ตาราง (`plan_catalog` 2 แถว) และข้อมูลเดิม (projects ~48, app users 13) ไม่เปลี่ยน
+- แอป staging ที่ deploy อยู่ (โค้ด main เดิม) ยังปกติ: root/health 200, `/api/v1/projects` ไม่ login 401 — migration เป็นแบบเพิ่มอย่างเดียวจึงไม่กระทบโค้ดเก่า
+- ขั้นถัดไปก่อน merge: ตรวจ `APP_ENV=staging` ทุก environment ของ Vercel รวม Preview; `ANTHROPIC_API_KEY`/`BOX_SPEC_MODEL` ยังไม่ตั้ง (ไม่บังคับ — ไม่มีคีย์ = AI บน cloud ตอบ 503 ก่อนจองเครดิต และระหว่างยังไม่เปิดขายทุกคนมีเครดิต 0 ปุ่ม AI จึงเปิดหน้าแพ็กเกจแทน); ตั้งเมื่อพร้อมเปิด AI พร้อมวงเงินที่ Anthropic
+

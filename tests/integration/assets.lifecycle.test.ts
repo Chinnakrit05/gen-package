@@ -56,6 +56,25 @@ describe('real asset lifecycle and project references', () => {
     }
     for (const userId of userIds) {
       await sql.begin(async (tx) => {
+        // billing — ลบก่อน projects: orders/design_licenses อ้าง projects แบบ restrict, subscriptions อ้าง orders
+        await tx`delete from app_private.ai_requests where workspace_id in (
+          select workspace_id from app_private.workspace_members where user_id = ${userId}
+        )`
+        await tx`delete from app_private.credit_ledger where workspace_id in (
+          select workspace_id from app_private.workspace_members where user_id = ${userId}
+        )`
+        await tx`delete from app_private.credit_balances where workspace_id in (
+          select workspace_id from app_private.workspace_members where user_id = ${userId}
+        )`
+        await tx`delete from app_private.design_licenses where workspace_id in (
+          select workspace_id from app_private.workspace_members where user_id = ${userId}
+        )`
+        await tx`delete from app_private.subscriptions where workspace_id in (
+          select workspace_id from app_private.workspace_members where user_id = ${userId}
+        )`
+        await tx`delete from app_private.orders where workspace_id in (
+          select workspace_id from app_private.workspace_members where user_id = ${userId}
+        )`
         await tx`delete from app_private.project_assets where workspace_id in (
           select workspace_id from app_private.workspace_members where user_id = ${userId}
         )`

@@ -37,6 +37,25 @@ describe('real Supabase session bootstrap', () => {
     const cleanupAppUserId = appUserId
     if (cleanupAppUserId && sql) {
       await sql.begin(async (tx) => {
+        // billing — ลบก่อน projects: orders/design_licenses อ้าง projects แบบ restrict, subscriptions อ้าง orders
+        await tx`delete from app_private.ai_requests where workspace_id in (
+          select workspace_id from app_private.workspace_members where user_id = ${cleanupAppUserId}
+        )`
+        await tx`delete from app_private.credit_ledger where workspace_id in (
+          select workspace_id from app_private.workspace_members where user_id = ${cleanupAppUserId}
+        )`
+        await tx`delete from app_private.credit_balances where workspace_id in (
+          select workspace_id from app_private.workspace_members where user_id = ${cleanupAppUserId}
+        )`
+        await tx`delete from app_private.design_licenses where workspace_id in (
+          select workspace_id from app_private.workspace_members where user_id = ${cleanupAppUserId}
+        )`
+        await tx`delete from app_private.subscriptions where workspace_id in (
+          select workspace_id from app_private.workspace_members where user_id = ${cleanupAppUserId}
+        )`
+        await tx`delete from app_private.orders where workspace_id in (
+          select workspace_id from app_private.workspace_members where user_id = ${cleanupAppUserId}
+        )`
         await tx`delete from app_private.workspace_members where user_id = ${cleanupAppUserId}`
         await tx`delete from app_private.workspaces where owner_user_id = ${cleanupAppUserId}`
         await tx`delete from app_private.auth_identities where app_user_id = ${cleanupAppUserId}`

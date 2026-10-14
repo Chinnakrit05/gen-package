@@ -5,6 +5,7 @@ import type { Project } from '../core/project'
 import type { ProjectSummary } from '../../shared/contracts/projects'
 import { getMaterial, packKind } from '../core/materials'
 import { TEMPLATES } from '../core/templates'
+import { useT } from '../i18n'
 import { IconBottle, IconBox, IconCard, IconPouch } from './icons'
 
 type ProjectItem = Project | ProjectSummary
@@ -50,6 +51,8 @@ interface ProjectGalleryProps {
   onSwitch: (id: string) => void
   onRename: () => void
   onDelete: (id: string) => void
+  // cloud: id ของแบบที่ซื้อแล้ว/ได้สิทธิ์ดาวน์โหลด → ป้าย "ซื้อแล้ว" บนการ์ดและปุ่มเลือกงาน
+  licensedIds?: ReadonlySet<string>
 }
 
 function projectKind(project?: Project): 'box' | 'vessel' | 'pouch' | 'card' | 'unknown' {
@@ -80,8 +83,9 @@ function ProjectThumb({ project }: { project?: Project }) {
 
 export function ProjectGallery({
   items, activeId, activeProject, busy, createDisabled, deleteDisabled,
-  onCreate, onSwitch, onRename, onDelete,
+  onCreate, onSwitch, onRename, onDelete, licensedIds,
 }: ProjectGalleryProps) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -93,6 +97,15 @@ export function ProjectGallery({
   const current = allItems.find((item) => item.id === activeId)
   const filtered = useMemo(() => filterGalleryItems(allItems, query), [allItems, query])
   const galleryWidth = Math.max(360, Math.min(4, allItems.length) * 264 + 44)
+  // ป้ายแบบที่มีสิทธิ์ดาวน์โหลดไฟล์ผลิต (ซื้อรายแบบ หรือโหลดไว้ตอนเป็น Pro)
+  const licensedTag = (
+    <span
+      className="project-gallery-licensed"
+      title={t('ซื้อแล้ว — ดาวน์โหลดไฟล์ผลิตได้', 'Purchased — production files can be downloaded')}
+    >
+      {t('ซื้อแล้ว', 'Purchased')}
+    </span>
+  )
 
   const close = () => {
     setOpen(false)
@@ -160,6 +173,7 @@ export function ProjectGallery({
         <span className="project-gallery-trigger-icon"><LayoutGrid size={18} aria-hidden="true" /></span>
         <span className="project-gallery-trigger-copy">
           <strong>{current?.name ?? 'งาน'}</strong>
+          {current && licensedIds?.has(current.id) && licensedTag}
         </span>
         <span className="project-gallery-count">{allItems.length} งาน</span>
         <ChevronDown className="project-gallery-chevron" size={17} aria-hidden="true" />
@@ -222,6 +236,7 @@ export function ProjectGallery({
                       >
                         <ProjectThumb project={item.detail} />
                         {active && <span className="project-gallery-active-tag" aria-hidden="true">เปิดอยู่</span>}
+                        {licensedIds?.has(item.id) && licensedTag}
                         <span className="project-gallery-card-body">
                           <span className="project-gallery-card-name">{item.name}</span>
                           <span className="project-gallery-card-meta">{typeLabel ?? 'โปรเจกต์'}</span>

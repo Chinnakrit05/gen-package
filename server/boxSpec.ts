@@ -385,15 +385,48 @@ function buildUserContent(prompt: string, current?: CurrentSpec): string {
     : prompt
 }
 
+// โทเคนที่ provider นับจริงต่อคำขอ (ไว้ดูต้นทุนบน cloud) — cache_* ของ SDK เป็น null ได้ จึงแปลงเป็น 0
+export interface ClaudeUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheCreationTokens: number
+}
+
+export interface BoxSpecWithUsage {
+  spec: BoxSpecResult
+  model: string // โมเดลที่ provider ตอบจริง (อาจเป็น id เต็มของ alias ที่ขอ)
+  usage: ClaudeUsage
+}
+
+// legacy /api/box-spec และ server/handler.ts ใช้ askClaude (ทิ้ง usage); cloud ใช้ askClaudeWithUsage
 export async function askClaude(
   apiKey: string,
   model: string,
   prompt: string,
   current?: CurrentSpec,
   image?: RefImage,
+  limits?: { timeoutMs?: number; maxRetries?: number },
 ): Promise<BoxSpecResult> {
+  return (await askClaudeWithUsage(apiKey, model, prompt, current, image, limits)).spec
+}
+
+export async function askClaudeWithUsage(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  current?: CurrentSpec,
+  image?: RefImage,
+  limits?: { timeoutMs?: number; maxRetries?: number },
+): Promise<BoxSpecWithUsage> {
   // BYOK requests must never reuse a client created with another user's key.
-  const client = new Anthropic({ apiKey })
+  // limits: cloud จำกัดเวลาให้สั้นกว่าเวลาสูงสุดของ serverless function เพื่อให้ timeout กลายเป็น
+  // AiProviderError แล้วเข้าทางคืนเครดิต (ค่าเริ่มต้นของ SDK 10 นาที + retry 2 ครั้ง นานกว่า function จะอยู่ได้)
+  const client = new Anthropic({
+    apiKey,
+    ...(limits?.timeoutMs !== undefined ? { timeout: limits.timeoutMs } : {}),
+    ...(limits?.maxRetries !== undefined ? { maxRetries: limits.maxRetries } : {}),
+  })
   const content: Anthropic.ContentBlockParam[] = []
   if (image) {
     content.push({
@@ -420,7 +453,16 @@ export async function askClaude(
     (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'box_spec',
   )
   if (!block) throw new Error('ไม่พบผลลัพธ์จากโมเดล')
-  return sanitize(block.input as Record<string, unknown>, false)
+  return {
+    spec: sanitize(block.input as Record<string, unknown>, false),
+    model: msg.model,
+    usage: {
+      inputTokens: msg.usage.input_tokens,
+      outputTokens: msg.usage.output_tokens,
+      cacheReadTokens: msg.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: msg.usage.cache_creation_input_tokens ?? 0,
+    },
+  }
 }
 
 // --- backend: claude CLI (ใช้ login ของ Claude Code ในเครื่อง ไม่ต้องมี API key) ---

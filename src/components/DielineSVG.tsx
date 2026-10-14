@@ -4,6 +4,7 @@ import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGStri
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 import { dimTextSize } from '../core/templates/shared'
+import { WATERMARK_ALPHA, watermarkTiles } from '../core/watermark'
 import { useT } from '../i18n'
 
 const DIM_COLOR = '#1b6ea8'
@@ -303,6 +304,7 @@ export const DielineSVG = memo(function DielineSVG({
   lowResDpi,
   fillLowDpi,
   clearFilm = false,
+  watermark = null,
 }: {
   dieline: Dieline
   showDims: boolean
@@ -332,6 +334,9 @@ export const DielineSVG = memo(function DielineSVG({
   lowResDpi?: Map<string, number> // id รูปที่ความละเอียดต่ำ → dpi (ป้ายเตือนบนรูป; ไม่ติดไปไฟล์ส่งออก)
   fillLowDpi?: number | null // รูปพื้นความละเอียดต่ำ → dpi
   clearFilm?: boolean // วัสดุฟิล์มใส: ลายตารางหมากรุกใต้แผง = ส่วนที่ไม่มีลายจะใส (พรีวิวเท่านั้น)
+  // ลายน้ำพรีวิว (Freemium): ข้อความซ้ำเฉียงทับหลังสุดใน rotor — ไม่ใช่ Deco จึงไม่เข้า snap/เลือก/ลาก
+  // และไม่ไปถึงไฟล์ส่งออก (ไฟล์ใช้ dielineSVGString คนละทาง)
+  watermark?: string | null
 }) {
   const [showRuler, setShowRuler] = useState(false)
   const t = useT()
@@ -1655,6 +1660,31 @@ export const DielineSVG = memo(function DielineSVG({
             </text>
           )
         })}
+      {/* ลายน้ำพรีวิว (Freemium) — ชั้นบนสุดของ rotor, ไม่รับ pointer จึงไม่กวนลาก/เลือก/snap */}
+      {watermark && (
+        <g className="watermark" pointerEvents="none" aria-hidden="true">
+          {watermarkTiles(dieline.width, dieline.height).map((tile, i) => (
+            <text
+              key={i}
+              x={tile.x}
+              y={tile.y}
+              transform={`rotate(${tile.angle} ${tile.x} ${tile.y})`}
+              fontSize={tile.size}
+              fontWeight={700}
+              fill="#111"
+              stroke="#fff"
+              strokeWidth={tile.size * 0.04}
+              strokeLinejoin="round"
+              paintOrder="stroke"
+              opacity={WATERMARK_ALPHA}
+              textAnchor="middle"
+              dominantBaseline="central"
+            >
+              {watermark}
+            </text>
+          ))}
+        </g>
+      )}
       </g>
     </svg>
     {/* ถังขยะลบเส้นไกด์ที่ขอบ canvas — โผล่ตามแกนของเส้นที่ชี้/ลากอยู่ (ขวา=เส้นตั้ง, ล่าง=เส้นนอน) */}

@@ -6,13 +6,14 @@ import type { SessionBootstrapData } from '../../shared/contracts/auth'
 import type { HealthData } from '../../shared/contracts/system'
 import type { DeleteProjectInput, SaveProjectInput } from '../../shared/contracts/projects'
 import { createSupabaseAssetService } from '../adapters/supabase/assetService'
+import { createSupabaseBillingRepository } from '../adapters/supabase/billingRepository'
 import { createSupabaseProjectRepository } from '../adapters/supabase/projectRepository'
 import { createSupabaseSessionService } from '../adapters/supabase/sessionService'
 import type { ServerConfig } from '../config'
+import { errorMessageForLog, logServerEvent } from '../logging'
 import type { SessionService } from '../modules/identity/sessionService'
 import { AssetService } from '../modules/assets/assetService'
-import { AiProviderError, AnthropicAiService, type AiService } from '../modules/ai/aiService'
-import { readRequestApiKey } from '../modules/ai/requestApiKey'
+import { AiProviderError, AnthropicAiService, type AiBoxSpecOutput, type AiService } from '../modules/ai/aiService'
 import { parseCurrent, parseImage } from '../boxSpec'
 import {
   assetDownloadRequestSchema,
@@ -20,6 +21,18 @@ import {
   assetOperationSchema,
   createAssetUploadIntentSchema,
 } from '../modules/assets/validation'
+import {
+  BillingService,
+  type AiRequestUsage,
+  type BillingRepository,
+  type BillingServiceOptions,
+} from '../modules/billing/billingService'
+import {
+  aiBoxSpecRequestSchema,
+  createOrderInputSchema,
+  entitlementsQuerySchema,
+  orderIdSchema,
+} from '../modules/billing/validation'
 import { decodeProjectCursor } from '../modules/projects/canonical'
 import { ProjectService } from '../modules/projects/projectService'
 import {
@@ -55,6 +68,10 @@ export interface ApiRouterDependencies {
   projectService?: ProjectService | null
   assetService?: AssetService | null
   aiService?: AiService | null
+  billingService?: BillingService | null
+  // ส่ง repository แทน service ได้ (เทสต์) — router สร้าง BillingService เองด้วย billingFlags(config)
+  // เทสต์จึงตรวจเงื่อนไขเปิดขาย/จำลองจ่ายตัวจริง ไม่ใช่สำเนาสูตรในเทสต์
+  billingRepository?: BillingRepository | null
 }
 
 function requestPath(req: HttpRequest): string {
@@ -110,6 +127,50 @@ function rejectDeleteBody(req: HttpRequest): void {
   }
 }
 
+// POST ที่ไม่ต้องการข้อมูล: ยอมรับไม่มี body หรือ {} เท่านั้น (client บางตัวส่ง {} มาเสมอ)
+async function rejectNonEmptyBody(req: HttpRequest): Promise<void> {
+  const contentLength = Number(headerValue(req, 'content-length') ?? 0)
+  if (req.body === undefined && contentLength <= 0 && !headerValue(req, 'transfer-encoding')) return
+  requireJsonContentType(req)
+  const body = await readJsonBody(req)
+  if (typeof body !== 'object' || body === null || Array.isArray(body) || Object.keys(body).length > 0) {
+    throw new HttpError(422, 'VALIDATION_ERROR', 'endpoint นี้รับเฉพาะ body ว่างหรือ {}')
+  }
+}
+
+export function isDevFulfilEnvironment(config: Pick<ServerConfig, 'appEnv'>): boolean {
+  return config.appEnv === 'development' || config.appEnv === 'test'
+}
+
+// เปิดขาย (POST /billing/orders + Entitlements.purchasesEnabled) — เจ้าของผลิตภัณฑ์ตัดสินใจ 13 ต.ค. 2026
+// ให้ซ่อนการซื้อจนกว่าจะมีผู้ให้บริการชำระเงิน ตอนนี้จึงเปิดเฉพาะที่จำลองจ่ายได้ (development/test)
+// เมื่อเลือกผู้ให้บริการแล้ว ต้องเปลี่ยนเงื่อนไขนี้เป็น "ตั้งค่าผู้ให้บริการชำระเงินใน config แล้ว" ไม่ใช่ตาม appEnv
+export function isPurchaseEnabled(config: Pick<ServerConfig, 'appEnv'>): boolean {
+  return isDevFulfilEnvironment(config)
+}
+
+// สวิตช์ของ BillingService ตาม config — ทางเดียวที่ createApiRouter ใช้ (router.test ตรวจ staging/production = ปิด)
+export function billingFlags(config: Pick<ServerConfig, 'appEnv'>): BillingServiceOptions {
+  return {
+    devFulfilEnabled: isDevFulfilEnvironment(config),
+    purchasesEnabled: isPurchaseEnabled(config),
+  }
+}
+
+// error ที่ไม่ใช่ HttpError = บั๊กหรือ dependency ล้ม → log หนึ่งบรรทัด (ไม่มีคีย์/token/อีเมล/body) แล้วตอบ fallback
+function unexpectedError(requestId: string, route: string, error: unknown, fallback: HttpError): HttpError {
+  logServerEvent('error', 'api_unexpected_error', {
+    requestId,
+    route,
+    status: fallback.status,
+    code: fallback.code,
+    error: errorMessageForLog(error),
+  })
+  return fallback
+}
+
+const AI_ROUTE = 'POST /api/v1/ai/box-spec'
+
 function validationError(error: ZodError): HttpError {
   return new HttpError(422, 'VALIDATION_ERROR', 'ข้อมูลโปรเจกต์ไม่ถูกต้อง', {
     issues: error.issues.slice(0, 20).map((issue) => ({
@@ -134,7 +195,15 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
   const assetService = dependencies.assetService === undefined
     ? config.supabase && createSupabaseAssetService(config.supabase)
     : dependencies.assetService
-  const aiService = dependencies.aiService === undefined ? new AnthropicAiService() : dependencies.aiService
+  const aiService = dependencies.aiService === undefined
+    ? new AnthropicAiService(config.ai?.model)
+    : dependencies.aiService
+  const billingRepository = dependencies.billingRepository === undefined
+    ? config.supabase && createSupabaseBillingRepository(config.supabase)
+    : dependencies.billingRepository
+  const billingService = dependencies.billingService === undefined
+    ? billingRepository && new BillingService(billingRepository, billingFlags(config))
+    : dependencies.billingService
 
   return async (req, res) => {
     const requestId = randomUUID()
@@ -203,32 +272,13 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
           res.setHeader('allow', 'POST')
           throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
         }
-        if (!sessionService || !aiService) {
+        if (!sessionService || !aiService || !billingService) {
           throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า AI หรือ Supabase')
         }
         requireJsonContentType(req)
-        await sessionService.authenticate(bearerToken(req), requestId)
+        const actor = await sessionService.authenticate(bearerToken(req), requestId)
 
-        const apiKey = readRequestApiKey(req.headers)
-        if (apiKey === undefined) {
-          throw new HttpError(422, 'AI_API_KEY_REQUIRED', 'กรุณาใส่ Anthropic API key')
-        }
-        if (apiKey === null) {
-          throw new HttpError(400, 'AI_API_KEY_INVALID', 'รูปแบบ Anthropic API key ไม่ถูกต้อง')
-        }
-
-        const body = await readJsonBody(req, 6 * 1024 * 1024)
-        if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-          throw new HttpError(422, 'VALIDATION_ERROR', 'ข้อมูล AI ไม่ถูกต้อง')
-        }
-        const input = body as Record<string, unknown>
-        const allowedKeys = new Set(['prompt', 'current', 'image'])
-        if (Object.keys(input).some((key) => !allowedKeys.has(key))) {
-          throw new HttpError(422, 'VALIDATION_ERROR', 'ข้อมูล AI มี field ที่ไม่รองรับ')
-        }
-        if (typeof input.prompt !== 'string' || !input.prompt.trim() || input.prompt.length > 2000) {
-          throw new HttpError(422, 'VALIDATION_ERROR', 'prompt ต้องเป็นข้อความ 1-2000 ตัวอักษร')
-        }
+        const input = parseOrThrow(aiBoxSpecRequestSchema.safeParse(await readJsonBody(req, 6 * 1024 * 1024)))
         const current = parseCurrent(input.current)
         if (input.current !== undefined && !current) {
           throw new HttpError(422, 'VALIDATION_ERROR', 'สเปกปัจจุบันไม่ถูกต้อง')
@@ -237,22 +287,80 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
         if (input.image !== undefined && !image) {
           throw new HttpError(422, 'VALIDATION_ERROR', 'รูปอ้างอิงไม่ถูกต้องหรือใหญ่เกินไป')
         }
+        // ตรวจคีย์ AI ของ server หลัง auth + validate (ไม่เปิดเผยสถานะ config ให้ผู้ไม่ได้ login)
+        // และก่อนจองเครดิต เพื่อไม่หักเครดิตทั้งที่เรียก provider ไม่ได้
+        const serverAi = config.ai
+        if (!serverAi) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่าคีย์ AI')
+        }
 
-        const data = await aiService.generateBoxSpec(apiKey, {
-          prompt: input.prompt.trim(),
-          ...(current ? { current } : {}),
-          ...(image ? { image } : {}),
-        })
-        sendJson(res, 200, { data, requestId }, requestId)
+        // หักเครดิตก่อนเรียก provider (402/409 จากการจองส่งต่อตรง ๆ); provider ล้ม → คืนแบบ best-effort
+        // ผลลัพธ์กลับมาแล้วไม่คืน — ดู docs/billing-freemium-pro.md §1
+        // concurrency cap (AI_CONCURRENCY_LIMIT → 429 AI_RATE_LIMITED) ก็ถูกปฏิเสธที่นี่โดยไม่หักเครดิต
+        const reservation = await billingService.reserveAiCredit(actor, input.workspaceId, input.operationId)
+        const hasImage = image !== undefined
+        let generated: AiBoxSpecOutput
+        try {
+          generated = await aiService.generateBoxSpec(serverAi.anthropicApiKey, {
+            prompt: input.prompt.trim(),
+            ...(current ? { current } : {}),
+            ...(image ? { image } : {}),
+          })
+        } catch (providerError) {
+          try {
+            await billingService.settleAiRequest(actor, reservation.requestId, 'failed', { hasImage })
+          } catch (refundError) {
+            // คืนเครดิตไม่สำเร็จ — รายงานข้อผิดพลาดต้นทางแทน; แถวค้าง reserved จะถูกคืนเองตอนจองครั้งถัดไป
+            // หลังพ้น 15 นาที (reserve_ai_credit)
+            logServerEvent('warn', 'ai_refund_failed', {
+              requestId,
+              route: AI_ROUTE,
+              aiRequestId: reservation.requestId,
+              error: errorMessageForLog(refundError),
+            })
+          }
+          throw providerError
+        }
+        // ผลลัพธ์กลับมาแล้ว = เครดิตหักขาดตามสเปก §1; settle เป็นแค่ bookkeeping — ถ้าล้มต้องไม่คืนเครดิต
+        // และต้องไม่ทิ้งผลลัพธ์ที่จ่าย provider ไปแล้ว (ยอดจาก reservation ถูกต้องอยู่แล้วเพราะหักตอนจอง)
+        // model/usage เก็บลง ai_requests เพื่อดูต้นทุน — ไม่ส่งให้ client
+        const usage: AiRequestUsage = {
+          hasImage,
+          model: generated.model,
+          ...(generated.usage ?? {}),
+        }
+        let credits = reservation.credits
+        try {
+          credits = (await billingService.settleAiRequest(actor, reservation.requestId, 'succeeded', usage)).credits
+        } catch (settleError) {
+          logServerEvent('warn', 'ai_settle_failed', {
+            requestId,
+            route: AI_ROUTE,
+            aiRequestId: reservation.requestId,
+            error: errorMessageForLog(settleError),
+          })
+        }
+        sendJson(res, 200, { data: { ...generated.spec, credits }, requestId }, requestId)
       } catch (error) {
         let httpError: HttpError
         if (error instanceof HttpError) httpError = error
-        else if (error instanceof AiProviderError && error.kind === 'authentication') {
-          httpError = new HttpError(401, 'AI_API_KEY_INVALID', 'Anthropic API key ไม่ถูกต้อง')
-        } else if (error instanceof AiProviderError && error.kind === 'rate-limit') {
-          httpError = new HttpError(429, 'AI_RATE_LIMITED', 'เรียก AI ถี่เกินไป รอสักครู่แล้วลองใหม่')
-        } else {
-          httpError = new HttpError(502, 'AI_PROVIDER_UNAVAILABLE', 'บริการ AI ขัดข้อง ลองใหม่อีกครั้ง')
+        else {
+          if (error instanceof AiProviderError && error.kind === 'authentication') {
+            httpError = new HttpError(503, 'CONFIGURATION_ERROR', 'คีย์ AI ของ server ไม่ถูกต้อง')
+          } else if (error instanceof AiProviderError && error.kind === 'rate-limit') {
+            httpError = new HttpError(429, 'AI_RATE_LIMITED', 'เรียก AI ถี่เกินไป รอสักครู่แล้วลองใหม่')
+          } else {
+            httpError = new HttpError(502, 'AI_PROVIDER_UNAVAILABLE', 'บริการ AI ขัดข้อง ลองใหม่อีกครั้ง')
+          }
+          // provider ล้ม/บั๊ก: log ชนิดความล้มเหลว + ข้อความต้นทาง (redact แล้ว) — คีย์ของ server ไม่อยู่ในข้อความนี้
+          logServerEvent('error', 'ai_provider_error', {
+            requestId,
+            route: AI_ROUTE,
+            status: httpError.status,
+            code: httpError.code,
+            kind: error instanceof AiProviderError ? error.kind : 'unexpected',
+            error: error instanceof AiProviderError ? error.providerMessage : errorMessageForLog(error),
+          })
         }
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
       }
@@ -400,6 +508,116 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
         const httpError = error instanceof HttpError
           ? error
           : new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'ดำเนินการกับไฟล์รูปไม่สำเร็จ')
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
+    if (path === '/api/v1/billing/entitlements') {
+      try {
+        if (req.method !== 'GET') {
+          res.setHeader('allow', 'GET')
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!sessionService || !billingService) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Supabase')
+        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId)
+        const url = requestUrl(req)
+        if ([...url.searchParams.keys()].some((key) => key !== 'workspaceId')) {
+          throw new HttpError(422, 'VALIDATION_ERROR', 'query parameter ไม่ถูกต้อง')
+        }
+        if (url.searchParams.getAll('workspaceId').length > 1) {
+          throw new HttpError(422, 'VALIDATION_ERROR', 'query parameter ต้องไม่ซ้ำ')
+        }
+        const query = parseOrThrow(entitlementsQuerySchema.safeParse({
+          workspaceId: url.searchParams.get('workspaceId') ?? undefined,
+        }))
+        const data = await billingService.getEntitlements(actor, query.workspaceId)
+        sendJson(res, 200, { data, requestId }, requestId)
+      } catch (error) {
+        const httpError = error instanceof HttpError
+          ? error
+          : unexpectedError(requestId, 'GET /api/v1/billing/entitlements', error,
+            new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'โหลดสิทธิ์การใช้งานไม่สำเร็จ'))
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
+    if (path === '/api/v1/billing/orders') {
+      try {
+        if (req.method !== 'POST') {
+          res.setHeader('allow', 'POST')
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!sessionService || !billingService) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Supabase')
+        }
+        requireJsonContentType(req)
+        const actor = await sessionService.authenticate(bearerToken(req), requestId)
+        const input = parseOrThrow(createOrderInputSchema.safeParse(await readJsonBody(req)))
+        const data = await billingService.createOrder(actor, input)
+        sendJson(res, 201, { data, requestId }, requestId)
+      } catch (error) {
+        const httpError = error instanceof HttpError
+          ? error
+          : unexpectedError(requestId, 'POST /api/v1/billing/orders', error,
+            new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'สร้างคำสั่งซื้อไม่สำเร็จ'))
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
+    const devFulfilMatch = /^\/api\/v1\/billing\/orders\/([^/]+)\/dev-fulfil$/.exec(path)
+    if (devFulfilMatch) {
+      try {
+        // นอก development/test เส้นทางนี้ต้องเหมือนไม่มีอยู่ (ตอบ 404 ก่อนตรวจ method/session)
+        if (!isDevFulfilEnvironment(config)) {
+          throw new HttpError(404, 'NOT_FOUND', 'ไม่พบ API endpoint นี้')
+        }
+        if (req.method !== 'POST') {
+          res.setHeader('allow', 'POST')
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!sessionService || !billingService) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Supabase')
+        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId)
+        const orderId = parseOrThrow(orderIdSchema.safeParse(devFulfilMatch[1]))
+        await rejectNonEmptyBody(req)
+        const data = await billingService.devFulfilOrder(actor, orderId, requestId)
+        sendJson(res, 200, { data, requestId }, requestId)
+      } catch (error) {
+        const httpError = error instanceof HttpError
+          ? error
+          : unexpectedError(requestId, 'POST /api/v1/billing/orders/:id/dev-fulfil', error,
+            new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'จำลองการชำระเงินไม่สำเร็จ'))
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
+    const exportAuthorizationMatch = /^\/api\/v1\/projects\/([^/]+)\/export-authorizations$/.exec(path)
+    if (exportAuthorizationMatch) {
+      try {
+        if (req.method !== 'POST') {
+          res.setHeader('allow', 'POST')
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!sessionService || !billingService) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Supabase')
+        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId)
+        const projectId = parseOrThrow(projectIdSchema.safeParse(exportAuthorizationMatch[1]))
+        await rejectNonEmptyBody(req)
+        const data = await billingService.authorizeExport(actor, projectId)
+        sendJson(res, 200, { data, requestId }, requestId)
+      } catch (error) {
+        const httpError = error instanceof HttpError
+          ? error
+          : unexpectedError(requestId, 'POST /api/v1/projects/:id/export-authorizations', error,
+            new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'ตรวจสอบสิทธิ์ดาวน์โหลดไม่สำเร็จ'))
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
       }
       return

@@ -27,6 +27,31 @@ try {
     where assets.state = 'ready' and links.asset_id is null
     order by assets.id
   `
+  // billing (docs/billing-freemium-pro.md): อ่านอย่างเดียวเช่นกัน — ai_requests ที่ค้าง reserved
+  // = เครดิตถูกหักแต่ server ไม่ได้ settle (crash ระหว่างเรียก provider); orders pending ค้าง = ยังไม่มี provider จ่ายจริง
+  const [billing] = await sql`
+    select
+      (select count(*)::integer from app_private.orders where status = 'pending') as pending_orders,
+      (select count(*)::integer from app_private.orders where status = 'paid') as paid_orders,
+      (select count(*)::integer from app_private.subscriptions
+        where status = 'active' and period_end > now()) as active_subscriptions,
+      (select count(*)::integer from app_private.design_licenses) as design_licenses,
+      (select count(*)::integer from app_private.ai_requests where state = 'reserved') as reserved_ai_requests,
+      (select coalesce(sum(balance), 0)::integer from app_private.credit_balances) as credit_balance_total,
+      (select coalesce(sum(delta), 0)::integer from app_private.credit_ledger) as credit_ledger_total
+  `
+  const staleAiReservations = await sql`
+    select id
+    from app_private.ai_requests
+    where state = 'reserved' and created_at < now() - interval '15 minutes'
+    order by created_at, id
+  `
+  const stalePendingOrders = await sql`
+    select id
+    from app_private.orders
+    where status = 'pending' and created_at < now() - interval '1 day'
+    order by created_at, id
+  `
 
   const [stagingObjects, canonicalObjects] = await Promise.all([
     listStorageObjects('packit-staging'),
@@ -45,6 +70,16 @@ try {
       assets: assets.length,
       stagingObjects: stagingObjects.length,
       canonicalObjects: canonicalObjects.length,
+      billing: {
+        pendingOrders: billing.pending_orders,
+        paidOrders: billing.paid_orders,
+        activeSubscriptions: billing.active_subscriptions,
+        designLicenses: billing.design_licenses,
+        reservedAiRequests: billing.reserved_ai_requests,
+        creditBalanceTotal: billing.credit_balance_total,
+        // ผลรวม ledger ต้องเท่ากับผลรวม balance เสมอ — ต่างกัน = หลักฐานว่ามีการแก้ balance นอก RPC
+        creditLedgerTotal: billing.credit_ledger_total,
+      },
     },
     candidates: {
       expiredTickets: assets
@@ -76,6 +111,8 @@ try {
           && asset.object_key
           && !canonicalSet.has(asset.object_key))
         .map((asset) => asset.id),
+      staleAiReservations: staleAiReservations.map((request) => request.id),
+      stalePendingOrders: stalePendingOrders.map((order) => order.id),
     },
     note: 'รายงานเท่านั้น: ไม่มีการลบหรือแก้ DB/Storage จนกว่าจะยืนยัน retention และ operator approval',
   }

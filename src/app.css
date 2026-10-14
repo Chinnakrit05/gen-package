@@ -1363,11 +1363,25 @@ main {
   cursor: not-allowed;
   opacity: 0.68;
 }
-.pb-disabled-note {
-  max-width: 220px;
-  color: var(--text-3);
-  font-size: 11px;
-  line-height: 1.25;
+/* เครดิต AI 0 (cloud): ปุ่มยังกดได้ (ไปหน้าแพ็กเกจ) — ป้าย "0" ให้เห็นบนจอสัมผัสที่ไม่มี tooltip */
+.pb-fab.blocked {
+  opacity: 0.86;
+}
+.pb-fab-zero {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  /* สีตายตัว: อยู่บนปุ่มหลัก (ไล่สี accent) ทั้งธีมสว่าง/มืด — พื้นขาวทึบ ตัวแดงเข้ม อ่านออกเสมอ */
+  background: #fff;
+  color: #b3261e;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: 1px;
 }
 /* แผงช่องพิมพ์ AI = dropdown มุมขวาใต้ header, portal ไป body + z สูงสุด (ลอยเหนือทุกอย่าง) */
 .promptbar {
@@ -2884,7 +2898,8 @@ aside .art-actions .file-pick:only-child {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
+  /* เหนือแผงลอยทุกชั้น (แผง AI 200, คำใบ้ 200, แกลเลอรี 220) — modal ต้องบังทุกอย่างข้างหลัง */
+  z-index: 300;
 }
 .modal {
   background: var(--surface-solid);
@@ -4149,4 +4164,791 @@ aside .art-actions .file-pick:only-child {
   min-width: 0;
   padding-left: 4px;
   padding-right: 4px;
+}
+
+/* --- แพ็กเกจ Freemium/Pro (cloud): ชิปแพ็กเกจบน header, ป้ายล็อกปุ่มดาวน์โหลด, paywall, ป้ายซื้อแล้ว, ลายน้ำ --- */
+/* ชิปแพ็กเกจ — หน้าตาเดียวกับ .cloud-save-state แต่เป็นปุ่ม pill (กดเปิด paywall แบบ Pro) */
+.plan-chip {
+  flex-shrink: 0;
+  width: auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.plan-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.plan-chip b {
+  font-weight: 700;
+  color: var(--text);
+}
+.plan-chip.pro b {
+  color: var(--accent-ink);
+}
+.plan-chip-upgrade {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--cta-grad);
+  color: var(--on-cta);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+/* header ของ cloud มีชิปแพ็กเกจเพิ่ม — จัดให้ไม่เบียดตัวเลือกงานจนทับกัน (local-demo ไม่มีคลาสนี้ หน้าตาเดิม) */
+.plan-chip-short {
+  display: none;
+}
+/* โหลดสิทธิ์ไม่ได้ — ชิปเป็นปุ่มลองใหม่ (โทนเตือน ไม่ใช่ error แดง: งานยังใช้ได้ server ตัดสินสิทธิ์เอง) */
+.plan-chip.error {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-weight: 600;
+}
+.plan-chip.error:hover {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.plan-chip:disabled {
+  cursor: progress;
+  opacity: 0.75;
+}
+.plan-chip:disabled:hover {
+  border-color: var(--border-strong);
+  color: var(--text-2);
+}
+@media (max-width: 1280px) {
+  header.with-plan .plan-chip-long {
+    display: none;
+  }
+  header.with-plan .plan-chip-short {
+    display: inline;
+  }
+  header.with-plan .logout-btn {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+  }
+  header.with-plan .logout-btn svg {
+    display: block;
+  }
+  header.with-plan .logout-btn span {
+    display: none;
+  }
+}
+/* แคบลงอีก: ตัวเลือกงานลงบรรทัดของตัวเองเต็มกว้าง (แบบเดียวกับมือถือ ≤820) */
+@media (max-width: 1100px) {
+  header.with-plan {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  header.with-plan .projects {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+
+/* ออฟไลน์ (cloud): ขอสิทธิ์ดาวน์โหลดจาก server ไม่ได้ → ปุ่มไฟล์ผลิตกดไม่ได้ + ข้อความบอกเหตุผลเหนือรายการ */
+.export-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.export-offline {
+  margin: 0 0 8px;
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* ป้ายราคาบนปุ่มดาวน์โหลดเมื่อยังไม่มีสิทธิ์ (ชิดขวาของปุ่ม) */
+.export-item .export-lock {
+  margin-left: auto;
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--warn-border);
+  border-radius: 999px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+:root[data-theme='dark'] .export-item .export-lock {
+  background: rgba(186, 117, 23, 0.18);
+  color: #f0c57a;
+}
+
+/* paywall modal */
+.paywall-modal {
+  width: min(460px, 92vw);
+}
+.paywall-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+.paywall-price b {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--accent-ink);
+}
+.paywall-price small {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.paywall-list {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+.paywall-switch {
+  margin: 12px 0 0;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.paywall-note {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-border);
+  border-radius: 10px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.paywall-note small {
+  color: inherit;
+  opacity: 0.85;
+  word-break: break-all;
+}
+:root[data-theme='dark'] .paywall-note {
+  background: rgba(186, 117, 23, 0.16);
+  color: #f0c57a;
+}
+/* ยังไม่เปิดขาย — โทนสงบ (accent อ่อน) ไม่ใช่คำเตือน: ผู้ใช้ยังออกแบบ/ดูพรีวิวได้ตามปกติ */
+.paywall-soon {
+  display: grid;
+  gap: 2px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.paywall-soon span {
+  color: var(--text-2);
+}
+.paywall-error {
+  margin-top: 10px;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* ป้าย "ซื้อแล้ว" — บนการ์ดในแกลเลอรี (มุมซ้ายบน คู่กับ "เปิดอยู่" ขวาบน) และต่อท้ายชื่องานบนปุ่มเลือกงาน */
+.project-gallery-licensed {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.project-gallery-trigger-copy .project-gallery-licensed {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.project-gallery-card .project-gallery-licensed {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* เครดิต AI ในหัวแถบ AI */
+.pb-credits {
+  margin-left: auto;
+  margin-right: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+
+/* ลายน้ำพรีวิว: สี/ความทึบกำหนดเป็น attribute (ตัวเข้ม + ขอบขาว paint-order:stroke จึงอ่านออกทั้งพื้นอ่อน/เข้ม
+   รวมการ์ดโหมดมืด) — ที่นี่แค่ฟอนต์ไทยและกันเลือกข้อความ */
+.dieline-svg .watermark text,
+.sheet-preview .watermark text {
+  user-select: none;
+  font-family: 'Noto Sans Thai', system-ui, sans-serif;
+}
+
+/* --- หน้าแพ็กเกจและราคา (PricingPage) — เต็มจอเหนือแอป, ใต้ modal (300) ---------------------------- */
+.login-pricing {
+  display: inline-block;
+  width: auto;
+  margin-top: 14px;
+  padding: 4px 8px;
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.login-pricing:hover {
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+}
+
+.pricing-page {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background:
+    radial-gradient(90% 60% at 50% -8%, var(--accent-weak), transparent 62%),
+    radial-gradient(60% 40% at 100% 30%, rgba(74, 167, 179, 0.12), transparent 70%),
+    var(--bg);
+  background-color: var(--bg-solid);
+  outline: none;
+}
+.pricing-shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 18px 24px 56px;
+}
+.pricing-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pricing-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.pricing-brand {
+  font-family: 'Prompt', 'Noto Sans Thai', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent-ink);
+}
+
+.pricing-hero {
+  max-width: 720px;
+  margin: 40px auto 36px;
+  text-align: center;
+  animation: pricing-rise 0.45s ease both;
+}
+.pricing-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.pricing-hero h1 {
+  margin: 16px 0 12px;
+  font-size: clamp(28px, 4.2vw, 42px);
+  line-height: 1.18;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+.pricing-hero p {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+.pricing-soon {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 4px 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 18px auto 0;
+  padding: 9px 16px;
+  border: 1px solid var(--accent-border);
+  border-radius: 14px;
+  background: var(--accent-weak);
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.pricing-soon b {
+  color: var(--accent-ink);
+}
+.pricing-soon + .pricing-status {
+  margin-top: 10px;
+}
+.pricing-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 18px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.pricing-status b {
+  color: var(--accent-ink);
+}
+.pricing-status-sep {
+  color: var(--text-3);
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+  align-items: stretch;
+  padding-top: 14px; /* ที่ว่างให้ริบบิ้น "แนะนำ" */
+}
+.plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 26px 24px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  box-shadow: var(--shadow-sm);
+  animation: pricing-rise 0.5s ease both;
+}
+.plan-card:nth-child(2) { animation-delay: 60ms; }
+.plan-card:nth-child(3) { animation-delay: 120ms; }
+/* การ์ดแนะนำ: ขอบไล่สีโลโก้ + ยกขึ้นเล็กน้อย */
+.plan-card.is-featured {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--surface-solid), var(--surface-solid)) padding-box,
+    var(--cta-grad) border-box;
+  box-shadow: var(--shadow);
+  transform: translateY(-10px);
+}
+.plan-card.is-current:not(.is-featured) {
+  border-color: var(--accent-border);
+}
+.plan-ribbon {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: var(--cta-grad);
+  color: var(--on-cta);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 8px 18px rgba(21, 64, 73, 0.3);
+}
+.plan-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 46px;
+}
+.plan-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+}
+.plan-card.is-featured .plan-icon {
+  background: var(--cta-grad);
+  color: var(--on-cta);
+}
+.plan-current {
+  padding: 4px 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+.plan-name {
+  margin-top: 16px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+.plan-tagline {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--text-3);
+}
+.plan-price {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 20px 0 18px;
+}
+.plan-price b {
+  font-family: 'Prompt', 'Noto Sans Thai', sans-serif;
+  font-size: 40px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.plan-card.is-featured .plan-price b {
+  color: var(--accent-ink);
+}
+.plan-price span {
+  font-size: 14px;
+  color: var(--text-3);
+}
+.plan-cta {
+  min-height: 46px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plan-cta:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+.plan-cta:disabled:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.plan-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+.plan-features {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin-top: 22px;
+  padding: 20px 0 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+.plan-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.plan-feature-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 0;
+  border-radius: 50%;
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+}
+.plan-features li.no {
+  color: var(--text-3);
+}
+.plan-features li.no .plan-feature-icon {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-3);
+}
+
+.pricing-compare,
+.pricing-faq {
+  margin-top: 56px;
+}
+.pricing-compare h2,
+.pricing-faq h2 {
+  margin-bottom: 18px;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text);
+}
+.pricing-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  box-shadow: var(--shadow-sm);
+}
+.pricing-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.pricing-table th,
+.pricing-table td {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  vertical-align: middle;
+}
+.pricing-table tbody tr:last-child th,
+.pricing-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.pricing-table thead th {
+  font-family: 'Prompt', 'Noto Sans Thai', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.pricing-table thead small {
+  display: block;
+  margin-top: 2px;
+  font-family: 'Noto Sans Thai', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.pricing-table tbody th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-2);
+}
+.pricing-table td {
+  color: var(--text);
+}
+.pricing-table .is-featured {
+  background: var(--accent-weak);
+}
+.pricing-table thead .is-featured {
+  color: var(--accent-ink);
+}
+.pricing-yes,
+.pricing-no {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.pricing-yes {
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+}
+.pricing-table .is-featured .pricing-yes {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.pricing-no {
+  border: 1px solid var(--border-strong);
+  color: var(--text-3);
+}
+
+.pricing-faq-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start; /* เปิดข้อหนึ่งแล้วข้อข้าง ๆ ไม่ยืดตาม */
+  gap: 14px;
+}
+.pricing-faq-item {
+  padding: 4px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+}
+.pricing-faq-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+}
+.pricing-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+.pricing-faq-item summary::after {
+  content: '+';
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+  font-size: 17px;
+  font-weight: 600;
+  transition: transform 0.18s ease;
+}
+.pricing-faq-item[open] summary::after {
+  transform: rotate(45deg);
+}
+.pricing-faq-item p {
+  padding: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+.pricing-foot {
+  margin-top: 36px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+@keyframes pricing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.plan-card.is-featured {
+  animation-name: pricing-rise-featured;
+}
+@keyframes pricing-rise-featured {
+  from {
+    opacity: 0;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pricing-hero,
+  .plan-card {
+    animation: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .pricing-grid {
+    grid-template-columns: minmax(0, 460px);
+    justify-content: center;
+    gap: 26px;
+  }
+  .plan-card.is-featured {
+    transform: none;
+  }
+  .pricing-faq-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* จอแคบ: ตารางเลื่อนแนวนอนในกรอบ — ตรึงคอลัมน์ชื่อความสามารถไว้ซ้าย (พื้นทึบกันตัวหนังสือซ้อน) */
+@media (max-width: 700px) {
+  .pricing-table thead th:first-child,
+  .pricing-table tbody th {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--surface-solid);
+    box-shadow: 1px 0 0 var(--border);
+  }
+  /* คอลัมน์ชื่อแคบคงที่ ข้อมูลกว้างขั้นต่ำ → เห็นอย่างน้อยหนึ่งคอลัมน์ข้อมูลข้างคอลัมน์ที่ตรึง แล้วปัดดูที่เหลือ */
+  .pricing-table {
+    width: max-content;
+    min-width: 0;
+  }
+  .pricing-table th,
+  .pricing-table td {
+    padding: 12px;
+  }
+  .pricing-table tbody th {
+    width: 128px;
+    min-width: 128px;
+    max-width: 128px;
+    font-size: 13px;
+  }
+  .pricing-table td,
+  .pricing-table thead th:not(:first-child) {
+    min-width: 104px;
+  }
+}
+@media (max-width: 480px) {
+  .pricing-shell {
+    padding: 12px 16px 40px;
+  }
+  .pricing-hero {
+    margin: 26px auto 24px;
+  }
+  .pricing-hero p {
+    font-size: 15px;
+  }
+  .plan-card {
+    padding: 22px 18px 20px;
+  }
+  .pricing-back span {
+    display: none;
+  }
+  .pricing-back {
+    padding: 8px 10px;
+  }
 }
