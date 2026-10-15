@@ -446,7 +446,7 @@ export function pouchSectionArea(style: PouchStyle): number {
 export const DOYPACK_LENS = 2.4 // เลขชี้กำลังเลนส์: z = 1 − |u|^P (มาก = หน้าอิ่มเต็ม ขอบยังคม)
 export const DOYPACK_BULLET = 2.8 // เลขชี้กำลังโปรไฟล์ด้านข้าง 1 − v^n (มาก = อิ่มนานแล้วค่อยบีบที่ปาก)
 export const DOYPACK_PULL = 0.05 // ซีลข้างถูกดึงเข้าได้สูงสุดเท่านี้ของครึ่งกว้าง ตอนพองเต็ม (ซีลแข็ง ไม่หดตามความยาวโค้ง)
-export const DOYPACK_FIN = 0.35 // ครึ่งความหนาแถบซีลบน (ฟิล์มสองชั้นประกบ)
+export const DOYPACK_FIN = 0.15 // ครึ่งความหนาแถบซีลบน (ฟิล์มสองชั้นประกบ)
 export const SPOUT_CORNER_R = POUCH_SIDE_SEAL // มุมไดคัทมนของถุงมีจุก (≤ ซีลข้าง → ตัดเฉพาะเนื้อซีล ไม่กินช่วงพอง)
 export const SPOUT_SHOULDER = 0.2 // สัดส่วนความสูงช่วงไหล่ที่ฟิล์มรวบเข้าหาเรือจุก
 export const DOYPACK_BOTTOM_SAG = 0.7 // ซีลก้นโค้งลงกลางแผง = สัดส่วนของครึ่งก้น (round-bottom)
