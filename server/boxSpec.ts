@@ -423,7 +423,7 @@ const THINKS_BY_DEFAULT = /^claude-[a-z]+-5(?:-\d+)?$/
 // รุ่นที่ claude-api skill ให้เปิด server-side fallback เป็นค่าเริ่มต้น — Haiku 5.5 ไม่มี server-side fallback
 // (แบบ list ตอบ 400) และ Opus 4.8 เป็นปลายทาง fallback เอง จึงไม่อยู่ในชุดนี้
 const SERVER_FALLBACK_MODELS = new Set(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-opus-5', 'claude-fable-5-1'])
-const SERVER_FALLBACK_BETA = 'server-side-fallback-2026-07-01'
+export const SERVER_FALLBACK_BETA = 'server-side-fallback-2026-07-01'
 
 export interface BoxSpecModelOptions {
   effort?: 'low'
@@ -574,7 +574,7 @@ let cliAvailable: boolean | null = null
 // execFile ไม่ผ่าน shell จึง resolve นามสกุลให้ไม่ได้เอง (จะ ENOENT) — ต้องหา path เต็ม
 // ของไฟล์ .exe ที่รันตรงได้ (เลี่ยง .cmd เพราะต้อง shell แล้ว argument ยาว ๆ จะโดน quote พัง)
 let claudeBinCache: string | undefined
-function resolveClaudeBin(): string {
+export function resolveClaudeBin(): string {
   if (claudeBinCache !== undefined) return claudeBinCache
   if (process.platform !== 'win32') return (claudeBinCache = 'claude')
   const dirs = (process.env.PATH || '').split(path.delimiter)
@@ -589,7 +589,7 @@ function resolveClaudeBin(): string {
   return (claudeBinCache = 'claude')
 }
 
-async function hasClaudeCli(): Promise<boolean> {
+export async function hasClaudeCli(): Promise<boolean> {
   if (cliAvailable !== null) return cliAvailable
   try {
     await execFileP(resolveClaudeBin(), ['--version'], { timeout: 10_000 })
@@ -610,7 +610,7 @@ const JSON_INSTRUCTION =
 // ที่รัน dev server อยู่) ไม่ให้ shadow login ปกติของเครื่อง
 // ถ้าผู้ใช้ตั้ง CLAUDE_CODE_OAUTH_TOKEN ใน .env (ได้จาก `claude setup-token`)
 // ให้ส่งเข้า child โดยตรง — ทางนี้ไม่พึ่ง Keychain เลย ใช้ได้ทุกบริบท
-function cliEnv(oauthToken?: string): NodeJS.ProcessEnv {
+export function cliEnv(oauthToken?: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {}
   for (const [k, v] of Object.entries(process.env)) {
     if (/^(ANTHROPIC_|CLAUDE)/i.test(k)) continue
@@ -620,7 +620,7 @@ function cliEnv(oauthToken?: string): NodeJS.ProcessEnv {
   return env
 }
 
-function extractJson(text: string): Record<string, unknown> | null {
+export function extractJson(text: string): Record<string, unknown> | null {
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
   if (start === -1 || end <= start) return null
@@ -675,7 +675,7 @@ async function askClaudeCli(
   }
 }
 
-async function readBody(req: IncomingMessage): Promise<string> {
+export async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of req) {
@@ -686,7 +686,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8')
 }
 
-function send(res: ServerResponse, status: number, body: unknown) {
+export function send(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status
   res.setHeader('content-type', 'application/json; charset=utf-8')
   res.setHeader('cache-control', 'no-store')
