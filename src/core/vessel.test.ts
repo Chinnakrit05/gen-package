@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_MIN, CAP_STYLES, capShape, LABEL_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
+import { TUBE_OVAL_ASPECT, TUBE_OVAL_CAP_FRAC, BODY_MIN, CAP_STYLES, capShape, LABEL_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
 import { ellipsePerimeter } from './pouch'
 import { MATERIALS, getMaterial } from './materials'
 import { computeGuides } from './guides'
@@ -419,5 +419,39 @@ describe('vessel: ขอบปาก crown finish เมื่อเลือก
     const c = capShape('crown', m)!
     expect(Math.min(...c.lathe.map((p) => p.y))).toBeLessThan(m.lipY)
     expect(Math.max(...v.profile.map((p) => p.y))).toBeCloseTo(box2.H)
+  })
+})
+
+describe('vessel: หลอดครีมฝาเหลี่ยม (วงรี)', () => {
+  const tb = { W: 40, D: 20, H: 150, handle: false }
+  const round = generateVessel(tb, getMaterial('tube-laminate')).tube!
+  const v = generateVessel(tb, getMaterial('tube-laminate'), 'body', { capStyle: 'oval' })
+  const t = v.tube!
+  const R = tb.W / 2
+
+  it('ฝาสูงกว่าฝากลม และหน้าตัดฝา/โคนลำตัวเป็นวงรีแบน (ลึก = ครึ่งกว้าง)', () => {
+    expect(t.oval).toBeDefined()
+    expect(round.oval).toBeUndefined()
+    expect(t.capTop).toBeCloseTo(TUBE_OVAL_CAP_FRAC * tb.H)
+    expect(t.capTop).toBeGreaterThan(round.capTop)
+    expect(t.oval!.b0 / t.oval!.a0).toBeCloseTo(TUBE_OVAL_ASPECT)
+    expect(t.oval!.ca).toBeLessThan(t.oval!.a0)
+    const base = tubeSection(t, t.bodyY0)
+    expect(base.a).toBeCloseTo(t.oval!.a0, 3)
+    expect(base.b).toBeCloseTo(t.oval!.b0, 3)
+  })
+
+  it('ท่อไม่ยืด: เส้นรอบวงหน้าตัดลำตัว = π⌀ ตลอดจากโคนวงรีถึงใต้ซีล', () => {
+    for (let k = 0; k <= 10; k++) {
+      const y = t.bodyY0 + ((t.sealY0 - t.bodyY0) * k) / 10 - 1e-6
+      const { a, b } = tubeSection(t, y)
+      expect(ellipsePerimeter(a, b)).toBeCloseTo(2 * Math.PI * R, 0)
+    }
+  })
+
+  it('ช่วงพิมพ์เริ่มเหนือฝาเหลี่ยม; ขวดที่เลือกฝาเหลี่ยมไม่มีฝา (ใช้กับหลอดเท่านั้น)', () => {
+    expect(v.labelY0).toBeGreaterThan(t.capTop)
+    const bottle = generateVessel(box, getMaterial('pet-bottle'), 'body', { capStyle: 'oval' })
+    expect(capShape('oval', bottle.mouth!)).toBeNull()
   })
 })

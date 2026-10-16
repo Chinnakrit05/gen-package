@@ -173,7 +173,8 @@ export function parseProject(v: unknown, idx: number): Project | null {
     neckH: typeof o.neckH === 'number' && Number.isFinite(o.neckH) ? clamp(Math.round(o.neckH * 2) / 2, 1, 300) : undefined,
     shoulderH: typeof o.shoulderH === 'number' && Number.isFinite(o.shoulderH) ? clamp(Math.round(o.shoulderH * 2) / 2, 1, 300) : undefined,
     labelBox: parseLabelBox(o.labelBox),
-    capStyle: CAP_STYLES.some((s) => s.id === o.capStyle && s.id !== 'none') ? (o.capStyle as CapStyle) : undefined,
+    capStyle:
+      o.capStyle === 'oval' || CAP_STYLES.some((s) => s.id === o.capStyle && s.id !== 'none') ? (o.capStyle as CapStyle) : undefined,
     capColor: typeof o.capColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.capColor) ? o.capColor : undefined,
     shoulderStyle: SHOULDER_STYLES.some((s) => s.id === o.shoulderStyle && s.id !== 'round') ? (o.shoulderStyle as ShoulderStyle) : undefined,
     pouchStyle: POUCH_STYLES.some((s) => s.id === o.pouchStyle) ? (o.pouchStyle as PouchStyle) : undefined,

@@ -201,8 +201,38 @@ function VesselModel({
   }, [tube, vessel.H])
 
   // ฝา flip-top: ทรงกระบอกกว้างเกือบเท่าท่อ ขอบล่างมน (ตั้งบนฝา) + ร่องแบ่งฝาพับ/ฐาน
+  // ฝาเหลี่ยม: แท่งหน้าตัดสเตเดียม (ca×cb) ขอบมนรอบ — extrude แนวตั้งจากก้นถึง capTop
   const tubeCapGeo = useMemo(() => {
     if (!tube) return null
+    if (tube.oval) {
+      const { ca, cb } = tube.oval
+      const bev = Math.min(1.4, cb * 0.18)
+      const hx = ca - bev
+      const hz = cb - bev
+      const rr = hz * 0.92 // มุมเกือบเต็มครึ่งลึก = ทรงสเตเดียมมนข้าง
+      const sh = new THREE.Shape()
+      sh.moveTo(-hx + rr, -hz)
+      sh.lineTo(hx - rr, -hz)
+      sh.absarc(hx - rr, -hz + rr, rr, -Math.PI / 2, 0, false)
+      sh.lineTo(hx, hz - rr)
+      sh.absarc(hx - rr, hz - rr, rr, 0, Math.PI / 2, false)
+      sh.lineTo(-hx + rr, hz)
+      sh.absarc(-hx + rr, hz - rr, rr, Math.PI / 2, Math.PI, false)
+      sh.lineTo(-hx, -hz + rr)
+      sh.absarc(-hx + rr, -hz + rr, rr, Math.PI, Math.PI * 1.5, false)
+      const g = new THREE.ExtrudeGeometry(sh, {
+        depth: Math.max(0.5, tube.capTop - 2 * bev),
+        bevelEnabled: true,
+        bevelThickness: bev,
+        bevelSize: bev,
+        bevelSegments: 4,
+        curveSegments: 24,
+      })
+      g.rotateX(-Math.PI / 2) // แนว extrude (z) → แกนตั้ง (y)
+      g.translate(0, bev, 0)
+      g.computeVertexNormals()
+      return g
+    }
     const { rcap: r, capTop: h } = tube
     const bev = Math.min(1.2, r * 0.08)
     const g0 = h * 0.34 // ร่องรอยแยกฝาพับ (นับจากก้น)
@@ -260,6 +290,7 @@ function VesselModel({
   )
   useEffect(() => () => capInnerGeo?.dispose(), [capInnerGeo])
   const capCol = capColor || defaultCapColor(capStyle)
+  const tubeCapCol = capColor || CAP_COLOR
   // จุกก๊อกผิวด้าน, ฟอยล์เป็นโลหะเงา, ฝาพลาสติกเงาปานกลาง
   const capRough = capStyle === 'cork' ? 0.85 : capStyle === 'foil' || capStyle === 'crown' ? 0.3 : 0.38
   const capMetal = capStyle === 'foil' ? 0.65 : capStyle === 'crown' ? 0.7 : 0.02
@@ -290,10 +321,10 @@ function VesselModel({
       )}
       {isTube && tubeCapGeo && (
         <mesh geometry={tubeCapGeo}>
-          <meshStandardMaterial color={CAP_COLOR} roughness={0.32} metalness={0.05} side={THREE.DoubleSide} />
+          <meshStandardMaterial color={tubeCapCol} roughness={0.32} metalness={0.05} side={THREE.DoubleSide} />
         </mesh>
       )}
-      {isTube && tube && (
+      {isTube && tube && !tube.oval && (
         // ร่องจับเปิดฝาพับ (thumb notch) ด้านหน้าที่แนวร่องฝา
         <mesh position={[0, tube.capTop * 0.34, tube.rcap - 0.15]}>
           <boxGeometry args={[tube.rcap * 0.5, tube.capTop * 0.16, 0.6]} />

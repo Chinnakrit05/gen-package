@@ -122,6 +122,9 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - หลอดครีม (tube-laminate, path ภาชนะ): W = ⌀ท่อ — ลำตัวสร้างจาก `tubeSection` (pure, vessel.ts) หน้าตัดวงรีเส้นรอบวงคงที่ πW
   (กลมที่ไหล่ → แบนกว้าง πW/2 ที่ซีล, ด้านข้างหัวกระสุน 1−v^`TUBE_BULLET`) ใช้ร่วม 3D + ความจุ (`tubeVolumeMl`); ตั้งบนฝา flip-top
   กว้างเกือบเท่าท่อ (`tubeCapR`), ซีลบน `TUBE_SEAL` มีลอนกด; พิมพ์รอบตัวทั้งท่อ (ค่ามาตรฐาน = ไหล่ถึงใต้ซีล) UV ตามความยาวผิว เริ่มกลางหลัง
+  ฝาหลอด (กลุ่ม "ฝาหลอด", ใช้ `Project.capStyle`): ไม่ใช่ 'oval' = ฝาฟลิปท็อปกลม (เดิม); 'oval' = ฝาเหลี่ยม — ฝาเกลียวหน้าตัดสเตเดียม
+  สูง `TUBE_OVAL_CAP_FRAC`·H (ExtrudeGeometry ขอบมน) + ลำตัวโคนวงรีแบน `tubeOvalSection` (ลึก = `TUBE_OVAL_ASPECT`×กว้าง ที่เส้นรอบวง 2πR
+  → `TubeShape.oval` ให้ `tubeSection` ไล่จากหน้าตัดฝา → วงรีโคน → ซีลแบน); `capColor` ใช้กับฝาหลอดด้วย; ขวดที่ได้ 'oval' ไม่มีฝา; PROJECT_FILE_VERSION 16
 - วัสดุถุงฟิล์ม (pouch-foil/pouch-kraft/pouch-clear, form==='pouch') → `src/core/pouch.ts`:
   ถุงฟิล์ม — (1) dieline แผ่นฟิล์มแบน (ข้างจีบ/ก้นแบน: [หน้า][หลัง][ลิ้นกาว]; pillow: [ครีบ][หลังซ้าย][หน้า][หลังขวา][ครีบ];
   ซองแบน 3 ด้าน: แผงหน้า+หลังแยก ซีล ⊔ (ซ้าย-ล่าง-ขวา `FLAT_SEAL` 3 มม.; มีรูแขวน → ซีลบนเป็นหัวซอง `FLAT_HANG_HEADER`) ปากบนเปิดไว้บรรจุ — 3D `flatZ`/`flatAt` ซีลแบนรอบ 4 ด้าน กลางพองบาง,
@@ -164,7 +167,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
-  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 15); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 16); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° ได้สันโค้งจาก `rollBeads` ใน fold.ts (ทรงกระบอกบาง รัศมี = ครึ่งระยะสองชั้น) — ตอนนี้ไม่มี template ใช้แล้ว
 - FEFCO 0427 ตามผัง dieline มาตรฐาน: ผนังข้างทบเป็นรอยพับคู่ (ผนัง → สัน กว้าง sp = 3t+0.2 = ผนัง+หู+ชั้นทบ → ชั้นทบ)
   ลิ้นปลายชั้นทบลงช่องบนฐานที่ sp − t/2; ฝาแคบกว่ากล่องข้างละ sp มีปีกข้างคางหมูพับลงด้านในชั้นทบ (stage 4 ก่อนฝาปิด 5),

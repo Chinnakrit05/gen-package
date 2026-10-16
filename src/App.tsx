@@ -89,7 +89,7 @@ import {
   type SheetLayout,
 } from './core/stickerSheet'
 import { isFreshWork, STANDARD_SIZE, type SizedKind } from './core/standardSize'
-import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, defaultCapColor, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
+import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, defaultCapColor, TUBE_CAP_STYLES, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
 import {
   generatePouch,
   POUCH_STYLES,
@@ -3520,6 +3520,39 @@ export default function App({
                 </label>
               )}
               <p className="hint">{t('ฝาแสดงในภาพ 3D เท่านั้น — ไม่อยู่ในไฟล์ฉลาก', 'The cap is shown in 3D only — not part of the label file')}</p>
+            </Group>
+          )}
+
+          {isTube && (
+            <Group title={t('ฝาหลอด', 'Tube cap')} open={groups.cap} onToggle={() => toggleGroup('cap')}>
+              <div className="pick-list">
+                {TUBE_CAP_STYLES.map((c) => {
+                  // หลอดใช้แค่ฝากลม/ฝาเหลี่ยม — ฝาขวดที่ติดมาจากงานเดิมนับเป็นฝากลม
+                  const on = c.id === 'oval' ? capStyle === 'oval' : capStyle !== 'oval'
+                  return (
+                    <button
+                      key={c.id}
+                      className={`pick-item${on ? ' active' : ''}`}
+                      disabled={aiBusy}
+                      aria-pressed={on}
+                      onClick={() => setCapStyle(c.id)}
+                    >
+                      <span className="pick-name">{t(c.nameTh, c.nameEn)}</span>
+                      <span className="pick-detail">{c.detail}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <label className="check" style={{ marginTop: 10 }}>
+                <input
+                  type="color"
+                  value={capColor ?? '#f1f1ef'}
+                  disabled={aiBusy}
+                  aria-label={t('สีฝา', 'Cap colour')}
+                  onChange={(e) => setCapColor(e.target.value)}
+                />
+                {t('สีฝา', 'Cap colour')}
+              </label>
             </Group>
           )}
 

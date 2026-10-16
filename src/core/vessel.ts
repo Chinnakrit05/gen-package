@@ -21,6 +21,9 @@ export interface TubeShape {
   bodyY0: number // ไหล่จบ → ลำตัวกลมเต็ม ⌀W เริ่มบีบ
   sealY0: number // ขอบล่างของตะเข็บซีลบน (ซีลแบนถึง H)
   sealThick: number // ความหนาตะเข็บซีล (ท่อสองชั้นประกบ)
+  // ฝาเหลี่ยม (ฝาเกลียววงรี/สเตเดียม): ลำตัวเริ่มจากหน้าตัดวงรีแบน a0×b0 (เส้นรอบวงเท่าท่อ) แทนวงกลม;
+  // ca×cb = ครึ่งกว้าง/ครึ่งลึกของฝา (หน้าตัดสเตเดียม แคบกว่าโคนลำตัวเล็กน้อย)
+  oval?: { a0: number; b0: number; ca: number; cb: number }
 }
 
 export const TUBE_BULLET = 2.6 // โปรไฟล์ด้านข้าง 1 − v^n (เทียบภาพด้านข้างหลอดจริง: กลางความสูงยังหนา ~83%)
@@ -28,19 +31,21 @@ export const TUBE_SEAL = 5 // ความสูงตะเข็บซีล�
 
 // หน้าตัดหลอดที่ความสูง y: ครึ่งกว้าง a (แกน x), ครึ่งลึก b (แกน z)
 export function tubeSection(t: TubeShape, y: number): { a: number; b: number } {
-  const { R, rcap, capTop, bodyY0, sealY0, sealThick } = t
+  const { R, rcap, capTop, bodyY0, sealY0, sealThick, oval } = t
   const half = sealThick / 2
   if (y <= bodyY0) {
-    // ไหล่มนจากขอบฝาขึ้นไปเป็นท่อกลมเต็ม
+    // ไหล่มนจากขอบฝาขึ้นไปเป็นท่อกลมเต็ม (ฝาเหลี่ยม: จากหน้าตัดฝาไปเป็นวงรีแบนโคนลำตัว)
     const k = Math.min(1, Math.max(0, (y - capTop) / Math.max(1e-6, bodyY0 - capTop)))
-    const r = rcap * 0.96 + (R - rcap * 0.96) * Math.sin((k * Math.PI) / 2)
+    const e = Math.sin((k * Math.PI) / 2)
+    if (oval) return { a: oval.ca * 0.98 + (oval.a0 - oval.ca * 0.98) * e, b: oval.cb * 0.98 + (oval.b0 - oval.cb * 0.98) * e }
+    const r = rcap * 0.96 + (R - rcap * 0.96) * e
     return { a: r, b: r }
   }
   if (y >= sealY0) return { a: (Math.PI * R) / 2, b: half }
   const v = (y - bodyY0) / (sealY0 - bodyY0)
-  const b = (R - half) * (1 - v ** TUBE_BULLET) + half
+  const b = ((oval ? oval.b0 : R) - half) * (1 - v ** TUBE_BULLET) + half
   // a ที่เส้นรอบวงรี = 2πR (ท่อไม่ยืด)
-  let lo = R * 0.9
+  let lo = oval ? oval.a0 * 0.98 : R * 0.9
   let hi = (Math.PI * R) / 2
   for (let i = 0; i < 30; i++) {
     const mid = (lo + hi) / 2
@@ -75,6 +80,21 @@ export const tubeCapR = (R: number, rn: number) => Math.min(Math.max(rn, R * 0.8
 // หลอดครีม: สัดส่วนความสูง (×H) ของฝา/คอกลมที่ก้น (ลำตัว loft เริ่มเหนือจุดนี้)
 export const TUBE_CAP_FRAC = 0.11
 export const TUBE_SHOULDER_FRAC = 0.025 // ไหล่มนเหนือฝา (×H)
+// ฝาเหลี่ยม (capStyle 'oval'): ฝาเกลียวหน้าตัดสเตเดียม สูงกว่าฝากลม; ลำตัวโคนเป็นวงรีลึก/กว้าง = TUBE_OVAL_ASPECT
+export const TUBE_OVAL_CAP_FRAC = 0.17
+export const TUBE_OVAL_ASPECT = 0.5
+export const TUBE_CAP_STYLES: { id: 'none' | 'oval'; nameTh: string; nameEn: string; detail: string }[] = [
+  { id: 'none', nameTh: 'ฝาฟลิปท็อปกลม', nameEn: 'Round flip-top', detail: 'ฝากลมเปิดพับได้ — ครีม/โลชั่น/เจล' },
+  { id: 'oval', nameTh: 'ฝาเหลี่ยม (วงรี)', nameEn: 'Oval screw cap', detail: 'ฝาเกลียวหน้าตัดวงรีแบน ลำตัวโคนแบนตาม — กันแดด/โฟมล้างหน้า' },
+]
+const tubeCapFrac = (oval: boolean) => (oval ? TUBE_OVAL_CAP_FRAC : TUBE_CAP_FRAC)
+
+// หน้าตัดโคนลำตัว + ฝาของหลอดฝาเหลี่ยม: วงรีลึก = ASPECT×กว้าง ที่เส้นรอบวงเท่าท่อ (2πR), ฝาแคบกว่าโคน 6%
+export function tubeOvalSection(R: number): { a0: number; b0: number; ca: number; cb: number } {
+  const a0 = (2 * Math.PI * R) / ellipsePerimeter(1, TUBE_OVAL_ASPECT)
+  const b0 = a0 * TUBE_OVAL_ASPECT
+  return { a0, b0, ca: a0 * 0.94, cb: b0 * 0.94 }
+}
 
 // รูปแบบฉลาก = ฉลากพันรอบตัวคลุมช่วงความสูงแค่ไหน (คำนวณจากช่วงลำตัวตรงของภาชนะ)
 export type LabelStyle = 'body' | 'full' | 'band' | 'neck'
@@ -187,7 +207,7 @@ function profileFor(
     // หลอดบีบคลาสสิก: ตั้งบน "ฝา/คอกลม" ที่ก้น → ลำตัวเป็น loft วงรี (กว้างคงที่ ลึกเรียว→ซีลแบน)
     // profile นี้เก็บแค่ฝา/คอ (ทรงหมุน กลม) จบแบบ "เปิด" ที่ (rcap, capH) ให้ลำตัว loft รับต่อ
     const rcap = tubeCapR(R, rn) // รัศมีฝา flip-top — ต้องตรงกับ vessel.tube.rcap
-    const capH = H * TUBE_CAP_FRAC
+    const capH = H * tubeCapFrac(shape.capStyle === 'oval')
     return {
       pts: [
         P(0, 0),
@@ -231,7 +251,8 @@ export interface Mouth {
 }
 
 // ฝาขวด (เลือกได้ — ภาพ 3D เท่านั้น ไม่อยู่ใน dieline ฉลาก)
-export type CapStyle = 'none' | 'screw' | 'flip' | 'pump' | 'cork' | 'foil' | 'crown'
+// 'oval' = ฝาเหลี่ยมของหลอดครีมเท่านั้น (ขวดไม่ใช้ — capShape คืน null)
+export type CapStyle = 'none' | 'screw' | 'flip' | 'pump' | 'cork' | 'foil' | 'crown' | 'oval'
 export const CAP_STYLES: { id: CapStyle; nameTh: string; nameEn: string; detail: string }[] = [
   { id: 'none', nameTh: 'ไม่มีฝา', nameEn: 'No cap', detail: 'แสดงปากขวดเปล่า' },
   { id: 'screw', nameTh: 'ฝาเกลียว', nameEn: 'Screw cap', detail: 'ฝาเกลียวขอบหยัก — น้ำดื่ม/เครื่องดื่ม/ซอส' },
@@ -266,7 +287,7 @@ export function capShape(
   style: CapStyle,
   m: Mouth,
 ): { lathe: Vec2[]; parts: CapPart[]; top: number; inner?: Vec2[] } | null {
-  if (style === 'none') return null
+  if (style === 'none' || style === 'oval') return null
   const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
   const lipH = m.top - m.lipY
   const rc = m.rr + 0.6 // ผนังฝาครอบนอกวงแหวน
@@ -413,7 +434,7 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
   // หลอดครีม: ลำตัวพิมพ์ได้ทั้งตัว (profile เป็นแค่ฝา) — กำหนดขอบพิมพ์เองให้ "สูงเต็มตัว" ขึ้นถึงใกล้ซีล
   if (mat.id === 'tube-laminate') {
     // พิมพ์ได้ทั้งตัวหลอด: จากไหล่ถึงใต้ตะเข็บซีล
-    b0 = (TUBE_CAP_FRAC + TUBE_SHOULDER_FRAC) * H
+    b0 = (tubeCapFrac(shape.capStyle === 'oval') + TUBE_SHOULDER_FRAC) * H
     b1 = H - Math.min(TUBE_SEAL, H * 0.06)
   }
   const span = Math.max(1, b1 - b0)
@@ -496,10 +517,11 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
     vessel.tube = {
       R,
       rcap: tubeCapR(R, rn),
-      capTop: TUBE_CAP_FRAC * H,
-      bodyY0: (TUBE_CAP_FRAC + TUBE_SHOULDER_FRAC) * H,
+      capTop: tubeCapFrac(shape.capStyle === 'oval') * H,
+      bodyY0: (tubeCapFrac(shape.capStyle === 'oval') + TUBE_SHOULDER_FRAC) * H,
       sealY0: H - Math.min(TUBE_SEAL, H * 0.06),
       sealThick: Math.max(0.8, mat.thickness * 2.5),
+      ...(shape.capStyle === 'oval' ? { oval: tubeOvalSection(R) } : {}),
     }
   }
   return vessel
