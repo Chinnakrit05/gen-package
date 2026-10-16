@@ -205,7 +205,7 @@ export const cloudProjectDocumentSchema = z.object({
     tearAt: finite.min(0).max(1000).optional(),
   }).strict().optional(),
   stickerCut: z.object({
-    shape: z.enum(['rect', 'contour']),
+    shape: z.enum(['rect', 'square', 'ellipse', 'hexagon', 'star', 'heart', 'contour']),
     border: z.enum(['white', 'none']),
     offset: finite.min(0).max(50),
     sheet: z.enum(['a6', 'a5', 'a4', 'a3', 'custom']).optional(),

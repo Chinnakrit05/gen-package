@@ -17,7 +17,10 @@ export const STICKER_RULES = {
   minRadius: 0.5, // รัศมีโค้งเล็กสุดของเส้นตัด (ต่ำกว่านี้ = หักศอก ตัดไม่สวย)
 } as const
 
-export type StickerShape = 'rect' | 'contour'
+// รูปทรงพื้นฐาน (เส้นตัดจากเรขาคณิต พอดีกรอบ W×H — ดู templates/sticker.ts) + 'contour' = ตามรูปลาย
+export type StickerBasicShape = 'rect' | 'square' | 'ellipse' | 'hexagon' | 'star' | 'heart'
+export const STICKER_BASIC_IDS: StickerBasicShape[] = ['rect', 'square', 'ellipse', 'hexagon', 'star', 'heart']
+export type StickerShape = StickerBasicShape | 'contour'
 export type StickerBorder = 'white' | 'none'
 export interface StickerCut {
   shape: StickerShape
@@ -63,10 +66,12 @@ export function parseStickerCut(raw: unknown): StickerCut | undefined {
   const sheetW = sheet === 'custom' ? num(o.sheetW, 50, 1000) : undefined
   const sheetH = sheet === 'custom' ? num(o.sheetH, 50, 1000) : undefined
   const sheetMargin = sheet && o.sheetMargin !== undefined ? num(o.sheetMargin, 0, 30) : undefined
-  if (o.shape !== 'contour' && !sheet) return undefined // ค่าเริ่มต้น (สี่เหลี่ยม ดวงเดียว) ไม่ต้องเก็บ
+  const shape: StickerShape =
+    o.shape === 'contour' || STICKER_BASIC_IDS.includes(o.shape as StickerBasicShape) ? (o.shape as StickerShape) : 'rect'
+  if (shape === 'rect' && !sheet) return undefined // ค่าเริ่มต้น (สี่เหลี่ยมมุมมน ดวงเดียว) ไม่ต้องเก็บ
   const off = Number(o.offset)
   return {
-    shape: o.shape === 'contour' ? 'contour' : 'rect',
+    shape,
     border: o.border === 'none' ? 'none' : 'white',
     offset: Number.isFinite(off)
       ? Math.min(STICKER_OFFSET_MAX, Math.max(STICKER_OFFSET_MIN, Math.round(off * 2) / 2))

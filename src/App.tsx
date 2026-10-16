@@ -66,7 +66,7 @@ import {
 } from './core/stickerContour'
 import { preflightSticker, type PreflightIssue } from './core/stickerPreflight'
 import { WHITE_SPOT, traceWhiteInk, whiteInkPath } from './core/whiteInk'
-import { generateStickerContour } from './core/templates/sticker'
+import { generateSticker, generateStickerContour, STICKER_BASIC_SHAPES, stickerOutline } from './core/templates/sticker'
 import {
   SHEET_GAP,
   SHEET_MARGIN,
@@ -1603,14 +1603,17 @@ export default function App({
       kind === 'box'
         ? isSticker && stickerLoops
           ? generateStickerContour(stickerLoops, W, H)
-          : applyVents(
+          : isSticker
+            // รูปทรงพื้นฐาน (ตามรูปที่ยังคำนวณไม่เสร็จ = สี่เหลี่ยมมุมมนชั่วคราว)
+            ? generateSticker({ W, D, H }, stickerCut.shape === 'contour' ? 'rect' : stickerCut.shape)
+            : applyVents(
               template.generate({ W, D, H, handle }, mat),
               template.supportsVents ? vents : undefined,
             )
         : kind === 'vessel'
           ? vessel!.label
           : pouch!.label,
-    [W, D, H, handle, mat, template, vessel, pouch, kind, vents, isSticker, stickerLoops],
+    [W, D, H, handle, mat, template, vessel, pouch, kind, vents, isSticker, stickerLoops, stickerCut.shape],
   )
   // ไดคัทตามรูปไม่ใช้เส้นเผื่อตัด 3 มม. แบบกล่อง — สติกเกอร์ใช้กติกาเผื่อสี/ระยะห่างของตัวเอง (ตรวจด้านล่าง)
   const guides = useMemo(
@@ -3522,26 +3525,46 @@ export default function App({
 
           {isSticker && (
             <Group title={t('ไดคัท', 'Die cut')} open={groups.label} onToggle={() => toggleGroup('label')}>
-              <div className="unit-toggle sticker-seg" role="group" aria-label={t('รูปทรงไดคัท', 'Cut shape')}>
+              {/* รูปทรงไดคัท: รูปทรงพื้นฐาน (พอดีกรอบ W×H — ปรับกว้าง/สูงได้จากช่องขนาด) หรือ ตามรูปลาย */}
+              <div className="sticker-shapes" role="group" aria-label={t('รูปทรงไดคัท', 'Cut shape')}>
+                {STICKER_BASIC_SHAPES.map((sh) => {
+                  const pts = stickerOutline(sh.id, 30, 30)
+                  return (
+                    <button
+                      key={sh.id}
+                      type="button"
+                      className={`sticker-shape${stickerCut.shape === sh.id ? ' active' : ''}`}
+                      aria-pressed={stickerCut.shape === sh.id}
+                      disabled={aiBusy}
+                      title={t(sh.nameTh, sh.nameEn)}
+                      onClick={() => setStickerCut({ ...stickerCut, shape: sh.id })}
+                    >
+                      <svg viewBox="-3 -3 36 36" aria-hidden="true">
+                        <path d={`M ${pts.map((p) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' L ')} Z`} />
+                      </svg>
+                      <span>{t(sh.nameTh, sh.nameEn)}</span>
+                    </button>
+                  )
+                })}
                 <button
                   type="button"
-                  className={stickerCut.shape === 'rect' ? 'active' : ''}
-                  aria-pressed={stickerCut.shape === 'rect'}
-                  disabled={aiBusy}
-                  onClick={() => setStickerCut({ ...stickerCut, shape: 'rect' })}
-                >
-                  {t('สี่เหลี่ยมมุมมน', 'Rounded rect')}
-                </button>
-                <button
-                  type="button"
-                  className={stickerCut.shape === 'contour' ? 'active' : ''}
+                  className={`sticker-shape${stickerCut.shape === 'contour' ? ' active' : ''}`}
                   aria-pressed={stickerCut.shape === 'contour'}
                   disabled={aiBusy}
+                  title={t('ตามรูป', 'Follow artwork')}
                   onClick={() => setStickerCut({ ...stickerCut, shape: 'contour' })}
                 >
-                  {t('ตามรูป', 'Follow artwork')}
+                  <svg viewBox="-3 -3 36 36" aria-hidden="true">
+                    <path d="M6 22 C2 14 8 4 15 7 C20 1 31 6 26 15 C31 22 22 31 15 26 C10 31 3 28 6 22 Z" strokeDasharray="3 2" />
+                  </svg>
+                  <span>{t('ตามรูป', 'Follow artwork')}</span>
                 </button>
               </div>
+              {stickerCut.shape !== 'contour' && (
+                <p className="hint">
+                  {t('ปรับกว้าง (W) × สูง (H) ได้ที่ช่องขนาด — วงกลมตั้ง W = H', 'Set width (W) × height (H) in the size panel — W = H for a circle')}
+                </p>
+              )}
               {stickerCut.shape === 'contour' && (
                 <>
                   <div className="unit-toggle sticker-seg" role="group" aria-label={t('ขอบ', 'Border')}>

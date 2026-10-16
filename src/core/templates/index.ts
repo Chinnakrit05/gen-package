@@ -220,7 +220,7 @@ export const TEMPLATES: BoxTemplate[] = [
     tilt: 0,
     supportsHandle: false,
     foldDepth: () => 0,
-    generate: generateSticker,
+    generate: (box) => generateSticker(box),
   },
 ]
 

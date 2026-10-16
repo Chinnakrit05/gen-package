@@ -30,6 +30,10 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `src/components/DielineSVG.tsx` — blueprint preview + เส้นบอกขนาด (toggle ได้) + ลาก/หมุน/ลบ artwork; การลากมี snap; ซูม/แพน (Ctrl+ล้อ), กริด, ไม้บรรทัด, เส้นไกด์ลากเอง (state ใน component; guideLines ≠ prop `guides` ที่เป็น bleed/safe); เส้นไกด์เข้า snapTargets ตอนลาก
 - `src/core/softProof.ts` + `src/components/useSoftProof.ts` — soft-proof CMYK บน blueprint (ปุ่ม "ดูสีแบบพิมพ์" ท้ายแถบเครื่องมือซ้ายบน ผ่าน prop `toolsExtra`, state ไม่จำข้ามรอบโดยเจตนา): ส่ง "สำเนา" ลาย/สีพื้น/รูปที่แปลงสีแล้วเข้า DielineSVG เท่านั้น — callback ของ blueprint อ้าง id/ค่าตัวเลข จึงแก้ไขระหว่างพรีวิวได้โดยสีจำลองไม่หลุดลงงาน/ไฟล์ส่งออก; รูปแปลงผ่าน canvas แบบ async + แคช. ใช้ 3D LUT 17³ ใน `src/core/cmykProofLut.ts` = **ไฟล์ที่ถูก generate** โดย `scripts/build-cmyk-lut.py` (Pillow/LittleCMS: sRGB→CMYK→sRGB relative+BPC แล้วแก้ gray balance ให้เทา/ขาว/ดำคงเดิม) — อย่าแก้ตรง ๆ; เปลี่ยน profile โรงพิมพ์ได้ด้วย `python scripts/build-cmyk-lut.py path.icc` (ค่าเริ่มต้น RSWOP.icm ของ Windows). สูตร RGB→CMYK ตรง ๆ ใน pdf.ts ใช้จำลองไม่ได้เพราะแปลงกลับได้ค่าเดิมเป๊ะ
 - `src/core/imageDpi.ts` + `src/components/useImageDpi.ts` — เตือนรูปความละเอียดต่ำ: dpi = พิกเซลจริงของรูป ÷ ขนาดที่วาดจริง (สูตรเดียวกับ `drawImageFit`: cover×cropZoom/contain/stretch; รูปพื้นใช้ `fillImageRect`) — <150 dpi = ป้ายแดงบนรูปใน blueprint (`LowResBadge` สูงคงที่ ~11px บนจอ, ไม่ไปถึงไฟล์ส่งออก) + สรุปในแท็บส่งออก; รูปที่เลือกโชว์ dpi ในแผง (เขียว ≥300 / เหลือง / แดง); ข้าม SVG (เวกเตอร์) และลายจากไลบรารี (preset)
+- รูปทรงสติกเกอร์พื้นฐาน (`StickerBasicShape`: rect มุมมน (ค่าเริ่มต้น)/square/ellipse/hexagon/star/heart) — `stickerOutline` ใน templates/sticker.ts
+  พอดีกรอบ W×H (ปรับกว้าง/สูงจากช่องขนาด) มุมทุกมุมมนด้วย `fillet` ส่วนโค้งวงกลมจริง ≥1 มม. (โค้งกำลังสองที่จุดยอดได้รัศมียอดแค่ ~0.1×ระยะขา
+  → ตัวตรวจไดคัทจับเป็นมุมหักศอก); ดาว/หกเหลี่ยมมนแล้วยืดกลับเต็มกรอบ; หัวใจ = สองวงพู + เส้นสัมผัสลงปลาย มนปลาย/ร่องด้วยวงแตะ
+  (รัศมีเผื่อการยืดสองแกน); App เลือก `generateSticker(box, shape)` ตาม `stickerCut.shape` (contour ที่ยังไม่เสร็จ = rect); PROJECT_FILE_VERSION 15
 - `src/core/stickerContour.ts` + `stickerPreflight.ts` (pure) — สติกเกอร์ 'ไดคัทตามรูป' + ตรวจไฟล์ตามข้อจำกัดผลิต
   (อิงเงื่อนไขโรงพิมพ์สติกเกอร์ไดคัท เช่น Lalapix: `STICKER_RULES` ห่างเส้นตัด/เผื่อสี ≥1 มม., ระหว่างเส้นตัด ≥2, ช่องเจาะ ≥2, รัศมีโค้ง ≥0.5):
   alpha ของลาย (`renderArtworkAlpha`, ไม่รวมสีพื้น) → อุดรู → ขยาย (มีขอบขาว) หรือหดเข้าเนื้อ 1 มม. (ไม่มีขอบขาว = สีเลยเส้นตัดเอง)
@@ -160,7 +164,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
-  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 14); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 15); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° ได้สันโค้งจาก `rollBeads` ใน fold.ts (ทรงกระบอกบาง รัศมี = ครึ่งระยะสองชั้น) — ตอนนี้ไม่มี template ใช้แล้ว
 - FEFCO 0427 ตามผัง dieline มาตรฐาน: ผนังข้างทบเป็นรอยพับคู่ (ผนัง → สัน กว้าง sp = 3t+0.2 = ผนัง+หู+ชั้นทบ → ชั้นทบ)
   ลิ้นปลายชั้นทบลงช่องบนฐานที่ sp − t/2; ฝาแคบกว่ากล่องข้างละ sp มีปีกข้างคางหมูพับลงด้านในชั้นทบ (stage 4 ก่อนฝาปิด 5),

@@ -3,6 +3,9 @@ import { computeMatrices, to3D } from '../fold'
 import { getTemplate } from './index'
 import { getMaterial } from '../materials'
 import { dielineDXFString } from '../dxf'
+import { generateSticker, STICKER_BASIC_SHAPES } from './sticker'
+import { preflightSticker } from '../stickerPreflight'
+import { parseStickerCut } from '../stickerContour'
 
 // สติกเกอร์ไดคัท = แผ่นพิมพ์แบนชิ้นเดียว มุมมน ไม่มีรอยพับ
 const mat = getMaterial('sticker-vinyl')
@@ -47,5 +50,37 @@ describe('sticker: โครงสร้าง dieline', () => {
   it('ส่งออก DXF ได้', () => {
     const dxf = dielineDXFString(d)
     expect(dxf).toContain('SECTION')
+  })
+})
+
+describe('sticker: รูปทรงพื้นฐาน', () => {
+  it.each(STICKER_BASIC_SHAPES.map((s) => [s.id] as const))('%s พอดีกรอบ W×H ทุกขนาด และผ่านกติกาไดคัท (มุมโค้ง/ขนาด)', (shape) => {
+    for (const [w, h] of [[60, 40], [40, 60], [50, 50], [15, 12]] as const) {
+      const dl = generateSticker({ W: w, D: 60, H: h }, shape)
+      const pts = dl.panels[0].outline
+      expect(pts.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true)
+      const xs = pts.map((p) => p.x)
+      const ys = pts.map((p) => p.y)
+      expect(Math.min(...xs)).toBeGreaterThanOrEqual(-1e-6)
+      expect(Math.max(...xs)).toBeLessThanOrEqual(w + 1e-6)
+      expect(Math.min(...ys)).toBeGreaterThanOrEqual(-1e-6)
+      expect(Math.max(...ys)).toBeLessThanOrEqual(h + 1e-6)
+      // ใช้กรอบเกือบเต็ม (มุมมน/ปลายแฉกที่มนทำให้ขาดได้เล็กน้อย)
+      expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(w * 0.9)
+      expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(h * 0.9)
+      const issues = preflightSticker({ loops: [pts], sheet: { w, h } })
+      expect(issues.filter((i) => i.code === 'corner')).toEqual([])
+      expect(dl.segments[0].d).not.toContain('NaN')
+    }
+  })
+
+  it('สี่เหลี่ยมมุมมนเท่าเดิม (ค่าเริ่มต้น) และ template ยังให้สี่เหลี่ยมมุมมน', () => {
+    expect(generateSticker({ W, D: 60, H }).panels[0].outline).toEqual(d.panels[0].outline)
+  })
+
+  it('เก็บรูปทรงลงงานได้ (rect = ค่าเริ่มต้นไม่เก็บ)', () => {
+    expect(parseStickerCut({ shape: 'heart', border: 'white', offset: 2 })?.shape).toBe('heart')
+    expect(parseStickerCut({ shape: 'rect', border: 'white', offset: 2 })).toBeUndefined()
+    expect(parseStickerCut({ shape: 'blob', border: 'white', offset: 2 })).toBeUndefined()
   })
 })
