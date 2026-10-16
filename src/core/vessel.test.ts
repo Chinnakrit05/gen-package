@@ -357,3 +357,28 @@ describe('vessel: จุกไวน์', () => {
     expect(c.top).toBeGreaterThan(m.top)
   })
 })
+
+describe('vessel: แคปซูลฟอยล์', () => {
+  const m = generateVessel({ W: 75, D: 20, H: 300, handle: false }, getMaterial('glass')).mouth!
+  const foil = capShape('foil', m)!
+  const cork = capShape('cork', m)!
+
+  it('หุ้มทับหัวจุก (สูงกว่า กว้างกว่า) และขอบปาก', () => {
+    expect(foil.top).toBeGreaterThan(cork.top)
+    expect(Math.max(...foil.lathe.map((p) => p.x))).toBeGreaterThan(Math.max(...cork.lathe.map((p) => p.x)))
+  })
+
+  it('รัดคอลงมาใต้ขอบปาก แต่ไม่เลยโคนคอ และแนบคอ (ไม่บานออก)', () => {
+    const y0 = Math.min(...foil.lathe.map((p) => p.y))
+    expect(y0).toBeLessThan(m.lipY - 10)
+    expect(y0).toBeGreaterThan(m.neckY)
+    const neckPart = foil.lathe.filter((p) => p.y < m.lipY - 0.6)
+    for (const p of neckPart) expect(p.x).toBeLessThan(m.rn + 1)
+  })
+
+  it('ก้านจุกยังอยู่ในคอ (inner) ไม่โผล่พ้นปาก', () => {
+    expect(foil.inner!.length).toBeGreaterThan(2)
+    expect(Math.max(...foil.inner!.map((p) => p.y))).toBeLessThanOrEqual(m.top + 1e-9)
+    expect(Math.max(...foil.inner!.map((p) => p.x))).toBeLessThan(m.rn)
+  })
+})

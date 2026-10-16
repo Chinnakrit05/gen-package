@@ -230,18 +230,21 @@ export interface Mouth {
 }
 
 // ฝาขวด (เลือกได้ — ภาพ 3D เท่านั้น ไม่อยู่ใน dieline ฉลาก)
-export type CapStyle = 'none' | 'screw' | 'flip' | 'pump' | 'cork'
+export type CapStyle = 'none' | 'screw' | 'flip' | 'pump' | 'cork' | 'foil'
 export const CAP_STYLES: { id: CapStyle; nameTh: string; nameEn: string; detail: string }[] = [
   { id: 'none', nameTh: 'ไม่มีฝา', nameEn: 'No cap', detail: 'แสดงปากขวดเปล่า' },
   { id: 'screw', nameTh: 'ฝาเกลียว', nameEn: 'Screw cap', detail: 'ฝาเกลียวขอบหยัก — น้ำดื่ม/เครื่องดื่ม/ซอส' },
   { id: 'flip', nameTh: 'ฝาฟลิปท็อป', nameEn: 'Flip-top cap', detail: 'ฝาเปิดพับได้ — แชมพู/ครีมอาบน้ำ/ซอส' },
   { id: 'pump', nameTh: 'หัวปั๊ม', nameEn: 'Pump', detail: 'หัวกดปั๊ม — สบู่เหลว/โลชั่น/เจล' },
   { id: 'cork', nameTh: 'จุกไวน์ (จุกก๊อก)', nameEn: 'Wine cork', detail: 'จุกก๊อกเสียบในคอขวด หัวโผล่พ้นปาก — ไวน์/สุรา/น้ำมันมะกอก' },
+  { id: 'foil', nameTh: 'จุกไวน์ + แคปซูลฟอยล์', nameEn: 'Cork + foil capsule', detail: 'แคปซูลฟอยล์หุ้มจุกและคอขวด — ไวน์/สปาร์กลิง' },
 ]
 export const DEFAULT_CAP_COLOR = '#f4f4f2'
 export const CORK_COLOR = '#c19a6b'
-// สีฝาเมื่อผู้ใช้ยังไม่เลือก — จุกก๊อกเป็นสีไม้ก๊อก ที่เหลือขาวมาตรฐาน
-export const defaultCapColor = (style: CapStyle) => (style === 'cork' ? CORK_COLOR : DEFAULT_CAP_COLOR)
+export const FOIL_COLOR = '#6e1a28'
+// สีฝาเมื่อผู้ใช้ยังไม่เลือก — จุกก๊อกสีไม้ก๊อก, แคปซูลฟอยล์แดงไวน์, ที่เหลือขาวมาตรฐาน
+export const defaultCapColor = (style: CapStyle) =>
+  style === 'cork' ? CORK_COLOR : style === 'foil' ? FOIL_COLOR : DEFAULT_CAP_COLOR
 
 // ชิ้นประกอบกล่องเล็ก ๆ ของฝา (ร่องหยัก/ลิ้นเปิด/หัวฉีด) — พิกัดเดียวกับโปรไฟล์ (y จากก้น, z = ด้านหน้า)
 export interface CapPart {
@@ -255,7 +258,11 @@ export interface CapPart {
 }
 
 // รูปฝา: lathe = โปรไฟล์ทรงหมุน (x = รัศมี, y) จากขอบล่างนอกขึ้นไปจบกลางยอด; ฝาครอบขอบปากลงมาถึงใต้วงแหวน
-export function capShape(style: CapStyle, m: Mouth): { lathe: Vec2[]; parts: CapPart[]; top: number } | null {
+// inner = ชิ้นทรงหมุนด้านใน (ก้านจุกก๊อกใต้แคปซูลฟอยล์) วาดด้วยสีไม้ก๊อก
+export function capShape(
+  style: CapStyle,
+  m: Mouth,
+): { lathe: Vec2[]; parts: CapPart[]; top: number; inner?: Vec2[] } | null {
   if (style === 'none') return null
   const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
   const lipH = m.top - m.lipY
@@ -300,7 +307,7 @@ export function capShape(style: CapStyle, m: Mouth): { lathe: Vec2[]; parts: Cap
       top: yt,
     }
   }
-  if (style === 'cork') {
+  if (style === 'cork' || style === 'foil') {
     // จุกก๊อก (T-cork): ก้านเสียบในคอแน่นพอดีรู ลึก ~2×⌀คอ (ไม่เลยโคนคอ) + หัวจุกโผล่พ้นปาก กว้างกว่าขอบปากเล็กน้อย
     const rk = m.rn * 0.96
     const depth = Math.min(clamp(m.rn * 2.2, 12, 45), m.top - m.neckY - 1)
@@ -309,10 +316,27 @@ export function capShape(style: CapStyle, m: Mouth): { lathe: Vec2[]; parts: Cap
     const hh = clamp(m.rn * 0.75, 4, 18)
     const yt = m.top + hh
     const b = Math.min(1.5, hh * 0.25)
+    const cork = [P(0, yb), P(rk - 0.6, yb), P(rk, yb + 0.6), P(rk, m.top), P(rh, m.top), P(rh, yt - b), P(rh - b, yt), P(0, yt)]
+    if (style === 'cork') return { lathe: cork, parts: [], top: yt }
+    // แคปซูลฟอยล์: หุ้มแนบหัวจุก + ขอบปาก แล้วรัดแนบคอลงมา ~3×รัศมีคอ (ไม่เลยโคนคอ — ฟอยล์ไม่หุ้มไหล่)
+    // ฟอยล์หนาตามจริงบางมาก — เผื่อผิว f กันซ้อนทับผิวขวด/จุก; ก้านจุกในคอยังเห็นผ่านแก้ว (inner)
+    const f = 0.3
+    const yf = Math.max(m.neckY + 1, m.top - clamp(m.rn * 3, 18, 60))
+    const ytf = yt + f
     return {
-      lathe: [P(0, yb), P(rk - 0.6, yb), P(rk, yb + 0.6), P(rk, m.top), P(rh, m.top), P(rh, yt - b), P(rh - b, yt), P(0, yt)],
+      lathe: [
+        P(m.rn + f, Math.min(yf, m.lipY - 1)),
+        P(m.rn + f, m.lipY - 0.5),
+        P(m.rr + f, m.lipY),
+        P(m.rr + f, m.top),
+        P(rh + f, m.top + 0.2),
+        P(rh + f, ytf - b),
+        P(rh + f - b, ytf),
+        P(0, ytf),
+      ],
       parts: [],
-      top: yt,
+      top: ytf,
+      inner: [P(0, yb), P(rk - 0.6, yb), P(rk, yb + 0.6), P(rk, m.top), P(0, m.top)], // ก้านจุกในคอ (ไม่รวมหัว)
     }
   }
   // หัวปั๊ม: ปลอกเกลียว → ก้านกด → หัวกด + หัวฉีดยื่นไปด้านหน้า

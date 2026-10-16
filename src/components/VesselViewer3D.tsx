@@ -5,7 +5,7 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
-import { capShape, defaultCapColor, tubeSection, type CapStyle, type Vessel } from '../core/vessel'
+import { capShape, CORK_COLOR, defaultCapColor, tubeSection, type CapStyle, type Vessel } from '../core/vessel'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
 import { SceneLighting, type LightMode } from './SceneLighting'
@@ -254,9 +254,15 @@ function VesselModel({
     [cap],
   )
   useEffect(() => () => capGeo?.dispose(), [capGeo])
+  const capInnerGeo = useMemo(
+    () => (cap?.inner ? new THREE.LatheGeometry(cap.inner.map((p) => new THREE.Vector2(p.x, p.y)), 48) : null),
+    [cap],
+  )
+  useEffect(() => () => capInnerGeo?.dispose(), [capInnerGeo])
   const capCol = capColor || defaultCapColor(capStyle)
-  // จุกก๊อกผิวด้าน ฝาพลาสติกเงากว่า
-  const capRough = capStyle === 'cork' ? 0.85 : 0.38
+  // จุกก๊อกผิวด้าน, ฟอยล์เป็นโลหะเงา, ฝาพลาสติกเงาปานกลาง
+  const capRough = capStyle === 'cork' ? 0.85 : capStyle === 'foil' ? 0.3 : 0.38
+  const capMetal = capStyle === 'foil' ? 0.65 : 0.02
 
   const modelRef = useRef<THREE.Group>(null)
 
@@ -312,12 +318,17 @@ function VesselModel({
       {cap && capGeo && (
         <>
           <mesh geometry={capGeo}>
-            <meshStandardMaterial color={capCol} roughness={capRough} metalness={0.02} side={THREE.DoubleSide} />
+            <meshStandardMaterial color={capCol} roughness={capRough} metalness={capMetal} side={THREE.DoubleSide} />
           </mesh>
+          {capInnerGeo && (
+            <mesh geometry={capInnerGeo}>
+              <meshStandardMaterial color={CORK_COLOR} roughness={0.85} metalness={0} side={THREE.DoubleSide} />
+            </mesh>
+          )}
           {cap.parts.map((pt, i) => (
             <mesh key={i} position={[pt.x, pt.y, pt.z]} rotation={[0, pt.rotY ?? 0, 0]}>
               <boxGeometry args={[pt.w, pt.h, pt.d]} />
-              <meshStandardMaterial color={capCol} roughness={capRough} metalness={0.02} />
+              <meshStandardMaterial color={capCol} roughness={capRough} metalness={capMetal} />
             </mesh>
           ))}
         </>
