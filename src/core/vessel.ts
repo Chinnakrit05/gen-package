@@ -230,21 +230,23 @@ export interface Mouth {
 }
 
 // ฝาขวด (เลือกได้ — ภาพ 3D เท่านั้น ไม่อยู่ใน dieline ฉลาก)
-export type CapStyle = 'none' | 'screw' | 'flip' | 'pump' | 'cork' | 'foil'
+export type CapStyle = 'none' | 'screw' | 'flip' | 'pump' | 'cork' | 'foil' | 'crown'
 export const CAP_STYLES: { id: CapStyle; nameTh: string; nameEn: string; detail: string }[] = [
   { id: 'none', nameTh: 'ไม่มีฝา', nameEn: 'No cap', detail: 'แสดงปากขวดเปล่า' },
   { id: 'screw', nameTh: 'ฝาเกลียว', nameEn: 'Screw cap', detail: 'ฝาเกลียวขอบหยัก — น้ำดื่ม/เครื่องดื่ม/ซอส' },
   { id: 'flip', nameTh: 'ฝาฟลิปท็อป', nameEn: 'Flip-top cap', detail: 'ฝาเปิดพับได้ — แชมพู/ครีมอาบน้ำ/ซอส' },
   { id: 'pump', nameTh: 'หัวปั๊ม', nameEn: 'Pump', detail: 'หัวกดปั๊ม — สบู่เหลว/โลชั่น/เจล' },
   { id: 'cork', nameTh: 'จุกไวน์ (จุกก๊อก)', nameEn: 'Wine cork', detail: 'จุกก๊อกเสียบในคอขวด หัวโผล่พ้นปาก — ไวน์/สุรา/น้ำมันมะกอก' },
+  { id: 'crown', nameTh: 'ฝาจีบ (crown cap)', nameEn: 'Crown cap', detail: 'ฝาโลหะขอบจีบหยัก — เบียร์/โซดา/น้ำอัดลมขวดแก้ว' },
   { id: 'foil', nameTh: 'จุกไวน์ + แคปซูลฟอยล์', nameEn: 'Cork + foil capsule', detail: 'แคปซูลฟอยล์หุ้มจุกและคอขวด — ไวน์/สปาร์กลิง' },
 ]
 export const DEFAULT_CAP_COLOR = '#f4f4f2'
 export const CORK_COLOR = '#c19a6b'
 export const FOIL_COLOR = '#6e1a28'
+export const CROWN_COLOR = '#c3c7cc'
 // สีฝาเมื่อผู้ใช้ยังไม่เลือก — จุกก๊อกสีไม้ก๊อก, แคปซูลฟอยล์แดงไวน์, ที่เหลือขาวมาตรฐาน
 export const defaultCapColor = (style: CapStyle) =>
-  style === 'cork' ? CORK_COLOR : style === 'foil' ? FOIL_COLOR : DEFAULT_CAP_COLOR
+  style === 'cork' ? CORK_COLOR : style === 'foil' ? FOIL_COLOR : style === 'crown' ? CROWN_COLOR : DEFAULT_CAP_COLOR
 
 // ชิ้นประกอบกล่องเล็ก ๆ ของฝา (ร่องหยัก/ลิ้นเปิด/หัวฉีด) — พิกัดเดียวกับโปรไฟล์ (y จากก้น, z = ด้านหน้า)
 export interface CapPart {
@@ -305,6 +307,29 @@ export function capShape(
         { x: 0, y: yg, z: -rf - 0.4, w: rf * 0.5, h: 2.2, d: 1 },
       ],
       top: yt,
+    }
+  }
+  if (style === 'crown') {
+    // ฝาจีบ: แผ่นโลหะเตี้ย ยอดนูนเล็กน้อย กระโปรงบานออกจีบเป็นหยัก 21 จีบ — ขอบปากเตี้ยครอบลงใต้วงแหวน (ล็อกใต้ขอบ),
+    // ขอบปากสูงกว่าฝาครอบแค่ช่วงบน (ฝาจีบจริงสูง ~6 มม. ไม่ยืดตามวงแหวน)
+    const hc = clamp(m.rn * 0.45, 4, 9)
+    const yt = m.top + Math.max(0.8, hc * 0.25)
+    const yb = Math.max(m.lipY - 0.5, yt - hc)
+    const rc = m.rr + 0.5
+    const rf = m.rr + Math.max(1, m.rn * 0.1) // ขอบล่างบานออก
+    const b = Math.min(0.8, (yt - yb) * 0.15)
+    const parts: CapPart[] = []
+    const n = 21
+    const fh = (yt - yb) * 0.62
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * 2 * Math.PI
+      const r = (rc + rf) / 2 + 0.25
+      parts.push({ x: Math.sin(a) * r, y: yb + fh / 2, z: Math.cos(a) * r, w: Math.max(0.8, (2 * Math.PI * rc) / n / 2.4), h: fh, d: 0.9, rotY: a })
+    }
+    return {
+      lathe: [P(m.rr + 0.05, yb), P(rf, yb), P(rc, yb + (yt - yb) * 0.45), P(rc, yt - b), P(rc - b, yt), P(rc * 0.55, yt + 0.25), P(0, yt + 0.3)],
+      parts,
+      top: yt + 0.3,
     }
   }
   if (style === 'cork' || style === 'foil') {

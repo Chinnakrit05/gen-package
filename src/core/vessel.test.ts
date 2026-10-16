@@ -330,7 +330,8 @@ describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: ปากขวด
   it.each(CAP_STYLES.filter((c) => c.id !== 'none').map((c) => [c.id] as const))('ฝา %s ครอบขอบปาก (ล่างต่ำกว่าวงแหวน กว้างกว่า สูงพ้นปาก)', (style) => {
     const c = capShape(style, m)!
     const ys = c.lathe.map((p) => p.y)
-    expect(Math.min(...ys)).toBeLessThan(m.lipY)
+    // ฝาจีบเตี้ยตายตัว: ครอบลงบนขอบปาก (ใต้วงแหวนเมื่อวงแหวนเตี้ยกว่าฝา)
+    expect(Math.min(...ys)).toBeLessThan(style === 'crown' ? m.top : m.lipY)
     // จุกก๊อก: หัวจุกกว้างกว่าขอบปาก (วางบนปาก) — ฝาอื่นครอบนอกขอบปาก
     expect(Math.max(...c.lathe.map((p) => p.x))).toBeGreaterThan(m.rr)
     expect(c.top).toBeGreaterThan(m.top)
@@ -380,5 +381,27 @@ describe('vessel: แคปซูลฟอยล์', () => {
     expect(foil.inner!.length).toBeGreaterThan(2)
     expect(Math.max(...foil.inner!.map((p) => p.y))).toBeLessThanOrEqual(m.top + 1e-9)
     expect(Math.max(...foil.inner!.map((p) => p.x))).toBeLessThan(m.rn)
+  })
+})
+
+describe('vessel: ฝาจีบ', () => {
+  const m = generateVessel({ W: 60, D: 26, H: 230, handle: false }, getMaterial('glass')).mouth!
+  const c = capShape('crown', m)!
+
+  it('เตี้ย ครอบลงใต้วงแหวนปาก ขอบล่างบานออก และมีจีบ 21 จีบรอบกระโปรง', () => {
+    const ys = c.lathe.map((p) => p.y)
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThanOrEqual(10)
+    expect(Math.min(...ys)).toBeLessThan(m.top)
+    expect(c.lathe[1].x).toBeGreaterThan(c.lathe[2].x) // ขอบล่างบานกว่ากระโปรงช่วงบน
+    expect(c.parts).toHaveLength(21)
+    for (const pt of c.parts) expect(Math.hypot(pt.x, pt.z)).toBeGreaterThan(m.rr)
+  })
+})
+
+describe('vessel: ฝาจีบบนขอบปากเตี้ย', () => {
+  it('ขอบปากเตี้ยกว่าฝา → กระโปรงครอบลงใต้วงแหวน', () => {
+    const m = generateVessel({ W: 60, D: 26, H: 120, handle: false }, getMaterial('pet-bottle'), 'body', { neckH: 10 }).mouth!
+    const c = capShape('crown', m)!
+    expect(Math.min(...c.lathe.map((p) => p.y))).toBeLessThan(m.lipY)
   })
 })

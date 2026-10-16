@@ -261,8 +261,8 @@ function VesselModel({
   useEffect(() => () => capInnerGeo?.dispose(), [capInnerGeo])
   const capCol = capColor || defaultCapColor(capStyle)
   // จุกก๊อกผิวด้าน, ฟอยล์เป็นโลหะเงา, ฝาพลาสติกเงาปานกลาง
-  const capRough = capStyle === 'cork' ? 0.85 : capStyle === 'foil' ? 0.3 : 0.38
-  const capMetal = capStyle === 'foil' ? 0.65 : 0.02
+  const capRough = capStyle === 'cork' ? 0.85 : capStyle === 'foil' || capStyle === 'crown' ? 0.3 : 0.38
+  const capMetal = capStyle === 'foil' ? 0.65 : capStyle === 'crown' ? 0.7 : 0.02
 
   const modelRef = useRef<THREE.Group>(null)
 
