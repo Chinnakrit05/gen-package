@@ -697,6 +697,7 @@ export interface BrickShape {
   finHalf: number // ครึ่งความหนาครีบ (ฟิล์มสองชั้นประกบ)
   creaseIn: number // รอยจีบกลางลำตัวพับเข้า
   gussetHalf: number // ความยาวครึ่งจีบ (สันข้าง→รอยจีบกลาง) — ฟิล์มไม่ยืด จึงคงที่ทุกระดับ
+  baseL: number // ความยาวฟิล์มปลายล่างของแผงที่พับเป็นก้นแบน (ลายส่วนนี้ไปอยู่ใต้ถุง)
   bodyH: number // ความสูงลำตัวตั้งตรง (ก้นที่ y=0)
   shoulderH: number // ความสูงไหล่ (แนวดิ่ง)
   shoulderL: number // ความยาวไหล่ตามผิวฟิล์ม
@@ -713,7 +714,9 @@ export function brickShape(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect'>):
   // ไหล่ไม่กินเกิน 60% ของความยาวหน้า (ถุงเตี้ย-จีบลึก → ไหล่ราบลง)
   const shoulderH = Math.min(b0 * BRICK_SHOULDER, Math.sqrt(Math.max(0, (p.H * 0.6) ** 2 - drop * drop)))
   const shoulderL = Math.hypot(shoulderH, drop)
-  const bodyH = Math.max(p.H * 0.4, p.H - shoulderL)
+  // ก้นแบนกินฟิล์มปลายล่างราวครึ่งความลึก (หน้า/หลังพับเข้าหาแนวซีลก้น) — ผนังตั้งจึงเตี้ยกว่า H เท่านี้
+  const baseL = Math.min(b0, p.H * 0.25)
+  const bodyH = Math.max(p.H * 0.15, p.H - shoulderL - baseL) // ไหล่ ≤ 0.6H + ก้น ≤ 0.25H → ปกติไม่ติดขั้นต่ำ
   const finH = p.frontRect.y
   return {
     H: p.H,
@@ -722,6 +725,7 @@ export function brickShape(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect'>):
     finHalf,
     creaseIn,
     gussetHalf: Math.hypot(b0, creaseIn),
+    baseL,
     bodyH,
     shoulderH,
     shoulderL,
@@ -740,12 +744,13 @@ export interface BrickRow {
   dly: number // พิกัดแนวตั้งบน dieline (UV)
 }
 
-// แถวโปรไฟล์ก้น → ปลายครีบ พร้อมพิกัด dieline: ลำตัว = ส่วนล่างของแผงหน้า, ไหล่ = ส่วนบน, ครีบ = แถบซีลบน [0..st]
+// แถวโปรไฟล์ก้น → ปลายครีบ พร้อมพิกัด dieline: ลำตัว = ส่วนล่างของแผงหน้า (เว้นปลาย baseL ที่พับเป็นก้น),
+// ไหล่ = ส่วนบน, ครีบ = แถบซีลบน [0..st]
 export function brickRows(s: BrickShape, st: number, nBody = 12, nShoulder = 16, nFin = 3): BrickRow[] {
   const rows: BrickRow[] = []
   for (let i = 0; i <= nBody; i++) {
     const t = i / nBody
-    rows.push({ y: t * s.bodyH, b: s.b0, d: s.creaseIn, dly: st + s.shoulderL + (1 - t) * (s.H - s.shoulderL) })
+    rows.push({ y: t * s.bodyH, b: s.b0, d: s.creaseIn, dly: st + s.shoulderL + (1 - t) * (s.H - s.shoulderL - s.baseL) })
   }
   for (let i = 1; i <= nShoulder; i++) {
     const t = i / nShoulder
@@ -768,6 +773,6 @@ export function brickAt(s: BrickShape, dl: number): { y: number; b: number; d: n
     const b = s.finHalf + (s.b0 - s.finHalf) * t
     return { y: s.bodyH + s.shoulderH * (1 - t), b, d: brickFold(s, b), tilt: Math.atan2(s.b0 - s.finHalf, s.shoulderH) }
   }
-  const t = Math.min(1, (dl - L) / Math.max(1e-6, s.H - L))
+  const t = Math.min(1, (dl - L) / Math.max(1e-6, s.H - L - s.baseL))
   return { y: s.bodyH * (1 - t), b: s.b0, d: s.creaseIn, tilt: 0 }
 }

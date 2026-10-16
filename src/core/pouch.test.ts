@@ -426,12 +426,14 @@ describe('pouch: ทรง 3D ซองข้างจีบ (brick) แบบ�
     expect(s.a).toBe(W / 2)
   })
 
-  it('ความยาวผิวหน้า ลำตัว+ไหล่ = H และครีบสูง = แถบซีลบน (UV ไม่ยืด)', () => {
-    expect(s.bodyH + s.shoulderL).toBeCloseTo(H, 6)
+  it('ความยาวผิวหน้า ลำตัว+ไหล่+ก้นพับ = H และครีบสูง = แถบซีลบน (UV ไม่ยืด)', () => {
+    expect(s.bodyH + s.shoulderL + s.baseL).toBeCloseTo(H, 6)
+    expect(s.baseL).toBeGreaterThan(0)
     expect(s.finH).toBe(BRICK_SEAL)
     expect(top.y).toBeCloseTo(s.topY, 6)
     // dieline แนวตั้ง: ก้น = ขอบล่างแผงหน้า, โคนครีบ = แนวซีลบน, ปลายครีบ = ขอบบนแผ่น
-    expect(rows[0].dly).toBeCloseTo(BRICK_SEAL + H, 6)
+    // ก้นผนังตั้ง = เหนือขอบล่างแผงหน้า baseL (ส่วนนั้นพับเป็นก้นแบนใต้ถุง)
+    expect(rows[0].dly).toBeCloseTo(BRICK_SEAL + H - s.baseL, 6)
     expect(rows.find((r) => Math.abs(r.y - (s.bodyH + s.shoulderH)) < 1e-9)?.dly).toBeCloseTo(BRICK_SEAL, 6)
     expect(top.dly).toBeCloseTo(0, 6)
     for (let i = 1; i < rows.length; i++) {
@@ -465,7 +467,8 @@ describe('pouch: ทรง 3D ซองข้างจีบ (brick) แบบ�
   it('ถุงเตี้ย-จีบลึก: ไหล่ไม่กินเกิน 60% ของหน้า ลำตัวยังมีความสูง', () => {
     const q = brickShape(generatePouch({ W: 80, D: 80, H: 60 }, mat, { style: 'gusset' }))
     expect(q.shoulderH).toBeGreaterThanOrEqual(0)
-    expect(q.bodyH).toBeGreaterThanOrEqual(60 * 0.4)
+    expect(q.bodyH).toBeGreaterThanOrEqual(60 * 0.15)
+    expect(q.baseL).toBeLessThanOrEqual(60 * 0.25)
     expect(Number.isFinite(q.topY)).toBe(true)
   })
 })

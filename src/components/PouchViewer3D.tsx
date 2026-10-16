@@ -185,7 +185,6 @@ export function buildPouchGeometry(pouch: Pouch) {
           idx.push(p, p + cols, p + 1, p + 1, p + cols, p + cols + 1)
         }
       }
-      const baseIndices: number[] = []
       let bottomSeal: { end: number; y: number; z: number } | null = null
       if (style === 'gusset') {
         const s = brickShape(pouch)
@@ -212,10 +211,11 @@ export function buildPouchGeometry(pouch: Pouch) {
             }
             pos.push(x, rootY * t - side * s.finHalf * t,
               foldedZ)
-            uv.push(fX / dw, (st + H) / dh)
+            // ก้นแบน = ฟิล์มปลายล่างของแผง (baseL) พับเข้าใต้ถุง — ลายต่อเนื่องจากผนังลงไปจนถึงแนวซีลก้น
+            uv.push(fX / dw, (st + H - s.baseL * (1 - t)) / dh)
           }
           for (let iu = 0; iu < cols - 1; iu++) {
-            baseIndices.push(previous + iu, previous + iu + 1, start + iu,
+            idx.push(previous + iu, previous + iu + 1, start + iu,
               previous + iu + 1, start + iu + 1, start + iu)
           }
           previous = start
@@ -238,7 +238,6 @@ export function buildPouchGeometry(pouch: Pouch) {
         bottomSeal = { end: previous, y: rootY, z: rootZ - sealLength }
       }
       const sideIdxCount = idx.length
-      idx.push(...baseIndices)
       // ปิดปลายครีบ/ก้น (fan) = material 1 สีพื้น (เลี่ยงลายยืดที่ปลายเรียว/ก้นแบน)
       const capRow = (rowY: number, rowBase: number, flip: boolean, rowZ = 0) => {
         const center = pos.length / 3

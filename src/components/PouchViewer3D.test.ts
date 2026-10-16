@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { buildPouchGeometry, getPouchSealColor } from './PouchViewer3D'
-import { generatePouch, DOYPACK_FIN, FLAT_SEAL, POUCH_FIN_SEAL, type PouchStyle } from '../core/pouch'
+import { brickShape, generatePouch, DOYPACK_FIN, FLAT_SEAL, POUCH_FIN_SEAL, type PouchStyle } from '../core/pouch'
 import { getMaterial } from '../core/materials'
 
 describe('brick pouch seal color', () => {
@@ -276,5 +276,46 @@ describe('flat 3-side-seal geometry', () => {
     expect(geometry.boundingBox!.max.y).toBeCloseTo(PH, 4)
     expect(geometry.boundingBox!.max.x).toBeCloseTo(size.W / 2, 4)
     geometry.dispose()
+  })
+})
+
+// ก้นแบนของซองข้างจีบ = ฟิล์มปลายล่างของแผง (baseL) พับเข้าใต้ถุง — ต้องมีลาย (กลุ่ม 0) ไม่ใช่แถบสีพื้น
+describe.each([
+  { W: 120, D: 80, H: 200 },
+  { W: 80, D: 50, H: 120 },
+])('brick pouch printed base ($W x $D x $H)', (size) => {
+  it('ผิวก้นใต้ถุงอยู่ในกลุ่มลาย แม็พฟิล์มช่วง baseL ปลายแผง ครอบคลุมพื้นที่ก้นเกือบทั้งหมด', () => {
+    const pouch = generatePouch(size, getMaterial('pouch-foil'), { style: 'gusset' })
+    const s = brickShape(pouch)
+    const st = pouch.frontRect.y
+    const geometry = buildPouchGeometry(pouch)
+    const uv = geometry.getAttribute('uv')
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()!
+    const v0 = st + size.H - s.baseL
+    const v1 = st + size.H
+    const area = (tri: number[]) => {
+      const [a, b, c] = tri.map((i) => new THREE.Vector3().fromBufferAttribute(position, i))
+      return new THREE.Vector3().crossVectors(b.clone().sub(a), c.clone().sub(a)).length() / 2
+    }
+    let printed = 0
+    let plain = 0
+    for (const group of geometry.groups) {
+      for (let i = group.start; i < group.start + group.count; i += 3) {
+        const tri = [index.getX(i), index.getX(i + 1), index.getX(i + 2)]
+        const vs = tri.map((t) => uv.getY(t) * pouch.label.height)
+        const ys = tri.map((t) => position.getY(t))
+        // ผิวก้น: อยู่ระดับพื้น (ไม่สูงกว่าก้นผนัง) และไม่ใช่แถบซีลก้น
+        if (!ys.every((y) => y <= 1e-3) || !vs.every((v) => v <= v1 + 1e-3)) continue
+        if (group.materialIndex === 0) {
+          printed += area(tri)
+          for (const v of vs) {
+            expect(v).toBeGreaterThanOrEqual(v0 - 1e-3)
+          }
+        } else plain += area(tri)
+      }
+    }
+    expect(plain).toBe(0)
+    expect(printed).toBeGreaterThan(0.6 * size.W * 2 * s.b0)
   })
 })
