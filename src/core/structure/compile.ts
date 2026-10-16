@@ -3,9 +3,10 @@
 // ปกติ (panels + segments จาก autoSegments) จึงเข้า 3D/blueprint/ไฟล์ส่งออกเดิมได้เลย
 import { Matrix4, Vector3 } from 'three'
 import type { BoxParams, Dieline, DimMark, Material, Panel, Vec2 } from '../types'
-import { P, autoSegments, fmt } from '../templates/shared'
+import { P, autoSegments, fmt, obroundPts, roundedRectPts } from '../templates/shared'
 import { computeMatrices, to3D } from '../fold'
 import type { BoxStructure, Dim, Edge, FlapType, StructureIssue } from './grammar'
+import { inPoly } from './validate'
 import {
   checkFoldSweep,
   coverageByFace,
@@ -44,6 +45,11 @@ interface Placed {
   side: 'in' | 'out'
   depth: number // ระยะยื่นจากบานพับ (มม.)
   lateralInset: number // ฝาที่สอดระหว่างผนังถูกหดข้างละเท่านี้ (ลิ้นบนฝานั้นไม่ต้องหดซ้ำ)
+  // พับออกนอก (-90) หรือต่อตรง (0) = อยู่นอกตัวกล่อง (หูหิ้ว/แผงป้าย) ไม่นับเป็นกล่องตอนวัดด้านที่ปิด
+  outward: boolean
+  // ทิศที่แผงยื่นจากบานพับบนแผ่นคลี่ (ราก = ขึ้นบน) + ทิศขนานบานพับ — ใช้วางรูเจาะตาม anchor
+  frame: { out: Vec2; along: Vec2 }
+  holes?: Vec2[][]
 }
 
 interface EdgeFrame {
@@ -115,7 +121,7 @@ export function compileStructure(structure: BoxStructure, box: BoxParams, mat: M
   const rootP: Placed = {
     id: root.id, kind: root.kind === 'glue' ? 'body' : root.kind, parentId: null,
     rect: { x0: 0, y0: 0, x1: rw, y1: rh }, outline: [P(0, 0), P(rw, 0), P(rw, rh), P(0, rh)],
-    stage: 0, zOffset: 0, side: 'in', depth: 0, lateralInset: 0,
+    stage: 0, zOffset: 0, side: 'in', depth: rh, lateralInset: 0, outward: false, frame: { out: P(0, -1), along: P(1, 0) },
   }
   if (root.kind !== 'body') warn('root-kind', `แผงราก "${root.id}" ควรเป็น kind body (ใช้เป็น body)`, [root.id])
   placed.set(root.id, rootP)
@@ -172,6 +178,7 @@ export function compileStructure(structure: BoxStructure, box: BoxParams, mat: M
       const pl: Placed = {
         id: sp.id, kind: sp.kind, parentId, rect, outline,
         hingeA, hingeB, foldAngle: f.sign * fold, stage, zOffset: 0, side: 'in', depth: size, lateralInset: li,
+        outward: fold === -90 || fold === 0 || parent.outward, frame: { out: f.out, along: f.along },
       }
       placed.set(sp.id, pl)
       order.push(pl)
@@ -185,7 +192,7 @@ export function compileStructure(structure: BoxStructure, box: BoxParams, mat: M
   if (issues.some((i) => i.severity === 'error')) return fail()
 
   const toPanel = (p: Placed): Panel => ({
-    id: p.id, parentId: p.parentId, outline: p.outline,
+    id: p.id, parentId: p.parentId, outline: p.outline, holes: p.holes,
     hingeA: p.hingeA, hingeB: p.hingeB, foldAngle: p.foldAngle, stage: p.stage,
     zOffset: p.zOffset || undefined, tuck: p.tuck || undefined,
   })
@@ -202,17 +209,34 @@ export function compileStructure(structure: BoxStructure, box: BoxParams, mat: M
     return rayExtent(bodyPanels, bodyEnd, origin, normalOf(hostM), new Set([hostId, ...skip]))
   }
   // ฝาลึกเกินช่องเปิด = พับแล้วทะลุผนังตรงข้าม (ตรวจตรงนี้เพราะฝาไม่ได้ "นอนแนบ" แผงใดให้ checkFoldSweep จับ)
-  for (const sp of structure.panels) {
-    if (sp.kind !== 'lid' || !sp.attach) continue
-    const lid = placed.get(sp.id)
-    const parent = placed.get(sp.attach.to)
-    if (!lid || !parent) continue
-    const extent = openingExtent(parent.id, edgeFrame(parent.rect, sp.attach.edge), [sp.id])
+  // ฝาสั้นกว่าช่อง: เตือนเฉพาะเมื่อไม่มีฝาอีกบานในระนาบเดียวกันมาปิดส่วนที่เหลือ (ฝาสองซีกประกบกลางเป็นเรื่องปกติ)
+  const lids = structure.panels.filter((sp) => sp.kind === 'lid' && sp.attach && placed.has(sp.id))
+  const lidPlane = (id: string) => {
+    const m = bodyEnd.get(id)!
+    const n = normalOf(m)
+    const o = to3D(placed.get(id)!.hingeA!).applyMatrix4(m)
+    return { n, d: n.dot(o) }
+  }
+  for (const sp of lids) {
+    const lid = placed.get(sp.id)!
+    const parent = placed.get(sp.attach!.to)
+    if (!parent) continue
+    const extent = openingExtent(parent.id, edgeFrame(parent.rect, sp.attach!.edge), [sp.id])
     if (extent === null) continue
     if (lid.depth > extent - t + 0.6) {
       err('lid-deep', `ฝา "${sp.id}" ลึก ${fmt(lid.depth)} มม. แต่ช่องเปิดลึกแค่ ${fmt(extent)} มม. — ตั้ง size ไม่เกิน ${fmt(extent - t)}`, [sp.id])
     } else if (lid.depth < extent - t - 4) {
-      warn('lid-short', `ฝา "${sp.id}" ลึก ${fmt(lid.depth)} มม. ไม่ถึงขอบตรงข้าม (${fmt(extent)} มม.) — ถ้าไม่ได้ตั้งใจให้ปิดไม่สนิท ตั้ง size = ${fmt(extent - t)}`, [sp.id])
+      const mine = lidPlane(sp.id)
+      const partnerDepth = lids
+        .filter((o) => o.id !== sp.id)
+        .filter((o) => {
+          const pl = lidPlane(o.id)
+          return Math.abs(Math.abs(pl.n.dot(mine.n)) - 1) < 0.02 && Math.abs(Math.abs(pl.d) - Math.abs(mine.d)) < 1.5
+        })
+        .reduce((sum, o) => sum + placed.get(o.id)!.depth, 0)
+      if (lid.depth + partnerDepth < extent - 2 * t - 4) {
+        warn('lid-short', `ฝา "${sp.id}" ลึก ${fmt(lid.depth)} มม. ไม่ถึงขอบตรงข้าม (${fmt(extent)} มม.) — ถ้าไม่ได้ตั้งใจให้ปิดไม่สนิท ตั้ง size = ${fmt(extent - t)}`, [sp.id])
+      }
     }
   }
   if (issues.some((i) => i.severity === 'error')) return fail()
@@ -267,10 +291,59 @@ export function compileStructure(structure: BoxStructure, box: BoxParams, mat: M
       id: fl.id, kind: 'flap', flapType: fl.type, parentId: host.id,
       rect: { x0: Math.min(...outline.map((v) => v.x)), y0: Math.min(...outline.map((v) => v.y)), x1: Math.max(...outline.map((v) => v.x)), y1: Math.max(...outline.map((v) => v.y)) },
       outline, hingeA: a, hingeB: b, foldAngle: f.sign * 90, stage: host.stage + 1, zOffset: 0,
-      tuck: fl.type === 'tuck', side: fl.side ?? 'in', depth, lateralInset: 0,
+      tuck: fl.type === 'tuck', side: fl.side ?? 'in', depth, lateralInset: 0, outward: host.outward,
+      frame: { out: f.out, along: f.along },
     }
     placed.set(fl.id, pl)
     order.push(pl)
+  }
+  if (issues.some((i) => i.severity === 'error')) return fail()
+
+  // --- 3b. รูเจาะ (รูมือ/หน้าต่าง) บนแผง: ขนาดมาตรฐานตามแผง วางตาม anchor ตามแนวที่แผงยื่นจากบานพับ ---
+  const HOLE_MARGIN = 4
+  for (const h of structure.holes) {
+    const host = placed.get(h.on)
+    if (!host || host.kind === 'flap' || host.kind === 'glue') {
+      err('hole-target', `รู "${h.id}" เจาะบนแผง "${h.on}" ไม่ได้`, [h.id])
+      continue
+    }
+    const r = host.rect
+    const horizontal = host.frame.out.y !== 0 // แผงยื่นขึ้น/ลง → บานพับแนวนอน → รูยาวตามแกน x
+    const alongLen = horizontal ? r.x1 - r.x0 : r.y1 - r.y0
+    const extent = horizontal ? r.y1 - r.y0 : r.x1 - r.x0
+    const dimOrNull = (d: Dim | null): number | null => (d === null ? null : resolve(d))
+    let length = dimOrNull(h.length) ?? (h.type === 'hand-hole' ? Math.min(90, 0.6 * alongLen) : 0.6 * alongLen)
+    let height = dimOrNull(h.height) ?? (h.type === 'hand-hole' ? Math.min(22, 0.45 * extent) : 0.6 * extent)
+    if (h.type === 'hand-hole' && length < height) [length, height] = [height, length]
+    const maxLen = alongLen - 2 * HOLE_MARGIN
+    const maxH = extent - 2 * HOLE_MARGIN
+    if (length > maxLen + 1e-6 || height > maxH + 1e-6 || length < 6 || height < 6) {
+      err('hole-fit', `รู "${h.id}" ขนาด ${fmt(length)}×${fmt(height)} มม. ไม่พอดีแผง "${h.on}" (${fmt(alongLen)}×${fmt(extent)} มม. ต้องเว้นขอบ ${HOLE_MARGIN})`, [h.id])
+      continue
+    }
+    // ตำแหน่งศูนย์กลาง: กลางแผง แล้วเลื่อนตามแนว out สำหรับ near/far
+    const cx0 = (r.x0 + r.x1) / 2
+    const cy0 = (r.y0 + r.y1) / 2
+    const shift = h.anchor === 'center' ? 0 : extent / 2 - HOLE_MARGIN - 4 - height / 2
+    const dir = h.anchor === 'far' ? 1 : h.anchor === 'near' ? -1 : 0
+    const cx = cx0 + host.frame.out.x * shift * dir
+    const cy = cy0 + host.frame.out.y * shift * dir
+    const ring = h.type === 'hand-hole'
+      ? obroundPts(cx, cy, length, height, !horizontal)
+      : horizontal
+        ? roundedRectPts(cx - length / 2, cy - height / 2, cx + length / 2, cy + height / 2, Math.min(6, 0.2 * Math.min(length, height)))
+        : roundedRectPts(cx - height / 2, cy - length / 2, cx + height / 2, cy + length / 2, Math.min(6, 0.2 * Math.min(length, height)))
+    if (!ring.every((v) => inPoly(v, host.outline))) {
+      err('hole-fit', `รู "${h.id}" ล้ำออกนอกแผง "${h.on}" — ลดขนาดหรือเปลี่ยน anchor`, [h.id])
+      continue
+    }
+    for (const other of host.holes ?? []) {
+      if (polygonsOverlap(ring, other)) {
+        err('hole-overlap', `รู "${h.id}" ทับรูอื่นบนแผง "${h.on}"`, [h.id])
+        break
+      }
+    }
+    host.holes = [...(host.holes ?? []), ring]
   }
   if (issues.some((i) => i.severity === 'error')) return fail()
 
@@ -289,10 +362,12 @@ export function compileStructure(structure: BoxStructure, box: BoxParams, mat: M
   let end = computeMatrices(panels, 1)
   const landings = findLandings(panels, end)
   const landOn = new Map<string, string>()
+  const kindOf = (id: string) => placed.get(id)!.kind
   for (const l of landings) {
-    // ถ้าแนบหลายแผง เลือกแผงลำตัว/ฝาก่อนลิ้น
+    // แผง (ผนัง/ฝา) ไม่ "แนบ" ลิ้น — ลิ้นต่างหากที่แนบแผง (ไม่งั้นฝาที่มีลิ้นกันฝุ่นอยู่ใต้จะถูกดันลงไปอยู่ชั้นเดียวกับลิ้น
+    // แล้วการจำลองลำดับพับแยกสองชั้นไม่ออก); ถ้าแนบหลายแผง เลือกแผงลำตัว/ฝาก่อนลิ้น
+    if (kindOf(l.q) === 'flap' && kindOf(l.p) !== 'flap') continue
     const prev = landOn.get(l.p)
-    const kindOf = (id: string) => placed.get(id)!.kind
     if (!prev || (kindOf(prev) === 'flap' && kindOf(l.q) !== 'flap')) landOn.set(l.p, l.q)
   }
   for (const [pid, qid] of landOn) {
@@ -338,8 +413,8 @@ export function compileStructure(structure: BoxStructure, box: BoxParams, mat: M
   const stages = Math.max(...order.map((p) => p.stage)) + 1
   if (stages > MAX_STAGES) warn('stages-many', `ลำดับพับมี ${stages} จังหวะ (เครื่องรองรับ ${MAX_STAGES}) — จังหวะท้ายจะพับพร้อมกัน`)
 
-  // --- 7. ด้านที่ปิด/เปิด ---
-  const boxIds = new Set(order.filter((p) => p.kind === 'body' || p.kind === 'lid').map((p) => p.id))
+  // --- 7. ด้านที่ปิด/เปิด (แผงที่พับออกนอก/ต่อตรง เช่น หูหิ้ว ไม่ใช่ตัวกล่อง) ---
+  const boxIds = new Set(order.filter((p) => (p.kind === 'body' || p.kind === 'lid') && !p.outward).map((p) => p.id))
   const coverage = coverageByFace(panels, boxIds, structure.orientation, t, end)
   const open = (Object.keys(coverage) as Face[]).filter((f) => coverage[f] < 0.85)
   if (open.length) {
@@ -354,6 +429,7 @@ export function compileStructure(structure: BoxStructure, box: BoxParams, mat: M
   const shifted: Panel[] = panels.map((p) => ({
     ...p,
     outline: p.outline.map(sh),
+    holes: p.holes?.map((ring) => ring.map(sh)),
     hingeA: p.hingeA && sh(p.hingeA),
     hingeB: p.hingeB && sh(p.hingeB),
   }))

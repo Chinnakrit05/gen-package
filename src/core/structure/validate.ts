@@ -67,7 +67,8 @@ export interface Landing {
   q: string // แผงที่ถูกแนบ (จุดศูนย์กลางของ p อยู่ในพื้นที่ q)
 }
 
-// คู่แผงที่สภาพพับสุดท้ายซ้อนแนบกัน (ทุกจุดของ p ห่างระนาบ q < 5 มม. และศูนย์กลาง p อยู่ใน q)
+// คู่แผงที่สภาพพับสุดท้ายซ้อนแนบกัน (ทุกจุดของ p ห่างระนาบ q < 5 มม. และจุดตัวอย่างของ p อย่างน้อยหนึ่งจุดอยู่ใน q)
+// จุดตัวอย่าง = ศูนย์กลาง + กึ่งกลางระหว่างศูนย์กลางกับแต่ละมุม — ลิ้นที่คร่อมรอยต่อฝาสองซีกจึงยังนับว่าแนบฝา
 // นับรวมแม่-ลูก (พับทบ 180° ลูกนอนบนแม่) — ต่างจาก checkFoldSweep ที่ข้ามคู่แม่-ลูก
 export function findLandings(panels: Panel[], end = computeMatrices(panels, 1)): Landing[] {
   const out: Landing[] = []
@@ -77,7 +78,9 @@ export function findLandings(panels: Panel[], end = computeMatrices(panels, 1)):
       const inv = end.get(q.id)!.clone().invert()
       const vs = p.outline.map((v) => toLocal(to3D(v).applyMatrix4(end.get(p.id)!), inv))
       if (!vs.every((v) => Math.abs(v.z) < 5)) continue
-      if (inPoly(centroid(vs.map((v) => v.p)), q.outline)) out.push({ p: p.id, q: q.id })
+      const c = centroid(vs.map((v) => v.p))
+      const samples = [c, ...vs.map((v) => ({ x: (v.p.x + c.x) / 2, y: (v.p.y + c.y) / 2 }))]
+      if (samples.some((pt) => inPoly(pt, q.outline))) out.push({ p: p.id, q: q.id })
     }
   }
   return out

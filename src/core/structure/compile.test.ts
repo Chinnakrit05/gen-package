@@ -7,7 +7,7 @@ import { generateSleeve } from '../templates/sleeve'
 import type { Dieline, Vec2 } from '../types'
 import { compileStructure, foldedExtent } from './compile'
 import { parseStructure, STRUCTURE_SCHEMA, type BoxStructure } from './grammar'
-import { MAILER_STRUCTURE, REVERSE_TUCK_STRUCTURE, TRAY_STRUCTURE, TUCK_END_STRUCTURE, sleeveStructure } from './examples'
+import { HANDLE_BOX_STRUCTURE, MAILER_STRUCTURE, REVERSE_TUCK_STRUCTURE, TRAY_STRUCTURE, TUCK_END_STRUCTURE, sleeveStructure } from './examples'
 import { checkFoldSweep, polygonsOverlap } from './validate'
 
 const carton = getMaterial('carton-300')
@@ -122,6 +122,65 @@ describe('compileStructure infers fold order and layers from the fold simulation
     expect(checkFoldSweep(out.dieline!.panels)).toEqual([])
   })
 
+  it('handle box: half lids close the top, handle panels stand up back to back with aligned hand holes', () => {
+    const b = { W: 80, D: 50, H: 120 }
+    const out = compileStructure(HANDLE_BOX_STRUCTURE, b, carton)
+    expect(out.issues.filter((i) => i.severity === 'error')).toEqual([])
+    // ฝาสองซีก D/2 ประกบกลาง — ไม่ใช่ฝาสั้น
+    expect(out.issues.map((i) => i.code)).not.toContain('lid-short')
+    const d = out.dieline!
+    const by = new Map(d.panels.map((p) => [p.id, p]))
+    // รูมือทั้งสองแผง เป็นวงปิด และเข้า segments เป็นเส้นตัด
+    expect(by.get('handle-f')!.holes).toHaveLength(1)
+    expect(by.get('handle-b')!.holes).toHaveLength(1)
+    expect(d.segments.filter((s) => s.kind === 'cut' && /Z$/.test(s.d)).length).toBeGreaterThanOrEqual(2)
+    // ด้านบนปิดด้วยฝาสองซีก (หูหิ้วไม่นับเป็นตัวกล่อง) — ทุกด้านปิด
+    for (const v of Object.values(out.coverage)) expect(v).toBeGreaterThan(0.85)
+    // แผงหูหิ้วตั้งอยู่เหนือกล่อง: จุดสูงสุดของหูหิ้วสูงกว่าระนาบฝา และสองแผงอยู่ระนาบเดียวกันกลางกล่อง
+    const end = computeMatrices(d.panels, 1)
+    const top = (id: string) => Math.max(...by.get(id)!.outline.map((v) => to3D(v).applyMatrix4(end.get(id)!).y))
+    const zs = (id: string) => by.get(id)!.outline.map((v) => to3D(v).applyMatrix4(end.get(id)!).z)
+    expect(top('handle-f') - top('lid-f')).toBeGreaterThan(40)
+    const zf = zs('handle-f')
+    const zb = zs('handle-b')
+    expect(Math.max(...zf) - Math.min(...zf)).toBeLessThan(1.5) // แผงตั้งฉากกับแกนลึก
+    expect(Math.abs((zf[0] + zb[0]) / 2 - (b.D + 2 * carton.thickness) / 2)).toBeLessThan(2) // ประกบกันกลางกล่อง
+    // ชั้นวัสดุดันสองแผงออกจากกันคนละฝั่งของระนาบกลาง (แผงจากฝาหน้าอยู่ฝั่งหน้า):
+    // ห่างกัน = 2 ชั้นวัสดุ + ช่องระหว่างปลายฝาสองซีก (ฝาแต่ละซีกสั้นกว่าครึ่งช่อง t)
+    const gap = zb[0] - zf[0]
+    expect(gap).toBeGreaterThan(0.5)
+    expect(gap).toBeLessThan(2 * (carton.thickness + 0.05) + 2 * carton.thickness + 0.2)
+    // รูมือตรงกัน (ศูนย์กลางรูในโลก 3D ห่างกันไม่เกินชั้นวัสดุ)
+    const holeCenter = (id: string) => {
+      const ring = by.get(id)!.holes![0].map((v) => to3D(v).applyMatrix4(end.get(id)!))
+      return ring.reduce((a, v) => a.add(v), new Vector3()).multiplyScalar(1 / ring.length)
+    }
+    const hf = holeCenter('handle-f')
+    const hb = holeCenter('handle-b')
+    expect(Math.hypot(hf.x - hb.x, hf.y - hb.y)).toBeLessThan(0.5) // ตรงกันในระนาบแผง (ต่างแค่ระยะห่างสองแผง)
+    expect(checkFoldSweep(d.panels)).toEqual([])
+  })
+
+  it('places a window on a wall and refuses holes that do not fit', () => {
+    const windowed: BoxStructure = {
+      ...TUCK_END_STRUCTURE,
+      holes: [{ id: 'win', type: 'window', on: 'front', anchor: 'center', length: null, height: null }],
+    }
+    const out = compileStructure(windowed, box, carton)
+    expect(out.ok).toBe(true)
+    const front = out.dieline!.panels.find((p) => p.id === 'front')!
+    expect(front.holes).toHaveLength(1)
+    expect(front.holes![0].every((v) => v.x > 0 && v.y > 0)).toBe(true)
+
+    const tooBig: BoxStructure = {
+      ...TUCK_END_STRUCTURE,
+      holes: [{ id: 'win', type: 'window', on: 'front', anchor: 'center', length: 'W', height: 20 }],
+    }
+    const bad = compileStructure(tooBig, box, carton)
+    expect(bad.ok).toBe(false)
+    expect(bad.issues.map((i) => i.code)).toContain('hole-fit')
+  })
+
   it('open tray: corner tabs fold before the front/back walls; top stays open on purpose', () => {
     const out = compileStructure(TRAY_STRUCTURE, { W: 160, D: 110, H: 40 }, carton)
     expect(out.issues.filter((i) => i.severity === 'error')).toEqual([])
@@ -180,7 +239,7 @@ describe('compileStructure rejects structures that cannot be made', () => {
 
 describe('parseStructure', () => {
   it('accepts the examples and normalises ids', () => {
-    for (const s of [TUCK_END_STRUCTURE, MAILER_STRUCTURE, TRAY_STRUCTURE]) {
+    for (const s of [TUCK_END_STRUCTURE, MAILER_STRUCTURE, TRAY_STRUCTURE, HANDLE_BOX_STRUCTURE]) {
       const r = parseStructure(JSON.parse(JSON.stringify(s)))
       expect(r.ok, s.name).toBe(true)
     }
@@ -199,12 +258,13 @@ describe('parseStructure', () => {
         { id: 'c', kind: 'body', attach: { to: 'a', edge: 'left', fold: 90 }, w: null, h: null, size: null },
       ],
       flaps: [{ id: 'f', type: 'tuck', on: 'a', edge: 'top', depth: null, side: null }],
+      holes: [{ id: 'h', type: 'hand-hole', on: 'zzz', anchor: 'center', length: null, height: null }],
       explanation: '',
     })
     expect(r.ok).toBe(false)
     if (!r.ok) {
       const codes = r.issues.map((i) => i.code)
-      expect(codes).toEqual(expect.arrayContaining(['orientation', 'attach-target', 'size', 'tuck-not-on-lid']))
+      expect(codes).toEqual(expect.arrayContaining(['orientation', 'attach-target', 'size', 'tuck-not-on-lid', 'hole-target']))
       for (const i of r.issues) expect(i.message).toMatch(/[ก-๙]/)
     }
   })

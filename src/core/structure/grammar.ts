@@ -19,12 +19,14 @@ export const PANEL_KINDS: readonly PanelKind[] = ['body', 'lid', 'glue']
 export type FlapType = 'dust' | 'tuck' | 'tab'
 export const FLAP_TYPES: readonly FlapType[] = ['dust', 'tuck', 'tab']
 
-export type FoldTurn = 90 | 180
+// 90 = พับตั้งฉากเข้าด้านใน (ปกติ), 180 = พับทบ (ม้วนขอบ/ผนังสองชั้น),
+// -90 = พับตั้งฉากออกด้านนอก (แผงหูหิ้วตั้งขึ้นจากปลายฝา), 0 = ต่อตรงไม่พับ (ยืดแผงให้สูงขึ้น)
+export type FoldTurn = 90 | 180 | -90 | 0
+export const FOLD_TURNS: readonly FoldTurn[] = [90, 180, -90, 0]
 
 export interface StructureAttach {
   to: string
   edge: Edge
-  // 90 = พับตั้งฉากเข้าด้านใน (ปกติ), 180 = พับทบ (ม้วนขอบ/ผนังสองชั้น)
   fold: FoldTurn
 }
 
@@ -49,6 +51,22 @@ export interface StructureFlap {
   side: 'in' | 'out' | null
 }
 
+// รูเจาะบนแผง: hand-hole = รูมือทรงแคปซูล (obround) สำหรับหูหิ้ว, window = หน้าต่างสี่เหลี่ยมมุมมน
+export type HoleType = 'hand-hole' | 'window'
+export const HOLE_TYPES: readonly HoleType[] = ['hand-hole', 'window']
+// ตำแหน่งตามแนวที่แผงยื่นจากบานพับ: near = ใกล้บานพับ, center = กลาง, far = ใกล้ขอบไกล (ปลายแผง)
+export type HoleAnchor = 'center' | 'near' | 'far'
+export const HOLE_ANCHORS: readonly HoleAnchor[] = ['center', 'near', 'far']
+
+export interface StructureHole {
+  id: string
+  type: HoleType
+  on: string // id ของแผง (body/lid เท่านั้น)
+  anchor: HoleAnchor
+  length: Dim | null // ด้านขนานบานพับ (null = มาตรฐานตามชนิด)
+  height: Dim | null // ด้านตามแนวยื่น (null = มาตรฐาน)
+}
+
 // front = แผงรากเป็นผนังหน้า (กล่องท่อ ตั้งตรง), base = แผงรากเป็นฐานวางพื้น (ถาด/กล่องไปรษณีย์)
 export type Orientation = 'front' | 'base'
 
@@ -57,6 +75,7 @@ export interface BoxStructure {
   orientation: Orientation
   panels: StructurePanel[]
   flaps: StructureFlap[]
+  holes: StructureHole[]
   // คำอธิบายสั้น ๆ ถึงผู้ใช้ (AI กรอก) — ไม่มีผลกับเรขาคณิต
   explanation: string
 }
@@ -101,7 +120,11 @@ export const STRUCTURE_SCHEMA: Record<string, unknown> = {
             properties: {
               to: { type: 'string' },
               edge: { type: 'string', enum: [...EDGES] },
-              fold: { type: 'integer', enum: [90, 180] },
+              fold: {
+                type: 'integer',
+                enum: [...FOLD_TURNS],
+                description: '90 พับเข้าด้านใน (ปกติ), 180 พับทบแนบแผงแม่, -90 พับออกด้านนอก/ตั้งขึ้น (หูหิ้วจากปลายฝา), 0 ต่อตรงไม่พับ',
+              },
             },
             required: ['to', 'edge', 'fold'],
           }),
@@ -133,9 +156,26 @@ export const STRUCTURE_SCHEMA: Record<string, unknown> = {
         required: ['id', 'type', 'on', 'edge', 'depth', 'side'],
       },
     },
+    holes: {
+      type: 'array',
+      description: `รูเจาะ 0-${MAX_ELEMENTS} รู (รูมือสำหรับหูหิ้ว, หน้าต่าง) บนแผง body/lid`,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string' },
+          type: { type: 'string', enum: [...HOLE_TYPES], description: 'hand-hole = รูมือทรงแคปซูล, window = หน้าต่างมุมมน' },
+          on: { type: 'string' },
+          anchor: { type: 'string', enum: [...HOLE_ANCHORS], description: 'near = ใกล้บานพับ, center = กลางแผง, far = ใกล้ปลายแผง' },
+          length: nullable(dimSchema),
+          height: nullable(dimSchema),
+        },
+        required: ['id', 'type', 'on', 'anchor', 'length', 'height'],
+      },
+    },
     explanation: { type: 'string', description: 'อธิบายโครงสร้างให้ลูกค้า 1-2 ประโยค' },
   },
-  required: ['name', 'orientation', 'panels', 'flaps', 'explanation'],
+  required: ['name', 'orientation', 'panels', 'flaps', 'holes', 'explanation'],
 }
 
 export interface StructureIssue {
@@ -187,9 +227,9 @@ export function parseStructure(raw: unknown): ParseResult {
         if (!isRecord(p.attach)) return err('attach', `แผง "${id}": attach ต้องเป็น object หรือ null`, [id])
         const to = typeof p.attach.to === 'string' ? p.attach.to.trim().toLowerCase() : ''
         const edge = (EDGES as readonly string[]).includes(p.attach.edge as string) ? (p.attach.edge as Edge) : null
-        const fold = p.attach.fold === 180 ? 180 : p.attach.fold === 90 || p.attach.fold === undefined ? 90 : null
+        const fold = p.attach.fold === undefined ? 90 : (FOLD_TURNS as readonly unknown[]).includes(p.attach.fold) ? (p.attach.fold as FoldTurn) : null
         if (!to || !edge || fold === null) {
-          return err('attach', `แผง "${id}": attach ต้องมี to (id แผงแม่), edge (top/bottom/left/right), fold (90 หรือ 180)`, [id])
+          return err('attach', `แผง "${id}": attach ต้องมี to (id แผงแม่), edge (top/bottom/left/right), fold (90, 180, -90 หรือ 0)`, [id])
         }
         attach = { to, edge, fold }
       }
@@ -239,6 +279,36 @@ export function parseStructure(raw: unknown): ParseResult {
     })
   }
 
+  const holes: StructureHole[] = []
+  if (raw.holes !== undefined && !Array.isArray(raw.holes)) err('holes', 'holes ต้องเป็น array')
+  else if (Array.isArray(raw.holes) && raw.holes.length > MAX_ELEMENTS) err('holes', `holes มี ${raw.holes.length} รู เกิน ${MAX_ELEMENTS}`)
+  else {
+    ;((raw.holes as unknown[]) ?? []).forEach((h: unknown, i: number) => {
+      if (!isRecord(h)) return err('hole', `holes[${i}] ต้องเป็น object`)
+      const id = typeof h.id === 'string' ? h.id.trim().toLowerCase() : ''
+      if (!ID_RE.test(id)) return err('hole-id', `holes[${i}].id "${String(h.id)}" ต้องเป็น a-z0-9 ขีดกลาง ยาว 1-32`)
+      if (ids.has(id)) return err('duplicate-id', `id "${id}" ซ้ำ`, [id])
+      ids.add(id)
+      const type = (HOLE_TYPES as readonly string[]).includes(h.type as string) ? (h.type as HoleType) : null
+      if (!type) return err('hole-type', `รู "${id}": type ต้องเป็น hand-hole/window`, [id])
+      const on = typeof h.on === 'string' ? h.on.trim().toLowerCase() : ''
+      if (!on) return err('hole-target', `รู "${id}": ต้องมี on (id แผง)`, [id])
+      const anchor = h.anchor === undefined || h.anchor === null ? 'center' : (HOLE_ANCHORS as readonly string[]).includes(h.anchor as string) ? (h.anchor as HoleAnchor) : null
+      if (!anchor) return err('hole-anchor', `รู "${id}": anchor ต้องเป็น center/near/far`, [id])
+      const dimOf = (key: 'length' | 'height'): Dim | null | undefined => {
+        const v = h[key]
+        if (v === null || v === undefined) return null
+        if (isDim(v)) return v
+        err('dim', `รู "${id}": ${key} ต้องเป็นตัวเลข มม. หรือ "W"/"D"/"H"/…`, [id])
+        return undefined
+      }
+      const length = dimOf('length')
+      const height = dimOf('height')
+      if (length === undefined || height === undefined) return
+      holes.push({ id, type, on, anchor, length, height })
+    })
+  }
+
   // อ้างอิงข้ามองค์ประกอบ
   const panelIds = new Set(panels.map((p) => p.id))
   const roots = panels.filter((p) => !p.attach)
@@ -254,6 +324,11 @@ export function parseStructure(raw: unknown): ParseResult {
     const host = panels.find((p) => p.id === f.on)
     if (host?.kind === 'glue') err('flap-on-glue', `ลิ้น "${f.id}" เกาะปีกทากาว "${f.on}" ไม่ได้`, [f.id])
     if (f.type === 'tuck' && host && host.kind !== 'lid') err('tuck-not-on-lid', `ลิ้นเสียบ "${f.id}" ต้องเกาะแผง kind "lid" เท่านั้น`, [f.id])
+  }
+  for (const h of holes) {
+    const host = panels.find((p) => p.id === h.on)
+    if (!host) err('hole-target', `รู "${h.id}" เจาะบนแผง "${h.on}" ที่ไม่มีอยู่ (เจาะได้เฉพาะแผง ไม่ใช่ลิ้น)`, [h.id])
+    else if (host.kind === 'glue') err('hole-on-glue', `รู "${h.id}" เจาะบนปีกทากาว "${h.on}" ไม่ได้`, [h.id])
   }
   // วงวน (แม่ → ลูก → แม่) ตรวจตอน compile ด้วย แต่จับที่นี่ให้ข้อความชัด
   const byId = new Map(panels.map((p) => [p.id, p]))
@@ -283,7 +358,7 @@ export function parseStructure(raw: unknown): ParseResult {
   for (const p of panels) if (p.attach) claim(p.id, opposite(p.attach.edge), `บานพับไป "${p.attach.to}"`)
 
   if (issues.length) return { ok: false, issues }
-  return { ok: true, structure: { name, orientation, panels, flaps, explanation } }
+  return { ok: true, structure: { name, orientation, panels, flaps, holes, explanation } }
 }
 
 export function opposite(edge: Edge): Edge {

@@ -9,7 +9,7 @@ import os from 'node:os'
 import Anthropic from '@anthropic-ai/sdk'
 import { getMaterial, MATERIALS } from '../src/core/materials'
 import { compileStructure, describeIssues, type CompileResult } from '../src/core/structure/compile'
-import { EXAMPLE_STRUCTURES, MAILER_STRUCTURE, TRAY_STRUCTURE, TUCK_END_STRUCTURE } from '../src/core/structure/examples'
+import { EXAMPLE_STRUCTURES, HANDLE_BOX_STRUCTURE, MAILER_STRUCTURE, TRAY_STRUCTURE, TUCK_END_STRUCTURE } from '../src/core/structure/examples'
 import { parseStructure, STRUCTURE_SCHEMA, type BoxStructure, type StructureIssue } from '../src/core/structure/grammar'
 import type { BoxParams } from '../src/core/types'
 import {
@@ -41,7 +41,8 @@ export const STRUCTURE_SYSTEM = `คุณคือวิศวกรโคร�
 - แผ่นคลี่: แกน x ไปขวา y ลงล่าง หน่วย มม. แผงทุกแผงเป็นสี่เหลี่ยมผืนผ้า
 - panels[]: มีแผงราก 1 แผง (attach = null, ระบุ w และ h) แผงอื่น "ต่อ" จากขอบของแผงแม่: attach = { to: id แผงแม่, edge: top|bottom|left|right, fold: 90|180 }
   แผงลูกยื่นออกไปนอกขอบนั้นเป็นระยะ size (ด้านที่ขนานกับขอบยาวเท่าขอบของแผงแม่เสมอ ไม่ต้องระบุ) — w/h ของแผงลูกใส่ null
-- fold 90 = พับตั้งฉากเข้าด้านในกล่อง (ปกติ), 180 = พับทบแนบแผงแม่ (ผนังสองชั้น/ขอบม้วน)
+- fold 90 = พับตั้งฉากเข้าด้านในกล่อง (ปกติ), 180 = พับทบแนบแผงแม่ (ผนังสองชั้น/ขอบม้วน), -90 = พับตั้งฉาก "ออกด้านนอก"
+  (ใช้ทำแผงหูหิ้วที่ตั้งขึ้นจากปลายฝา), 0 = ต่อตรงไม่พับ (ยืดแผงให้สูงขึ้น เช่น ผนังหลังสูงเลยปากกล่องเป็นแผงป้าย)
 - ขนาด (w, h, size, depth): ใช้สัญลักษณ์ "W" "D" "H" = ขนาดด้านในของกล่องที่ลูกค้าต้องการ (ระบบบวกความหนาวัสดุให้เอง),
   "W/2" "D/2" "H/2" = ครึ่งหนึ่ง, หรือตัวเลข มม. ตรง ๆ (1-400)
 - kind ของแผง: "body" = ผนัง/ฐาน, "lid" = ฝาที่ปิดช่องเปิด (ระบบย่อให้สอดเข้าช่องได้เอง ตั้ง size เท่าความลึกของช่องที่ปิด เช่น ฝาปิดด้านบนของกล่องท่อ size "D"),
@@ -51,6 +52,8 @@ export const STRUCTURE_SYSTEM = `คุณคือวิศวกรโคร�
   - "tuck" ลิ้นเสียบปลายฝา มุมมน ไถลเข้าด้านในผนังตรงข้าม — เกาะได้เฉพาะแผง kind "lid" ที่ขอบปลายฝา (depth null = ความยาวมาตรฐาน)
   - "tab" ลิ้นสี่เหลี่ยมมุมเฉียงอเนกประสงค์ (ลิ้นมุมถาด, ลิ้นล็อก, ปีกข้างฝา)
   - side: "in" (ปกติ ลิ้นอยู่ด้านในผนังที่มันไปแนบ) หรือ "out" (ปีกห่อลงด้านนอกผนัง เช่น ปีกข้างของฝากล่องไปรษณีย์ — ตั้ง depth "H")
+- holes[]: รูเจาะบนแผง body/lid (ไม่ใช่ลิ้น): type "hand-hole" = รูมือทรงแคปซูล (หูหิ้ว/ช่องจับ), "window" = หน้าต่างมุมมน;
+  anchor = ตำแหน่งตามแนวที่แผงยื่นจากบานพับ (near/center/far); length/height null = ขนาดมาตรฐานตามแผง
 - orientation: "front" = แผงรากคือผนังหน้า (กล่องท่อตั้ง: ผนังเรียงต่อกันซ้าย-ขวา ฝาอยู่บน-ล่าง), "base" = แผงรากคือฐานวางพื้น (ถาด/กล่องไปรษณีย์: ผนังต่อรอบฐานสี่ด้าน)
 
 ## กติกาที่ระบบตรวจ (ผิดแล้วจะส่งรายการกลับให้แก้)
@@ -62,10 +65,15 @@ export const STRUCTURE_SYSTEM = `คุณคือวิศวกรโคร�
 6. ไม่เกิน 24 แผง + 24 ลิ้น แผ่นคลี่ไม่ควรเกิน 600 มม.
 ลำดับพับและชั้นวัสดุไม่ต้องกำหนด — ระบบจำลองและจัดให้
 
+## หูหิ้ว (ลูกค้าขอบ่อย) ทำได้ 2 แบบ
+- รูมือเจาะบนฝาหรือผนัง: holes type "hand-hole" บนแผงนั้น (เช่น ฝาบนของกล่องท่อ หรือผนังข้างสองด้านของกล่องไปรษณีย์)
+- แผงหูหิ้วตั้งขึ้น: ฝาบนแยกสองซีก (lid size "D/2" จากผนังหน้าและผนังหลัง) แต่ละซีกต่อแผง body ด้วย fold -90 (ตั้งขึ้นประกบกันกลางกล่อง
+  ความสูง 35-50 มม.) แล้วเจาะ hand-hole ทั้งสองแผงด้วย anchor เดียวกันให้รูตรงกัน — ดูตัวอย่าง "กล่องหูหิ้วฝาประกบ"
+
 ## วิธีตอบ
 - ตอบ JSON ตาม schema เท่านั้น ทุกครั้งที่ได้รายการข้อผิดพลาดกลับมา ให้ส่ง JSON ฉบับแก้แล้ว "ทั้งฉบับ" ไม่ใช่เฉพาะส่วนที่แก้
 - ตั้ง id เป็นภาษาอังกฤษตัวเล็ก สื่อความหมาย (front, side-left, lid-top, dust-tl …)
-- explanation: อธิบายให้ลูกค้า 1-2 ประโยค ว่ากล่องประกอบอย่างไร ถ้าสิ่งที่ขอทำในภาษาแผงไม่ได้ (ทรงโค้ง แผงไม่ใช่สี่เหลี่ยม หน้าต่าง หูหิ้วเจาะ) ให้ทำแบบใกล้เคียงแล้วบอกตรง ๆ
+- explanation: อธิบายให้ลูกค้า 1-2 ประโยค ว่ากล่องประกอบอย่างไร ถ้าสิ่งที่ขอทำในภาษาแผงไม่ได้ (ทรงโค้ง หน้าจั่ว แผงไม่ใช่สี่เหลี่ยม ก้นล็อกอัตโนมัติ) ให้ทำแบบใกล้เคียงแล้วบอกตรง ๆ
 - ถ้ามี "โครงสร้างปัจจุบัน" แนบมา ลูกค้าต้องการแก้ต่อยอดจากของเดิม — แก้เฉพาะส่วนที่เกี่ยว คง id เดิมไว้
 
 ## ตัวอย่าง
@@ -77,6 +85,9 @@ ${JSON.stringify(MAILER_STRUCTURE)}
 
 ถาดเปิด (ตั้งใจเปิดด้านบน):
 ${JSON.stringify(TRAY_STRUCTURE)}
+
+กล่องหูหิ้วฝาประกบ (ฝาบนสองซีก + แผงหูหิ้ว fold -90 ประกบกัน + รูมือ):
+${JSON.stringify(HANDLE_BOX_STRUCTURE)}
 
 ## วัสดุพับได้ (ลูกค้าเลือกไว้แล้ว ระบบส่งมาให้ — ใช้แค่ประกอบการตัดสินใจเรื่องขนาดลิ้น)
 ${FOLDABLE.map((m) => `- ${m.id}: ${m.nameTh} หนา ${m.thickness} มม.`).join('\n')}`
@@ -218,7 +229,10 @@ export function cliAsk(model: string | undefined, oauthToken: string | undefined
 
 // โหมดจำลอง: เลือกตัวอย่างตามคำ (ไม่ต้องมีคีย์) — ไว้ลอง UI/วงรอบตรวจ
 export function mockStructure(prompt: string): BoxStructure {
-  const pick = /ถาด|tray/i.test(prompt) ? TRAY_STRUCTURE : /ไปรษณีย์|mailer|ฝาพับ/i.test(prompt) ? MAILER_STRUCTURE : TUCK_END_STRUCTURE
+  const pick = /ถาด|tray/i.test(prompt) ? TRAY_STRUCTURE
+    : /ไปรษณีย์|mailer|ฝาพับ/i.test(prompt) ? MAILER_STRUCTURE
+    : /หูหิ้ว|หิ้ว|handle/i.test(prompt) ? HANDLE_BOX_STRUCTURE
+    : TUCK_END_STRUCTURE
   return { ...pick, explanation: `(จำลอง — ไม่ได้เรียก AI) ${pick.explanation}` }
 }
 

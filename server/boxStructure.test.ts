@@ -63,6 +63,7 @@ describe('mock + prompt', () => {
   it('mock picks an example by keyword and marks it as simulated', () => {
     expect(mockStructure('ถาดใส่ขนม').name).toBe('ถาดเปิด')
     expect(mockStructure('กล่องไปรษณีย์').name).toBe('กล่องไปรษณีย์ฝาพับ')
+    expect(mockStructure('กล่องขวดน้ำมีหูหิ้ว').name).toBe('กล่องหูหิ้วฝาประกบ')
     expect(mockStructure('กล่องครีม').explanation).toContain('จำลอง')
   })
 
@@ -70,6 +71,7 @@ describe('mock + prompt', () => {
     expect(STRUCTURE_SYSTEM).toContain('ภาษาแผง')
     expect(STRUCTURE_SYSTEM).toContain('"orientation":"base"')
     expect(STRUCTURE_SYSTEM).toContain('carton-300')
-    expect(STRUCTURE_SYSTEM.length).toBeLessThan(12_000)
+    expect(STRUCTURE_SYSTEM).toContain('hand-hole')
+    expect(STRUCTURE_SYSTEM.length).toBeLessThan(18_000)
   })
 })
