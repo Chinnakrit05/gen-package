@@ -405,3 +405,19 @@ describe('vessel: ฝาจีบบนขอบปากเตี้ย', () =>
     expect(Math.min(...c.lathe.map((p) => p.y))).toBeLessThan(m.lipY)
   })
 })
+
+describe('vessel: ขอบปาก crown finish เมื่อเลือกฝาจีบ', () => {
+  const box2 = { W: 60, D: 26, H: 230, handle: false }
+  it.each(VESSEL_IDS.map((id) => [id] as const))('%s: วงแหวนเตี้ย 2.5–5 มม. และฝาจีบครอบลงใต้วงแหวน', (id) => {
+    const normal = generateVessel(box2, getMaterial(id)).mouth!
+    const v = generateVessel(box2, getMaterial(id), 'body', { capStyle: 'crown' })
+    const m = v.mouth!
+    const lip = m.top - m.lipY
+    expect(lip).toBeGreaterThanOrEqual(2.5 - 1e-9)
+    expect(lip).toBeLessThanOrEqual(5 + 1e-9)
+    expect(lip).toBeLessThanOrEqual(normal.top - normal.lipY)
+    const c = capShape('crown', m)!
+    expect(Math.min(...c.lathe.map((p) => p.y))).toBeLessThan(m.lipY)
+    expect(Math.max(...v.profile.map((p) => p.y))).toBeCloseTo(box2.H)
+  })
+})

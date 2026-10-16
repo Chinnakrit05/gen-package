@@ -158,6 +158,7 @@ export interface VesselShape {
   shoulderH?: number
   shoulderStyle?: ShoulderStyle
   label?: LabelBox
+  capStyle?: CapStyle // ฝาที่เลือก — ฝาจีบเปลี่ยนขอบปากเป็น crown finish (วงแหวนเตี้ย)
 }
 
 // เส้นไหล่จาก (R, s0) ถึงโคนคอ (rn, Hb) — ไม่รวมจุดเริ่ม
@@ -207,7 +208,7 @@ function profileFor(
   const band1 = Math.max(s0 - sp.gap * Hb, baseTop + 4)
   const band: [number, number] = [Math.min(sp.band0 * Hb, band1 - 3), band1]
   // ปากขวดทุกชนิดมีขอบปาก (finish/bead) เหมือนกัน: วงแหวนสูง ~28% ของคอ — ฝาครอบทับช่วงนี้
-  const lip = mouthLip(neck, H)
+  const lip = mouthLip(neck, H, rn, shape.capStyle === 'crown')
   const rr = rn * sp.ring
   const mouthPts = [P(rn, H - lip), P(rr, H - lip * 0.9), P(rr, H)]
   // ช่วงลำตัวตรง = ขอบก้นมนถึงไหล่เริ่ม (ไม่ใช้เกณฑ์รัศมี — ขอบปากอาจกว้างเกือบเท่าตัว)
@@ -394,7 +395,9 @@ export function capShape(
 }
 
 // ความสูงขอบปาก (มม.) — ใช้ร่วมโปรไฟล์ขวดและตำแหน่งฝา
-const mouthLip = (neck: number, H: number) => Math.min(neck * 0.28, Math.max(1.5, H * 0.05))
+// ฝาจีบใช้ปากแบบ crown finish: วงแหวนเตี้ย (~0.3×รัศมีคอ, 2.5–5 มม.) ให้กระโปรงฝาจีบครอบลงล็อกใต้วงแหวนได้เหมือนขวดเบียร์
+const mouthLip = (neck: number, H: number, rn: number, crown = false) =>
+  Math.min(neck * 0.28, crown ? Math.min(5, Math.max(2.5, rn * 0.3)) : Math.max(1.5, H * 0.05))
 
 export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelStyle = 'body', shape: VesselShape = {}): Vessel {
   const { W, D, H } = box

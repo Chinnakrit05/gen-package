@@ -1564,8 +1564,8 @@ export default function App({
     setH(clamp(bodyH + v, 30, 300))
   }
   const vessel = useMemo(
-    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, { neckH, shoulderH, shoulderStyle, label: labelBox }) : null),
-    [W, D, H, handle, mat, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, kind],
+    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, { neckH, shoulderH, shoulderStyle, label: labelBox, capStyle }) : null),
+    [W, D, H, handle, mat, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, capStyle, kind],
   )
   const pouch = useMemo(
     () =>
