@@ -110,7 +110,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   `Vessel.labelArc` (มุมหุ้ม) ให้ viewer สร้าง Cylinder ส่วนโค้งกึ่งกลางด้านหน้า; `labelBox.rot` องศา (0 หน้า, 180 หลัง → `Vessel.labelRot`
   หมุน mesh ฉลาก); หลอดครีมไม่ใช้. ช่วงลำตัวตรงมาจาก `profileFor().straight` (ไม่ใช้เกณฑ์รัศมี — ขอบปากอาจกว้างเกือบเท่าตัว)
   ปากขวดทุกชนิด (PET/แก้ว/อะลูมิเนียม) มีขอบปากวงแหวน (`SHAPES.ring`, สูง `mouthLip`) → `Vessel.mouth`; ฝาขวดเลือกได้
-  `Project.capStyle` none/screw/flip/pump + `capColor` — `capShape(style, mouth)` (pure) คืน lathe + ชิ้นกล่องเล็ก, ภาพ 3D เท่านั้น
+  `Project.capStyle` none/screw/flip/pump/cork (จุกก๊อกเสียบในคอ ลึกไม่เลย `mouth.neckY`, สีเริ่ม `defaultCapColor`) + `capColor` — `capShape(style, mouth)` (pure) คืน lathe + ชิ้นกล่องเล็ก, ภาพ 3D เท่านั้น
   (ไม่อยู่ใน dieline), ครอบลงต่ำกว่าวงแหวน; PROJECT_FILE_VERSION 14
 - หลอดครีม (tube-laminate, path ภาชนะ): W = ⌀ท่อ — ลำตัวสร้างจาก `tubeSection` (pure, vessel.ts) หน้าตัดวงรีเส้นรอบวงคงที่ πW
   (กลมที่ไหล่ → แบนกว้าง πW/2 ที่ซีล, ด้านข้างหัวกระสุน 1−v^`TUBE_BULLET`) ใช้ร่วม 3D + ความจุ (`tubeVolumeMl`); ตั้งบนฝา flip-top

@@ -211,7 +211,7 @@ function profileFor(
   const rr = rn * sp.ring
   const mouthPts = [P(rn, H - lip), P(rr, H - lip * 0.9), P(rr, H)]
   // ช่วงลำตัวตรง = ขอบก้นมนถึงไหล่เริ่ม (ไม่ใช้เกณฑ์รัศมี — ขอบปากอาจกว้างเกือบเท่าตัว)
-  const out = { band, straight: [baseTop, s0] as [number, number], mouth: { rn, rr, lipY: H - lip, top: H } }
+  const out = { band, straight: [baseTop, s0] as [number, number], mouth: { rn, rr, lipY: H - lip, top: H, neckY: Hb } }
   if (matId === 'aluminum') {
     // กระป๋อง/ขวดอะลูมิเนียม: ขอบม้วนที่ปาก แล้วปิดฝาบน (ฝาเปลือกกระป๋อง)
     return { ...out, pts: [...body, ...mouthPts, P(rr * 0.94, H), P(0, H)] }
@@ -220,23 +220,28 @@ function profileFor(
   return { ...out, pts: [...body, ...mouthPts] }
 }
 
-// ปากขวด: rn = รัศมีคอ, rr = รัศมีขอบปาก, lipY = ขอบล่างของขอบปาก, top = ปาก (= H)
+// ปากขวด: rn = รัศมีคอ, rr = รัศมีขอบปาก, lipY = ขอบล่างของขอบปาก, top = ปาก (= H), neckY = โคนคอ (ปลายไหล่)
 export interface Mouth {
   rn: number
   rr: number
   lipY: number
   top: number
+  neckY: number
 }
 
 // ฝาขวด (เลือกได้ — ภาพ 3D เท่านั้น ไม่อยู่ใน dieline ฉลาก)
-export type CapStyle = 'none' | 'screw' | 'flip' | 'pump'
+export type CapStyle = 'none' | 'screw' | 'flip' | 'pump' | 'cork'
 export const CAP_STYLES: { id: CapStyle; nameTh: string; nameEn: string; detail: string }[] = [
   { id: 'none', nameTh: 'ไม่มีฝา', nameEn: 'No cap', detail: 'แสดงปากขวดเปล่า' },
   { id: 'screw', nameTh: 'ฝาเกลียว', nameEn: 'Screw cap', detail: 'ฝาเกลียวขอบหยัก — น้ำดื่ม/เครื่องดื่ม/ซอส' },
   { id: 'flip', nameTh: 'ฝาฟลิปท็อป', nameEn: 'Flip-top cap', detail: 'ฝาเปิดพับได้ — แชมพู/ครีมอาบน้ำ/ซอส' },
   { id: 'pump', nameTh: 'หัวปั๊ม', nameEn: 'Pump', detail: 'หัวกดปั๊ม — สบู่เหลว/โลชั่น/เจล' },
+  { id: 'cork', nameTh: 'จุกไวน์ (จุกก๊อก)', nameEn: 'Wine cork', detail: 'จุกก๊อกเสียบในคอขวด หัวโผล่พ้นปาก — ไวน์/สุรา/น้ำมันมะกอก' },
 ]
 export const DEFAULT_CAP_COLOR = '#f4f4f2'
+export const CORK_COLOR = '#c19a6b'
+// สีฝาเมื่อผู้ใช้ยังไม่เลือก — จุกก๊อกเป็นสีไม้ก๊อก ที่เหลือขาวมาตรฐาน
+export const defaultCapColor = (style: CapStyle) => (style === 'cork' ? CORK_COLOR : DEFAULT_CAP_COLOR)
 
 // ชิ้นประกอบกล่องเล็ก ๆ ของฝา (ร่องหยัก/ลิ้นเปิด/หัวฉีด) — พิกัดเดียวกับโปรไฟล์ (y จากก้น, z = ด้านหน้า)
 export interface CapPart {
@@ -292,6 +297,21 @@ export function capShape(style: CapStyle, m: Mouth): { lathe: Vec2[]; parts: Cap
         { x: 0, y: yg + 0.8, z: rf + 0.6, w: rf * 0.55, h: 1.6, d: 1.4 },
         { x: 0, y: yg, z: -rf - 0.4, w: rf * 0.5, h: 2.2, d: 1 },
       ],
+      top: yt,
+    }
+  }
+  if (style === 'cork') {
+    // จุกก๊อก (T-cork): ก้านเสียบในคอแน่นพอดีรู ลึก ~2×⌀คอ (ไม่เลยโคนคอ) + หัวจุกโผล่พ้นปาก กว้างกว่าขอบปากเล็กน้อย
+    const rk = m.rn * 0.96
+    const depth = Math.min(clamp(m.rn * 2.2, 12, 45), m.top - m.neckY - 1)
+    const yb = m.top - Math.max(depth, lipH + 1)
+    const rh = m.rr + 0.4
+    const hh = clamp(m.rn * 0.75, 4, 18)
+    const yt = m.top + hh
+    const b = Math.min(1.5, hh * 0.25)
+    return {
+      lathe: [P(0, yb), P(rk - 0.6, yb), P(rk, yb + 0.6), P(rk, m.top), P(rh, m.top), P(rh, yt - b), P(rh - b, yt), P(0, yt)],
+      parts: [],
       top: yt,
     }
   }

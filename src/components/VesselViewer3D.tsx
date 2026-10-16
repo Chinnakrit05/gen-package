@@ -5,7 +5,7 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
-import { capShape, DEFAULT_CAP_COLOR, tubeSection, type CapStyle, type Vessel } from '../core/vessel'
+import { capShape, defaultCapColor, tubeSection, type CapStyle, type Vessel } from '../core/vessel'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
 import { SceneLighting, type LightMode } from './SceneLighting'
@@ -254,7 +254,9 @@ function VesselModel({
     [cap],
   )
   useEffect(() => () => capGeo?.dispose(), [capGeo])
-  const capCol = capColor || DEFAULT_CAP_COLOR
+  const capCol = capColor || defaultCapColor(capStyle)
+  // จุกก๊อกผิวด้าน ฝาพลาสติกเงากว่า
+  const capRough = capStyle === 'cork' ? 0.85 : 0.38
 
   const modelRef = useRef<THREE.Group>(null)
 
@@ -310,12 +312,12 @@ function VesselModel({
       {cap && capGeo && (
         <>
           <mesh geometry={capGeo}>
-            <meshStandardMaterial color={capCol} roughness={0.38} metalness={0.02} side={THREE.DoubleSide} />
+            <meshStandardMaterial color={capCol} roughness={capRough} metalness={0.02} side={THREE.DoubleSide} />
           </mesh>
           {cap.parts.map((pt, i) => (
             <mesh key={i} position={[pt.x, pt.y, pt.z]} rotation={[0, pt.rotY ?? 0, 0]}>
               <boxGeometry args={[pt.w, pt.h, pt.d]} />
-              <meshStandardMaterial color={capCol} roughness={0.38} metalness={0.02} />
+              <meshStandardMaterial color={capCol} roughness={capRough} metalness={0.02} />
             </mesh>
           ))}
         </>

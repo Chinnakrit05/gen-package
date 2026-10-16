@@ -88,7 +88,7 @@ import {
   resolveStickerSheet,
   type SheetLayout,
 } from './core/stickerSheet'
-import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, DEFAULT_CAP_COLOR, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
+import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, defaultCapColor, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
 import {
   generatePouch,
   POUCH_STYLES,
@@ -3486,7 +3486,7 @@ export default function App({
                 <label className="check" style={{ marginTop: 10 }}>
                   <input
                     type="color"
-                    value={capColor ?? DEFAULT_CAP_COLOR}
+                    value={capColor ?? defaultCapColor(capStyle)}
                     disabled={aiBusy}
                     aria-label={t('สีฝา', 'Cap colour')}
                     onChange={(e) => setCapColor(e.target.value)}

@@ -331,6 +331,7 @@ describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: ปากขวด
     const c = capShape(style, m)!
     const ys = c.lathe.map((p) => p.y)
     expect(Math.min(...ys)).toBeLessThan(m.lipY)
+    // จุกก๊อก: หัวจุกกว้างกว่าขอบปาก (วางบนปาก) — ฝาอื่นครอบนอกขอบปาก
     expect(Math.max(...c.lathe.map((p) => p.x))).toBeGreaterThan(m.rr)
     expect(c.top).toBeGreaterThan(m.top)
     for (let i = 1; i < c.lathe.length; i++) expect(c.lathe[i].y).toBeGreaterThanOrEqual(c.lathe[i - 1].y - 1e-9)
@@ -340,5 +341,19 @@ describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: ปากขวด
     expect(capShape('none', m)).toBeNull()
     expect(generateVessel(box, getMaterial(id), 'body', { label: { rot: 180 } }).labelRot).toBeCloseTo(Math.PI)
     expect(v.labelRot).toBe(0)
+  })
+})
+
+describe('vessel: จุกไวน์', () => {
+  const m = generateVessel({ W: 75, D: 20, H: 300, handle: false }, getMaterial('glass')).mouth!
+  const c = capShape('cork', m)!
+
+  it('ก้านจุกอยู่ในรูคอ (แคบกว่าคอ) ไม่ลึกเลยโคนคอ หัวจุกวางบนปาก', () => {
+    const below = c.lathe.filter((p) => p.y < m.top - 1e-6)
+    expect(Math.max(...below.map((p) => p.x))).toBeLessThan(m.rn)
+    expect(Math.min(...c.lathe.map((p) => p.y))).toBeGreaterThan(m.neckY)
+    const head = c.lathe.filter((p) => p.y > m.top + 1e-6)
+    expect(Math.max(...head.map((p) => p.x))).toBeGreaterThan(m.rr)
+    expect(c.top).toBeGreaterThan(m.top)
   })
 })
