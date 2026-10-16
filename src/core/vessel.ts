@@ -91,13 +91,31 @@ function shoulder(p0: Vec2, c: Vec2, p1: Vec2, n = 6): Vec2[] {
   return out
 }
 
+// สัดส่วนทรงต่อชนิดภาชนะ (×ความสูงตัว Hb ยกเว้น neck ×H) — ค่าเริ่มต้นเท่ากับทรงเดิมก่อนแยกตัว/คอ/ไหล่
+// neck = คอ, base = ขอบก้นมน, shoulder = ไหล่ (จากจุดเริ่มสอบเข้าถึงโคนคอ), ctrl = จุดคุมโค้งไหล่มน (×ไหล่),
+// gap = ระยะขอบบนฉลากใต้ไหล่, band0 = ขอบล่างฉลาก, foot = รัศมีก้น (×R), lip = มีขอบปาก (PET)
+interface VesselShapeSpec {
+  neck: number
+  base: number
+  shoulder: number
+  ctrl: number
+  gap: number
+  band0: number
+  foot: number
+}
+const SHAPES: Record<string, VesselShapeSpec> = {
+  'pet-bottle': { neck: 0.18, base: 0.061, shoulder: 0.268, ctrl: 0.728, gap: 0.061, band0: 0.122, foot: 0.86 },
+  glass: { neck: 0.16, base: 0.048, shoulder: 0.143, ctrl: 0.832, gap: 0.071, band0: 0.119, foot: 0.92 },
+  aluminum: { neck: 0.06, base: 0.043, shoulder: 0.085, ctrl: 1, gap: 0.043, band0: 0.064, foot: 0.82 },
+}
+
 // ความสูงคอ (มม.) = ช่วงตั้งแต่ปลายไหล่ (รัศมีลดถึงปาก) ถึงปาก — ตัว = ก้นถึงปลายไหล่ (H − คอ)
-// ค่าเริ่มต้นตามสัดส่วนภาชนะจริงต่อชนิด (เท่ากับทรงเดิมก่อนแยกตัว/คอ); หลอดครีมไม่มีคอแบบนี้ (ตั้งบนฝา)
-const NECK_FRAC: Record<string, number> = { 'pet-bottle': 0.18, glass: 0.16, aluminum: 0.06 }
+// หลอดครีมไม่มีคอ/ไหล่แบบนี้ (ตั้งบนฝา)
 export const NECK_MIN = 3
 export const BODY_MIN = 15
-export const hasNeck = (matId: string) => matId in NECK_FRAC
-export const defaultNeckH = (matId: string, H: number) => Math.round((NECK_FRAC[matId] ?? 0.18) * H * 2) / 2
+export const SHOULDER_MIN = 1
+export const hasNeck = (matId: string) => matId in SHAPES
+export const defaultNeckH = (matId: string, H: number) => Math.round((SHAPES[matId]?.neck ?? 0.18) * H * 2) / 2
 // ช่วงความสูงคอที่ใช้ได้ที่ความสูงรวม H — ตัวต้องเหลืออย่างน้อย BODY_MIN
 export const neckRange = (H: number): [number, number] => [NECK_MIN, Math.max(NECK_MIN, H - BODY_MIN)]
 export const resolveNeckH = (matId: string, H: number, neckH?: number) => {
@@ -105,26 +123,42 @@ export const resolveNeckH = (matId: string, H: number, neckH?: number) => {
   return Math.min(hi, Math.max(lo, neckH ?? defaultNeckH(matId, H)))
 }
 
-// โปรไฟล์ต่อชนิดภาชนะ + ช่วงติดฉลาก (สัดส่วนอิงรูปทรงจริงของภาชนะแต่ละแบบ)
-// สัดส่วนลำตัว/ไหล่อิงความสูงตัว Hb = H − คอ ส่วนคอเป็นทรงกระบอก ⌀ปาก จาก Hb ถึง H
-function profileFor(matId: string, R: number, rn: number, H: number, neck: number): { pts: Vec2[]; band: [number, number] } {
-  const Hb = H - neck
-  if (matId === 'aluminum') {
-    // กระป๋อง: ตัวตรง คอดบนเล็กน้อย ฝาปิด
-    return {
-      pts: [
-        P(0, 0),
-        P(R * 0.82, 0),
-        P(R, Hb * 0.043),
-        P(R, Hb * 0.915),
-        ...shoulder(P(R, Hb * 0.915), P(R, Hb), P(rn, Hb)),
-        P(rn, H),
-        P(rn * 0.94, H),
-        P(0, H), // ปิดฝาบน
-      ],
-      band: [Hb * 0.064, Hb * 0.872],
-    }
+// ไหล่ = รอยต่อตัว→คอ: ความสูง (มม. อยู่ในความสูงตัว ไม่เพิ่มสูงรวม) + รูปทรง
+export type ShoulderStyle = 'round' | 'slope' | 'flat'
+export const SHOULDER_STYLES: { id: ShoulderStyle; nameTh: string; nameEn: string }[] = [
+  { id: 'round', nameTh: 'โค้งมน', nameEn: 'Rounded' },
+  { id: 'slope', nameTh: 'ลาดตรง', nameEn: 'Sloped' },
+  { id: 'flat', nameTh: 'ไหล่ตั้ง', nameEn: 'Square' },
+]
+export const defaultShoulderH = (matId: string, Hb: number) => Math.round((SHAPES[matId]?.shoulder ?? 0.268) * Hb * 2) / 2
+// ไหล่สูงได้ถึงเหนือขอบก้นมน 2 มม. (ตัวตรงเหลือ ≥ 0)
+export const shoulderMax = (matId: string, Hb: number) =>
+  Math.max(SHOULDER_MIN, Hb - (SHAPES[matId]?.base ?? 0.061) * Hb - 2)
+export const resolveShoulderH = (matId: string, Hb: number, shoulderH?: number) =>
+  Math.min(shoulderMax(matId, Hb), Math.max(SHOULDER_MIN, shoulderH ?? defaultShoulderH(matId, Hb)))
+
+export interface VesselShape {
+  neckH?: number
+  shoulderH?: number
+  shoulderStyle?: ShoulderStyle
+}
+
+// เส้นไหล่จาก (R, s0) ถึงโคนคอ (rn, Hb) — ไม่รวมจุดเริ่ม
+function shoulderPts(style: ShoulderStyle, R: number, rn: number, s0: number, Hb: number, ctrl: number): Vec2[] {
+  const sh = Hb - s0
+  if (style === 'slope') return [P(rn, Hb)] // ทรงกรวย: เส้นตรงตัว→คอ
+  if (style === 'flat') {
+    // ไหล่ตั้ง: มุมมนรัศมี ~ความสูงไหล่ แล้วบ่าแบนเข้าหาคอ
+    const rr = Math.min(sh, R - rn)
+    const pts = shoulder(P(R, s0), P(R, Hb), P(R - rr, Hb), 8)
+    return R - rr > rn + 1e-6 ? [...pts, P(rn, Hb)] : pts
   }
+  return shoulder(P(R, s0), P(R, s0 + ctrl * sh), P(rn, Hb), 8)
+}
+
+// โปรไฟล์ต่อชนิดภาชนะ + ช่วงติดฉลาก (สัดส่วนอิงรูปทรงจริงของภาชนะแต่ละแบบ)
+// ลำตัว/ไหล่อิงความสูงตัว Hb = H − คอ; คอเป็นทรงกระบอก ⌀ปาก จาก Hb ถึง H
+function profileFor(matId: string, R: number, rn: number, H: number, shape: VesselShape): { pts: Vec2[]; band: [number, number] } {
   if (matId === 'tube-laminate') {
     // หลอดบีบคลาสสิก: ตั้งบน "ฝา/คอกลม" ที่ก้น → ลำตัวเป็น loft วงรี (กว้างคงที่ ลึกเรียว→ซีลแบน)
     // profile นี้เก็บแค่ฝา/คอ (ทรงหมุน กลม) จบแบบ "เปิด" ที่ (rcap, capH) ให้ลำตัว loft รับต่อ
@@ -139,44 +173,36 @@ function profileFor(matId: string, R: number, rn: number, H: number, neck: numbe
       band: [capH + H * 0.08, H * 0.82], // ฉลากบนช่วงลำตัว (แบบ "สูงเต็มตัว" จะขึ้นถึง ~0.9H)
     }
   }
+  const sp = SHAPES[matId] ?? SHAPES['pet-bottle']
+  const neck = resolveNeckH(matId, H, shape.neckH)
+  const Hb = H - neck
+  const sh = resolveShoulderH(matId, Hb, shape.shoulderH)
+  const s0 = Hb - sh // ตัวตรงสิ้นสุด / ไหล่เริ่ม
+  const baseTop = sp.base * Hb
+  const body = [P(0, 0), P(R * sp.foot, 0), P(R, baseTop), P(R, s0), ...shoulderPts(shape.shoulderStyle ?? 'round', R, rn, s0, Hb, sp.ctrl)]
+  // ฉลากมาตรฐาน: ขอบบนใต้ไหล่เสมอ (ไหล่สูง → ฉลากเตี้ยลง)
+  const band1 = Math.max(s0 - sp.gap * Hb, baseTop + 4)
+  const band: [number, number] = [Math.min(sp.band0 * Hb, band1 - 3), band1]
+  if (matId === 'aluminum') {
+    // กระป๋อง: ตัวตรง คอดบนเล็กน้อย ฝาปิด
+    return { pts: [...body, P(rn, H), P(rn * 0.94, H), P(0, H)], band }
+  }
   if (matId === 'glass') {
     // โหล/ขวดแก้วปากกว้าง: ตัวอวบ บ่าสั้น ปากกว้าง
-    return {
-      pts: [
-        P(0, 0),
-        P(R * 0.92, 0),
-        P(R, Hb * 0.048),
-        P(R, Hb * 0.857),
-        ...shoulder(P(R, Hb * 0.857), P(R, Hb * 0.976), P(rn, Hb)),
-        P(rn, H),
-      ],
-      band: [Hb * 0.119, Hb * 0.786],
-    }
+    return { pts: [...body, P(rn, H)], band }
   }
   // ขวด PET: ตัวทรงกระบอก ไหล่โค้งยาว คอเล็ก ปากมีขอบ (ขอบปากสูง ~28% ของคอ)
   const lip = Math.min(neck * 0.28, Math.max(1.5, H * 0.05))
-  return {
-    pts: [
-      P(0, 0),
-      P(R * 0.86, 0),
-      P(R, Hb * 0.061),
-      P(R, Hb * 0.732),
-      ...shoulder(P(R, Hb * 0.732), P(R, Hb * 0.927), P(rn, Hb)),
-      P(rn, H - lip),
-      P(rn * 1.12, H - lip * 0.9),
-      P(rn * 1.12, H),
-    ],
-    band: [Hb * 0.122, Hb * 0.671],
-  }
+  return { pts: [...body, P(rn, H - lip), P(rn * 1.12, H - lip * 0.9), P(rn * 1.12, H)], band }
 }
 
-export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelStyle = 'body', neckH?: number): Vessel {
+export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelStyle = 'body', shape: VesselShape = {}): Vessel {
   const { W, D, H } = box
   const R = W / 2
   // ปาก/คอต้องเล็กกว่าตัวเสมอ (กันผู้ใช้/AI ใส่ D เกิน W)
   const rn = Math.min(Math.max(D / 2, 5), R * 0.9)
 
-  const { pts, band } = profileFor(mat.id, R, rn, H, resolveNeckH(mat.id, H, neckH))
+  const { pts, band } = profileFor(mat.id, R, rn, H, shape)
   // ช่วงลำตัวตรง (รัศมี ~R) = ขอบเขตที่ฉลากติดได้จริง ใช้คำนวณรูปแบบฉลากแต่ละแบบ
   const straightYs = pts.filter((p) => p.x >= R * 0.98).map((p) => p.y)
   let b0 = straightYs.length ? Math.min(...straightYs) : band[0]

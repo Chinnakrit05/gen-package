@@ -101,7 +101,10 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ความหมายขนาด: W = ⌀ตัว, D = ⌀ปาก/คอ, H = สูงรวม (template ถูกละเลย); `isVessel` = !foldable && form≠pouch
   ขวด/โหล/กระป๋อง แยกสูงตัว/คอ: `Project.neckH` (ไม่ใส่ = `defaultNeckH` สัดส่วนเดิมตามวัสดุ, clamp ด้วย `resolveNeckH`)
   ตัว = ก้นถึงปลายไหล่ (H − คอ) สัดส่วนลำตัว/ไหล่/ช่วงฉลากอิงความสูงตัว; UI โชว์ สูงตัว/สูงคอ + สูงรวม — ปรับตัวจะตรึงคอ,
-  ปรับคอตัวคงเดิม (H เปลี่ยนตาม); thread แบบ labelStyle + schema cloud, PROJECT_FILE_VERSION 11; หลอดครีมไม่ใช้
+  ปรับคอตัวคงเดิม (H เปลี่ยนตาม); thread แบบ labelStyle + schema cloud; หลอดครีมไม่ใช้
+  ไหล่ (รอยต่อตัว→คอ): `Project.shoulderH` (มม. อยู่ในความสูงตัว ไม่เพิ่มสูงรวม; ไม่ใส่ = `defaultShoulderH`, clamp `resolveShoulderH`)
+  + `shoulderStyle` round/slope/flat (`shoulderPts`: โค้ง Q / เส้นตรงกรวย / มุมมนรัศมี≈สูงไหล่แล้วบ่าแบน) — สัดส่วนต่อวัสดุใน `SHAPES`;
+  ฉลากมาตรฐานขอบบนอยู่ใต้ไหล่เสมอ; `generateVessel(box, mat, labelStyle, { neckH, shoulderH, shoulderStyle })`, PROJECT_FILE_VERSION 12
 - หลอดครีม (tube-laminate, path ภาชนะ): W = ⌀ท่อ — ลำตัวสร้างจาก `tubeSection` (pure, vessel.ts) หน้าตัดวงรีเส้นรอบวงคงที่ πW
   (กลมที่ไหล่ → แบนกว้าง πW/2 ที่ซีล, ด้านข้างหัวกระสุน 1−v^`TUBE_BULLET`) ใช้ร่วม 3D + ความจุ (`tubeVolumeMl`); ตั้งบนฝา flip-top
   กว้างเกือบเท่าท่อ (`tubeCapR`), ซีลบน `TUBE_SEAL` มีลอนกด; พิมพ์รอบตัวทั้งท่อ (ค่ามาตรฐาน = ไหล่ถึงใต้ซีล) UV ตามความยาวผิว เริ่มกลางหลัง
@@ -146,7 +149,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
-  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 11); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 12); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° ได้สันโค้งจาก `rollBeads` ใน fold.ts (ทรงกระบอกบาง รัศมี = ครึ่งระยะสองชั้น) — ตอนนี้ไม่มี template ใช้แล้ว
 - FEFCO 0427 ตามผัง dieline มาตรฐาน: ผนังข้างทบเป็นรอยพับคู่ (ผนัง → สัน กว้าง sp = 3t+0.2 = ผนัง+หู+ชั้นทบ → ชั้นทบ)
   ลิ้นปลายชั้นทบลงช่องบนฐานที่ sp − t/2; ฝาแคบกว่ากล่องข้างละ sp มีปีกข้างคางหมูพับลงด้านในชั้นทบ (stage 4 ก่อนฝาปิด 5),

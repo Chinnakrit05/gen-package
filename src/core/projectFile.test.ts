@@ -64,6 +64,20 @@ describe('projectFile: round-trip', () => {
     expect(res.project.neckH).toBe(22.5)
   })
 
+  it('ไหล่ขวด: เก็บความสูง/ทรงเมื่อตั้งเอง (ทรงโค้งมน = ค่าเริ่มต้นไม่เก็บ)', () => {
+    const p = sampleProject()
+    p.live = { template: 'tuck-end', materialId: 'glass', W: 60, D: 40, H: 100, handle: false }
+    p.shoulderStyle = 'round'
+    expect(JSON.parse(serializeProject(p)).project.shoulderStyle).toBeUndefined()
+    p.shoulderH = 12
+    p.shoulderStyle = 'flat'
+    const res = parseProjectFile(serializeProject(p))
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.project.shoulderH).toBe(12)
+    expect(res.project.shoulderStyle).toBe('flat')
+  })
+
   it('นำเข้าได้ id ใหม่เสมอ (กันชนกับงานที่เปิดอยู่)', () => {
     const p = sampleProject()
     const res = parseProjectFile(serializeProject(p))

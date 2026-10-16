@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_MIN, LABEL_OVERLAP, NECK_MIN, TUBE_CAP_FRAC, TUBE_SEAL, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
+import { BODY_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
 import { ellipsePerimeter } from './pouch'
 import { MATERIALS, getMaterial } from './materials'
 import { computeGuides } from './guides'
@@ -200,12 +200,12 @@ describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: แยกควา
   const mat = getMaterial(id)
   const rn = box.D / 2
   // ระดับที่รัศมีลดถึง ⌀คอ ครั้งแรก = ปลายไหล่ (เริ่มคอ)
-  const neckBase = (neckH?: number) => generateVessel(box, mat, 'body', neckH).profile.find((p) => p.y > 0 && Math.abs(p.x - rn) < 1e-6)!.y
+  const neckBase = (neckH?: number) => generateVessel(box, mat, 'body', { neckH }).profile.find((p) => p.y > 0 && Math.abs(p.x - rn) < 1e-6)!.y
 
   it('ตั้งความสูงคอ → คอเริ่มที่ H − คอ, สูงรวมยังเป็น H', () => {
     for (const nh of [8, 30, 60]) {
       expect(neckBase(nh)).toBeCloseTo(box.H - nh, 6)
-      const v = generateVessel(box, mat, 'body', nh)
+      const v = generateVessel(box, mat, 'body', { neckH: nh })
       expect(Math.max(...v.profile.map((p) => p.y))).toBeCloseTo(box.H)
     }
   })
@@ -215,8 +215,8 @@ describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: แยกควา
   })
 
   it('คอยาวขึ้น → ตัวเตี้ยลง ฉลากย้ายลงตาม (ยังอยู่บนตัว)', () => {
-    const short = generateVessel(box, mat, 'body', 10)
-    const long = generateVessel(box, mat, 'body', 80)
+    const short = generateVessel(box, mat, 'body', { neckH: 10 })
+    const long = generateVessel(box, mat, 'body', { neckH: 80 })
     expect(long.labelY1).toBeLessThan(short.labelY1)
     expect(long.labelY1).toBeLessThan(box.H - 80)
   })
@@ -224,7 +224,58 @@ describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: แยกควา
   it('คอถูกจำกัดให้ตัวเหลืออย่างน้อย BODY_MIN และคออย่างน้อย NECK_MIN', () => {
     expect(resolveNeckH(id, box.H, 500)).toBe(box.H - BODY_MIN)
     expect(resolveNeckH(id, box.H, 0)).toBe(NECK_MIN)
-    const v = generateVessel(box, mat, 'body', 500)
+    const v = generateVessel(box, mat, 'body', { neckH: 500 })
     expect(v.profile.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true)
+  })
+})
+
+// ไหล่ (รอยต่อตัว→คอ): ความสูงไหล่อยู่ในความสูงตัว + รูปทรง โค้งมน/ลาดตรง/ไหล่ตั้ง
+describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: ไหล่ %s', (id) => {
+  const mat = getMaterial(id)
+  const R = box.W / 2
+  const rn = box.D / 2
+  const neckH = 30
+  const Hb = box.H - neckH
+  // จุดสุดท้ายที่ยังกว้างเต็มตัว = ไหล่เริ่ม
+  const s0 = (v: ReturnType<typeof generateVessel>) => Math.max(...v.profile.filter((p) => Math.abs(p.x - R) < 1e-6).map((p) => p.y))
+
+  it('ตั้งสูงไหล่ → ไหล่เริ่มที่ (ตัว − ไหล่), โคนคอ/สูงรวมเท่าเดิม', () => {
+    for (const sh of [5, 40, 100]) {
+      const v = generateVessel(box, mat, 'body', { neckH, shoulderH: sh })
+      expect(s0(v)).toBeCloseTo(Hb - sh, 6)
+      expect(v.profile.some((p) => Math.abs(p.x - rn) < 1e-6 && Math.abs(p.y - Hb) < 1e-6)).toBe(true)
+      expect(Math.max(...v.profile.map((p) => p.y))).toBeCloseTo(box.H)
+    }
+  })
+
+  it('ไม่ตั้งค่า = สัดส่วนมาตรฐานของวัสดุ; ค่าเกินถูกจำกัด', () => {
+    const v = generateVessel(box, mat, 'body', { neckH })
+    expect(s0(v)).toBeCloseTo(Hb - defaultShoulderH(id, Hb), 6)
+    expect(resolveShoulderH(id, Hb, 1e4)).toBe(shoulderMax(id, Hb))
+    expect(resolveShoulderH(id, Hb, 0)).toBe(SHOULDER_MIN)
+  })
+
+  it('ฉลากมาตรฐานอยู่ใต้ไหล่เสมอ (ไหล่สูง → ฉลากเตี้ยลง)', () => {
+    const lo = generateVessel(box, mat, 'body', { neckH, shoulderH: 10 })
+    const hi = generateVessel(box, mat, 'body', { neckH, shoulderH: 80 })
+    expect(hi.labelY1).toBeLessThan(lo.labelY1)
+    expect(hi.labelY1).toBeLessThanOrEqual(Hb - 80)
+    expect(hi.labelY1).toBeGreaterThan(hi.labelY0)
+  })
+
+  it('ลาดตรง = เส้นตรงจากไหล่เริ่มถึงโคนคอ', () => {
+    const v = generateVessel(box, mat, 'body', { neckH, shoulderH: 40, shoulderStyle: 'slope' })
+    const i = v.profile.findIndex((p) => Math.abs(p.x - R) < 1e-6 && Math.abs(p.y - (Hb - 40)) < 1e-6)
+    expect(v.profile[i + 1].x).toBeCloseTo(rn)
+    expect(v.profile[i + 1].y).toBeCloseTo(Hb)
+  })
+
+  it('ไหล่ตั้ง = มุมมนแล้วบ่าแบนที่ระดับโคนคอ', () => {
+    const sh = 8
+    const v = generateVessel(box, mat, 'body', { neckH, shoulderH: sh, shoulderStyle: 'flat' })
+    const top = v.profile.filter((p) => Math.abs(p.y - Hb) < 1e-6)
+    expect(top.some((p) => Math.abs(p.x - (R - Math.min(sh, R - rn))) < 1e-6)).toBe(true)
+    expect(top.some((p) => Math.abs(p.x - rn) < 1e-6)).toBe(true)
+    for (let i = 1; i < v.profile.length; i++) expect(v.profile[i].y).toBeGreaterThanOrEqual(v.profile[i - 1].y - 1e-9)
   })
 })

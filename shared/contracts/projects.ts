@@ -14,6 +14,8 @@ export interface CloudProjectDocumentV1 {
   fillImage?: Record<string, unknown> | null
   labelStyle?: string
   neckH?: number
+  shoulderH?: number
+  shoulderStyle?: string
   pouchStyle?: string
   zipper?: boolean
   pouchAddons?: Record<string, boolean | number>

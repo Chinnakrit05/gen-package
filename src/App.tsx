@@ -88,7 +88,7 @@ import {
   resolveStickerSheet,
   type SheetLayout,
 } from './core/stickerSheet'
-import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, type LabelStyle } from './core/vessel'
+import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, type LabelStyle, type ShoulderStyle } from './core/vessel'
 import {
   generatePouch,
   POUCH_STYLES,
@@ -878,6 +878,8 @@ interface EditSnapshot {
   fillImage: FillImage | null
   labelStyle: LabelStyle
   neckH: number | undefined
+  shoulderH: number | undefined
+  shoulderStyle: ShoulderStyle
   pouchStyle: PouchStyle
   zipper: boolean
   pouchAddons: PouchAddons
@@ -898,6 +900,8 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.fillImage === b.fillImage &&
   a.labelStyle === b.labelStyle &&
   a.neckH === b.neckH &&
+  a.shoulderH === b.shoulderH &&
+  a.shoulderStyle === b.shoulderStyle &&
   a.pouchStyle === b.pouchStyle &&
   a.zipper === b.zipper &&
   a.pouchAddons === b.pouchAddons &&
@@ -1191,6 +1195,9 @@ export default function App({
   const [labelStyle, setLabelStyle] = useState<LabelStyle>(initialActive.labelStyle ?? 'body')
   // ความสูงคอขวด (มม.) — undefined = สัดส่วนมาตรฐานตามวัสดุ; ตั้งเองเมื่อผู้ใช้ปรับคอ/ตัวแยกกัน
   const [neckH, setNeckH] = useState<number | undefined>(initialActive.neckH)
+  // ไหล่ (รอยต่อตัว→คอ): ความสูง มม. (undefined = สัดส่วนมาตรฐาน) + รูปทรง
+  const [shoulderH, setShoulderH] = useState<number | undefined>(initialActive.shoulderH)
+  const [shoulderStyle, setShoulderStyle] = useState<ShoulderStyle>(initialActive.shoulderStyle ?? 'round')
   const [pouchStyle, setPouchStyle] = useState<PouchStyle>(initialActive.pouchStyle ?? 'stand')
   const [zipper, setZipper] = useState<boolean>(initialActive.zipper ?? false)
   const [pouchAddons, setPouchAddons] = useState<PouchAddons>(initialActive.pouchAddons ?? {})
@@ -1529,6 +1536,7 @@ export default function App({
   const showNeck = kind === 'vessel' && hasNeck(mat.id)
   const neckEff = showNeck ? resolveNeckH(mat.id, H, neckH) : 0
   const bodyH = H - neckEff
+  const shoulderEff = showNeck ? resolveShoulderH(mat.id, bodyH, shoulderH) : 0
   // ปรับสูงตัว: ตรึงคอที่ค่าปัจจุบัน (ไม่ให้คอเลื่อนตามสัดส่วน) แล้วสูงรวม = ตัว + คอ
   const setBodyH = (v: number) => {
     setNeckH(neckEff)
@@ -1540,8 +1548,8 @@ export default function App({
     setH(clamp(bodyH + v, 30, 300))
   }
   const vessel = useMemo(
-    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, neckH) : null),
-    [W, D, H, handle, mat, labelStyle, neckH, kind],
+    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, { neckH, shoulderH, shoulderStyle }) : null),
+    [W, D, H, handle, mat, labelStyle, neckH, shoulderH, shoulderStyle, kind],
   )
   const pouch = useMemo(
     () =>
@@ -1735,6 +1743,8 @@ export default function App({
               && p.fillImage === fillImage
               && (p.labelStyle ?? 'body') === labelStyle
               && p.neckH === neckH
+              && p.shoulderH === shoulderH
+              && (p.shoulderStyle ?? 'round') === shoulderStyle
               && (p.pouchStyle ?? 'stand') === pouchStyle
               && Boolean(p.zipper) === zipper
               && samePouchAddons(p.pouchAddons, pouchAddons)
@@ -1752,6 +1762,8 @@ export default function App({
                     fillImage,
                     labelStyle,
                     neckH,
+                    shoulderH,
+                    shoulderStyle,
                     pouchStyle,
                     zipper,
                     pouchAddons,
@@ -1767,7 +1779,7 @@ export default function App({
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
 
   // local demo เขียน localStorage; cloud ส่ง active project เข้า durable IndexedDB/save queue
   useEffect(() => {
@@ -1849,6 +1861,8 @@ export default function App({
     fillImage,
     labelStyle,
     neckH,
+    shoulderH,
+    shoulderStyle,
     pouchStyle,
     zipper,
     pouchAddons,
@@ -1876,7 +1890,7 @@ export default function App({
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -1891,6 +1905,8 @@ export default function App({
     setFillImage(s.fillImage ?? null)
     setLabelStyle(s.labelStyle ?? 'body')
     setNeckH(s.neckH)
+    setShoulderH(s.shoulderH)
+    setShoulderStyle(s.shoulderStyle ?? 'round')
     setPouchStyle(s.pouchStyle ?? 'stand')
     setZipper(s.zipper ?? false)
     setPouchAddons(s.pouchAddons ?? {})
@@ -1984,6 +2000,8 @@ export default function App({
           && p.fillImage === fillImage
           && (p.labelStyle ?? 'body') === labelStyle
           && p.neckH === neckH
+          && p.shoulderH === shoulderH
+          && (p.shoulderStyle ?? 'round') === shoulderStyle
           && (p.pouchStyle ?? 'stand') === pouchStyle
           && Boolean(p.zipper) === zipper
           && samePouchAddons(p.pouchAddons, pouchAddons)
@@ -1993,7 +2011,7 @@ export default function App({
           && p.history === history
           && p.histIdx === histIdx
             ? p
-            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
+            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -2010,6 +2028,8 @@ export default function App({
     setFillImage(p.fillImage ?? null)
     setLabelStyle(p.labelStyle ?? 'body')
     setNeckH(p.neckH)
+    setShoulderH(p.shoulderH)
+    setShoulderStyle(p.shoulderStyle ?? 'round')
     setPouchStyle(p.pouchStyle ?? 'stand')
     setZipper(p.zipper ?? false)
     setPouchAddons(p.pouchAddons ?? {})
@@ -3729,6 +3749,33 @@ export default function App({
                   disabled={aiBusy}
                   onChange={setNeckLen}
                 />
+                {/* ไหล่ = รอยต่อตัว→คอ: สูงไหล่อยู่ในความสูงตัว (สูงรวมไม่เปลี่ยน) */}
+                <DimField
+                  imperial={imperial}
+                  label={t('สูงไหล่', 'Shoulder height')}
+                  value={shoulderEff}
+                  min={SHOULDER_MIN}
+                  max={shoulderMax(mat.id, bodyH)}
+                  disabled={aiBusy}
+                  onChange={setShoulderH}
+                />
+                <div className="field">
+                  <span className="field-head">{t('ทรงไหล่', 'Shoulder shape')}</span>
+                  <div className="unit-toggle" role="group" aria-label={t('ทรงไหล่', 'Shoulder shape')}>
+                    {SHOULDER_STYLES.map((st) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        className={shoulderStyle === st.id ? 'active' : ''}
+                        aria-pressed={shoulderStyle === st.id}
+                        disabled={aiBusy}
+                        onClick={() => setShoulderStyle(st.id)}
+                      >
+                        {t(st.nameTh, st.nameEn)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <p className="hint">
                   {imperial
                     ? t(`สูงรวม ${(H / MM_PER_IN).toFixed(2)} นิ้ว`, `Total height ${(H / MM_PER_IN).toFixed(2)} in`)
