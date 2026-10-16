@@ -26008,7 +26008,7 @@ var init_sdk = __esm({
 
 // server/config.ts
 var APP_ENVIRONMENTS = ["development", "test", "staging", "production"];
-var DEFAULT_AI_MODEL = "claude-opus-4-8";
+var DEFAULT_AI_MODEL = "claude-opus-5-5";
 var ServerConfigError = class extends Error {
   constructor(message) {
     super(message);
@@ -31774,8 +31774,8 @@ var error3 = () => {
         const sizing = getSizing(issue2.origin);
         if (sizing) {
           const maxValue = Number(issue2.maximum);
-          const unit = getBelarusianPlural(maxValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
-          return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u0432\u044F\u043B\u0456\u043A\u0456: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u044D\u043D\u043D\u0435"} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 ${sizing.verb} ${adj}${issue2.maximum.toString()} ${unit}`;
+          const unit2 = getBelarusianPlural(maxValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
+          return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u0432\u044F\u043B\u0456\u043A\u0456: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u044D\u043D\u043D\u0435"} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 ${sizing.verb} ${adj}${issue2.maximum.toString()} ${unit2}`;
         }
         return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u0432\u044F\u043B\u0456\u043A\u0456: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u044D\u043D\u043D\u0435"} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 \u0431\u044B\u0446\u044C ${adj}${issue2.maximum.toString()}`;
       }
@@ -31784,8 +31784,8 @@ var error3 = () => {
         const sizing = getSizing(issue2.origin);
         if (sizing) {
           const minValue = Number(issue2.minimum);
-          const unit = getBelarusianPlural(minValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
-          return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u043C\u0430\u043B\u044B: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 ${sizing.verb} ${adj}${issue2.minimum.toString()} ${unit}`;
+          const unit2 = getBelarusianPlural(minValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
+          return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u043C\u0430\u043B\u044B: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 ${sizing.verb} ${adj}${issue2.minimum.toString()} ${unit2}`;
         }
         return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u043C\u0430\u043B\u044B: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 \u0431\u044B\u0446\u044C ${adj}${issue2.minimum.toString()}`;
       }
@@ -34412,8 +34412,8 @@ var error24 = () => {
         const sizing = getSizing(issue2.origin);
         if (sizing) {
           const maxValue = Number(issue2.maximum);
-          const unit = getArmenianPlural(maxValue, sizing.unit.one, sizing.unit.many);
-          return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0574\u0565\u056E \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin ?? "\u0561\u0580\u056A\u0565\u0584")} \u056F\u0578\u0582\u0576\u0565\u0576\u0561 ${adj}${issue2.maximum.toString()} ${unit}`;
+          const unit2 = getArmenianPlural(maxValue, sizing.unit.one, sizing.unit.many);
+          return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0574\u0565\u056E \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin ?? "\u0561\u0580\u056A\u0565\u0584")} \u056F\u0578\u0582\u0576\u0565\u0576\u0561 ${adj}${issue2.maximum.toString()} ${unit2}`;
         }
         return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0574\u0565\u056E \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin ?? "\u0561\u0580\u056A\u0565\u0584")} \u056C\u056B\u0576\u056B ${adj}${issue2.maximum.toString()}`;
       }
@@ -34422,8 +34422,8 @@ var error24 = () => {
         const sizing = getSizing(issue2.origin);
         if (sizing) {
           const minValue = Number(issue2.minimum);
-          const unit = getArmenianPlural(minValue, sizing.unit.one, sizing.unit.many);
-          return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0583\u0578\u0584\u0580 \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin)} \u056F\u0578\u0582\u0576\u0565\u0576\u0561 ${adj}${issue2.minimum.toString()} ${unit}`;
+          const unit2 = getArmenianPlural(minValue, sizing.unit.one, sizing.unit.many);
+          return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0583\u0578\u0584\u0580 \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin)} \u056F\u0578\u0582\u0576\u0565\u0576\u0561 ${adj}${issue2.minimum.toString()} ${unit2}`;
         }
         return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0583\u0578\u0584\u0580 \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin)} \u056C\u056B\u0576\u056B ${adj}${issue2.minimum.toString()}`;
       }
@@ -35337,18 +35337,18 @@ var error32 = () => {
         const adj = issue2.inclusive ? "\uC774\uD558" : "\uBBF8\uB9CC";
         const suffix = adj === "\uBBF8\uB9CC" ? "\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4" : "\uC5EC\uC57C \uD569\uB2C8\uB2E4";
         const sizing = getSizing(issue2.origin);
-        const unit = sizing?.unit ?? "\uC694\uC18C";
+        const unit2 = sizing?.unit ?? "\uC694\uC18C";
         if (sizing)
-          return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uD07D\uB2C8\uB2E4: ${issue2.maximum.toString()}${unit} ${adj}${suffix}`;
+          return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uD07D\uB2C8\uB2E4: ${issue2.maximum.toString()}${unit2} ${adj}${suffix}`;
         return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uD07D\uB2C8\uB2E4: ${issue2.maximum.toString()} ${adj}${suffix}`;
       }
       case "too_small": {
         const adj = issue2.inclusive ? "\uC774\uC0C1" : "\uCD08\uACFC";
         const suffix = adj === "\uC774\uC0C1" ? "\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4" : "\uC5EC\uC57C \uD569\uB2C8\uB2E4";
         const sizing = getSizing(issue2.origin);
-        const unit = sizing?.unit ?? "\uC694\uC18C";
+        const unit2 = sizing?.unit ?? "\uC694\uC18C";
         if (sizing) {
-          return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uC791\uC2B5\uB2C8\uB2E4: ${issue2.minimum.toString()}${unit} ${adj}${suffix}`;
+          return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uC791\uC2B5\uB2C8\uB2E4: ${issue2.minimum.toString()}${unit2} ${adj}${suffix}`;
         }
         return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uC791\uC2B5\uB2C8\uB2E4: ${issue2.minimum.toString()} ${adj}${suffix}`;
       }
@@ -37161,8 +37161,8 @@ var error46 = () => {
         const sizing = getSizing(issue2.origin);
         if (sizing) {
           const maxValue = Number(issue2.maximum);
-          const unit = getRussianPlural(maxValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
-          return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435"} \u0431\u0443\u0434\u0435\u0442 \u0438\u043C\u0435\u0442\u044C ${adj}${issue2.maximum.toString()} ${unit}`;
+          const unit2 = getRussianPlural(maxValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
+          return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435"} \u0431\u0443\u0434\u0435\u0442 \u0438\u043C\u0435\u0442\u044C ${adj}${issue2.maximum.toString()} ${unit2}`;
         }
         return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435"} \u0431\u0443\u0434\u0435\u0442 ${adj}${issue2.maximum.toString()}`;
       }
@@ -37171,8 +37171,8 @@ var error46 = () => {
         const sizing = getSizing(issue2.origin);
         if (sizing) {
           const minValue = Number(issue2.minimum);
-          const unit = getRussianPlural(minValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
-          return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u0435\u043D\u044C\u043A\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin} \u0431\u0443\u0434\u0435\u0442 \u0438\u043C\u0435\u0442\u044C ${adj}${issue2.minimum.toString()} ${unit}`;
+          const unit2 = getRussianPlural(minValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
+          return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u0435\u043D\u044C\u043A\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin} \u0431\u0443\u0434\u0435\u0442 \u0438\u043C\u0435\u0442\u044C ${adj}${issue2.minimum.toString()} ${unit2}`;
         }
         return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u0435\u043D\u044C\u043A\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin} \u0431\u0443\u0434\u0435\u0442 ${adj}${issue2.minimum.toString()}`;
       }
@@ -55506,6 +55506,7 @@ var STICKER_RULES = {
 };
 var STICKER_OFFSET_MIN = STICKER_RULES.minBorder;
 var NO_BORDER_INSET = STICKER_RULES.minBleed;
+var loopPath = (l) => `M ${l.map((p) => `${Math.round(p.x * 1e3) / 1e3} ${Math.round(p.y * 1e3) / 1e3}`).join(" L ")} Z`;
 
 // src/core/stickerSheet.ts
 var SHEET_GAP = STICKER_RULES.minGap;
@@ -56701,13 +56702,138 @@ function generateCard(box) {
 }
 
 // src/core/templates/sticker.ts
-function generateSticker(box) {
+var MIN_CORNER = 1;
+function arcTo(cx, cy, r, a0, a1, seg) {
+  const n = Math.max(2, Math.ceil(Math.abs(a1 - a0) / (Math.PI / 2) * seg));
+  return Array.from({ length: n }, (_, k) => {
+    const a = a0 + (a1 - a0) * (k + 1) / n;
+    return P(cx + r * Math.cos(a), cy + r * Math.sin(a));
+  });
+}
+function fillet(V, u, w, r, maxD, seg = 8) {
+  const cos = Math.max(-1, Math.min(1, u.x * w.x + u.y * w.y));
+  const half = Math.acos(cos) / 2;
+  if (half > Math.PI / 2 - 1e-3) return [V];
+  let d = r / Math.tan(half);
+  if (d > maxD) {
+    d = maxD;
+    r = d * Math.tan(half);
+  }
+  const bx = u.x + w.x;
+  const by = u.y + w.y;
+  const bl = Math.hypot(bx, by);
+  const cd = r / Math.sin(half);
+  const C = P(V.x + bx / bl * cd, V.y + by / bl * cd);
+  const p0 = P(V.x + u.x * d, V.y + u.y * d);
+  const p1 = P(V.x + w.x * d, V.y + w.y * d);
+  const a0 = Math.atan2(p0.y - C.y, p0.x - C.x);
+  let a1 = Math.atan2(p1.y - C.y, p1.x - C.x);
+  while (a1 - a0 > Math.PI) a1 -= 2 * Math.PI;
+  while (a1 - a0 < -Math.PI) a1 += 2 * Math.PI;
+  return [p0, ...arcTo(C.x, C.y, r, a0, a1, seg)];
+}
+var unit = (a, b) => {
+  const l = Math.hypot(b.x - a.x, b.y - a.y);
+  return P((b.x - a.x) / l, (b.y - a.y) / l);
+};
+function roundPolygon(pts, r) {
+  const N = pts.length;
+  return pts.flatMap((V, i) => {
+    const a = pts[(i - 1 + N) % N];
+    const b = pts[(i + 1) % N];
+    const maxD = 0.45 * Math.min(Math.hypot(a.x - V.x, a.y - V.y), Math.hypot(b.x - V.x, b.y - V.y));
+    return fillet(V, unit(V, a), unit(V, b), r, maxD);
+  });
+}
+function fitBox(pts, w, h) {
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  const x0 = Math.min(...xs);
+  const y0 = Math.min(...ys);
+  const sx = w / (Math.max(...xs) - x0);
+  const sy = h / (Math.max(...ys) - y0);
+  return pts.map((p) => P((p.x - x0) * sx, (p.y - y0) * sy));
+}
+function stickerOutline(shape, w, h) {
+  const s = Math.min(w, h);
+  if (shape === "rect" || shape === "square") {
+    const r = shape === "rect" ? Math.min(Math.max(s * 0.12, 2), s / 2) : MIN_CORNER;
+    return roundedRectPts(0, 0, w, h, r);
+  }
+  if (shape === "ellipse") {
+    const n = 96;
+    return Array.from({ length: n }, (_, i) => {
+      const a = i / n * 2 * Math.PI;
+      return P(w / 2 + w / 2 * Math.cos(a), h / 2 + h / 2 * Math.sin(a));
+    });
+  }
+  if (shape === "hexagon") {
+    const hex3 = [P(0, h / 2), P(w / 4, 0), P(3 * w / 4, 0), P(w, h / 2), P(3 * w / 4, h), P(w / 4, h)];
+    return fitBox(roundPolygon(hex3, Math.max(MIN_CORNER, s * 0.06)), w, h);
+  }
+  if (shape === "star") {
+    const pts = [];
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 5;
+      const r = i % 2 === 0 ? 1 : 0.45;
+      pts.push(P(r * Math.cos(a), r * Math.sin(a)));
+    }
+    return fitBox(roundPolygon(fitBox(pts, w, h), Math.max(MIN_CORNER, s * 0.03)), w, h);
+  }
+  return heartOutline(w, h);
+}
+function heartOutline(w, h) {
+  const rho = 1;
+  const a = 0.7;
+  const tip = 2.2;
+  const W0 = 2 * (a + rho);
+  const H0 = rho + tip;
+  const sx = w / W0;
+  const sy = h / H0;
+  const need = 1.2 * Math.max(sx, sy) / Math.min(sx, sy) ** 2;
+  const rt = Math.max(0.14, need);
+  const rn = Math.max(0.16, need);
+  const T = P(0, -tip);
+  const Cr = P(a, 0);
+  const Cl = P(-a, 0);
+  const tangent = (C, side) => {
+    const vx = T.x - C.x;
+    const vy = T.y - C.y;
+    const L = Math.hypot(vx, vy);
+    const al = Math.acos(rho / L) * side;
+    const ang = Math.atan2(vy, vx) + al;
+    return P(C.x + rho * Math.cos(ang), C.y + rho * Math.sin(ang));
+  };
+  const Pr = tangent(Cr, 1);
+  const Pl = tangent(Cl, -1);
+  const yc = Math.sqrt((rho + rn) ** 2 - a * a);
+  const Cf = P(0, yc);
+  const angOn = (C, q) => Math.atan2(q.y - C.y, q.x - C.x);
+  const Fr = P(Cr.x + rho * (Cf.x - Cr.x) / (rho + rn), Cr.y + rho * (Cf.y - Cr.y) / (rho + rn));
+  const Fl = P(Cl.x + rho * (Cf.x - Cl.x) / (rho + rn), Cl.y + rho * (Cf.y - Cl.y) / (rho + rn));
+  const pts = [];
+  pts.push(...fillet(T, unit(T, Pl), unit(T, Pr), rt, 0.45 * Math.hypot(Pr.x - T.x, Pr.y - T.y), 10));
+  pts.push(Pr);
+  let a0 = angOn(Cr, Pr);
+  let a1 = angOn(Cr, Fr);
+  while (a1 < a0) a1 += 2 * Math.PI;
+  pts.push(...arcTo(Cr.x, Cr.y, rho, a0, a1, 16));
+  a0 = angOn(Cf, Fr);
+  a1 = angOn(Cf, Fl);
+  while (a1 > a0) a1 -= 2 * Math.PI;
+  pts.push(...arcTo(Cf.x, Cf.y, rn, a0, a1, 10));
+  a0 = angOn(Cl, Fl);
+  a1 = angOn(Cl, Pl);
+  while (a1 < a0) a1 += 2 * Math.PI;
+  pts.push(...arcTo(Cl.x, Cl.y, rho, a0, a1, 16));
+  return fitBox(pts.map((p) => P(p.x, -p.y)), w, h);
+}
+function generateSticker(box, shape = "rect") {
   const { W: w, H: h } = box;
+  const outline = stickerOutline(shape, w, h);
+  const panels = [{ id: "sticker", parentId: null, outline, stage: 0 }];
   const r = Math.min(Math.max(Math.min(w, h) * 0.12, 2), Math.min(w, h) / 2);
-  const panels = [
-    { id: "sticker", parentId: null, outline: roundedRectPts(0, 0, w, h, r), stage: 0 }
-  ];
-  const segments = [{ kind: "cut", d: roundedRectPath(0, 0, w, h, r) }];
+  const segments = [{ kind: "cut", d: shape === "rect" ? roundedRectPath(0, 0, w, h, r) : loopPath(outline) }];
   const dims = [
     { a: P(0, h + 12), b: P(w, h + 12), label: `W ${fmt(w)}` },
     { a: P(-10, 0), b: P(-10, h), label: `H ${fmt(h)}` }
@@ -58006,7 +58132,7 @@ var TEMPLATES = [
     tilt: 0,
     supportsHandle: false,
     foldDepth: () => 0,
-    generate: generateSticker
+    generate: (box) => generateSticker(box)
   }
 ];
 
@@ -58178,6 +58304,17 @@ var cloudProjectDocumentSchema = external_exports.object({
   fillColor: color.nullable(),
   fillImage: fillImageSchema.nullable().optional(),
   labelStyle: external_exports.enum(["body", "full", "band", "neck"]).optional(),
+  neckH: finite.min(1).max(300).optional(),
+  shoulderH: finite.min(1).max(300).optional(),
+  shoulderStyle: external_exports.enum(["round", "slope", "flat"]).optional(),
+  labelBox: external_exports.object({
+    y: finite.min(0).max(2e3).optional(),
+    h: finite.min(0).max(2e3).optional(),
+    w: finite.min(0).max(2e3).optional(),
+    rot: finite.min(-180).max(180).optional()
+  }).strict().optional(),
+  capStyle: external_exports.enum(["none", "screw", "flip", "pump", "cork", "foil", "crown", "oval"]).optional(),
+  capColor: color.optional(),
   pouchStyle: external_exports.enum(["stand", "flat", "gusset", "box", "pillow", "spout"]).optional(),
   zipper: external_exports.boolean().optional(),
   pouchAddons: external_exports.object({
@@ -58188,7 +58325,7 @@ var cloudProjectDocumentSchema = external_exports.object({
     tearAt: finite.min(0).max(1e3).optional()
   }).strict().optional(),
   stickerCut: external_exports.object({
-    shape: external_exports.enum(["rect", "contour"]),
+    shape: external_exports.enum(["rect", "square", "ellipse", "hexagon", "star", "heart", "contour"]),
     border: external_exports.enum(["white", "none"]),
     offset: finite.min(0).max(50),
     sheet: external_exports.enum(["a6", "a5", "a4", "a3", "custom"]).optional(),
@@ -58594,7 +58731,8 @@ var COMMON_ITEMS = [
   { re: /ครีม|กระปุก/, w: 55, d: 55, h: 50, label: "\u0E01\u0E23\u0E30\u0E1B\u0E38\u0E01\u0E04\u0E23\u0E35\u0E21 50 \u0E21\u0E25. \u2248 \u230055\xD750 \u0E21\u0E21.", fragile: false },
   { re: /คุกกี้|ขนม/, w: 120, d: 45, h: 180, label: "\u0E0B\u0E2D\u0E07\u0E04\u0E38\u0E01\u0E01\u0E35\u0E49 \u2248 120\xD745\xD7180 \u0E21\u0E21.", fragile: false }
 ];
-var SYSTEM = `\u0E04\u0E38\u0E13\u0E04\u0E37\u0E2D\u0E27\u0E34\u0E28\u0E27\u0E01\u0E23\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C \u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E04\u0E37\u0E2D\u0E41\u0E1B\u0E25\u0E07\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E02\u0E2D\u0E07\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32 (\u0E20\u0E32\u0E29\u0E32\u0E1E\u0E39\u0E14) \u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E40\u0E1B\u0E01\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E04\u0E33\u0E19\u0E27\u0E13\u0E41\u0E25\u0E49\u0E27 \u0E42\u0E14\u0E22\u0E40\u0E23\u0E35\u0E22\u0E01 tool box_spec \u0E40\u0E2A\u0E21\u0E2D
+function systemPrompt(answer, why) {
+  return `\u0E04\u0E38\u0E13\u0E04\u0E37\u0E2D\u0E27\u0E34\u0E28\u0E27\u0E01\u0E23\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C \u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E04\u0E37\u0E2D\u0E41\u0E1B\u0E25\u0E07\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E02\u0E2D\u0E07\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32 (\u0E20\u0E32\u0E29\u0E32\u0E1E\u0E39\u0E14) \u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E40\u0E1B\u0E01\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E04\u0E33\u0E19\u0E27\u0E13\u0E41\u0E25\u0E49\u0E27 ${answer}
 
 ## \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07 (template)
 ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
@@ -58623,8 +58761,8 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
 
 ## \u0E27\u0E31\u0E2A\u0E14\u0E38\u0E17\u0E35\u0E48\u0E21\u0E35\u0E43\u0E19\u0E23\u0E30\u0E1A\u0E1A (materialId)
 ${MATERIALS.map(
-  (m) => `- ${m.id}: ${m.nameTh} (${m.detail}) \u0E2B\u0E19\u0E32 ${m.thickness} \u0E21\u0E21. ${m.foldable ? "\u0E1E\u0E31\u0E1A\u0E44\u0E14\u0E49" : "\u0E1E\u0E31\u0E1A\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49 \u2014 " + m.process}`
-).join("\n")}
+    (m) => `- ${m.id}: ${m.nameTh} (${m.detail}) \u0E2B\u0E19\u0E32 ${m.thickness} \u0E21\u0E21. ${m.foldable ? "\u0E1E\u0E31\u0E1A\u0E44\u0E14\u0E49" : "\u0E1E\u0E31\u0E1A\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49 \u2014 " + m.process}`
+  ).join("\n")}
 
 ## \u0E41\u0E19\u0E27\u0E01\u0E32\u0E23\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E27\u0E31\u0E2A\u0E14\u0E38\u0E08\u0E32\u0E01\u0E2A\u0E44\u0E15\u0E25\u0E4C\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E1A\u0E2D\u0E01
 - \u0E2D\u0E35\u0E42\u0E04\u0E48 / \u0E23\u0E31\u0E01\u0E29\u0E4C\u0E42\u0E25\u0E01 / \u0E18\u0E23\u0E23\u0E21\u0E0A\u0E32\u0E15\u0E34 \u2192 kraft-350
@@ -58649,14 +58787,14 @@ ${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? " (\u0E40\u0E1B\u0E23\u0E32
 5. \u0E02\u0E2D\u0E1A\u0E40\u0E02\u0E15: W 30-250, D 20-150, H 30-300 \u2014 \u0E16\u0E49\u0E32\u0E40\u0E01\u0E34\u0E19\u0E43\u0E2B\u0E49\u0E08\u0E31\u0E14 layout \u0E43\u0E2B\u0E21\u0E48 (\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E41\u0E16\u0E27) \u0E08\u0E19\u0E2D\u0E22\u0E39\u0E48\u0E43\u0E19\u0E0A\u0E48\u0E27\u0E07
 
 ## \u0E40\u0E0A\u0E47\u0E04\u0E43\u0E2B\u0E49\u0E1C\u0E48\u0E32\u0E19\u0E01\u0E48\u0E2D\u0E19\u0E2A\u0E48\u0E07\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E17\u0E38\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07 (fit check)
-1. \u0E04\u0E33\u0E19\u0E27\u0E13\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E35\u0E48\u0E17\u0E35\u0E48\u0E02\u0E2D\u0E07\u0E15\u0E49\u0E2D\u0E07\u0E43\u0E0A\u0E49\u0E08\u0E23\u0E34\u0E07 (\u0E23\u0E27\u0E21\u0E0A\u0E48\u0E2D\u0E07\u0E44\u0E1F/\u0E01\u0E31\u0E19\u0E01\u0E23\u0E30\u0E41\u0E17\u0E01) \u0E40\u0E17\u0E35\u0E22\u0E1A\u0E01\u0E31\u0E1A W\xD7D\xD7H \u0E17\u0E35\u0E48\u0E08\u0E30\u0E15\u0E2D\u0E1A \u2014 \u0E16\u0E49\u0E32\u0E43\u0E2A\u0E48\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E08\u0E23\u0E34\u0E07 \u0E2B\u0E49\u0E32\u0E21\u0E40\u0E02\u0E35\u0E22\u0E19 assumptions/layoutNote/reasoning \u0E40\u0E2B\u0E21\u0E37\u0E2D\u0E19\u0E43\u0E2A\u0E48\u0E44\u0E14\u0E49
+1. \u0E04\u0E33\u0E19\u0E27\u0E13\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E35\u0E48\u0E17\u0E35\u0E48\u0E02\u0E2D\u0E07\u0E15\u0E49\u0E2D\u0E07\u0E43\u0E0A\u0E49\u0E08\u0E23\u0E34\u0E07 (\u0E23\u0E27\u0E21\u0E0A\u0E48\u0E2D\u0E07\u0E44\u0E1F/\u0E01\u0E31\u0E19\u0E01\u0E23\u0E30\u0E41\u0E17\u0E01) \u0E40\u0E17\u0E35\u0E22\u0E1A\u0E01\u0E31\u0E1A W\xD7D\xD7H \u0E17\u0E35\u0E48\u0E08\u0E30\u0E15\u0E2D\u0E1A \u2014 \u0E16\u0E49\u0E32\u0E43\u0E2A\u0E48\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E08\u0E23\u0E34\u0E07 \u0E2B\u0E49\u0E32\u0E21\u0E40\u0E02\u0E35\u0E22\u0E19 assumptions/layoutNote/${why} \u0E40\u0E2B\u0E21\u0E37\u0E2D\u0E19\u0E43\u0E2A\u0E48\u0E44\u0E14\u0E49
 2. \u0E16\u0E49\u0E32\u0E02\u0E2D\u0E07\u0E2B\u0E23\u0E37\u0E2D\u0E08\u0E33\u0E19\u0E27\u0E19\u0E17\u0E35\u0E48\u0E02\u0E2D\u0E40\u0E01\u0E34\u0E19\u0E25\u0E34\u0E21\u0E34\u0E15\u0E23\u0E30\u0E1A\u0E1A (\u0E15\u0E49\u0E2D\u0E07\u0E43\u0E0A\u0E49 W>250 / D>150 / H>300): \u0E43\u0E2B\u0E49 assumptions \u0E02\u0E49\u0E2D\u0E41\u0E23\u0E01\u0E02\u0E36\u0E49\u0E19\u0E15\u0E49\u0E19\u0E14\u0E49\u0E27\u0E22 "\u0E02\u0E49\u0E2D\u0E08\u0E33\u0E01\u0E31\u0E14:" \u0E1A\u0E2D\u0E01\u0E15\u0E23\u0E07\u0E46 \u0E27\u0E48\u0E32\u0E43\u0E2A\u0E48\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14 \u0E43\u0E2A\u0E48\u0E44\u0E14\u0E49\u0E08\u0E23\u0E34\u0E07\u0E01\u0E35\u0E48\u0E0A\u0E34\u0E49\u0E19/\u0E02\u0E19\u0E32\u0E14\u0E44\u0E2B\u0E19 \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E17\u0E32\u0E07\u0E40\u0E25\u0E37\u0E2D\u0E01 (\u0E41\u0E22\u0E01\u0E2B\u0E25\u0E32\u0E22\u0E01\u0E25\u0E48\u0E2D\u0E07, \u0E0B\u0E49\u0E2D\u0E19\u0E2B\u0E25\u0E32\u0E22\u0E0A\u0E31\u0E49\u0E19, \u0E15\u0E31\u0E14\u0E08\u0E33\u0E19\u0E27\u0E19) \u2014 \u0E41\u0E25\u0E49\u0E27\u0E15\u0E31\u0E49\u0E07 W/D/H \u0E40\u0E1B\u0E47\u0E19\u0E04\u0E48\u0E32\u0E17\u0E35\u0E48\u0E14\u0E35\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14\u0E40\u0E17\u0E48\u0E32\u0E17\u0E35\u0E48\u0E17\u0E33\u0E44\u0E14\u0E49
 3. prompt \u0E01\u0E33\u0E01\u0E27\u0E21\u0E23\u0E30\u0E2B\u0E27\u0E48\u0E32\u0E07 "\u0E1C\u0E25\u0E34\u0E15\u0E20\u0E32\u0E0A\u0E19\u0E30\u0E40\u0E2D\u0E07" (\u0E02\u0E27\u0E14/\u0E01\u0E23\u0E30\u0E1B\u0E4B\u0E2D\u0E07/\u0E42\u0E2B\u0E25) \u0E01\u0E31\u0E1A "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E43\u0E2A\u0E48\u0E21\u0E31\u0E19" \u2192 \u0E1B\u0E23\u0E30\u0E01\u0E32\u0E28\u0E01\u0E32\u0E23\u0E15\u0E35\u0E04\u0E27\u0E32\u0E21\u0E17\u0E35\u0E48\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E44\u0E27\u0E49\u0E43\u0E19 assumptions \u0E02\u0E49\u0E2D\u0E41\u0E23\u0E01
 4. handle=true \u0E01\u0E31\u0E1A\u0E02\u0E2D\u0E07\u0E2B\u0E19\u0E31\u0E01 (\u0E40\u0E0B\u0E23\u0E32\u0E21\u0E34\u0E01/\u0E41\u0E01\u0E49\u0E27/\u0E02\u0E27\u0E14\u0E2B\u0E25\u0E32\u0E22\u0E0A\u0E34\u0E49\u0E19 \u0E23\u0E27\u0E21 >2 \u0E01\u0E01.) \u2192 \u0E40\u0E15\u0E37\u0E2D\u0E19\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E23\u0E31\u0E1A\u0E19\u0E49\u0E33\u0E2B\u0E19\u0E31\u0E01\u0E08\u0E33\u0E01\u0E31\u0E14 \u0E04\u0E27\u0E23\u0E22\u0E01\u0E1B\u0E23\u0E30\u0E04\u0E2D\u0E07\u0E01\u0E49\u0E19\u0E01\u0E25\u0E48\u0E2D\u0E07
 
 ## \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E02\u0E2D\u0E07\u0E23\u0E30\u0E1A\u0E1A (\u0E2A\u0E33\u0E04\u0E31\u0E0D\u0E21\u0E32\u0E01 \u2014 \u0E2B\u0E49\u0E32\u0E21\u0E2D\u0E49\u0E32\u0E07\u0E40\u0E01\u0E34\u0E19\u0E19\u0E35\u0E49)
 \u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A gen \u0E44\u0E14\u0E49\u0E08\u0E23\u0E34\u0E07\u0E21\u0E35\u0E40\u0E17\u0E48\u0E32\u0E19\u0E35\u0E49: \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19, \u0E27\u0E31\u0E2A\u0E14\u0E38\u0E08\u0E32\u0E01\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23, \u0E02\u0E19\u0E32\u0E14 W/D/H, \u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E40\u0E08\u0E32\u0E30 (handle=true \u2014 tuck-end \u0E40\u0E08\u0E32\u0E30\u0E1A\u0E19\u0E1D\u0E32\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E1A\u0E19, mailer \u0E40\u0E08\u0E32\u0E30\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E2A\u0E2D\u0E07\u0E14\u0E49\u0E32\u0E19; bottle-carrier \u0E21\u0E35\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27+\u0E23\u0E39\u0E21\u0E37\u0E2D+\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E43\u0E19\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27; sleeve/fefco-0427 \u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A), \u0E20\u0E32\u0E0A\u0E19\u0E30\u0E02\u0E36\u0E49\u0E19\u0E23\u0E39\u0E1B (\u0E27\u0E31\u0E2A\u0E14\u0E38 pet-bottle/glass/aluminum \u2192 \u0E17\u0E23\u0E07 revolve + dieline \u0E09\u0E25\u0E32\u0E01\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E15\u0E31\u0E27), \u0E2B\u0E25\u0E2D\u0E14\u0E04\u0E23\u0E35\u0E21 (\u0E27\u0E31\u0E2A\u0E14\u0E38 tube-laminate \u2192 \u0E17\u0E23\u0E07 revolve \u0E2B\u0E25\u0E2D\u0E14\u0E1A\u0E35\u0E1A \u0E1D\u0E32\u0E40\u0E01\u0E25\u0E35\u0E22\u0E27 \u0E01\u0E49\u0E19\u0E0B\u0E35\u0E25\u0E41\u0E1A\u0E19 + dieline \u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E15\u0E31\u0E27), \u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E44\u0E14\u0E04\u0E31\u0E17 (template sticker + \u0E27\u0E31\u0E2A\u0E14\u0E38 sticker-* \u2192 \u0E41\u0E1C\u0E48\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19\u0E21\u0E38\u0E21\u0E21\u0E19; \u0E21\u0E35\u0E42\u0E2B\u0E21\u0E14 '\u0E44\u0E14\u0E04\u0E31\u0E17\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B' \u0E2A\u0E23\u0E49\u0E32\u0E07\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14\u0E15\u0E32\u0E21\u0E02\u0E2D\u0E1A\u0E25\u0E32\u0E22/\u0E23\u0E39\u0E1B PNG \u0E1E\u0E37\u0E49\u0E19\u0E43\u0E2A\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 \u0E41\u0E1A\u0E1A\u0E21\u0E35\u0E02\u0E2D\u0E1A\u0E02\u0E32\u0E27 (\u0E23\u0E30\u0E22\u0E30 1\u20138 \u0E21\u0E21.) \u0E2B\u0E23\u0E37\u0E2D\u0E44\u0E21\u0E48\u0E21\u0E35\u0E02\u0E2D\u0E1A\u0E02\u0E32\u0E27 + \u0E15\u0E23\u0E27\u0E08\u0E44\u0E1F\u0E25\u0E4C\u0E15\u0E32\u0E21\u0E02\u0E49\u0E2D\u0E08\u0E33\u0E01\u0E31\u0E14\u0E1C\u0E25\u0E34\u0E15\u0E44\u0E14\u0E04\u0E31\u0E17 (\u0E2B\u0E48\u0E32\u0E07\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14/\u0E40\u0E1C\u0E37\u0E48\u0E2D\u0E2A\u0E35 \u22651 \u0E21\u0E21., \u0E23\u0E30\u0E22\u0E30\u0E23\u0E30\u0E2B\u0E27\u0E48\u0E32\u0E07\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14 \u22652 \u0E21\u0E21., \u0E0A\u0E48\u0E2D\u0E07\u0E40\u0E08\u0E32\u0E30 \u22652 \u0E21\u0E21., \u0E44\u0E21\u0E48\u0E21\u0E35\u0E21\u0E38\u0E21\u0E2B\u0E31\u0E01\u0E28\u0E2D\u0E01) + \u0E41\u0E1C\u0E48\u0E19\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E2B\u0E25\u0E32\u0E22\u0E14\u0E27\u0E07 (\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E41\u0E1C\u0E48\u0E19 A6/A5/A4 \u2192 \u0E40\u0E23\u0E35\u0E22\u0E07\u0E14\u0E27\u0E07\u0E17\u0E35\u0E48\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E0B\u0E49\u0E33\u0E40\u0E15\u0E47\u0E21\u0E41\u0E1C\u0E48\u0E19\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 \u0E40\u0E27\u0E49\u0E19\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14 2 \u0E21\u0E21. \u0E02\u0E2D\u0E1A\u0E41\u0E1C\u0E48\u0E19 5 \u0E21\u0E21. \u0E2B\u0E21\u0E38\u0E19\u0E44\u0E14\u0E49 \u0E1A\u0E2D\u0E01\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E27\u0E07/\u0E41\u0E1C\u0E48\u0E19 \u0E41\u0E25\u0E30\u0E41\u0E1C\u0E48\u0E19\u0E15\u0E48\u0E2D A3; \u0E2B\u0E23\u0E37\u0E2D\u0E01\u0E33\u0E2B\u0E19\u0E14\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E27\u0E07\u0E15\u0E48\u0E2D\u0E41\u0E1C\u0E48\u0E19\u0E41\u0E25\u0E49\u0E27\u0E23\u0E30\u0E1A\u0E1A\u0E2B\u0E32\u0E02\u0E19\u0E32\u0E14\u0E14\u0E27\u0E07\u0E43\u0E2B\u0E0D\u0E48\u0E2A\u0E38\u0E14\u0E17\u0E35\u0E48\u0E43\u0E2A\u0E48\u0E44\u0E14\u0E49 \u0E22\u0E48\u0E2D/\u0E02\u0E22\u0E32\u0E22\u0E25\u0E32\u0E22\u0E15\u0E32\u0E21\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 (\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E40\u0E25\u0E47\u0E01\u0E2A\u0E38\u0E14 10 \u0E21\u0E21.); \u0E44\u0E1F\u0E25\u0E4C\u0E2A\u0E48\u0E07\u0E2D\u0E2D\u0E01\u0E40\u0E1B\u0E47\u0E19\u0E17\u0E31\u0E49\u0E07\u0E41\u0E1C\u0E48\u0E19) \u2014 \u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI; \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E22\u0E32\u0E01\u0E44\u0E14\u0E49\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E15\u0E31\u0E14\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01 template sticker \u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E1B\u0E34\u0E14 '\u0E44\u0E14\u0E04\u0E31\u0E17: \u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B' \u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A), \u0E41\u0E25\u0E30\u0E16\u0E38\u0E07\u0E1F\u0E34\u0E25\u0E4C\u0E21 (\u0E27\u0E31\u0E2A\u0E14\u0E38 pouch-* \u2192 dieline \u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E41\u0E1A\u0E19; \u0E21\u0E35 6 \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E49\u0E1C\u0E39\u0E49\u0E43\u0E0A\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A: \u0E16\u0E38\u0E07\u0E15\u0E31\u0E49\u0E07\u0E44\u0E14\u0E49 doypack (\u0E01\u0E49\u0E19\u0E15\u0E31\u0E49\u0E07 \u0E43\u0E0A\u0E49 D=\u0E25\u0E36\u0E01\u0E01\u0E49\u0E19), \u0E0B\u0E2D\u0E07\u0E41\u0E1A\u0E19 3 \u0E14\u0E49\u0E32\u0E19 (\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E49\u0E19 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 D \u2014 \u0E02\u0E2D\u0E07\u0E40\u0E25\u0E47\u0E01/\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E48\u0E32\u0E07/\u0E21\u0E32\u0E2A\u0E4C\u0E01/\u0E0B\u0E2D\u0E07\u0E0B\u0E2D\u0E2A), \u0E0B\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E07\u0E08\u0E35\u0E1A brick (\u0E16\u0E38\u0E07\u0E01\u0E32\u0E41\u0E1F\u0E04\u0E25\u0E32\u0E2A\u0E2A\u0E34\u0E01 \u0E17\u0E23\u0E07\u0E41\u0E17\u0E48\u0E07 \u0E43\u0E0A\u0E49 D=\u0E08\u0E35\u0E1A\u0E02\u0E49\u0E32\u0E07), \u0E16\u0E38\u0E07\u0E01\u0E49\u0E19\u0E41\u0E1A\u0E19\u0E15\u0E31\u0E49\u0E07\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21 box/quad-seal (\u0E01\u0E32\u0E41\u0E1F\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E15\u0E31\u0E49\u0E07\u0E17\u0E23\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07 \u0E43\u0E0A\u0E49 D), \u0E0B\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E01\u0E25\u0E32\u0E07 pillow (\u0E16\u0E38\u0E07\u0E02\u0E19\u0E21/\u0E0A\u0E34\u0E1B \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 D), \u0E41\u0E25\u0E30 \u0E16\u0E38\u0E07\u0E21\u0E35\u0E08\u0E38\u0E01 spout (\u0E02\u0E2D\u0E07\u0E40\u0E2B\u0E25\u0E27/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E14\u0E37\u0E48\u0E21 \u0E21\u0E35\u0E08\u0E38\u0E01+\u0E1D\u0E32 \u0E43\u0E0A\u0E49 D=\u0E01\u0E49\u0E19) + \u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E40\u0E2A\u0E23\u0E34\u0E21 (\u0E0B\u0E34\u0E1B\u0E25\u0E47\u0E2D\u0E01/\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01 \u2014 \u0E1B\u0E23\u0E31\u0E1A\u0E23\u0E30\u0E22\u0E30\u0E0B\u0E34\u0E1B\u0E41\u0E25\u0E30\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01\u0E08\u0E32\u0E01\u0E02\u0E2D\u0E1A\u0E1A\u0E19\u0E44\u0E14\u0E49 \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E15\u0E23\u0E27\u0E08\u0E25\u0E33\u0E14\u0E31\u0E1A\u0E0B\u0E35\u0E25\u2192\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01\u2192\u0E0B\u0E34\u0E1B \u0E41\u0E25\u0E30\u0E01\u0E32\u0E23\u0E17\u0E31\u0E1A\u0E27\u0E32\u0E25\u0E4C\u0E27/\u0E08\u0E38\u0E01/\u0E17\u0E35\u0E48\u0E23\u0E31\u0E14\u0E1B\u0E32\u0E01, \u0E23\u0E39\u0E41\u0E02\u0E27\u0E19 euro-hole, \u0E27\u0E32\u0E25\u0E4C\u0E27\u0E01\u0E32\u0E41\u0E1F, \u0E17\u0E35\u0E48\u0E23\u0E31\u0E14\u0E1B\u0E32\u0E01 tin-tie) \u2014 \u0E17\u0E31\u0E49\u0E07\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E16\u0E38\u0E07\u0E41\u0E25\u0E30\u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E40\u0E2A\u0E23\u0E34\u0E21\u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI; \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E0B\u0E2D\u0E07\u0E41\u0E1A\u0E1A\u0E40\u0E08\u0E32\u0E30\u0E08\u0E07/\u0E21\u0E35\u0E0B\u0E34\u0E1B/\u0E21\u0E35\u0E27\u0E32\u0E25\u0E4C\u0E27 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E27\u0E31\u0E2A\u0E14\u0E38\u0E16\u0E38\u0E07\u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A/\u0E40\u0E1B\u0E34\u0E14\u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A), \u0E41\u0E25\u0E30\u0E23\u0E39\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28 (vent holes) \u2014 \u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E01\u0E25\u0E21\u0E40\u0E1B\u0E47\u0E19\u0E01\u0E23\u0E34\u0E14\u0E1A\u0E19\u0E1C\u0E19\u0E31\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E31\u0E1A (tuck-end/mailer/fefco-0427/rsc/tray/gable) \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E2A\u0E48\u0E07\u0E1C\u0E25\u0E44\u0E21\u0E49/\u0E1C\u0E31\u0E01/\u0E02\u0E2D\u0E07\u0E2A\u0E14 \u0E40\u0E02\u0E49\u0E32\u0E17\u0E31\u0E49\u0E07 3D \u0E41\u0E25\u0E30\u0E44\u0E1F\u0E25\u0E4C\u0E15\u0E31\u0E14 (DXF/PDF); \u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A (\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E1C\u0E19\u0E31\u0E07+\u0E02\u0E19\u0E32\u0E14\u0E23\u0E39+\u0E08\u0E33\u0E19\u0E27\u0E19\u0E41\u0E16\u0E27/\u0E04\u0E2D\u0E25\u0E31\u0E21\u0E19\u0E4C) \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI \u2014 \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28/\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1C\u0E25\u0E44\u0E21\u0E49\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E31\u0E1A\u0E17\u0E35\u0E48\u0E40\u0E2B\u0E21\u0E32\u0E30 (\u0E40\u0E0A\u0E48\u0E19 rsc/tray) \u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E23\u0E39\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28\u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A
-\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E22\u0E31\u0E07\u0E17\u0E33\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49: \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E40\u0E0A\u0E37\u0E2D\u0E01/\u0E1E\u0E25\u0E32\u0E2A\u0E15\u0E34\u0E01, \u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E43\u0E2A, \u0E15\u0E31\u0E27\u0E25\u0E47\u0E2D\u0E01\u0E1E\u0E34\u0E40\u0E28\u0E29, \u0E41\u0E1C\u0E48\u0E19\u0E01\u0E31\u0E49\u0E19\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, \u0E17\u0E23\u0E07\u0E20\u0E32\u0E0A\u0E19\u0E30\u0E41\u0E1A\u0E1A\u0E01\u0E33\u0E2B\u0E19\u0E14\u0E40\u0E2D\u0E07 (\u0E42\u0E1B\u0E23\u0E44\u0E1F\u0E25\u0E4C fix \u0E15\u0E32\u0E21\u0E0A\u0E19\u0E34\u0E14\u0E27\u0E31\u0E2A\u0E14\u0E38) \u0E2F\u0E25\u0E2F \u2014 \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E2A\u0E34\u0E48\u0E07\u0E40\u0E2B\u0E25\u0E48\u0E32\u0E19\u0E35\u0E49 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2A\u0E34\u0E48\u0E07\u0E43\u0E01\u0E25\u0E49\u0E40\u0E04\u0E35\u0E22\u0E07\u0E17\u0E35\u0E48\u0E21\u0E35 (\u0E40\u0E0A\u0E48\u0E19 \u0E02\u0E2D\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27/\u0E17\u0E35\u0E48\u0E08\u0E31\u0E1A \u2192 handle=true) \u0E41\u0E25\u0E30\u0E40\u0E02\u0E35\u0E22\u0E19\u0E43\u0E19 reasoning \u0E15\u0E23\u0E07\u0E46 \u0E27\u0E48\u0E32\u0E23\u0E30\u0E1A\u0E1A\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E02\u0E2D\u0E41\u0E1A\u0E1A\u0E40\u0E1B\u0E4A\u0E30\u0E46 \u0E2B\u0E49\u0E32\u0E21\u0E2D\u0E49\u0E32\u0E07\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E17\u0E33\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E17\u0E33\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E43\u0E2B\u0E49\u0E41\u0E25\u0E49\u0E27
+\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E22\u0E31\u0E07\u0E17\u0E33\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49: \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E40\u0E0A\u0E37\u0E2D\u0E01/\u0E1E\u0E25\u0E32\u0E2A\u0E15\u0E34\u0E01, \u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E43\u0E2A, \u0E15\u0E31\u0E27\u0E25\u0E47\u0E2D\u0E01\u0E1E\u0E34\u0E40\u0E28\u0E29, \u0E41\u0E1C\u0E48\u0E19\u0E01\u0E31\u0E49\u0E19\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, \u0E17\u0E23\u0E07\u0E20\u0E32\u0E0A\u0E19\u0E30\u0E41\u0E1A\u0E1A\u0E01\u0E33\u0E2B\u0E19\u0E14\u0E40\u0E2D\u0E07 (\u0E42\u0E1B\u0E23\u0E44\u0E1F\u0E25\u0E4C fix \u0E15\u0E32\u0E21\u0E0A\u0E19\u0E34\u0E14\u0E27\u0E31\u0E2A\u0E14\u0E38) \u0E2F\u0E25\u0E2F \u2014 \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E2A\u0E34\u0E48\u0E07\u0E40\u0E2B\u0E25\u0E48\u0E32\u0E19\u0E35\u0E49 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2A\u0E34\u0E48\u0E07\u0E43\u0E01\u0E25\u0E49\u0E40\u0E04\u0E35\u0E22\u0E07\u0E17\u0E35\u0E48\u0E21\u0E35 (\u0E40\u0E0A\u0E48\u0E19 \u0E02\u0E2D\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27/\u0E17\u0E35\u0E48\u0E08\u0E31\u0E1A \u2192 handle=true) \u0E41\u0E25\u0E30\u0E40\u0E02\u0E35\u0E22\u0E19\u0E43\u0E19 ${why} \u0E15\u0E23\u0E07\u0E46 \u0E27\u0E48\u0E32\u0E23\u0E30\u0E1A\u0E1A\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E02\u0E2D\u0E41\u0E1A\u0E1A\u0E40\u0E1B\u0E4A\u0E30\u0E46 \u0E2B\u0E49\u0E32\u0E21\u0E2D\u0E49\u0E32\u0E07\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E17\u0E33\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E17\u0E33\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E43\u0E2B\u0E49\u0E41\u0E25\u0E49\u0E27
 
 ## \u0E23\u0E39\u0E1B\u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07\u0E08\u0E32\u0E01\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32 (\u0E16\u0E49\u0E32\u0E21\u0E35)
 \u0E43\u0E0A\u0E49\u0E23\u0E39\u0E1B\u0E40\u0E1E\u0E37\u0E48\u0E2D: \u0E23\u0E30\u0E1A\u0E38\u0E0A\u0E19\u0E34\u0E14/\u0E08\u0E33\u0E19\u0E27\u0E19\u0E02\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E08\u0E30\u0E43\u0E2A\u0E48, \u0E1B\u0E23\u0E30\u0E40\u0E21\u0E34\u0E19\u0E02\u0E19\u0E32\u0E14\u0E08\u0E23\u0E34\u0E07\u0E08\u0E32\u0E01\u0E27\u0E31\u0E15\u0E16\u0E38\u0E1A\u0E23\u0E34\u0E1A\u0E17\u0E43\u0E19\u0E23\u0E39\u0E1B (\u0E1D\u0E48\u0E32\u0E21\u0E37\u0E2D ~180 \u0E21\u0E21., \u0E1A\u0E31\u0E15\u0E23\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 86 \u0E21\u0E21., \u0E02\u0E27\u0E14\u0E19\u0E49\u0E33\u0E21\u0E32\u0E15\u0E23\u0E10\u0E32\u0E19 \u230065 \u0E2F\u0E25\u0E2F), \u0E41\u0E25\u0E30\u0E2D\u0E19\u0E38\u0E21\u0E32\u0E19\u0E2A\u0E44\u0E15\u0E25\u0E4C (\u0E2A\u0E35 \u0E27\u0E31\u0E2A\u0E14\u0E38 \u0E04\u0E27\u0E32\u0E21\u0E2B\u0E23\u0E39) \u2014 \u0E17\u0E38\u0E01\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E17\u0E35\u0E48\u0E2D\u0E48\u0E32\u0E19\u0E08\u0E32\u0E01\u0E23\u0E39\u0E1B\u0E41\u0E25\u0E49\u0E27\u0E21\u0E35\u0E1C\u0E25\u0E15\u0E48\u0E2D spec \u0E43\u0E2B\u0E49\u0E1B\u0E23\u0E30\u0E01\u0E32\u0E28\u0E43\u0E19 assumptions \u0E02\u0E36\u0E49\u0E19\u0E15\u0E49\u0E19\u0E14\u0E49\u0E27\u0E22 "\u0E08\u0E32\u0E01\u0E23\u0E39\u0E1B:" \u0E16\u0E49\u0E32\u0E23\u0E39\u0E1B\u0E02\u0E31\u0E14\u0E41\u0E22\u0E49\u0E07\u0E01\u0E31\u0E1A\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32 \u0E43\u0E2B\u0E49\u0E22\u0E36\u0E14\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21
@@ -58665,34 +58803,32 @@ ${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? " (\u0E40\u0E1B\u0E23\u0E32
 - \u0E2B\u0E49\u0E32\u0E21\u0E16\u0E32\u0E21\u0E01\u0E25\u0E31\u0E1A \u0E15\u0E31\u0E14\u0E2A\u0E34\u0E19\u0E43\u0E08\u0E40\u0E2A\u0E21\u0E2D \u2014 \u0E17\u0E38\u0E01\u0E04\u0E48\u0E32\u0E17\u0E35\u0E48\u0E40\u0E14\u0E32 (\u0E02\u0E19\u0E32\u0E14\u0E02\u0E2D\u0E07 \u0E08\u0E33\u0E19\u0E27\u0E19 \u0E01\u0E32\u0E23\u0E08\u0E31\u0E14\u0E27\u0E32\u0E07 \u0E0A\u0E48\u0E2D\u0E07\u0E44\u0E1F \u0E27\u0E31\u0E2A\u0E14\u0E38 \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07) \u0E15\u0E49\u0E2D\u0E07\u0E1B\u0E23\u0E30\u0E01\u0E32\u0E28\u0E43\u0E19 assumptions \u0E40\u0E1B\u0E47\u0E19\u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22\u0E2A\u0E31\u0E49\u0E19\u0E46 \u0E17\u0E35\u0E25\u0E30\u0E02\u0E49\u0E2D \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E43\u0E2B\u0E49\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E01\u0E14\u0E41\u0E01\u0E49\u0E44\u0E14\u0E49
 - \u0E16\u0E49\u0E32\u0E21\u0E35 "\u0E2A\u0E40\u0E1B\u0E01\u0E1B\u0E31\u0E08\u0E08\u0E38\u0E1A\u0E31\u0E19" \u0E21\u0E32\u0E14\u0E49\u0E27\u0E22: \u0E1B\u0E01\u0E15\u0E34\u0E04\u0E37\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E1B\u0E23\u0E31\u0E1A\u0E02\u0E2D\u0E07\u0E40\u0E14\u0E34\u0E21\u0E15\u0E48\u0E2D\u0E40\u0E19\u0E37\u0E48\u0E2D\u0E07 \u2014 \u0E41\u0E01\u0E49\u0E40\u0E09\u0E1E\u0E32\u0E30\u0E2A\u0E48\u0E27\u0E19\u0E17\u0E35\u0E48\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E40\u0E01\u0E35\u0E48\u0E22\u0E27\u0E02\u0E49\u0E2D\u0E07 \u0E04\u0E07\u0E04\u0E48\u0E32\u0E17\u0E35\u0E48\u0E40\u0E2B\u0E25\u0E37\u0E2D (\u0E23\u0E27\u0E21 template) \u0E44\u0E27\u0E49\u0E15\u0E32\u0E21\u0E40\u0E14\u0E34\u0E21 \u0E41\u0E15\u0E48\u0E16\u0E49\u0E32\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E0A\u0E31\u0E14\u0E40\u0E08\u0E19\u0E27\u0E48\u0E32\u0E40\u0E1B\u0E47\u0E19\u0E07\u0E32\u0E19\u0E43\u0E2B\u0E21\u0E48\u0E04\u0E19\u0E25\u0E30\u0E0A\u0E34\u0E49\u0E19 (\u0E40\u0E0A\u0E48\u0E19 \u0E2A\u0E31\u0E48\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E43\u0E2A\u0E48\u0E02\u0E2D\u0E07\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E2D\u0E37\u0E48\u0E19\u0E17\u0E31\u0E49\u0E07\u0E43\u0E1A) \u0E43\u0E2B\u0E49\u0E04\u0E33\u0E19\u0E27\u0E13\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14\u0E42\u0E14\u0E22\u0E44\u0E21\u0E48\u0E22\u0E36\u0E14\u0E04\u0E48\u0E32\u0E40\u0E14\u0E34\u0E21
 - layoutNote \u0E2A\u0E31\u0E49\u0E19\u0E46 \u0E40\u0E0A\u0E48\u0E19 "\u0E27\u0E32\u0E07\u0E40\u0E23\u0E35\u0E22\u0E07 3 \xD7 1" (\u0E16\u0E49\u0E32\u0E44\u0E21\u0E48\u0E40\u0E01\u0E35\u0E48\u0E22\u0E27\u0E01\u0E31\u0E1A\u0E01\u0E32\u0E23\u0E27\u0E32\u0E07\u0E02\u0E2D\u0E07 \u0E43\u0E2A\u0E48 "-")
-- reasoning: 1-2 \u0E1B\u0E23\u0E30\u0E42\u0E22\u0E04 \u0E17\u0E33\u0E44\u0E21\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A/\u0E27\u0E31\u0E2A\u0E14\u0E38/\u0E02\u0E19\u0E32\u0E14\u0E19\u0E35\u0E49`;
-var TOOL = {
-  name: "box_spec",
-  description: "\u0E2A\u0E48\u0E07\u0E2A\u0E40\u0E1B\u0E01\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C\u0E17\u0E35\u0E48\u0E04\u0E33\u0E19\u0E27\u0E13\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E41\u0E25\u0E49\u0E27\u0E43\u0E2B\u0E49\u0E23\u0E30\u0E1A\u0E1A gen \u0E01\u0E25\u0E48\u0E2D\u0E07",
-  strict: true,
-  input_schema: {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      template: { type: "string", enum: TEMPLATE_IDS },
-      materialId: { type: "string", enum: MATERIALS.map((m) => m.id) },
-      W: { type: "number", description: "\u0E01\u0E27\u0E49\u0E32\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u0E21\u0E21. (30-250)" },
-      D: { type: "number", description: "\u0E25\u0E36\u0E01\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u0E21\u0E21. (20-150)" },
-      H: { type: "number", description: "\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u0E21\u0E21. (30-300)" },
-      handle: {
-        type: "boolean",
-        description: "\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (tuck-end/mailer \u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19; sleeve \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false)"
-      },
-      assumptions: {
-        type: "array",
-        items: { type: "string" },
-        description: "\u0E17\u0E38\u0E01\u0E04\u0E48\u0E32\u0E17\u0E35\u0E48\u0E40\u0E14\u0E32 \u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22\u0E2A\u0E31\u0E49\u0E19\u0E46 \u0E17\u0E35\u0E25\u0E30\u0E02\u0E49\u0E2D"
-      },
-      layoutNote: { type: "string", description: '\u0E01\u0E32\u0E23\u0E08\u0E31\u0E14\u0E27\u0E32\u0E07\u0E02\u0E2D\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u0E40\u0E0A\u0E48\u0E19 "\u0E27\u0E32\u0E07\u0E40\u0E23\u0E35\u0E22\u0E07 3 \xD7 1"' },
-      reasoning: { type: "string", description: "\u0E40\u0E2B\u0E15\u0E38\u0E1C\u0E25\u0E2A\u0E31\u0E49\u0E19\u0E46 \u0E17\u0E35\u0E48\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A/\u0E27\u0E31\u0E2A\u0E14\u0E38/\u0E02\u0E19\u0E32\u0E14\u0E19\u0E35\u0E49" }
+- ${why}: 1-2 \u0E1B\u0E23\u0E30\u0E42\u0E22\u0E04 \u0E17\u0E33\u0E44\u0E21\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A/\u0E27\u0E31\u0E2A\u0E14\u0E38/\u0E02\u0E19\u0E32\u0E14\u0E19\u0E35\u0E49`;
+}
+var SYSTEM = systemPrompt("\u0E42\u0E14\u0E22\u0E40\u0E23\u0E35\u0E22\u0E01 tool box_spec \u0E40\u0E2A\u0E21\u0E2D", "reasoning");
+var API_SYSTEM = systemPrompt("\u0E42\u0E14\u0E22\u0E15\u0E2D\u0E1A\u0E40\u0E1B\u0E47\u0E19 JSON \u0E15\u0E32\u0E21 schema \u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E01\u0E33\u0E2B\u0E19\u0E14\u0E40\u0E2A\u0E21\u0E2D", "explanation");
+var BOX_SPEC_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    template: { type: "string", enum: TEMPLATE_IDS },
+    materialId: { type: "string", enum: MATERIALS.map((m) => m.id) },
+    W: { type: "number", description: "\u0E01\u0E27\u0E49\u0E32\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u0E21\u0E21. (30-250)" },
+    D: { type: "number", description: "\u0E25\u0E36\u0E01\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u0E21\u0E21. (20-150)" },
+    H: { type: "number", description: "\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u0E21\u0E21. (30-300)" },
+    handle: {
+      type: "boolean",
+      description: "\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (tuck-end/mailer \u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19; sleeve \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false)"
     },
-    required: ["template", "materialId", "W", "D", "H", "handle", "assumptions", "layoutNote", "reasoning"]
-  }
+    assumptions: {
+      type: "array",
+      items: { type: "string" },
+      description: "\u0E17\u0E38\u0E01\u0E04\u0E48\u0E32\u0E17\u0E35\u0E48\u0E40\u0E14\u0E32 \u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22\u0E2A\u0E31\u0E49\u0E19\u0E46 \u0E17\u0E35\u0E25\u0E30\u0E02\u0E49\u0E2D"
+    },
+    layoutNote: { type: "string", description: '\u0E01\u0E32\u0E23\u0E08\u0E31\u0E14\u0E27\u0E32\u0E07\u0E02\u0E2D\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u0E40\u0E0A\u0E48\u0E19 "\u0E27\u0E32\u0E07\u0E40\u0E23\u0E35\u0E22\u0E07 3 \xD7 1"' },
+    explanation: { type: "string", description: "\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E2A\u0E31\u0E49\u0E19\u0E46 1-2 \u0E1B\u0E23\u0E30\u0E42\u0E22\u0E04\u0E16\u0E36\u0E07\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32 \u0E27\u0E48\u0E32\u0E17\u0E33\u0E44\u0E21\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A/\u0E27\u0E31\u0E2A\u0E14\u0E38/\u0E02\u0E19\u0E32\u0E14\u0E19\u0E35\u0E49" }
+  },
+  required: ["template", "materialId", "W", "D", "H", "handle", "assumptions", "layoutNote", "explanation"]
 };
 function sanitize(raw, mock) {
   const materialId = MATERIALS.some((m) => m.id === raw.materialId) ? raw.materialId : "carton-300";
@@ -58744,6 +58880,49 @@ function buildUserContent(prompt, current) {
 
 \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14\u0E08\u0E32\u0E01\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32: ${prompt}` : prompt;
 }
+var MAX_TOKENS = 16e3;
+var THINKS_BY_DEFAULT = /^claude-[a-z]+-5(?:-\d+)?$/;
+var SERVER_FALLBACK_MODELS = /* @__PURE__ */ new Set(["claude-opus-5-5", "claude-sonnet-5-5", "claude-opus-5", "claude-fable-5-1"]);
+var SERVER_FALLBACK_BETA = "server-side-fallback-2026-07-01";
+function boxSpecModelOptions(model) {
+  return {
+    ...THINKS_BY_DEFAULT.test(model) ? { effort: "low" } : {},
+    serverFallback: SERVER_FALLBACK_MODELS.has(model)
+  };
+}
+var BoxSpecResponseError = class extends Error {
+  constructor(reason, category = null) {
+    super(
+      reason === "refusal" ? `\u0E42\u0E21\u0E40\u0E14\u0E25\u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18\u0E04\u0E33\u0E02\u0E2D (stop_reason=refusal, category=${category ?? "null"})` : reason === "max_tokens" ? "\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E16\u0E39\u0E01\u0E15\u0E31\u0E14\u0E17\u0E35\u0E48 max_tokens \u0E01\u0E48\u0E2D\u0E19 JSON \u0E04\u0E23\u0E1A" : "\u0E44\u0E21\u0E48\u0E1E\u0E1A JSON \u0E2A\u0E40\u0E1B\u0E01\u0E43\u0E19\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E02\u0E2D\u0E07\u0E42\u0E21\u0E40\u0E14\u0E25"
+    );
+    this.reason = reason;
+    this.category = category;
+    this.name = "BoxSpecResponseError";
+  }
+};
+function parseBoxSpecMessage(msg) {
+  if (msg.stop_reason === "refusal") throw new BoxSpecResponseError("refusal", msg.stop_details?.category ?? null);
+  if (msg.stop_reason === "max_tokens") throw new BoxSpecResponseError("max_tokens");
+  const text = msg.content.map((b) => b.type === "text" ? b.text ?? "" : "").join("");
+  let raw = null;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new BoxSpecResponseError("no_output");
+  const { explanation, ...fields } = raw;
+  return {
+    spec: sanitize({ ...fields, reasoning: explanation }, false),
+    model: msg.model,
+    // usage ระดับบนคือรอบที่ตอบ — รอบที่ถูกปฏิเสธก่อน fallback อยู่ใน usage.iterations ไม่ได้รวมตรงนี้
+    usage: {
+      inputTokens: msg.usage.input_tokens,
+      outputTokens: msg.usage.output_tokens,
+      cacheReadTokens: msg.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: msg.usage.cache_creation_input_tokens ?? 0
+    }
+  };
+}
 async function askClaudeWithUsage(apiKey, model, prompt, current, image, limits) {
   const client = new Anthropic({
     apiKey,
@@ -58762,28 +58941,27 @@ async function askClaudeWithUsage(apiKey, model, prompt, current, image, limits)
     });
   }
   content.push({ type: "text", text: buildUserContent(prompt, current) });
-  const msg = await client.messages.create({
+  const options = boxSpecModelOptions(model);
+  const params = {
     model,
-    max_tokens: 2048,
-    system: SYSTEM,
-    tools: [TOOL],
-    tool_choice: { type: "tool", name: "box_spec" },
-    messages: [{ role: "user", content }]
-  });
-  const block = msg.content.find(
-    (b) => b.type === "tool_use" && b.name === "box_spec"
-  );
-  if (!block) throw new Error("\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E1C\u0E25\u0E25\u0E31\u0E1E\u0E18\u0E4C\u0E08\u0E32\u0E01\u0E42\u0E21\u0E40\u0E14\u0E25");
-  return {
-    spec: sanitize(block.input, false),
-    model: msg.model,
-    usage: {
-      inputTokens: msg.usage.input_tokens,
-      outputTokens: msg.usage.output_tokens,
-      cacheReadTokens: msg.usage.cache_read_input_tokens ?? 0,
-      cacheCreationTokens: msg.usage.cache_creation_input_tokens ?? 0
+    max_tokens: MAX_TOKENS,
+    system: API_SYSTEM,
+    messages: [{ role: "user", content }],
+    output_config: {
+      format: { type: "json_schema", schema: BOX_SPEC_SCHEMA },
+      ...options.effort ? { effort: options.effort } : {}
     }
   };
+  if (!options.serverFallback) return parseBoxSpecMessage(await client.messages.create(params));
+  const fallbackParams = {
+    ...params,
+    betas: [SERVER_FALLBACK_BETA],
+    // SDK 0.111 รู้จักแค่ fallbacks แบบ list แต่ "default" ส่งผ่าน body ได้ตรง ๆ — อัปเกรด SDK แล้ว tsc จะฟ้อง
+    // ว่า directive ข้างล่างไม่จำเป็น ให้ถอดออก
+    // @ts-expect-error fallbacks: "default" ยังไม่อยู่ใน type ของ SDK 0.111
+    fallbacks: "default"
+  };
+  return parseBoxSpecMessage(await client.beta.messages.create(fallbackParams));
 }
 var JSON_INSTRUCTION = `
 
@@ -58804,7 +58982,7 @@ var AiProviderError = class extends Error {
 };
 var CLOUD_AI_LIMITS = { timeoutMs: 5e4, maxRetries: 0 };
 var AnthropicAiService = class {
-  constructor(model = "claude-opus-4-8", limits = CLOUD_AI_LIMITS) {
+  constructor(model = DEFAULT_AI_MODEL, limits = CLOUD_AI_LIMITS) {
     this.model = model;
     this.limits = limits;
   }
@@ -58812,6 +58990,9 @@ var AnthropicAiService = class {
     try {
       return await askClaudeWithUsage(apiKey, this.model, input2.prompt, input2.current, input2.image, this.limits);
     } catch (error62) {
+      if (error62 instanceof BoxSpecResponseError) {
+        throw new AiProviderError(error62.reason === "refusal" ? "refusal" : "provider", error62);
+      }
       if (error62 instanceof Anthropic.AuthenticationError) throw new AiProviderError("authentication", error62);
       if (error62 instanceof Anthropic.RateLimitError) throw new AiProviderError("rate-limit", error62);
       if (error62 instanceof Anthropic.APIError) throw new AiProviderError("provider", error62);
@@ -59205,6 +59386,8 @@ function createApiRouter(config2, dependencies = {}) {
             httpError = new HttpError(503, "CONFIGURATION_ERROR", "\u0E04\u0E35\u0E22\u0E4C AI \u0E02\u0E2D\u0E07 server \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
           } else if (error63 instanceof AiProviderError && error63.kind === "rate-limit") {
             httpError = new HttpError(429, "AI_RATE_LIMITED", "\u0E40\u0E23\u0E35\u0E22\u0E01 AI \u0E16\u0E35\u0E48\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48");
+          } else if (error63 instanceof AiProviderError && error63.kind === "refusal") {
+            httpError = new HttpError(502, "AI_PROVIDER_UNAVAILABLE", "AI \u0E44\u0E21\u0E48\u0E23\u0E31\u0E1A\u0E04\u0E33\u0E02\u0E2D\u0E19\u0E35\u0E49 \u0E25\u0E2D\u0E07\u0E1B\u0E23\u0E31\u0E1A\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E41\u0E25\u0E49\u0E27\u0E2A\u0E48\u0E07\u0E43\u0E2B\u0E21\u0E48");
           } else {
             httpError = new HttpError(502, "AI_PROVIDER_UNAVAILABLE", "\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23 AI \u0E02\u0E31\u0E14\u0E02\u0E49\u0E2D\u0E07 \u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07");
           }

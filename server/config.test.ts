@@ -9,7 +9,7 @@ describe('loadServerConfig', () => {
   it('reads the optional server AI key and model without requiring them anywhere', () => {
     expect(loadServerConfig({ BOX_SPEC_MODEL: 'haiku' }).ai).toBeNull()
     expect(loadServerConfig({ ANTHROPIC_API_KEY: ' sk-ant-test ' }).ai)
-      .toEqual({ anthropicApiKey: 'sk-ant-test', model: 'claude-opus-4-8' })
+      .toEqual({ anthropicApiKey: 'sk-ant-test', model: 'claude-opus-5-5' })
     expect(loadServerConfig({ ANTHROPIC_API_KEY: 'sk-ant-test', BOX_SPEC_MODEL: ' haiku ' }).ai)
       .toEqual({ anthropicApiKey: 'sk-ant-test', model: 'haiku' })
     expect(loadServerConfig({
