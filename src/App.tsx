@@ -88,6 +88,7 @@ import {
   resolveStickerSheet,
   type SheetLayout,
 } from './core/stickerSheet'
+import { isFreshWork, STANDARD_SIZE, type SizedKind } from './core/standardSize'
 import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, defaultCapColor, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
 import {
   generatePouch,
@@ -2244,6 +2245,19 @@ export default function App({
     if (mat.foldable) play()
   }
 
+  // สลับประเภทงานตอนยังไม่เริ่มงาน → ขนาดมาตรฐานของประเภทนั้น + ล้างทรงขวด/ฉลากที่ตั้งเอง
+  // (มีลาย/รูปพื้นแล้วคงขนาดเดิม ลายจะได้ไม่หลุดตำแหน่ง)
+  const resetKindSize = (k: SizedKind | 'box') => {
+    if (!isFreshWork(decos, fillImage)) return
+    const sz = k === 'box' ? getTemplate(templateId).defaults : STANDARD_SIZE[k]
+    setW(sz.W)
+    setD(sz.D)
+    setH(sz.H)
+    setNeckH(undefined)
+    setShoulderH(undefined)
+    setLabelBox(undefined)
+  }
+
   const changeMaterial = (id: string) => {
     cancelAnimationFrame(raf.current)
     setMaterialId(id)
@@ -3163,6 +3177,7 @@ export default function App({
                 onClick={() => {
                   if (kind !== 'box' || isSticker) changeMaterial('carton-300')
                   if (templateId === 'card' || templateId === 'sticker') changeTemplate('tuck-end')
+                  else if (kind !== 'box') resetKindSize('box')
                 }}
               >
                 <span className="mode-ic">
@@ -3178,7 +3193,10 @@ export default function App({
                 disabled={aiBusy}
                 aria-pressed={kind === 'vessel' && !isTube}
                 onClick={() => {
-                  if (kind !== 'vessel' || isTube) changeMaterial('pet-bottle')
+                  if (kind !== 'vessel' || isTube) {
+                    changeMaterial('pet-bottle')
+                    resetKindSize('vessel')
+                  }
                 }}
               >
                 <span className="mode-ic">
@@ -3194,7 +3212,10 @@ export default function App({
                 disabled={aiBusy}
                 aria-pressed={kind === 'pouch'}
                 onClick={() => {
-                  if (kind !== 'pouch') changeMaterial('pouch-foil')
+                  if (kind !== 'pouch') {
+                    changeMaterial('pouch-foil')
+                    resetKindSize('pouch')
+                  }
                 }}
               >
                 <span className="mode-ic">
@@ -3212,10 +3233,11 @@ export default function App({
                 onClick={() => {
                   if (!isTube) {
                     changeMaterial('tube-laminate')
-                    // หลอดครีมทรงชะลูด — ตั้งสัดส่วนเริ่มต้นให้ดูเป็นหลอด ไม่ใช่กระปุก
-                    setW(40)
-                    setD(20)
-                    setH(150)
+                    // หลอดครีมทรงชะลูด — ตั้งสัดส่วนเริ่มต้นให้ดูเป็นหลอด ไม่ใช่กระปุก (ตั้งเสมอ แม้มีลายแล้ว)
+                    const sz = STANDARD_SIZE.tube
+                    setW(sz.W)
+                    setD(sz.D)
+                    setH(sz.H)
                   }
                 }}
               >
