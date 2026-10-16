@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
+import { BODY_MIN, LABEL_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
 import { ellipsePerimeter } from './pouch'
 import { MATERIALS, getMaterial } from './materials'
 import { computeGuides } from './guides'
@@ -277,5 +277,41 @@ describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: ไหล่ %s', 
     expect(top.some((p) => Math.abs(p.x - (R - Math.min(sh, R - rn))) < 1e-6)).toBe(true)
     expect(top.some((p) => Math.abs(p.x - rn) < 1e-6)).toBe(true)
     for (let i = 1; i < v.profile.length; i++) expect(v.profile[i].y).toBeGreaterThanOrEqual(v.profile[i - 1].y - 1e-9)
+  })
+})
+
+// ฉลากกำหนดเอง: ตำแหน่งแนวตั้ง/สูง/ยาวรอบตัว — อยู่บนลำตัวตรงเสมอ
+describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: ฉลากกำหนดเอง %s', (id) => {
+  const mat = getMaterial(id)
+  const circ = Math.PI * box.W
+  const base = generateVessel(box, mat)
+  const [b0, b1] = base.labelRange
+
+  it('ตั้งขอบล่าง + สูง → ฉลากอยู่ตรงนั้น, dieline สูงตาม', () => {
+    const v = generateVessel(box, mat, 'body', { label: { y: b0 + 10, h: 40 } })
+    expect(v.labelY0).toBeCloseTo(b0 + 10)
+    expect(v.labelY1).toBeCloseTo(b0 + 50)
+    expect(v.label.height).toBeCloseTo(40)
+  })
+
+  it('ค่าเกินลำตัวถูกจำกัดให้อยู่บนลำตัวตรง', () => {
+    const hi = generateVessel(box, mat, 'body', { label: { y: 1e4, h: 30 } })
+    expect(hi.labelY1).toBeCloseTo(b1)
+    const lo = generateVessel(box, mat, 'body', { label: { y: -50, h: 1e4 } })
+    expect(lo.labelY0).toBeCloseTo(b0)
+    expect(lo.labelY1).toBeCloseTo(b1)
+    const tiny = generateVessel(box, mat, 'body', { label: { h: 0 } })
+    expect(tiny.labelY1 - tiny.labelY0).toBeCloseTo(LABEL_MIN)
+  })
+
+  it('ยาวเท่าเส้นรอบวง = พันรอบ (มีทับกาว), สั้นกว่า = ฉลากแผ่นหน้าไม่มีกาว', () => {
+    const wrap = generateVessel(box, mat, 'body', { label: { w: circ } })
+    expect(wrap.labelArc).toBeCloseTo(2 * Math.PI)
+    expect(wrap.label.width).toBeCloseTo(circ + LABEL_OVERLAP)
+    const front = generateVessel(box, mat, 'body', { label: { w: 100 } })
+    expect(front.label.width).toBeCloseTo(100)
+    expect(front.label.panels.map((p) => p.id)).toEqual(['label'])
+    expect(front.labelArc).toBeCloseTo(100 / (box.W / 2))
+    expect(front.label.segments.some((sg) => sg.kind === 'crease')).toBe(false)
   })
 })

@@ -78,6 +78,17 @@ describe('projectFile: round-trip', () => {
     expect(res.project.shoulderStyle).toBe('flat')
   })
 
+  it('ฉลากกำหนดเอง: เก็บเฉพาะคีย์ที่ตั้ง และอ่านกลับได้', () => {
+    const p = sampleProject()
+    p.live = { template: 'tuck-end', materialId: 'pet-bottle', W: 60, D: 25, H: 150, handle: false }
+    expect(JSON.parse(serializeProject(p)).project.labelBox).toBeUndefined()
+    p.labelBox = { y: 20.5, h: 45, w: 120 }
+    const res = parseProjectFile(serializeProject(p))
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.project.labelBox).toEqual({ y: 20.5, h: 45, w: 120 })
+  })
+
   it('นำเข้าได้ id ใหม่เสมอ (กันชนกับงานที่เปิดอยู่)', () => {
     const p = sampleProject()
     const res = parseProjectFile(serializeProject(p))

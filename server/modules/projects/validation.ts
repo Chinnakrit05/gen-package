@@ -187,6 +187,11 @@ export const cloudProjectDocumentSchema = z.object({
   neckH: finite.min(1).max(300).optional(),
   shoulderH: finite.min(1).max(300).optional(),
   shoulderStyle: z.enum(['round', 'slope', 'flat']).optional(),
+  labelBox: z.object({
+    y: finite.min(0).max(2000).optional(),
+    h: finite.min(0).max(2000).optional(),
+    w: finite.min(0).max(2000).optional(),
+  }).strict().optional(),
   pouchStyle: z.enum(['stand', 'flat', 'gusset', 'box', 'pillow', 'spout']).optional(),
   zipper: z.boolean().optional(),
   pouchAddons: z.object({

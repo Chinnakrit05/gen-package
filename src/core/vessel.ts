@@ -56,6 +56,9 @@ export interface Vessel {
   labelR: number // รัศมีผิวที่ติดฉลาก
   labelY0: number // ช่วงความสูงของฉลากบนตัวภาชนะ
   labelY1: number
+  labelArc: number // มุมที่ฉลากหุ้ม (เรเดียน) — 2π = พันรอบตัว, น้อยกว่า = ฉลากแผ่นหน้า จัดกึ่งกลางด้านหน้า
+  labelRange: [number, number] // ช่วงความสูงที่ติดฉลากได้ (ลำตัวตรง) — ใช้เป็นขอบเขตช่องปรับตำแหน่ง/สูง
+  circ: number // เส้นรอบวงตัว (มม.)
   H: number
   tube?: TubeShape // มีเฉพาะหลอดครีม — บอก viewer ให้สร้างลำตัว loft บีบแบน
 }
@@ -137,10 +140,20 @@ export const shoulderMax = (matId: string, Hb: number) =>
 export const resolveShoulderH = (matId: string, Hb: number, shoulderH?: number) =>
   Math.min(shoulderMax(matId, Hb), Math.max(SHOULDER_MIN, shoulderH ?? defaultShoulderH(matId, Hb)))
 
+// ฉลากกำหนดเอง (มม.): y = ขอบล่างจากก้น, h = สูงฉลาก, w = ยาวรอบตัว (≥ เส้นรอบวง = พันรอบ + ทับกาว)
+// ค่าที่ไม่ใส่ใช้ตามรูปแบบฉลาก (LabelStyle); ทั้งหมดถูก clamp ให้อยู่บนลำตัวตรง
+export interface LabelBox {
+  y?: number
+  h?: number
+  w?: number
+}
+export const LABEL_MIN = 5
+
 export interface VesselShape {
   neckH?: number
   shoulderH?: number
   shoulderStyle?: ShoulderStyle
+  label?: LabelBox
 }
 
 // เส้นไหล่จาก (R, s0) ถึงโคนคอ (rn, Hb) — ไม่รวมจุดเริ่ม
@@ -234,30 +247,46 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
     ;[labelY0, labelY1] = band
   }
 
-  // --- dieline ฉลาก: แผ่นพันรอบตัว = เส้นรอบวง + ระยะทับซ้อน ---
+  // ฉลากกำหนดเอง: สูง/ตำแหน่งแทนค่าตามรูปแบบ (อยู่บนลำตัวตรงเสมอ — ฉลากแบนพันบนไหล่โค้งไม่ได้)
+  const lb = mat.id === 'tube-laminate' ? undefined : shape.label
+  if (lb?.h !== undefined || lb?.y !== undefined) {
+    const hh = Math.min(span, Math.max(Math.min(LABEL_MIN, span), lb.h ?? labelY1 - labelY0))
+    labelY0 = Math.min(b1 - hh, Math.max(b0, lb.y ?? labelY0))
+    labelY1 = labelY0 + hh
+  }
+
+  // --- dieline ฉลาก: พันรอบตัว = เส้นรอบวง + ระยะทับซ้อน / สั้นกว่าเส้นรอบวง = ฉลากแผ่นหน้า ---
   const circ = 2 * Math.PI * R
   const h = labelY1 - labelY0
-  const w = circ + LABEL_OVERLAP
-
-  const panels: Panel[] = [
-    // แยกส่วนทากาวเป็นแผงต่างหาก: ขอบร่วมที่ x=circ กลายเป็นรอยต่อ (ไม่ใช่ขอบนอก)
-    // เส้นไกด์ bleed จึงไม่ขึ้นตรงรอยต่อ และ safe area จัดกลางเฉพาะส่วนที่มองเห็นจริง
-    { id: 'label', parentId: null, outline: rect(0, 0, circ, h), stage: 0 },
-    { id: 'glue', parentId: 'label', outline: rect(circ, 0, w, h), stage: 0 },
-  ]
+  const wrapW = lb?.w === undefined ? circ : Math.min(circ, Math.max(LABEL_MIN, lb.w))
+  const wrap = wrapW >= circ - 0.25
+  const w = wrap ? circ + LABEL_OVERLAP : wrapW
 
   const cut = (d: string): Segment => ({ kind: 'cut', d })
   const crease = (d: string): Segment => ({ kind: 'crease', d })
+  // พันรอบ: แยกส่วนทากาวเป็นแผงต่างหาก — ขอบร่วมที่ x=circ เป็นรอยต่อ (ไม่ใช่ขอบนอก)
+  // เส้นไกด์ bleed จึงไม่ขึ้นตรงรอยต่อ และ safe area จัดกลางเฉพาะส่วนที่มองเห็นจริง
+  const panels: Panel[] = wrap
+    ? [
+        { id: 'label', parentId: null, outline: rect(0, 0, circ, h), stage: 0 },
+        { id: 'glue', parentId: 'label', outline: rect(circ, 0, w, h), stage: 0 },
+      ]
+    : [{ id: 'label', parentId: null, outline: rect(0, 0, w, h), stage: 0 }]
   const segments: Segment[] = [
     cut(`M 0 0 L ${w} 0 L ${w} ${h} L 0 ${h} Z`),
-    crease(`M ${circ} 0 L ${circ} ${h}`), // แนวทับซ้อน/ทากาว
+    ...(wrap ? [crease(`M ${circ} 0 L ${circ} ${h}`)] : []), // แนวทับซ้อน/ทากาว
   ]
 
-  const dims: DimMark[] = [
-    { a: P(0, h + 12), b: P(circ, h + 12), label: `รอบวง ${fmt(circ)}` },
-    { a: P(circ, h + 12), b: P(w, h + 12), label: `กาว ${fmt(LABEL_OVERLAP)}` },
-    { a: P(w + 10, 0), b: P(w + 10, h), label: `สูงฉลาก ${fmt(h)}` },
-  ]
+  const dims: DimMark[] = wrap
+    ? [
+        { a: P(0, h + 12), b: P(circ, h + 12), label: `รอบวง ${fmt(circ)}` },
+        { a: P(circ, h + 12), b: P(w, h + 12), label: `กาว ${fmt(LABEL_OVERLAP)}` },
+        { a: P(w + 10, 0), b: P(w + 10, h), label: `สูงฉลาก ${fmt(h)}` },
+      ]
+    : [
+        { a: P(0, h + 12), b: P(w, h + 12), label: `ยาวฉลาก ${fmt(w)}` },
+        { a: P(w + 10, 0), b: P(w + 10, h), label: `สูงฉลาก ${fmt(h)}` },
+      ]
 
   const vessel: Vessel = {
     profile: pts,
@@ -265,6 +294,9 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
     labelR: R,
     labelY0,
     labelY1,
+    labelArc: wrap ? 2 * Math.PI : w / R,
+    labelRange: [b0, b1],
+    circ,
     H,
   }
   if (mat.id === 'tube-laminate') {

@@ -88,7 +88,7 @@ import {
   resolveStickerSheet,
   type SheetLayout,
 } from './core/stickerSheet'
-import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, type LabelStyle, type ShoulderStyle } from './core/vessel'
+import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
 import {
   generatePouch,
   POUCH_STYLES,
@@ -880,6 +880,7 @@ interface EditSnapshot {
   neckH: number | undefined
   shoulderH: number | undefined
   shoulderStyle: ShoulderStyle
+  labelBox: LabelBox | undefined
   pouchStyle: PouchStyle
   zipper: boolean
   pouchAddons: PouchAddons
@@ -902,6 +903,7 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.neckH === b.neckH &&
   a.shoulderH === b.shoulderH &&
   a.shoulderStyle === b.shoulderStyle &&
+  sameLabelBox(a.labelBox, b.labelBox) &&
   a.pouchStyle === b.pouchStyle &&
   a.zipper === b.zipper &&
   a.pouchAddons === b.pouchAddons &&
@@ -916,6 +918,9 @@ const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
   a.D === b.D &&
   a.H === b.H &&
   a.handle === b.handle
+
+const sameLabelBox = (a: LabelBox | undefined, b: LabelBox | undefined) =>
+  a?.y === b?.y && a?.h === b?.h && a?.w === b?.w
 
 const samePouchAddons = (a: PouchAddons | undefined, b: PouchAddons | undefined) =>
   Boolean(a?.hangHole) === Boolean(b?.hangHole)
@@ -1198,6 +1203,8 @@ export default function App({
   // ไหล่ (รอยต่อตัว→คอ): ความสูง มม. (undefined = สัดส่วนมาตรฐาน) + รูปทรง
   const [shoulderH, setShoulderH] = useState<number | undefined>(initialActive.shoulderH)
   const [shoulderStyle, setShoulderStyle] = useState<ShoulderStyle>(initialActive.shoulderStyle ?? 'round')
+  // ฉลากกำหนดเอง (ตำแหน่ง/สูง/ยาวรอบตัว) — undefined = ตามรูปแบบฉลาก
+  const [labelBox, setLabelBox] = useState<LabelBox | undefined>(initialActive.labelBox)
   const [pouchStyle, setPouchStyle] = useState<PouchStyle>(initialActive.pouchStyle ?? 'stand')
   const [zipper, setZipper] = useState<boolean>(initialActive.zipper ?? false)
   const [pouchAddons, setPouchAddons] = useState<PouchAddons>(initialActive.pouchAddons ?? {})
@@ -1548,8 +1555,8 @@ export default function App({
     setH(clamp(bodyH + v, 30, 300))
   }
   const vessel = useMemo(
-    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, { neckH, shoulderH, shoulderStyle }) : null),
-    [W, D, H, handle, mat, labelStyle, neckH, shoulderH, shoulderStyle, kind],
+    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, { neckH, shoulderH, shoulderStyle, label: labelBox }) : null),
+    [W, D, H, handle, mat, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, kind],
   )
   const pouch = useMemo(
     () =>
@@ -1745,6 +1752,7 @@ export default function App({
               && p.neckH === neckH
               && p.shoulderH === shoulderH
               && (p.shoulderStyle ?? 'round') === shoulderStyle
+              && sameLabelBox(p.labelBox, labelBox)
               && (p.pouchStyle ?? 'stand') === pouchStyle
               && Boolean(p.zipper) === zipper
               && samePouchAddons(p.pouchAddons, pouchAddons)
@@ -1764,6 +1772,7 @@ export default function App({
                     neckH,
                     shoulderH,
                     shoulderStyle,
+                    labelBox,
                     pouchStyle,
                     zipper,
                     pouchAddons,
@@ -1779,7 +1788,7 @@ export default function App({
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
 
   // local demo เขียน localStorage; cloud ส่ง active project เข้า durable IndexedDB/save queue
   useEffect(() => {
@@ -1863,6 +1872,7 @@ export default function App({
     neckH,
     shoulderH,
     shoulderStyle,
+    labelBox,
     pouchStyle,
     zipper,
     pouchAddons,
@@ -1890,7 +1900,7 @@ export default function App({
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -1907,6 +1917,7 @@ export default function App({
     setNeckH(s.neckH)
     setShoulderH(s.shoulderH)
     setShoulderStyle(s.shoulderStyle ?? 'round')
+    setLabelBox(s.labelBox)
     setPouchStyle(s.pouchStyle ?? 'stand')
     setZipper(s.zipper ?? false)
     setPouchAddons(s.pouchAddons ?? {})
@@ -2002,6 +2013,7 @@ export default function App({
           && p.neckH === neckH
           && p.shoulderH === shoulderH
           && (p.shoulderStyle ?? 'round') === shoulderStyle
+          && sameLabelBox(p.labelBox, labelBox)
           && (p.pouchStyle ?? 'stand') === pouchStyle
           && Boolean(p.zipper) === zipper
           && samePouchAddons(p.pouchAddons, pouchAddons)
@@ -2011,7 +2023,7 @@ export default function App({
           && p.history === history
           && p.histIdx === histIdx
             ? p
-            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
+            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -2030,6 +2042,7 @@ export default function App({
     setNeckH(p.neckH)
     setShoulderH(p.shoulderH)
     setShoulderStyle(p.shoulderStyle ?? 'round')
+    setLabelBox(p.labelBox)
     setPouchStyle(p.pouchStyle ?? 'stand')
     setZipper(p.zipper ?? false)
     setPouchAddons(p.pouchAddons ?? {})
@@ -3347,7 +3360,11 @@ export default function App({
                     className={`pick-item${labelStyle === s.id ? ' active' : ''}`}
                     disabled={aiBusy}
                     aria-pressed={labelStyle === s.id}
-                    onClick={() => setLabelStyle(s.id)}
+                    onClick={() => {
+                      setLabelStyle(s.id)
+                      // เลือกรูปแบบ = กลับไปใช้ตำแหน่ง/สูงตามรูปแบบ (ความยาวรอบตัวที่ตั้งไว้คงเดิม)
+                      setLabelBox((b) => (b?.w !== undefined ? { w: b.w } : undefined))
+                    }}
                   >
                     <span className="pick-name">{s.nameTh}</span>
                     <span className="pick-detail">{s.detail}</span>
@@ -3357,6 +3374,51 @@ export default function App({
               <p className="hint">
                 ฉลากพันรอบตัว — เลือกว่าคลุมช่วงความสูงแค่ไหน ความสูงฉลากในไฟล์ปรับตามนี้
               </p>
+              {showNeck && vessel && (
+                <>
+                  {/* ฉลากกำหนดเอง: ตำแหน่งแนวตั้ง/สูง/ยาวรอบตัว — อยู่บนลำตัวตรงเสมอ (ขอบเขตจาก vessel.labelRange) */}
+                  <DimField
+                    imperial={imperial}
+                    label={t('ตำแหน่งฉลาก (ขอบล่างจากก้น)', 'Label position (bottom edge)')}
+                    value={Math.round(vessel.labelY0 * 2) / 2}
+                    min={Math.ceil(vessel.labelRange[0] * 2) / 2}
+                    max={Math.max(Math.ceil(vessel.labelRange[0] * 2) / 2, Math.floor((vessel.labelRange[1] - (vessel.labelY1 - vessel.labelY0)) * 2) / 2)}
+                    disabled={aiBusy}
+                    onChange={(v) => setLabelBox((b) => ({ ...b, y: v, h: Math.round((vessel.labelY1 - vessel.labelY0) * 2) / 2 }))}
+                  />
+                  <DimField
+                    imperial={imperial}
+                    label={t('สูงฉลาก', 'Label height')}
+                    value={Math.round((vessel.labelY1 - vessel.labelY0) * 2) / 2}
+                    min={LABEL_MIN}
+                    max={Math.max(LABEL_MIN, Math.floor((vessel.labelRange[1] - vessel.labelRange[0]) * 2) / 2)}
+                    disabled={aiBusy}
+                    onChange={(v) => setLabelBox((b) => ({ ...b, y: Math.round(vessel.labelY0 * 2) / 2, h: v }))}
+                  />
+                  <DimField
+                    imperial={imperial}
+                    label={t('ยาวรอบขวด', 'Length around')}
+                    value={vessel.labelArc >= 2 * Math.PI - 1e-9 ? Math.round(vessel.circ * 2) / 2 : vessel.label.width}
+                    min={LABEL_MIN}
+                    max={Math.round(vessel.circ * 2) / 2}
+                    disabled={aiBusy}
+                    onChange={(v) => setLabelBox((b) => ({ ...b, w: v }))}
+                  />
+                  <p className="hint">
+                    {vessel.labelArc >= 2 * Math.PI - 1e-9
+                      ? t(
+                          `ยาวเท่าเส้นรอบวง = พันรอบตัว (+ทับกาว ${LABEL_OVERLAP} มม.) — ลดลงเพื่อทำฉลากแผ่นหน้า`,
+                          `Full circumference = wrap-around (+${LABEL_OVERLAP} mm glue overlap) — shorten for a front label`,
+                        )
+                      : t('ฉลากแผ่นหน้า (ไม่พันรอบ) จัดกึ่งกลางด้านหน้าขวด', 'Front label (not wrap-around), centred on the front')}
+                  </p>
+                  {labelBox && (
+                    <button type="button" className="link-btn" disabled={aiBusy} onClick={() => setLabelBox(undefined)}>
+                      {t('กลับเป็นขนาดตามรูปแบบฉลาก', 'Reset to label style')}
+                    </button>
+                  )}
+                </>
+              )}
             </Group>
           )}
 

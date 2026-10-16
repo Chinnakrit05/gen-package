@@ -30,10 +30,11 @@ function useLabelTexture(
     fillImage,
     enabled: true,
     watermark,
-    deps: [fillColor, fillImage, vessel.labelR],
-    // โชว์เฉพาะช่วงเส้นรอบวงจริง — หางทับซ้อน (กาว) มุดใต้รอยต่อ มองไม่เห็นบนขวด
+    deps: [fillColor, fillImage, vessel.labelR, vessel.labelArc],
+    // พันรอบ: โชว์เฉพาะช่วงเส้นรอบวงจริง — หางทับซ้อน (กาว) มุดใต้รอยต่อ มองไม่เห็นบนขวด
+    // ฉลากแผ่นหน้า: ทั้งแผ่นเต็มช่วงมุมที่หุ้ม
     configure: (t) => {
-      t.repeat.x = (2 * Math.PI * vessel.labelR) / width
+      t.repeat.x = Math.min(1, (vessel.labelArc * vessel.labelR) / width)
       t.wrapS = THREE.ClampToEdgeWrapping
     },
     // ผิวทรงกระบอกมองจากด้านนอก UV อ่านตรง — ไม่ต้องมิเรอร์แบบกล่อง; ฉลากพื้นขาว (กระดาษพิมพ์)
@@ -221,7 +222,10 @@ function VesselModel({
   const labelGeo = useMemo(() => {
     if (tube) return loftTube(range(vessel.labelY0, vessel.labelY1, 40), 0.25, true)
     // ลอยเหนือผิว 0.3 มม. กัน z-fighting กับตัวภาชนะ
-    return new THREE.CylinderGeometry(vessel.labelR + 0.3, vessel.labelR + 0.3, labelH, 64, 1, true)
+    // ฉลากแผ่นหน้า (ไม่พันรอบ): ส่วนโค้งกว้าง labelArc จัดกึ่งกลางที่ θ=π (หลังหมุนกลุ่ม π = ด้านหน้า)
+    const arc = vessel.labelArc
+    const seg = Math.max(8, Math.ceil((64 * arc) / (2 * Math.PI)))
+    return new THREE.CylinderGeometry(vessel.labelR + 0.3, vessel.labelR + 0.3, labelH, seg, 1, true, Math.PI - arc / 2, arc)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tube, vessel, labelH])
 

@@ -1,7 +1,7 @@
 import { MATERIALS } from './materials'
 import { TEMPLATES } from './templates'
 import { parseDecos, parseFillImage, type Deco, type FillImage } from './artwork'
-import { LABEL_STYLES, SHOULDER_STYLES, type LabelStyle, type ShoulderStyle } from './vessel'
+import { LABEL_STYLES, SHOULDER_STYLES, type LabelBox, type LabelStyle, type ShoulderStyle } from './vessel'
 import { POUCH_STYLES, ZIP_AT_MAX, type PouchStyle, type PouchAddons } from './pouch'
 import { parseVents, type VentConfig } from './vents'
 import { parseStickerCut, type StickerCut } from './stickerContour'
@@ -54,6 +54,7 @@ export interface Project {
   neckH?: number // ความสูงคอขวด มม. (เฉพาะโหมดภาชนะ; H = สูงรวม) — ไม่ใส่ = สัดส่วนมาตรฐานตามวัสดุ
   shoulderH?: number // ความสูงไหล่ มม. (อยู่ในความสูงตัว) — ไม่ใส่ = สัดส่วนมาตรฐานตามวัสดุ
   shoulderStyle?: ShoulderStyle // รูปทรงไหล่ — ไม่ใส่ = 'round'
+  labelBox?: LabelBox // ฉลากกำหนดเอง (ขอบล่าง/สูง/ยาวรอบตัว มม.) — เก็บเฉพาะคีย์ที่ตั้ง
   pouchStyle?: PouchStyle // รูปแบบถุง (เฉพาะโหมดถุง) — ไม่ใส่ = 'stand'
   zipper?: boolean // ซิปล็อก + รอยฉีก (เฉพาะโหมดถุง) — เก็บเฉพาะเมื่อ true
   pouchAddons?: PouchAddons // ออปชันเสริมถุง (รูแขวน/วาล์ว/tin-tie) — เก็บเฉพาะที่เปิด + ตำแหน่งซิป/รอยบากที่ตั้งเอง
@@ -139,6 +140,18 @@ function parsePouchAddons(v: unknown): PouchAddons | undefined {
   return Object.keys(a).length ? a : undefined
 }
 
+// ฉลากกำหนดเอง — เก็บเฉพาะคีย์ที่เป็นตัวเลข (ปัดครึ่งมม.); ไม่มีสักคีย์ = undefined
+export function parseLabelBox(v: unknown): LabelBox | undefined {
+  if (typeof v !== 'object' || v === null) return undefined
+  const o = v as Record<string, unknown>
+  const out: LabelBox = {}
+  for (const k of ['y', 'h', 'w'] as const) {
+    const n = o[k]
+    if (typeof n === 'number' && Number.isFinite(n)) out[k] = clamp(Math.round(n * 2) / 2, 0, 2000)
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 export function parseProject(v: unknown, idx: number): Project | null {
   if (typeof v !== 'object' || v === null) return null
   const o = v as Record<string, unknown>
@@ -156,6 +169,7 @@ export function parseProject(v: unknown, idx: number): Project | null {
     labelStyle: LABEL_STYLES.some((s) => s.id === o.labelStyle) ? (o.labelStyle as LabelStyle) : undefined,
     neckH: typeof o.neckH === 'number' && Number.isFinite(o.neckH) ? clamp(Math.round(o.neckH * 2) / 2, 1, 300) : undefined,
     shoulderH: typeof o.shoulderH === 'number' && Number.isFinite(o.shoulderH) ? clamp(Math.round(o.shoulderH * 2) / 2, 1, 300) : undefined,
+    labelBox: parseLabelBox(o.labelBox),
     shoulderStyle: SHOULDER_STYLES.some((s) => s.id === o.shoulderStyle && s.id !== 'round') ? (o.shoulderStyle as ShoulderStyle) : undefined,
     pouchStyle: POUCH_STYLES.some((s) => s.id === o.pouchStyle) ? (o.pouchStyle as PouchStyle) : undefined,
     zipper: o.zipper === true ? true : undefined,
