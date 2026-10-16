@@ -222,10 +222,13 @@ describe('parseStructure', () => {
     if (!r.ok) expect(r.issues.map((i) => i.code)).toEqual(expect.arrayContaining(['root', 'cycle']))
   })
 
-  it('schema is strict (additionalProperties false everywhere, all properties required)', () => {
+  it('schema is strict and uses only keywords Claude structured outputs accept', () => {
+    // Claude ตอบ 400 กับ minimum/maximum/multipleOf/minLength/maxLength/minItems/maxItems — เคยพังในหน้าทดลองมาแล้ว
+    const banned = ['minimum', 'maximum', 'multipleOf', 'minLength', 'maxLength', 'minItems', 'maxItems', 'pattern', 'uniqueItems']
     const walk = (node: unknown) => {
       if (typeof node !== 'object' || node === null) return
       const n = node as Record<string, unknown>
+      for (const k of banned) expect(n, `พบ ${k}`).not.toHaveProperty(k)
       if (n.type === 'object') {
         expect(n.additionalProperties).toBe(false)
         expect(Object.keys(n.properties as object).sort()).toEqual([...(n.required as string[])].sort())
@@ -233,6 +236,13 @@ describe('parseStructure', () => {
       for (const v of Object.values(n)) walk(v)
     }
     walk(STRUCTURE_SCHEMA)
+  })
+
+  it('caps the number of panels and flaps in the parser instead of the schema', () => {
+    const many = Array.from({ length: 25 }, (_, i) => ({ id: `f${i}`, type: 'tab', on: 'front', edge: 'top', depth: null, side: null }))
+    const r = parseStructure({ ...TUCK_END_STRUCTURE, flaps: many })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.issues[0].message).toContain('เกิน 24')
   })
 })
 

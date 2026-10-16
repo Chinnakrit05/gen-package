@@ -61,13 +61,21 @@ export interface BoxStructure {
   explanation: string
 }
 
+// structured outputs ของ Claude ไม่รับ minimum/maximum/minItems/maxItems/minLength (ตอบ 400) — ขอบเขตตัวเลข
+// และจำนวนแผงจึงบังคับใน parseStructure แทน และบอกไว้ใน description ให้โมเดลรู้
+// จำนวนแผง/ลิ้นสูงสุด (บังคับใน parseStructure เพราะ schema ใส่ maxItems ไม่ได้)
+export const MAX_ELEMENTS = 24
+
 const dimSchema = {
-  anyOf: [{ type: 'number', minimum: 1, maximum: 400 }, { type: 'string', enum: [...DIM_NAMES] }],
+  anyOf: [
+    { type: 'number', description: 'มม. (1-400)' },
+    { type: 'string', enum: [...DIM_NAMES], description: 'ขนาดด้านในของกล่อง หรือครึ่งหนึ่ง' },
+  ],
 }
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] })
 
-// JSON schema สำหรับ structured outputs ของ Claude (ทุก object ต้อง additionalProperties:false + required ครบ)
-// ตรงกับ parseStructure ด้านล่าง — แก้ฝั่งหนึ่งต้องแก้อีกฝั่ง
+// JSON schema สำหรับ structured outputs ของ Claude (ทุก object ต้อง additionalProperties:false + required ครบ,
+// ห้ามใช้ keyword ที่ API ไม่รองรับ — เทสต์ใน compile.test.ts กันไว้) ตรงกับ parseStructure ด้านล่าง — แก้ฝั่งหนึ่งต้องแก้อีกฝั่ง
 export const STRUCTURE_SCHEMA: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
@@ -80,8 +88,7 @@ export const STRUCTURE_SCHEMA: Record<string, unknown> = {
     },
     panels: {
       type: 'array',
-      minItems: 1,
-      maxItems: 24,
+      description: `แผง 1-${MAX_ELEMENTS} แผง (แผงราก 1 แผง attach = null)`,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -107,7 +114,7 @@ export const STRUCTURE_SCHEMA: Record<string, unknown> = {
     },
     flaps: {
       type: 'array',
-      maxItems: 24,
+      description: `ลิ้น 0-${MAX_ELEMENTS} ชิ้น`,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -165,6 +172,7 @@ export function parseStructure(raw: unknown): ParseResult {
   const panels: StructurePanel[] = []
   const ids = new Set<string>()
   if (!Array.isArray(raw.panels) || raw.panels.length === 0) err('panels', 'ต้องมี panels อย่างน้อย 1 แผง')
+  else if (raw.panels.length > MAX_ELEMENTS) err('panels', `panels มี ${raw.panels.length} แผง เกิน ${MAX_ELEMENTS}`)
   else {
     raw.panels.forEach((p: unknown, i: number) => {
       if (!isRecord(p)) return err('panel', `panels[${i}] ต้องเป็น object`)
@@ -204,6 +212,7 @@ export function parseStructure(raw: unknown): ParseResult {
 
   const flaps: StructureFlap[] = []
   if (raw.flaps !== undefined && !Array.isArray(raw.flaps)) err('flaps', 'flaps ต้องเป็น array')
+  else if (Array.isArray(raw.flaps) && raw.flaps.length > MAX_ELEMENTS) err('flaps', `flaps มี ${raw.flaps.length} ชิ้น เกิน ${MAX_ELEMENTS}`)
   else {
     ;((raw.flaps as unknown[]) ?? []).forEach((f: unknown, i: number) => {
       if (!isRecord(f)) return err('flap', `flaps[${i}] ต้องเป็น object`)

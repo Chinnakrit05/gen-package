@@ -305,7 +305,10 @@ export async function handleBoxStructure(
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) send(res, 502, { error: 'Anthropic API key ไม่ถูกต้อง' })
     else if (err instanceof Anthropic.RateLimitError) send(res, 429, { error: 'เรียกถี่เกินไป รอสักครู่แล้วลองใหม่' })
-    else if (err instanceof Anthropic.APIError) send(res, 502, { error: `Claude API ขัดข้อง (${err.status ?? '?'}) ลองใหม่อีกครั้ง` })
+    else if (err instanceof Anthropic.APIError) {
+      // endpoint ทดลองใน local dev — แนบข้อความจาก Anthropic ให้ดีบักได้ (ไม่มีคีย์ในข้อความ; 400 มักเป็น schema)
+      send(res, 502, { error: `Claude API ขัดข้อง (${err.status ?? '?'}): ${err.message.replace(/sk-ant-[\w-]+/g, '[key]').slice(0, 400)}` })
+    }
     else send(res, 502, { error: err instanceof Error ? err.message.slice(0, 300) : 'เกิดข้อผิดพลาดภายใน' })
   }
 }
