@@ -123,7 +123,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   (กลมที่ไหล่ → แบนกว้าง πW/2 ที่ซีล, ด้านข้างหัวกระสุน 1−v^`TUBE_BULLET`) ใช้ร่วม 3D + ความจุ (`tubeVolumeMl`); ตั้งบนฝา flip-top
   กว้างเกือบเท่าท่อ (`tubeCapR`), ซีลบน `TUBE_SEAL` มีลอนกด; พิมพ์รอบตัวทั้งท่อ (ค่ามาตรฐาน = ไหล่ถึงใต้ซีล) UV ตามความยาวผิว เริ่มกลางหลัง
   ฝาหลอด (กลุ่ม "ฝาหลอด", ใช้ `Project.capStyle`): ไม่ใช่ 'oval' = ฝาฟลิปท็อปกลม (เดิม); 'oval' = ฝาเหลี่ยม — ฝาเกลียวหน้าตัดสเตเดียม
-  สูง `TUBE_OVAL_CAP_FRAC`·H (ExtrudeGeometry ขอบมน) + ลำตัวโคนวงรีแบน `tubeOvalSection` (ลึก = `TUBE_OVAL_ASPECT`×กว้าง ที่เส้นรอบวง 2πR
+  สูง `TUBE_OVAL_CAP_FRAC`·H (`ovalFlipCapGeometry` ใน components/tubeCapGeometry.ts: ฝาพับช่วงล่าง `TUBE_LID_FRAC` ขอบมน = รอยต่อ + ร่องงัดรูปซุ้มลึกจริงบนหน้าแบนด้านหน้า) + ลำตัวโคนวงรีแบน `tubeOvalSection` (ลึก = `TUBE_OVAL_ASPECT`×กว้าง ที่เส้นรอบวง 2πR
   → `TubeShape.oval` ให้ `tubeSection` ไล่จากหน้าตัดฝา → วงรีโคน → ซีลแบน); `capColor` ใช้กับฝาหลอดด้วย; ขวดที่ได้ 'oval' ไม่มีฝา; PROJECT_FILE_VERSION 16
 - วัสดุถุงฟิล์ม (pouch-foil/pouch-kraft/pouch-clear, form==='pouch') → `src/core/pouch.ts`:
   ถุงฟิล์ม — (1) dieline แผ่นฟิล์มแบน (ข้างจีบ/ก้นแบน: [หน้า][หลัง][ลิ้นกาว]; pillow: [ครีบ][หลังซ้าย][หน้า][หลังขวา][ครีบ];

@@ -9,6 +9,7 @@ import { capShape, CORK_COLOR, defaultCapColor, tubeSection, type CapStyle, type
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
 import { SceneLighting, type LightMode } from './SceneLighting'
+import { ovalFlipCapGeometry } from './tubeCapGeometry'
 
 // พรีวิวภาชนะขึ้นรูป: โปรไฟล์หมุนรอบแกน (LatheGeometry) + ฉลากพันรอบตัว
 // ฉลากเป็นทรงกระบอกบาง ๆ ลอยเหนือผิว เท็กซ์เจอร์วาดจาก dieline ฉลาก (สีขาว = กระดาษฉลาก)
@@ -201,38 +202,10 @@ function VesselModel({
   }, [tube, vessel.H])
 
   // ฝา flip-top: ทรงกระบอกกว้างเกือบเท่าท่อ ขอบล่างมน (ตั้งบนฝา) + ร่องแบ่งฝาพับ/ฐาน
-  // ฝาเหลี่ยม: แท่งหน้าตัดสเตเดียม (ca×cb) ขอบมนรอบ — extrude แนวตั้งจากก้นถึง capTop
+  // ฝาเหลี่ยม: ฝาพับทรงสเตเดียม + รอยต่อ + ร่องงัดรูปซุ้ม (ovalFlipCapGeometry)
   const tubeCapGeo = useMemo(() => {
     if (!tube) return null
-    if (tube.oval) {
-      const { ca, cb } = tube.oval
-      const bev = Math.min(1.4, cb * 0.18)
-      const hx = ca - bev
-      const hz = cb - bev
-      const rr = hz * 0.92 // มุมเกือบเต็มครึ่งลึก = ทรงสเตเดียมมนข้าง
-      const sh = new THREE.Shape()
-      sh.moveTo(-hx + rr, -hz)
-      sh.lineTo(hx - rr, -hz)
-      sh.absarc(hx - rr, -hz + rr, rr, -Math.PI / 2, 0, false)
-      sh.lineTo(hx, hz - rr)
-      sh.absarc(hx - rr, hz - rr, rr, 0, Math.PI / 2, false)
-      sh.lineTo(-hx + rr, hz)
-      sh.absarc(-hx + rr, hz - rr, rr, Math.PI / 2, Math.PI, false)
-      sh.lineTo(-hx, -hz + rr)
-      sh.absarc(-hx + rr, -hz + rr, rr, Math.PI, Math.PI * 1.5, false)
-      const g = new THREE.ExtrudeGeometry(sh, {
-        depth: Math.max(0.5, tube.capTop - 2 * bev),
-        bevelEnabled: true,
-        bevelThickness: bev,
-        bevelSize: bev,
-        bevelSegments: 4,
-        curveSegments: 24,
-      })
-      g.rotateX(-Math.PI / 2) // แนว extrude (z) → แกนตั้ง (y)
-      g.translate(0, bev, 0)
-      g.computeVertexNormals()
-      return g
-    }
+    if (tube.oval) return ovalFlipCapGeometry(tube.oval.ca, tube.oval.cb, tube.capTop)
     const { rcap: r, capTop: h } = tube
     const bev = Math.min(1.2, r * 0.08)
     const g0 = h * 0.34 // ร่องรอยแยกฝาพับ (นับจากก้น)
