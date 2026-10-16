@@ -99,7 +99,7 @@ export function ovalFlipCapGeometry(ca: number, cb: number, h: number): THREE.Bu
   const aw = Math.min(fx * 2 * 0.8, ca * 2 * 0.36)
   const ar = aw / 2
   const ah = Math.max(ar * 1.2, (ytb - gL) * 0.72)
-  const d = Math.min(1.2, cb * 0.15)
+  const d = Math.min(3, cb * 0.3) // ลึกพอให้เห็นเงาผนังร่องชัด (ตัวฝากลวง ร่องไม่ทะลุ)
   const archPts: [number, number][] = [[-ar, gL], [-ar, gL + ah - ar]]
   for (let k = 1; k <= 16; k++) {
     const a = Math.PI - (Math.PI * k) / 16

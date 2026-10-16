@@ -23,7 +23,7 @@ describe('ฝาเหลี่ยมหลอดครีม: รอยต่�
 
   it('ร่องงัด: มีพื้นร่องยุบจากหน้าแบนด้านหน้า กลางหน้า เหนือรอยต่อฝาพับ', () => {
     const gL = h * TUBE_LID_FRAC
-    const floor = pts.filter((p) => p.z < cb - 0.5 && p.z > cb - 2 && Math.abs(p.x) < ca * 0.3 && p.y > gL + 0.5)
+    const floor = pts.filter((p) => p.z < cb - 2.5 && p.z > cb - 4 && Math.abs(p.x) < ca * 0.3 && p.y > gL + 0.5)
     expect(floor.length).toBeGreaterThan(10)
     // หน้าแบนด้านหน้าไม่มีเนื้อทับช่องร่อง: จุดที่ z = cb กลางหน้าเหนือรอยต่อเล็กน้อย = ขอบร่องเท่านั้น
     const archTop = Math.max(...floor.map((p) => p.y))

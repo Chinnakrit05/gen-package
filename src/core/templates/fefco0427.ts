@@ -31,8 +31,14 @@ export function rollEndLayout(
   // front: 'tuck' = ลิ้นหน้าเสียบด้านในผนังหน้า (0427) / 'wide' = ลิ้นหน้ากว้างเต็มแผ่น (rollover mailer):
   // ตัวลิ้นเสียบด้านในผนังหน้า หูสองปลายพับตั้งฉากเก็บเข้าด้านในผนังข้าง (ในปีกข้างฝา) → ปิดแล้วเรียบ ไม่เห็นหู
   const over = lid && opts.front === 'wide'
-  // ลิ้นหน้ากว้าง: ปีกข้างฝาพับก่อน (3) → หูลิ้นพับตั้งฉาก (4) → ฝาปิดพาลิ้นเสียบลง (5) — หูอยู่ในระนาบด้านในตลอด
-  const flapStage = over ? 3 : 4
+  // ลิ้นหน้ากว้าง: ฝาปิดเป็นจังหวะสุดท้าย (4) — ปีกข้างฝาและหูลิ้นเริ่มพับพร้อมฝา (`EARLY` = ช่วงแรกของจังหวะ)
+  // ส่วนฝาเริ่มหมุนช้ากว่าเล็กน้อย (`LID_LAG`): ปีกต้องพับเกือบเสร็จตอนฝายังตั้ง ไม่งั้นมุมปีกฝั่งบานพับ
+  // จะลดต่ำกว่าขอบผนังข้างขณะยังกางอยู่นอกกล่อง แล้วกวาดทะลุผนังตอนพับเข้า;
+  // ลิ้นเสียบ (tuck) ผูกมุมกับฝา → หูลิ้นกางเข้าในผนังข้างหลังฝาปิดสนิท (5)
+  const flapStage = 4
+  const lidStage = over ? 4 : 5
+  const EARLY: [number, number] = [0, 0.35]
+  const LID_LAG: [number, number] = [0.3, 1]
   const { W, D, H } = box
   const t = mat.thickness
 
@@ -253,35 +259,38 @@ export function rollEndLayout(
     // ฝา (stage 5) — ปีกข้าง (4) พับลงก่อน แล้วฝาปิดพาปีกลงด้านในชั้นทบ; ลิ้นหน้า tuck ผูกจังหวะกับฝา
     {
       id: 'lid', parentId: 'back', outline: rect(lx0, y1, lx1, y2),
-      hingeA: P(lx0, y2), hingeB: P(lx1, y2), foldAngle: 90, stage: 5,
+      hingeA: P(lx0, y2), hingeB: P(lx1, y2), foldAngle: 90, stage: lidStage,
+      ...(over ? { within: LID_LAG } : {}),
     },
     {
       id: 'lid-flap-left', parentId: 'lid', outline: flapPts(lx0, -1),
       hingeA: P(lx0, y1 + flapIn), hingeB: P(lx0, y2 - flapIn), foldAngle: -90, stage: flapStage,
+      ...(over ? { within: EARLY } : {}),
     },
     {
       id: 'lid-flap-right', parentId: 'lid', outline: flapPts(lx1, 1),
       hingeA: P(lx1, y1 + flapIn), hingeB: P(lx1, y2 - flapIn), foldAngle: 90, stage: flapStage,
+      ...(over ? { within: EARLY } : {}),
     },
     ...(over
       ? [
           // ตัวลิ้น: เสียบด้านในผนังหน้า (tuck ผูกมุมกับฝา) กว้างพอดีระหว่างชั้นทบสองข้าง
           {
             id: 'lip', parentId: 'lid', outline: rect(lx0, 0, lx1, y1),
-            hingeA: P(lx0, y1), hingeB: P(lx1, y1), foldAngle: 90, stage: 5, zOffset: layer, tuck: true,
+            hingeA: P(lx0, y1), hingeB: P(lx1, y1), foldAngle: 90, stage: lidStage, zOffset: layer, tuck: true,
           },
           // หูสองปลาย: พับทบ 180° แนบด้านในลิ้นไว้ก่อน (ตอนฝายังตั้ง) — ลิ้นงอเกินฉากตอนไถลลงผนังหน้า
           // ถ้าหูตั้งฉากไว้จะโผล่ทะลุฝา; ปิดฝาเสร็จแล้วค่อยกางหูกลับ 90° เข้าไปแนบด้านในปีกข้างฝา (จังหวะสุดท้าย
           // กวาดอยู่ในตัวกล่องล้วน) — ชั้นวัสดุ: ตอนทบอยู่ด้านในลิ้น (−layer ในแกนที่พลิกแล้ว) → ตอนจบ +layer
           {
             id: 'lip-ear-left', parentId: 'lip', outline: earOutline(true),
-            hingeA: P(lx0, 0), hingeB: P(lx0, y1), foldAngle: -180, stage: 4, zOffset: -layer,
-            refold: { angle: 90, stage: 6, dz: 2 * layer },
+            hingeA: P(lx0, 0), hingeB: P(lx0, y1), foldAngle: -180, stage: lidStage, within: EARLY, zOffset: -layer,
+            refold: { angle: 90, stage: lidStage + 1, dz: 2 * layer },
           },
           {
             id: 'lip-ear-right', parentId: 'lip', outline: earOutline(false),
-            hingeA: P(lx1, 0), hingeB: P(lx1, y1), foldAngle: 180, stage: 4, zOffset: -layer,
-            refold: { angle: -90, stage: 6, dz: 2 * layer },
+            hingeA: P(lx1, 0), hingeB: P(lx1, y1), foldAngle: 180, stage: lidStage, within: EARLY, zOffset: -layer,
+            refold: { angle: -90, stage: lidStage + 1, dz: 2 * layer },
           },
         ]
       : [

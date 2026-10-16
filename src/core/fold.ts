@@ -46,8 +46,12 @@ const WINDOWS_7: [number, number][] = [
   [0.9, 1],
 ]
 
-function stageProgress(windows: [number, number][], stage: number, fold: number): number {
-  const [s, e] = windows[Math.min(stage, windows.length - 1)]
+function stageProgress(windows: [number, number][], stage: number, fold: number, within?: [number, number]): number {
+  let [s, e] = windows[Math.min(stage, windows.length - 1)]
+  if (within) {
+    const w = e - s
+    ;[s, e] = [s + w * within[0], s + w * within[1]]
+  }
   const u = Math.min(1, Math.max(0, (fold - s) / (e - s)))
   return u * u * (3 - 2 * u)
 }
@@ -99,7 +103,7 @@ export function computeMatrices(panels: Panel[], fold: number): Map<string, Matr
     const p = byId.get(id)
     if (!p) throw new Error(`unknown panel: ${id}`)
     const m = p.parentId ? get(p.parentId).clone() : new Matrix4()
-    let progress = stageProgress(windows, p.stage, fold)
+    let progress = stageProgress(windows, p.stage, fold, p.within)
     if (p.hingeA && p.hingeB && p.foldAngle !== undefined) {
       const a = to3D(p.hingeA)
       const b = to3D(p.hingeB)
@@ -107,7 +111,7 @@ export function computeMatrices(panels: Panel[], fold: number): Map<string, Matr
       let theta = (p.foldAngle * Math.PI * progress) / 180
       if (p.tuck && p.foldAngle !== 0) {
         const lid = p.parentId ? byId.get(p.parentId) : undefined
-        theta = tuckAngle(p, lid, progress, stageProgress(windows, lid?.stage ?? 0, fold))
+        theta = tuckAngle(p, lid, progress, stageProgress(windows, lid?.stage ?? 0, fold, lid?.within))
         // ชั้นวัสดุ (zOffset) ดันตามมุมที่พับไปจริง — ลิ้นถูกพับนำจังหวะ stage ของตัวเอง
         // ถ้าใช้ progress เดิม ลิ้นจะเบียดผนังหน้าเกินความหนาชั้นช่วงที่ไถลลง
         progress = Math.min(1, (theta * 180) / Math.PI / p.foldAngle)
