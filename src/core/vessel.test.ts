@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_MIN, LABEL_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
+import { BODY_MIN, CAP_STYLES, capShape, LABEL_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
 import { ellipsePerimeter } from './pouch'
 import { MATERIALS, getMaterial } from './materials'
 import { computeGuides } from './guides'
@@ -313,5 +313,32 @@ describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: ฉลากกำ
     expect(front.label.panels.map((p) => p.id)).toEqual(['label'])
     expect(front.labelArc).toBeCloseTo(100 / (box.W / 2))
     expect(front.label.segments.some((sg) => sg.kind === 'crease')).toBe(false)
+  })
+})
+
+// ปากขวดทุกชนิดมีขอบปาก (วงแหวน) + ฝาเลือกได้ครอบขอบปาก
+describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: ปากขวด/ฝา %s', (id) => {
+  const v = generateVessel(box, getMaterial(id))
+  const m = v.mouth!
+
+  it('มีขอบปากกว้างกว่าคอ ที่ปลายบน', () => {
+    expect(m.rr).toBeGreaterThan(m.rn)
+    expect(m.top).toBeCloseTo(box.H)
+    expect(v.profile.some((p) => Math.abs(p.x - m.rr) < 1e-6 && Math.abs(p.y - box.H) < 1e-6)).toBe(true)
+  })
+
+  it.each(CAP_STYLES.filter((c) => c.id !== 'none').map((c) => [c.id] as const))('ฝา %s ครอบขอบปาก (ล่างต่ำกว่าวงแหวน กว้างกว่า สูงพ้นปาก)', (style) => {
+    const c = capShape(style, m)!
+    const ys = c.lathe.map((p) => p.y)
+    expect(Math.min(...ys)).toBeLessThan(m.lipY)
+    expect(Math.max(...c.lathe.map((p) => p.x))).toBeGreaterThan(m.rr)
+    expect(c.top).toBeGreaterThan(m.top)
+    for (let i = 1; i < c.lathe.length; i++) expect(c.lathe[i].y).toBeGreaterThanOrEqual(c.lathe[i - 1].y - 1e-9)
+  })
+
+  it('ไม่มีฝา = null; ฉลากหมุนได้ (180° = ด้านหลัง)', () => {
+    expect(capShape('none', m)).toBeNull()
+    expect(generateVessel(box, getMaterial(id), 'body', { label: { rot: 180 } }).labelRot).toBeCloseTo(Math.PI)
+    expect(v.labelRot).toBe(0)
   })
 })

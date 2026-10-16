@@ -107,7 +107,11 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ฉลากมาตรฐานขอบบนอยู่ใต้ไหล่เสมอ; `generateVessel(box, mat, labelStyle, { neckH, shoulderH, shoulderStyle, label })`
   ฉลากกำหนดเอง `Project.labelBox` {y ขอบล่างจากก้น, h สูง, w ยาวรอบตัว} (เก็บเฉพาะคีย์ที่ตั้ง; เลือกรูปแบบฉลาก = ล้าง y/h):
   clamp บนลำตัวตรง (`Vessel.labelRange`); w ≥ เส้นรอบวง = พันรอบ+ทับกาว, น้อยกว่า = ฉลากแผ่นหน้าแผงเดียวไม่มีกาว →
-  `Vessel.labelArc` (มุมหุ้ม) ให้ viewer สร้าง Cylinder ส่วนโค้งกึ่งกลางด้านหน้า; หลอดครีมไม่ใช้, PROJECT_FILE_VERSION 13
+  `Vessel.labelArc` (มุมหุ้ม) ให้ viewer สร้าง Cylinder ส่วนโค้งกึ่งกลางด้านหน้า; `labelBox.rot` องศา (0 หน้า, 180 หลัง → `Vessel.labelRot`
+  หมุน mesh ฉลาก); หลอดครีมไม่ใช้. ช่วงลำตัวตรงมาจาก `profileFor().straight` (ไม่ใช้เกณฑ์รัศมี — ขอบปากอาจกว้างเกือบเท่าตัว)
+  ปากขวดทุกชนิด (PET/แก้ว/อะลูมิเนียม) มีขอบปากวงแหวน (`SHAPES.ring`, สูง `mouthLip`) → `Vessel.mouth`; ฝาขวดเลือกได้
+  `Project.capStyle` none/screw/flip/pump + `capColor` — `capShape(style, mouth)` (pure) คืน lathe + ชิ้นกล่องเล็ก, ภาพ 3D เท่านั้น
+  (ไม่อยู่ใน dieline), ครอบลงต่ำกว่าวงแหวน; PROJECT_FILE_VERSION 14
 - หลอดครีม (tube-laminate, path ภาชนะ): W = ⌀ท่อ — ลำตัวสร้างจาก `tubeSection` (pure, vessel.ts) หน้าตัดวงรีเส้นรอบวงคงที่ πW
   (กลมที่ไหล่ → แบนกว้าง πW/2 ที่ซีล, ด้านข้างหัวกระสุน 1−v^`TUBE_BULLET`) ใช้ร่วม 3D + ความจุ (`tubeVolumeMl`); ตั้งบนฝา flip-top
   กว้างเกือบเท่าท่อ (`tubeCapR`), ซีลบน `TUBE_SEAL` มีลอนกด; พิมพ์รอบตัวทั้งท่อ (ค่ามาตรฐาน = ไหล่ถึงใต้ซีล) UV ตามความยาวผิว เริ่มกลางหลัง
@@ -152,7 +156,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
-  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 13); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 14); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° ได้สันโค้งจาก `rollBeads` ใน fold.ts (ทรงกระบอกบาง รัศมี = ครึ่งระยะสองชั้น) — ตอนนี้ไม่มี template ใช้แล้ว
 - FEFCO 0427 ตามผัง dieline มาตรฐาน: ผนังข้างทบเป็นรอยพับคู่ (ผนัง → สัน กว้าง sp = 3t+0.2 = ผนัง+หู+ชั้นทบ → ชั้นทบ)
   ลิ้นปลายชั้นทบลงช่องบนฐานที่ sp − t/2; ฝาแคบกว่ากล่องข้างละ sp มีปีกข้างคางหมูพับลงด้านในชั้นทบ (stage 4 ก่อนฝาปิด 5),

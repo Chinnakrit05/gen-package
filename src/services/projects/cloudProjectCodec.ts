@@ -180,6 +180,8 @@ export async function dehydrateProject(input: DehydrateProjectInput): Promise<De
     ...(project.shoulderH !== undefined ? { shoulderH: project.shoulderH } : {}),
     ...(project.shoulderStyle && project.shoulderStyle !== 'round' ? { shoulderStyle: project.shoulderStyle } : {}),
     ...(project.labelBox && Object.keys(project.labelBox).length ? { labelBox: { ...project.labelBox } } : {}),
+    ...(project.capStyle && project.capStyle !== 'none' ? { capStyle: project.capStyle } : {}),
+    ...(project.capColor ? { capColor: project.capColor } : {}),
     ...(project.stickerCut ? { stickerCut: structuredClone(project.stickerCut) as unknown as Record<string, unknown> } : {}),
     ...(project.pouchStyle ? { pouchStyle: project.pouchStyle } : {}),
     ...(project.zipper !== undefined ? { zipper: project.zipper } : {}),

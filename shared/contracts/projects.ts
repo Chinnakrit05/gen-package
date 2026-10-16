@@ -17,6 +17,8 @@ export interface CloudProjectDocumentV1 {
   shoulderH?: number
   shoulderStyle?: string
   labelBox?: Record<string, number>
+  capStyle?: string
+  capColor?: string
   pouchStyle?: string
   zipper?: boolean
   pouchAddons?: Record<string, boolean | number>

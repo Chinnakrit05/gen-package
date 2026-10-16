@@ -88,7 +88,7 @@ import {
   resolveStickerSheet,
   type SheetLayout,
 } from './core/stickerSheet'
-import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
+import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, DEFAULT_CAP_COLOR, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
 import {
   generatePouch,
   POUCH_STYLES,
@@ -881,6 +881,8 @@ interface EditSnapshot {
   shoulderH: number | undefined
   shoulderStyle: ShoulderStyle
   labelBox: LabelBox | undefined
+  capStyle: CapStyle
+  capColor: string | null
   pouchStyle: PouchStyle
   zipper: boolean
   pouchAddons: PouchAddons
@@ -904,6 +906,8 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.shoulderH === b.shoulderH &&
   a.shoulderStyle === b.shoulderStyle &&
   sameLabelBox(a.labelBox, b.labelBox) &&
+  a.capStyle === b.capStyle &&
+  a.capColor === b.capColor &&
   a.pouchStyle === b.pouchStyle &&
   a.zipper === b.zipper &&
   a.pouchAddons === b.pouchAddons &&
@@ -920,7 +924,7 @@ const sameSpec = (a: CurrentSpec, b: CurrentSpec) =>
   a.handle === b.handle
 
 const sameLabelBox = (a: LabelBox | undefined, b: LabelBox | undefined) =>
-  a?.y === b?.y && a?.h === b?.h && a?.w === b?.w
+  a?.y === b?.y && a?.h === b?.h && a?.w === b?.w && a?.rot === b?.rot
 
 const samePouchAddons = (a: PouchAddons | undefined, b: PouchAddons | undefined) =>
   Boolean(a?.hangHole) === Boolean(b?.hangHole)
@@ -1205,6 +1209,9 @@ export default function App({
   const [shoulderStyle, setShoulderStyle] = useState<ShoulderStyle>(initialActive.shoulderStyle ?? 'round')
   // ฉลากกำหนดเอง (ตำแหน่ง/สูง/ยาวรอบตัว) — undefined = ตามรูปแบบฉลาก
   const [labelBox, setLabelBox] = useState<LabelBox | undefined>(initialActive.labelBox)
+  // ฝาขวด (ภาพ 3D) — ไม่มีฝาเป็นค่าเริ่มต้น; สี null = ขาวมาตรฐาน
+  const [capStyle, setCapStyle] = useState<CapStyle>(initialActive.capStyle ?? 'none')
+  const [capColor, setCapColor] = useState<string | null>(initialActive.capColor ?? null)
   const [pouchStyle, setPouchStyle] = useState<PouchStyle>(initialActive.pouchStyle ?? 'stand')
   const [zipper, setZipper] = useState<boolean>(initialActive.zipper ?? false)
   const [pouchAddons, setPouchAddons] = useState<PouchAddons>(initialActive.pouchAddons ?? {})
@@ -1355,6 +1362,7 @@ export default function App({
     tpl: true,
     mat: true,
     label: true,
+    cap: true,
     size: true,
     // หน้าตกแต่ง (bg เปิดไว้ — เป็นโมดูลลอยแล้ว)
     bg: true,
@@ -1753,6 +1761,8 @@ export default function App({
               && p.shoulderH === shoulderH
               && (p.shoulderStyle ?? 'round') === shoulderStyle
               && sameLabelBox(p.labelBox, labelBox)
+              && (p.capStyle ?? 'none') === capStyle
+              && (p.capColor ?? null) === capColor
               && (p.pouchStyle ?? 'stand') === pouchStyle
               && Boolean(p.zipper) === zipper
               && samePouchAddons(p.pouchAddons, pouchAddons)
@@ -1773,6 +1783,8 @@ export default function App({
                     shoulderH,
                     shoulderStyle,
                     labelBox,
+                    capStyle,
+                    capColor: capColor ?? undefined,
                     pouchStyle,
                     zipper,
                     pouchAddons,
@@ -1788,7 +1800,7 @@ export default function App({
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
 
   // local demo เขียน localStorage; cloud ส่ง active project เข้า durable IndexedDB/save queue
   useEffect(() => {
@@ -1873,6 +1885,8 @@ export default function App({
     shoulderH,
     shoulderStyle,
     labelBox,
+    capStyle,
+    capColor,
     pouchStyle,
     zipper,
     pouchAddons,
@@ -1900,7 +1914,7 @@ export default function App({
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -1918,6 +1932,8 @@ export default function App({
     setShoulderH(s.shoulderH)
     setShoulderStyle(s.shoulderStyle ?? 'round')
     setLabelBox(s.labelBox)
+    setCapStyle(s.capStyle ?? 'none')
+    setCapColor(s.capColor ?? null)
     setPouchStyle(s.pouchStyle ?? 'stand')
     setZipper(s.zipper ?? false)
     setPouchAddons(s.pouchAddons ?? {})
@@ -2014,6 +2030,8 @@ export default function App({
           && p.shoulderH === shoulderH
           && (p.shoulderStyle ?? 'round') === shoulderStyle
           && sameLabelBox(p.labelBox, labelBox)
+          && (p.capStyle ?? 'none') === capStyle
+          && (p.capColor ?? null) === capColor
           && (p.pouchStyle ?? 'stand') === pouchStyle
           && Boolean(p.zipper) === zipper
           && samePouchAddons(p.pouchAddons, pouchAddons)
@@ -2023,7 +2041,7 @@ export default function App({
           && p.history === history
           && p.histIdx === histIdx
             ? p
-            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
+            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, capStyle, capColor: capColor ?? undefined, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -2043,6 +2061,8 @@ export default function App({
     setShoulderH(p.shoulderH)
     setShoulderStyle(p.shoulderStyle ?? 'round')
     setLabelBox(p.labelBox)
+    setCapStyle(p.capStyle ?? 'none')
+    setCapColor(p.capColor ?? null)
     setPouchStyle(p.pouchStyle ?? 'stand')
     setZipper(p.zipper ?? false)
     setPouchAddons(p.pouchAddons ?? {})
@@ -2857,7 +2877,7 @@ export default function App({
             watermark={watermark}
           />
         ) : kind === 'vessel' ? (
-          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} lightMode={lightMode3d} watermark={watermark} />
+          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} lightMode={lightMode3d} watermark={watermark} capStyle={capStyle} capColor={capColor} />
         ) : (
           <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} dimVariant="lines" lightMode={lightMode3d} watermark={watermark} />
         )}
@@ -3412,6 +3432,30 @@ export default function App({
                         )
                       : t('ฉลากแผ่นหน้า (ไม่พันรอบ) จัดกึ่งกลางด้านหน้าขวด', 'Front label (not wrap-around), centred on the front')}
                   </p>
+                  <DimField
+                    label={t('หมุนฉลากรอบขวด', 'Rotate label')}
+                    unit="°"
+                    step={5}
+                    value={labelBox?.rot ?? 0}
+                    min={-180}
+                    max={180}
+                    disabled={aiBusy}
+                    onChange={(v) => setLabelBox((b) => ({ ...b, rot: v }))}
+                  />
+                  <div className="unit-toggle" role="group" aria-label={t('ด้านที่ติดฉลาก', 'Label side')}>
+                    {([[0, 'หน้า', 'Front'], [90, 'ข้าง', 'Side'], [180, 'หลัง', 'Back']] as const).map(([deg, th, en]) => (
+                      <button
+                        key={deg}
+                        type="button"
+                        className={Math.abs(labelBox?.rot ?? 0) === deg ? 'active' : ''}
+                        aria-pressed={Math.abs(labelBox?.rot ?? 0) === deg}
+                        disabled={aiBusy}
+                        onClick={() => setLabelBox((b) => ({ ...b, rot: deg }))}
+                      >
+                        {t(th, en)}
+                      </button>
+                    ))}
+                  </div>
                   {labelBox && (
                     <button type="button" className="link-btn" disabled={aiBusy} onClick={() => setLabelBox(undefined)}>
                       {t('กลับเป็นขนาดตามรูปแบบฉลาก', 'Reset to label style')}
@@ -3419,6 +3463,38 @@ export default function App({
                   )}
                 </>
               )}
+            </Group>
+          )}
+
+          {showNeck && (
+            <Group title={t('ฝาขวด', 'Cap')} open={groups.cap} onToggle={() => toggleGroup('cap')}>
+              <div className="pick-list">
+                {CAP_STYLES.map((c) => (
+                  <button
+                    key={c.id}
+                    className={`pick-item${capStyle === c.id ? ' active' : ''}`}
+                    disabled={aiBusy}
+                    aria-pressed={capStyle === c.id}
+                    onClick={() => setCapStyle(c.id)}
+                  >
+                    <span className="pick-name">{t(c.nameTh, c.nameEn)}</span>
+                    <span className="pick-detail">{c.detail}</span>
+                  </button>
+                ))}
+              </div>
+              {capStyle !== 'none' && (
+                <label className="check" style={{ marginTop: 10 }}>
+                  <input
+                    type="color"
+                    value={capColor ?? DEFAULT_CAP_COLOR}
+                    disabled={aiBusy}
+                    aria-label={t('สีฝา', 'Cap colour')}
+                    onChange={(e) => setCapColor(e.target.value)}
+                  />
+                  {t('สีฝา', 'Cap colour')}
+                </label>
+              )}
+              <p className="hint">{t('ฝาแสดงในภาพ 3D เท่านั้น — ไม่อยู่ในไฟล์ฉลาก', 'The cap is shown in 3D only — not part of the label file')}</p>
             </Group>
           )}
 

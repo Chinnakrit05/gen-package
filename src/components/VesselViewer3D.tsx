@@ -5,7 +5,7 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
-import { tubeSection, type Vessel } from '../core/vessel'
+import { capShape, DEFAULT_CAP_COLOR, tubeSection, type CapStyle, type Vessel } from '../core/vessel'
 import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
 import { SceneLighting, type LightMode } from './SceneLighting'
@@ -71,6 +71,8 @@ function VesselModel({
   dims,
   imperial,
   watermark,
+  capStyle = 'none',
+  capColor,
 }: {
   vessel: Vessel
   mat: Material
@@ -80,6 +82,8 @@ function VesselModel({
   dims?: Dim3D[]
   imperial?: boolean
   watermark?: string | null
+  capStyle?: CapStyle
+  capColor?: string | null
 }) {
   const tex = useLabelTexture(vessel, decos, fillColor, fillImage, watermark)
 
@@ -243,6 +247,15 @@ function VesselModel({
   // สีฝาหลอด flip-top — พลาสติกขาวเงา แยกจากตัวหลอด
   const CAP_COLOR = '#f1f1ef'
 
+  // ฝาขวด (เลือกได้): ทรงหมุนครอบขอบปาก + ชิ้นเล็ก (ร่องหยัก/ลิ้นเปิด/หัวฉีด)
+  const cap = useMemo(() => (vessel.mouth && !tube ? capShape(capStyle, vessel.mouth) : null), [vessel, capStyle, tube])
+  const capGeo = useMemo(
+    () => (cap ? new THREE.LatheGeometry(cap.lathe.map((p) => new THREE.Vector2(p.x, p.y)), 64) : null),
+    [cap],
+  )
+  useEffect(() => () => capGeo?.dispose(), [capGeo])
+  const capCol = capColor || DEFAULT_CAP_COLOR
+
   const modelRef = useRef<THREE.Group>(null)
 
   return (
@@ -290,9 +303,22 @@ function VesselModel({
           <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} roughness={0.8} metalness={0} side={THREE.DoubleSide} />
         </mesh>
       ) : (
-        <mesh geometry={labelGeo} position={[0, (vessel.labelY0 + vessel.labelY1) / 2, 0]} rotation={[0, Math.PI, 0]}>
+        <mesh geometry={labelGeo} position={[0, (vessel.labelY0 + vessel.labelY1) / 2, 0]} rotation={[0, Math.PI + vessel.labelRot, 0]}>
           <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} roughness={0.8} metalness={0} />
         </mesh>
+      )}
+      {cap && capGeo && (
+        <>
+          <mesh geometry={capGeo}>
+            <meshStandardMaterial color={capCol} roughness={0.38} metalness={0.02} side={THREE.DoubleSide} />
+          </mesh>
+          {cap.parts.map((pt, i) => (
+            <mesh key={i} position={[pt.x, pt.y, pt.z]} rotation={[0, pt.rotY ?? 0, 0]}>
+              <boxGeometry args={[pt.w, pt.h, pt.d]} />
+              <meshStandardMaterial color={capCol} roughness={0.38} metalness={0.02} />
+            </mesh>
+          ))}
+        </>
       )}
     </group>
     {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant={tube ? 'tube' : 'vessel'} />}
@@ -310,6 +336,8 @@ export function VesselViewer3D({
   imperial,
   lightMode,
   watermark,
+  capStyle,
+  capColor,
 }: {
   vessel: Vessel
   mat: Material
@@ -320,6 +348,8 @@ export function VesselViewer3D({
   imperial?: boolean
   lightMode?: LightMode
   watermark?: string | null
+  capStyle?: CapStyle
+  capColor?: string | null
 }) {
   const dist = Math.max(vessel.H, vessel.labelR * 4) * 2.2
   return (
@@ -331,7 +361,7 @@ export function VesselViewer3D({
     >
       <color attach="background" args={['#ffffff']} />
       <SceneLighting mode={lightMode ?? 'soft'} />
-      <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} watermark={watermark} />
+      <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} watermark={watermark} capStyle={capStyle} capColor={capColor} />
       <OrbitControls makeDefault enableDamping />
     </Canvas>
   )

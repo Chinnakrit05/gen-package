@@ -1,7 +1,7 @@
 import { MATERIALS } from './materials'
 import { TEMPLATES } from './templates'
 import { parseDecos, parseFillImage, type Deco, type FillImage } from './artwork'
-import { LABEL_STYLES, SHOULDER_STYLES, type LabelBox, type LabelStyle, type ShoulderStyle } from './vessel'
+import { CAP_STYLES, LABEL_STYLES, SHOULDER_STYLES, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './vessel'
 import { POUCH_STYLES, ZIP_AT_MAX, type PouchStyle, type PouchAddons } from './pouch'
 import { parseVents, type VentConfig } from './vents'
 import { parseStickerCut, type StickerCut } from './stickerContour'
@@ -54,7 +54,9 @@ export interface Project {
   neckH?: number // ความสูงคอขวด มม. (เฉพาะโหมดภาชนะ; H = สูงรวม) — ไม่ใส่ = สัดส่วนมาตรฐานตามวัสดุ
   shoulderH?: number // ความสูงไหล่ มม. (อยู่ในความสูงตัว) — ไม่ใส่ = สัดส่วนมาตรฐานตามวัสดุ
   shoulderStyle?: ShoulderStyle // รูปทรงไหล่ — ไม่ใส่ = 'round'
-  labelBox?: LabelBox // ฉลากกำหนดเอง (ขอบล่าง/สูง/ยาวรอบตัว มม.) — เก็บเฉพาะคีย์ที่ตั้ง
+  labelBox?: LabelBox // ฉลากกำหนดเอง (ขอบล่าง/สูง/ยาวรอบตัว มม., หมุนองศา) — เก็บเฉพาะคีย์ที่ตั้ง
+  capStyle?: CapStyle // ฝาขวด (3D) — ไม่ใส่ = 'none'
+  capColor?: string // สีฝา #rrggbb — ไม่ใส่ = ขาวมาตรฐาน
   pouchStyle?: PouchStyle // รูปแบบถุง (เฉพาะโหมดถุง) — ไม่ใส่ = 'stand'
   zipper?: boolean // ซิปล็อก + รอยฉีก (เฉพาะโหมดถุง) — เก็บเฉพาะเมื่อ true
   pouchAddons?: PouchAddons // ออปชันเสริมถุง (รูแขวน/วาล์ว/tin-tie) — เก็บเฉพาะที่เปิด + ตำแหน่งซิป/รอยบากที่ตั้งเอง
@@ -149,6 +151,7 @@ export function parseLabelBox(v: unknown): LabelBox | undefined {
     const n = o[k]
     if (typeof n === 'number' && Number.isFinite(n)) out[k] = clamp(Math.round(n * 2) / 2, 0, 2000)
   }
+  if (typeof o.rot === 'number' && Number.isFinite(o.rot) && o.rot !== 0) out.rot = clamp(Math.round(o.rot), -180, 180)
   return Object.keys(out).length ? out : undefined
 }
 
@@ -170,6 +173,8 @@ export function parseProject(v: unknown, idx: number): Project | null {
     neckH: typeof o.neckH === 'number' && Number.isFinite(o.neckH) ? clamp(Math.round(o.neckH * 2) / 2, 1, 300) : undefined,
     shoulderH: typeof o.shoulderH === 'number' && Number.isFinite(o.shoulderH) ? clamp(Math.round(o.shoulderH * 2) / 2, 1, 300) : undefined,
     labelBox: parseLabelBox(o.labelBox),
+    capStyle: CAP_STYLES.some((s) => s.id === o.capStyle && s.id !== 'none') ? (o.capStyle as CapStyle) : undefined,
+    capColor: typeof o.capColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.capColor) ? o.capColor : undefined,
     shoulderStyle: SHOULDER_STYLES.some((s) => s.id === o.shoulderStyle && s.id !== 'round') ? (o.shoulderStyle as ShoulderStyle) : undefined,
     pouchStyle: POUCH_STYLES.some((s) => s.id === o.pouchStyle) ? (o.pouchStyle as PouchStyle) : undefined,
     zipper: o.zipper === true ? true : undefined,

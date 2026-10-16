@@ -89,6 +89,22 @@ describe('projectFile: round-trip', () => {
     expect(res.project.labelBox).toEqual({ y: 20.5, h: 45, w: 120 })
   })
 
+  it('ฝาขวด + หมุนฉลาก: เก็บเมื่อตั้ง และอ่านกลับได้', () => {
+    const p = sampleProject()
+    p.live = { template: 'tuck-end', materialId: 'glass', W: 60, D: 25, H: 150, handle: false }
+    p.capStyle = 'none'
+    expect(JSON.parse(serializeProject(p)).project.capStyle).toBeUndefined()
+    p.capStyle = 'pump'
+    p.capColor = '#112233'
+    p.labelBox = { rot: 180 }
+    const res = parseProjectFile(serializeProject(p))
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.project.capStyle).toBe('pump')
+    expect(res.project.capColor).toBe('#112233')
+    expect(res.project.labelBox).toEqual({ rot: 180 })
+  })
+
   it('นำเข้าได้ id ใหม่เสมอ (กันชนกับงานที่เปิดอยู่)', () => {
     const p = sampleProject()
     const res = parseProjectFile(serializeProject(p))

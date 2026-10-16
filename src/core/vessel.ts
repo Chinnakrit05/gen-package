@@ -56,6 +56,8 @@ export interface Vessel {
   labelR: number // รัศมีผิวที่ติดฉลาก
   labelY0: number // ช่วงความสูงของฉลากบนตัวภาชนะ
   labelY1: number
+  labelRot: number // หมุนฉลากรอบแกนตั้ง (เรเดียน) จากด้านหน้า
+  mouth?: Mouth // ปากขวด (ขวด/โหล/กระป๋อง) — ตำแหน่งวางฝา
   labelArc: number // มุมที่ฉลากหุ้ม (เรเดียน) — 2π = พันรอบตัว, น้อยกว่า = ฉลากแผ่นหน้า จัดกึ่งกลางด้านหน้า
   labelRange: [number, number] // ช่วงความสูงที่ติดฉลากได้ (ลำตัวตรง) — ใช้เป็นขอบเขตช่องปรับตำแหน่ง/สูง
   circ: number // เส้นรอบวงตัว (มม.)
@@ -105,11 +107,12 @@ interface VesselShapeSpec {
   gap: number
   band0: number
   foot: number
+  ring: number // รัศมีขอบปาก (×รัศมีคอ)
 }
 const SHAPES: Record<string, VesselShapeSpec> = {
-  'pet-bottle': { neck: 0.18, base: 0.061, shoulder: 0.268, ctrl: 0.728, gap: 0.061, band0: 0.122, foot: 0.86 },
-  glass: { neck: 0.16, base: 0.048, shoulder: 0.143, ctrl: 0.832, gap: 0.071, band0: 0.119, foot: 0.92 },
-  aluminum: { neck: 0.06, base: 0.043, shoulder: 0.085, ctrl: 1, gap: 0.043, band0: 0.064, foot: 0.82 },
+  'pet-bottle': { neck: 0.18, base: 0.061, shoulder: 0.268, ctrl: 0.728, gap: 0.061, band0: 0.122, foot: 0.86, ring: 1.12 },
+  glass: { neck: 0.16, base: 0.048, shoulder: 0.143, ctrl: 0.832, gap: 0.071, band0: 0.119, foot: 0.92, ring: 1.1 },
+  aluminum: { neck: 0.06, base: 0.043, shoulder: 0.085, ctrl: 1, gap: 0.043, band0: 0.064, foot: 0.82, ring: 1.08 },
 }
 
 // ความสูงคอ (มม.) = ช่วงตั้งแต่ปลายไหล่ (รัศมีลดถึงปาก) ถึงปาก — ตัว = ก้นถึงปลายไหล่ (H − คอ)
@@ -146,6 +149,7 @@ export interface LabelBox {
   y?: number
   h?: number
   w?: number
+  rot?: number // หมุนฉลากรอบตัว (องศา) 0 = กึ่งกลางด้านหน้า, ±180 = ด้านหลัง
 }
 export const LABEL_MIN = 5
 
@@ -171,7 +175,13 @@ function shoulderPts(style: ShoulderStyle, R: number, rn: number, s0: number, Hb
 
 // โปรไฟล์ต่อชนิดภาชนะ + ช่วงติดฉลาก (สัดส่วนอิงรูปทรงจริงของภาชนะแต่ละแบบ)
 // ลำตัว/ไหล่อิงความสูงตัว Hb = H − คอ; คอเป็นทรงกระบอก ⌀ปาก จาก Hb ถึง H
-function profileFor(matId: string, R: number, rn: number, H: number, shape: VesselShape): { pts: Vec2[]; band: [number, number] } {
+function profileFor(
+  matId: string,
+  R: number,
+  rn: number,
+  H: number,
+  shape: VesselShape,
+): { pts: Vec2[]; band: [number, number]; straight?: [number, number]; mouth?: Mouth } {
   if (matId === 'tube-laminate') {
     // หลอดบีบคลาสสิก: ตั้งบน "ฝา/คอกลม" ที่ก้น → ลำตัวเป็น loft วงรี (กว้างคงที่ ลึกเรียว→ซีลแบน)
     // profile นี้เก็บแค่ฝา/คอ (ทรงหมุน กลม) จบแบบ "เปิด" ที่ (rcap, capH) ให้ลำตัว loft รับต่อ
@@ -196,18 +206,126 @@ function profileFor(matId: string, R: number, rn: number, H: number, shape: Vess
   // ฉลากมาตรฐาน: ขอบบนใต้ไหล่เสมอ (ไหล่สูง → ฉลากเตี้ยลง)
   const band1 = Math.max(s0 - sp.gap * Hb, baseTop + 4)
   const band: [number, number] = [Math.min(sp.band0 * Hb, band1 - 3), band1]
+  // ปากขวดทุกชนิดมีขอบปาก (finish/bead) เหมือนกัน: วงแหวนสูง ~28% ของคอ — ฝาครอบทับช่วงนี้
+  const lip = mouthLip(neck, H)
+  const rr = rn * sp.ring
+  const mouthPts = [P(rn, H - lip), P(rr, H - lip * 0.9), P(rr, H)]
+  // ช่วงลำตัวตรง = ขอบก้นมนถึงไหล่เริ่ม (ไม่ใช้เกณฑ์รัศมี — ขอบปากอาจกว้างเกือบเท่าตัว)
+  const out = { band, straight: [baseTop, s0] as [number, number], mouth: { rn, rr, lipY: H - lip, top: H } }
   if (matId === 'aluminum') {
-    // กระป๋อง: ตัวตรง คอดบนเล็กน้อย ฝาปิด
-    return { pts: [...body, P(rn, H), P(rn * 0.94, H), P(0, H)], band }
+    // กระป๋อง/ขวดอะลูมิเนียม: ขอบม้วนที่ปาก แล้วปิดฝาบน (ฝาเปลือกกระป๋อง)
+    return { ...out, pts: [...body, ...mouthPts, P(rr * 0.94, H), P(0, H)] }
   }
-  if (matId === 'glass') {
-    // โหล/ขวดแก้วปากกว้าง: ตัวอวบ บ่าสั้น ปากกว้าง
-    return { pts: [...body, P(rn, H)], band }
-  }
-  // ขวด PET: ตัวทรงกระบอก ไหล่โค้งยาว คอเล็ก ปากมีขอบ (ขอบปากสูง ~28% ของคอ)
-  const lip = Math.min(neck * 0.28, Math.max(1.5, H * 0.05))
-  return { pts: [...body, P(rn, H - lip), P(rn * 1.12, H - lip * 0.9), P(rn * 1.12, H)], band }
+  // ขวด PET / ขวดแก้ว: ปากเปิด
+  return { ...out, pts: [...body, ...mouthPts] }
 }
+
+// ปากขวด: rn = รัศมีคอ, rr = รัศมีขอบปาก, lipY = ขอบล่างของขอบปาก, top = ปาก (= H)
+export interface Mouth {
+  rn: number
+  rr: number
+  lipY: number
+  top: number
+}
+
+// ฝาขวด (เลือกได้ — ภาพ 3D เท่านั้น ไม่อยู่ใน dieline ฉลาก)
+export type CapStyle = 'none' | 'screw' | 'flip' | 'pump'
+export const CAP_STYLES: { id: CapStyle; nameTh: string; nameEn: string; detail: string }[] = [
+  { id: 'none', nameTh: 'ไม่มีฝา', nameEn: 'No cap', detail: 'แสดงปากขวดเปล่า' },
+  { id: 'screw', nameTh: 'ฝาเกลียว', nameEn: 'Screw cap', detail: 'ฝาเกลียวขอบหยัก — น้ำดื่ม/เครื่องดื่ม/ซอส' },
+  { id: 'flip', nameTh: 'ฝาฟลิปท็อป', nameEn: 'Flip-top cap', detail: 'ฝาเปิดพับได้ — แชมพู/ครีมอาบน้ำ/ซอส' },
+  { id: 'pump', nameTh: 'หัวปั๊ม', nameEn: 'Pump', detail: 'หัวกดปั๊ม — สบู่เหลว/โลชั่น/เจล' },
+]
+export const DEFAULT_CAP_COLOR = '#f4f4f2'
+
+// ชิ้นประกอบกล่องเล็ก ๆ ของฝา (ร่องหยัก/ลิ้นเปิด/หัวฉีด) — พิกัดเดียวกับโปรไฟล์ (y จากก้น, z = ด้านหน้า)
+export interface CapPart {
+  x: number
+  y: number
+  z: number
+  w: number
+  h: number
+  d: number
+  rotY?: number
+}
+
+// รูปฝา: lathe = โปรไฟล์ทรงหมุน (x = รัศมี, y) จากขอบล่างนอกขึ้นไปจบกลางยอด; ฝาครอบขอบปากลงมาถึงใต้วงแหวน
+export function capShape(style: CapStyle, m: Mouth): { lathe: Vec2[]; parts: CapPart[]; top: number } | null {
+  if (style === 'none') return null
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+  const lipH = m.top - m.lipY
+  const rc = m.rr + 0.6 // ผนังฝาครอบนอกวงแหวน
+  if (style === 'screw') {
+    const hc = clamp(m.rn * 1.1, 8, 40)
+    const yb = m.top - Math.max(lipH + 1, hc * 0.55)
+    const yt = yb + hc
+    const b = Math.min(1.2, hc * 0.1)
+    const parts: CapPart[] = []
+    const n = Math.max(24, Math.round((2 * Math.PI * rc) / 2.2)) // ร่องหยักกันลื่นทุก ~2 มม.
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * 2 * Math.PI
+      parts.push({ x: Math.sin(a) * rc, y: yb + hc * 0.45, z: Math.cos(a) * rc, w: 0.7, h: hc * 0.72, d: 0.7, rotY: a })
+    }
+    return { lathe: [P(m.rr + 0.05, yb), P(rc, yb), P(rc, yt - b), P(rc - b, yt), P(0, yt)], parts, top: yt }
+  }
+  if (style === 'flip') {
+    const rf = rc + Math.max(0.8, m.rn * 0.12)
+    const hf = clamp(m.rn * 1.25, 10, 45)
+    const yb = m.top - Math.max(lipH + 1, hf * 0.45)
+    const yg = yb + hf * 0.62 // แนวแยกฝาพับ (ร่อง)
+    const yt = yb + hf
+    const g = 0.5
+    const dome = Math.min(2, hf * 0.08)
+    return {
+      lathe: [
+        P(m.rr + 0.05, yb),
+        P(rf, yb),
+        P(rf, yg - g),
+        P(rf - g, yg - g / 2),
+        P(rf, yg),
+        P(rf, yt - dome),
+        P(rf * 0.7, yt - dome * 0.2),
+        P(0, yt),
+      ],
+      parts: [
+        // ลิ้นเปิดฝาด้านหน้า + บานพับด้านหลัง
+        { x: 0, y: yg + 0.8, z: rf + 0.6, w: rf * 0.55, h: 1.6, d: 1.4 },
+        { x: 0, y: yg, z: -rf - 0.4, w: rf * 0.5, h: 2.2, d: 1 },
+      ],
+      top: yt,
+    }
+  }
+  // หัวปั๊ม: ปลอกเกลียว → ก้านกด → หัวกด + หัวฉีดยื่นไปด้านหน้า
+  const hcol = clamp(m.rn * 0.8, 6, 25)
+  const yb = m.top - Math.max(lipH + 1, hcol * 0.6)
+  const yc = yb + hcol
+  const rs = Math.max(1.5, m.rn * 0.22)
+  const ys = yc + clamp(m.rn * 0.9, 6, 30)
+  const ra = Math.max(5, m.rn * 0.8)
+  const ha = clamp(m.rn * 0.75, 6, 22)
+  const yt = ys + ha
+  const b = Math.min(2, ha * 0.2)
+  const nozL = Math.max(8, m.rn * 1.5)
+  return {
+    lathe: [
+      P(m.rr + 0.05, yb),
+      P(rc, yb),
+      P(rc, yc - 0.8),
+      P(rc - 0.8, yc),
+      P(rs, yc),
+      P(rs, ys),
+      P(ra, ys),
+      P(ra, yt - b),
+      P(ra - b, yt),
+      P(0, yt),
+    ],
+    parts: [{ x: 0, y: ys + ha * 0.62, z: ra + nozL / 2 - 1, w: Math.max(2.5, ra * 0.38), h: Math.max(2.5, ha * 0.35), d: nozL }],
+    top: yt,
+  }
+}
+
+// ความสูงขอบปาก (มม.) — ใช้ร่วมโปรไฟล์ขวดและตำแหน่งฝา
+const mouthLip = (neck: number, H: number) => Math.min(neck * 0.28, Math.max(1.5, H * 0.05))
 
 export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelStyle = 'body', shape: VesselShape = {}): Vessel {
   const { W, D, H } = box
@@ -215,11 +333,11 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
   // ปาก/คอต้องเล็กกว่าตัวเสมอ (กันผู้ใช้/AI ใส่ D เกิน W)
   const rn = Math.min(Math.max(D / 2, 5), R * 0.9)
 
-  const { pts, band } = profileFor(mat.id, R, rn, H, shape)
-  // ช่วงลำตัวตรง (รัศมี ~R) = ขอบเขตที่ฉลากติดได้จริง ใช้คำนวณรูปแบบฉลากแต่ละแบบ
+  const { pts, band, straight, mouth } = profileFor(mat.id, R, rn, H, shape)
+  // ช่วงลำตัวตรง = ขอบเขตที่ฉลากติดได้จริง ใช้คำนวณรูปแบบฉลากแต่ละแบบ
   const straightYs = pts.filter((p) => p.x >= R * 0.98).map((p) => p.y)
-  let b0 = straightYs.length ? Math.min(...straightYs) : band[0]
-  let b1 = straightYs.length ? Math.max(...straightYs) : band[1]
+  let b0 = straight ? straight[0] : straightYs.length ? Math.min(...straightYs) : band[0]
+  let b1 = straight ? straight[1] : straightYs.length ? Math.max(...straightYs) : band[1]
   // หลอดครีม: ลำตัวพิมพ์ได้ทั้งตัว (profile เป็นแค่ฝา) — กำหนดขอบพิมพ์เองให้ "สูงเต็มตัว" ขึ้นถึงใกล้ซีล
   if (mat.id === 'tube-laminate') {
     // พิมพ์ได้ทั้งตัวหลอด: จากไหล่ถึงใต้ตะเข็บซีล
@@ -295,6 +413,8 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
     labelY0,
     labelY1,
     labelArc: wrap ? 2 * Math.PI : w / R,
+    labelRot: (((lb?.rot ?? 0) % 360) * Math.PI) / 180,
+    ...(mouth ? { mouth } : {}),
     labelRange: [b0, b1],
     circ,
     H,

@@ -191,7 +191,10 @@ export const cloudProjectDocumentSchema = z.object({
     y: finite.min(0).max(2000).optional(),
     h: finite.min(0).max(2000).optional(),
     w: finite.min(0).max(2000).optional(),
+    rot: finite.min(-180).max(180).optional(),
   }).strict().optional(),
+  capStyle: z.enum(['none', 'screw', 'flip', 'pump']).optional(),
+  capColor: color.optional(),
   pouchStyle: z.enum(['stand', 'flat', 'gusset', 'box', 'pillow', 'spout']).optional(),
   zipper: z.boolean().optional(),
   pouchAddons: z.object({
