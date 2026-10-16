@@ -59,7 +59,7 @@ npm run setup:cloud
 | `SUPABASE_URL` | URL เดียวกับฝั่ง browser |
 | `SUPABASE_SECRET_KEY` | secret/service-role key สำหรับ server เท่านั้น |
 
-ตัวเลือกเพิ่มเติม (ไม่บังคับ): `ANTHROPIC_API_KEY` = คีย์ Anthropic **ของระบบ** ฝั่ง server (ห้ามใส่ใน `VITE_*`) ใช้กับแถบ AI บน Cloud และ `BOX_SPEC_MODEL` เลือกโมเดล (ค่าเริ่มต้น `claude-opus-4-8`; รุ่นที่รองรับและข้อแลกเปลี่ยนต้นทุน/ความเร็ว: [docs/billing-freemium-pro.md §6](docs/billing-freemium-pro.md)) ถ้าไม่ตั้งคีย์ แถบ AI บน Cloud จะแจ้งว่า server ยังไม่ได้ตั้งค่า (503) — Cloud **ไม่รับคีย์จากผู้ใช้ใน UI อีกต่อไป** (การกรอกคีย์เองมีเฉพาะ local demo)
+ตัวเลือกเพิ่มเติม (ไม่บังคับ): `ANTHROPIC_API_KEY` = คีย์ Anthropic **ของระบบ** ฝั่ง server (ห้ามใส่ใน `VITE_*`) ใช้กับแถบ AI บน Cloud และ `BOX_SPEC_MODEL` เลือกโมเดล (ค่าเริ่มต้น `claude-opus-5-5`; รุ่นที่รองรับและข้อแลกเปลี่ยนต้นทุน/ความเร็ว: [docs/billing-freemium-pro.md §6](docs/billing-freemium-pro.md)) ถ้าไม่ตั้งคีย์ แถบ AI บน Cloud จะแจ้งว่า server ยังไม่ได้ตั้งค่า (503) — Cloud **ไม่รับคีย์จากผู้ใช้ใน UI อีกต่อไป** (การกรอกคีย์เองมีเฉพาะ local demo)
 
 แพ็กเกจบน Cloud (ดู [docs/billing-freemium-pro.md](docs/billing-freemium-pro.md)): Freemium ออกแบบ/ดู blueprint และ 3D ได้ แต่ไม่มีเครดิต AI และดาวน์โหลดไฟล์ผลิตไม่ได้ (พรีวิวมีลายน้ำ; ไฟล์สำรอง `.genpkg.json` ยังใช้ได้); ซื้อรายแบบ 149 บาท หรือ Pro 399 บาท/เดือน ยังไม่เลือกผู้ให้บริการชำระเงิน จึง **ยังไม่เปิดขาย**: staging/production ซ่อนปุ่มซื้อทั้งหมดและแสดง "เปิดขายเร็ว ๆ นี้" ส่วน `APP_ENV` เป็น `development` หรือ `test` เปิดให้ลองสั่งซื้อและกด "จำลองการชำระ (dev)" ได้ (ห้ามใช้สองค่านี้กับ environment ที่มีผู้ใช้จริง)
 

@@ -7,6 +7,7 @@ import {
   type CurrentSpec,
   type RefImage,
 } from '../../boxSpec'
+import { DEFAULT_AI_MODEL } from '../../config'
 import { errorMessageForLog } from '../../logging'
 
 export interface AiBoxSpecInput {
@@ -48,7 +49,7 @@ export const CLOUD_AI_LIMITS = { timeoutMs: 50_000, maxRetries: 0 } as const
 
 export class AnthropicAiService implements AiService {
   constructor(
-    private readonly model = 'claude-opus-4-8',
+    private readonly model = DEFAULT_AI_MODEL,
     private readonly limits: { timeoutMs?: number; maxRetries?: number } = CLOUD_AI_LIMITS,
   ) {}
 

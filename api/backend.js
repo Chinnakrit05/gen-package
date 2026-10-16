@@ -26008,7 +26008,7 @@ var init_sdk = __esm({
 
 // server/config.ts
 var APP_ENVIRONMENTS = ["development", "test", "staging", "production"];
-var DEFAULT_AI_MODEL = "claude-opus-4-8";
+var DEFAULT_AI_MODEL = "claude-opus-5-5";
 var ServerConfigError = class extends Error {
   constructor(message) {
     super(message);
@@ -31774,8 +31774,8 @@ var error3 = () => {
         const sizing = getSizing(issue2.origin);
         if (sizing) {
           const maxValue = Number(issue2.maximum);
-          const unit = getBelarusianPlural(maxValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
-          return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u0432\u044F\u043B\u0456\u043A\u0456: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u044D\u043D\u043D\u0435"} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 ${sizing.verb} ${adj}${issue2.maximum.toString()} ${unit}`;
+          const unit2 = getBelarusianPlural(maxValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
+          return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u0432\u044F\u043B\u0456\u043A\u0456: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u044D\u043D\u043D\u0435"} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 ${sizing.verb} ${adj}${issue2.maximum.toString()} ${unit2}`;
         }
         return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u0432\u044F\u043B\u0456\u043A\u0456: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u044D\u043D\u043D\u0435"} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 \u0431\u044B\u0446\u044C ${adj}${issue2.maximum.toString()}`;
       }
@@ -31784,8 +31784,8 @@ var error3 = () => {
         const sizing = getSizing(issue2.origin);
         if (sizing) {
           const minValue = Number(issue2.minimum);
-          const unit = getBelarusianPlural(minValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
-          return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u043C\u0430\u043B\u044B: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 ${sizing.verb} ${adj}${issue2.minimum.toString()} ${unit}`;
+          const unit2 = getBelarusianPlural(minValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
+          return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u043C\u0430\u043B\u044B: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 ${sizing.verb} ${adj}${issue2.minimum.toString()} ${unit2}`;
         }
         return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u043C\u0430\u043B\u044B: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 \u0431\u044B\u0446\u044C ${adj}${issue2.minimum.toString()}`;
       }
@@ -34412,8 +34412,8 @@ var error24 = () => {
         const sizing = getSizing(issue2.origin);
         if (sizing) {
           const maxValue = Number(issue2.maximum);
-          const unit = getArmenianPlural(maxValue, sizing.unit.one, sizing.unit.many);
-          return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0574\u0565\u056E \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin ?? "\u0561\u0580\u056A\u0565\u0584")} \u056F\u0578\u0582\u0576\u0565\u0576\u0561 ${adj}${issue2.maximum.toString()} ${unit}`;
+          const unit2 = getArmenianPlural(maxValue, sizing.unit.one, sizing.unit.many);
+          return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0574\u0565\u056E \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin ?? "\u0561\u0580\u056A\u0565\u0584")} \u056F\u0578\u0582\u0576\u0565\u0576\u0561 ${adj}${issue2.maximum.toString()} ${unit2}`;
         }
         return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0574\u0565\u056E \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin ?? "\u0561\u0580\u056A\u0565\u0584")} \u056C\u056B\u0576\u056B ${adj}${issue2.maximum.toString()}`;
       }
@@ -34422,8 +34422,8 @@ var error24 = () => {
         const sizing = getSizing(issue2.origin);
         if (sizing) {
           const minValue = Number(issue2.minimum);
-          const unit = getArmenianPlural(minValue, sizing.unit.one, sizing.unit.many);
-          return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0583\u0578\u0584\u0580 \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin)} \u056F\u0578\u0582\u0576\u0565\u0576\u0561 ${adj}${issue2.minimum.toString()} ${unit}`;
+          const unit2 = getArmenianPlural(minValue, sizing.unit.one, sizing.unit.many);
+          return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0583\u0578\u0584\u0580 \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin)} \u056F\u0578\u0582\u0576\u0565\u0576\u0561 ${adj}${issue2.minimum.toString()} ${unit2}`;
         }
         return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0583\u0578\u0584\u0580 \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin)} \u056C\u056B\u0576\u056B ${adj}${issue2.minimum.toString()}`;
       }
@@ -35337,18 +35337,18 @@ var error32 = () => {
         const adj = issue2.inclusive ? "\uC774\uD558" : "\uBBF8\uB9CC";
         const suffix = adj === "\uBBF8\uB9CC" ? "\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4" : "\uC5EC\uC57C \uD569\uB2C8\uB2E4";
         const sizing = getSizing(issue2.origin);
-        const unit = sizing?.unit ?? "\uC694\uC18C";
+        const unit2 = sizing?.unit ?? "\uC694\uC18C";
         if (sizing)
-          return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uD07D\uB2C8\uB2E4: ${issue2.maximum.toString()}${unit} ${adj}${suffix}`;
+          return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uD07D\uB2C8\uB2E4: ${issue2.maximum.toString()}${unit2} ${adj}${suffix}`;
         return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uD07D\uB2C8\uB2E4: ${issue2.maximum.toString()} ${adj}${suffix}`;
       }
       case "too_small": {
         const adj = issue2.inclusive ? "\uC774\uC0C1" : "\uCD08\uACFC";
         const suffix = adj === "\uC774\uC0C1" ? "\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4" : "\uC5EC\uC57C \uD569\uB2C8\uB2E4";
         const sizing = getSizing(issue2.origin);
-        const unit = sizing?.unit ?? "\uC694\uC18C";
+        const unit2 = sizing?.unit ?? "\uC694\uC18C";
         if (sizing) {
-          return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uC791\uC2B5\uB2C8\uB2E4: ${issue2.minimum.toString()}${unit} ${adj}${suffix}`;
+          return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uC791\uC2B5\uB2C8\uB2E4: ${issue2.minimum.toString()}${unit2} ${adj}${suffix}`;
         }
         return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uC791\uC2B5\uB2C8\uB2E4: ${issue2.minimum.toString()} ${adj}${suffix}`;
       }
@@ -37161,8 +37161,8 @@ var error46 = () => {
         const sizing = getSizing(issue2.origin);
         if (sizing) {
           const maxValue = Number(issue2.maximum);
-          const unit = getRussianPlural(maxValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
-          return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435"} \u0431\u0443\u0434\u0435\u0442 \u0438\u043C\u0435\u0442\u044C ${adj}${issue2.maximum.toString()} ${unit}`;
+          const unit2 = getRussianPlural(maxValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
+          return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435"} \u0431\u0443\u0434\u0435\u0442 \u0438\u043C\u0435\u0442\u044C ${adj}${issue2.maximum.toString()} ${unit2}`;
         }
         return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435"} \u0431\u0443\u0434\u0435\u0442 ${adj}${issue2.maximum.toString()}`;
       }
@@ -37171,8 +37171,8 @@ var error46 = () => {
         const sizing = getSizing(issue2.origin);
         if (sizing) {
           const minValue = Number(issue2.minimum);
-          const unit = getRussianPlural(minValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
-          return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u0435\u043D\u044C\u043A\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin} \u0431\u0443\u0434\u0435\u0442 \u0438\u043C\u0435\u0442\u044C ${adj}${issue2.minimum.toString()} ${unit}`;
+          const unit2 = getRussianPlural(minValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
+          return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u0435\u043D\u044C\u043A\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin} \u0431\u0443\u0434\u0435\u0442 \u0438\u043C\u0435\u0442\u044C ${adj}${issue2.minimum.toString()} ${unit2}`;
         }
         return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u0435\u043D\u044C\u043A\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin} \u0431\u0443\u0434\u0435\u0442 ${adj}${issue2.minimum.toString()}`;
       }
@@ -55506,6 +55506,7 @@ var STICKER_RULES = {
 };
 var STICKER_OFFSET_MIN = STICKER_RULES.minBorder;
 var NO_BORDER_INSET = STICKER_RULES.minBleed;
+var loopPath = (l) => `M ${l.map((p) => `${Math.round(p.x * 1e3) / 1e3} ${Math.round(p.y * 1e3) / 1e3}`).join(" L ")} Z`;
 
 // src/core/stickerSheet.ts
 var SHEET_GAP = STICKER_RULES.minGap;
@@ -56701,13 +56702,138 @@ function generateCard(box) {
 }
 
 // src/core/templates/sticker.ts
-function generateSticker(box) {
+var MIN_CORNER = 1;
+function arcTo(cx, cy, r, a0, a1, seg) {
+  const n = Math.max(2, Math.ceil(Math.abs(a1 - a0) / (Math.PI / 2) * seg));
+  return Array.from({ length: n }, (_, k) => {
+    const a = a0 + (a1 - a0) * (k + 1) / n;
+    return P(cx + r * Math.cos(a), cy + r * Math.sin(a));
+  });
+}
+function fillet(V, u, w, r, maxD, seg = 8) {
+  const cos = Math.max(-1, Math.min(1, u.x * w.x + u.y * w.y));
+  const half = Math.acos(cos) / 2;
+  if (half > Math.PI / 2 - 1e-3) return [V];
+  let d = r / Math.tan(half);
+  if (d > maxD) {
+    d = maxD;
+    r = d * Math.tan(half);
+  }
+  const bx = u.x + w.x;
+  const by = u.y + w.y;
+  const bl = Math.hypot(bx, by);
+  const cd = r / Math.sin(half);
+  const C = P(V.x + bx / bl * cd, V.y + by / bl * cd);
+  const p0 = P(V.x + u.x * d, V.y + u.y * d);
+  const p1 = P(V.x + w.x * d, V.y + w.y * d);
+  const a0 = Math.atan2(p0.y - C.y, p0.x - C.x);
+  let a1 = Math.atan2(p1.y - C.y, p1.x - C.x);
+  while (a1 - a0 > Math.PI) a1 -= 2 * Math.PI;
+  while (a1 - a0 < -Math.PI) a1 += 2 * Math.PI;
+  return [p0, ...arcTo(C.x, C.y, r, a0, a1, seg)];
+}
+var unit = (a, b) => {
+  const l = Math.hypot(b.x - a.x, b.y - a.y);
+  return P((b.x - a.x) / l, (b.y - a.y) / l);
+};
+function roundPolygon(pts, r) {
+  const N = pts.length;
+  return pts.flatMap((V, i) => {
+    const a = pts[(i - 1 + N) % N];
+    const b = pts[(i + 1) % N];
+    const maxD = 0.45 * Math.min(Math.hypot(a.x - V.x, a.y - V.y), Math.hypot(b.x - V.x, b.y - V.y));
+    return fillet(V, unit(V, a), unit(V, b), r, maxD);
+  });
+}
+function fitBox(pts, w, h) {
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  const x0 = Math.min(...xs);
+  const y0 = Math.min(...ys);
+  const sx = w / (Math.max(...xs) - x0);
+  const sy = h / (Math.max(...ys) - y0);
+  return pts.map((p) => P((p.x - x0) * sx, (p.y - y0) * sy));
+}
+function stickerOutline(shape, w, h) {
+  const s = Math.min(w, h);
+  if (shape === "rect" || shape === "square") {
+    const r = shape === "rect" ? Math.min(Math.max(s * 0.12, 2), s / 2) : MIN_CORNER;
+    return roundedRectPts(0, 0, w, h, r);
+  }
+  if (shape === "ellipse") {
+    const n = 96;
+    return Array.from({ length: n }, (_, i) => {
+      const a = i / n * 2 * Math.PI;
+      return P(w / 2 + w / 2 * Math.cos(a), h / 2 + h / 2 * Math.sin(a));
+    });
+  }
+  if (shape === "hexagon") {
+    const hex3 = [P(0, h / 2), P(w / 4, 0), P(3 * w / 4, 0), P(w, h / 2), P(3 * w / 4, h), P(w / 4, h)];
+    return fitBox(roundPolygon(hex3, Math.max(MIN_CORNER, s * 0.06)), w, h);
+  }
+  if (shape === "star") {
+    const pts = [];
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 5;
+      const r = i % 2 === 0 ? 1 : 0.45;
+      pts.push(P(r * Math.cos(a), r * Math.sin(a)));
+    }
+    return fitBox(roundPolygon(fitBox(pts, w, h), Math.max(MIN_CORNER, s * 0.03)), w, h);
+  }
+  return heartOutline(w, h);
+}
+function heartOutline(w, h) {
+  const rho = 1;
+  const a = 0.7;
+  const tip = 2.2;
+  const W0 = 2 * (a + rho);
+  const H0 = rho + tip;
+  const sx = w / W0;
+  const sy = h / H0;
+  const need = 1.2 * Math.max(sx, sy) / Math.min(sx, sy) ** 2;
+  const rt = Math.max(0.14, need);
+  const rn = Math.max(0.16, need);
+  const T = P(0, -tip);
+  const Cr = P(a, 0);
+  const Cl = P(-a, 0);
+  const tangent = (C, side) => {
+    const vx = T.x - C.x;
+    const vy = T.y - C.y;
+    const L = Math.hypot(vx, vy);
+    const al = Math.acos(rho / L) * side;
+    const ang = Math.atan2(vy, vx) + al;
+    return P(C.x + rho * Math.cos(ang), C.y + rho * Math.sin(ang));
+  };
+  const Pr = tangent(Cr, 1);
+  const Pl = tangent(Cl, -1);
+  const yc = Math.sqrt((rho + rn) ** 2 - a * a);
+  const Cf = P(0, yc);
+  const angOn = (C, q) => Math.atan2(q.y - C.y, q.x - C.x);
+  const Fr = P(Cr.x + rho * (Cf.x - Cr.x) / (rho + rn), Cr.y + rho * (Cf.y - Cr.y) / (rho + rn));
+  const Fl = P(Cl.x + rho * (Cf.x - Cl.x) / (rho + rn), Cl.y + rho * (Cf.y - Cl.y) / (rho + rn));
+  const pts = [];
+  pts.push(...fillet(T, unit(T, Pl), unit(T, Pr), rt, 0.45 * Math.hypot(Pr.x - T.x, Pr.y - T.y), 10));
+  pts.push(Pr);
+  let a0 = angOn(Cr, Pr);
+  let a1 = angOn(Cr, Fr);
+  while (a1 < a0) a1 += 2 * Math.PI;
+  pts.push(...arcTo(Cr.x, Cr.y, rho, a0, a1, 16));
+  a0 = angOn(Cf, Fr);
+  a1 = angOn(Cf, Fl);
+  while (a1 > a0) a1 -= 2 * Math.PI;
+  pts.push(...arcTo(Cf.x, Cf.y, rn, a0, a1, 10));
+  a0 = angOn(Cl, Fl);
+  a1 = angOn(Cl, Pl);
+  while (a1 < a0) a1 += 2 * Math.PI;
+  pts.push(...arcTo(Cl.x, Cl.y, rho, a0, a1, 16));
+  return fitBox(pts.map((p) => P(p.x, -p.y)), w, h);
+}
+function generateSticker(box, shape = "rect") {
   const { W: w, H: h } = box;
+  const outline = stickerOutline(shape, w, h);
+  const panels = [{ id: "sticker", parentId: null, outline, stage: 0 }];
   const r = Math.min(Math.max(Math.min(w, h) * 0.12, 2), Math.min(w, h) / 2);
-  const panels = [
-    { id: "sticker", parentId: null, outline: roundedRectPts(0, 0, w, h, r), stage: 0 }
-  ];
-  const segments = [{ kind: "cut", d: roundedRectPath(0, 0, w, h, r) }];
+  const segments = [{ kind: "cut", d: shape === "rect" ? roundedRectPath(0, 0, w, h, r) : loopPath(outline) }];
   const dims = [
     { a: P(0, h + 12), b: P(w, h + 12), label: `W ${fmt(w)}` },
     { a: P(-10, 0), b: P(-10, h), label: `H ${fmt(h)}` }
@@ -58006,7 +58132,7 @@ var TEMPLATES = [
     tilt: 0,
     supportsHandle: false,
     foldDepth: () => 0,
-    generate: generateSticker
+    generate: (box) => generateSticker(box)
   }
 ];
 
@@ -58178,6 +58304,17 @@ var cloudProjectDocumentSchema = external_exports.object({
   fillColor: color.nullable(),
   fillImage: fillImageSchema.nullable().optional(),
   labelStyle: external_exports.enum(["body", "full", "band", "neck"]).optional(),
+  neckH: finite.min(1).max(300).optional(),
+  shoulderH: finite.min(1).max(300).optional(),
+  shoulderStyle: external_exports.enum(["round", "slope", "flat"]).optional(),
+  labelBox: external_exports.object({
+    y: finite.min(0).max(2e3).optional(),
+    h: finite.min(0).max(2e3).optional(),
+    w: finite.min(0).max(2e3).optional(),
+    rot: finite.min(-180).max(180).optional()
+  }).strict().optional(),
+  capStyle: external_exports.enum(["none", "screw", "flip", "pump", "cork", "foil", "crown", "oval"]).optional(),
+  capColor: color.optional(),
   pouchStyle: external_exports.enum(["stand", "flat", "gusset", "box", "pillow", "spout"]).optional(),
   zipper: external_exports.boolean().optional(),
   pouchAddons: external_exports.object({
@@ -58188,7 +58325,7 @@ var cloudProjectDocumentSchema = external_exports.object({
     tearAt: finite.min(0).max(1e3).optional()
   }).strict().optional(),
   stickerCut: external_exports.object({
-    shape: external_exports.enum(["rect", "contour"]),
+    shape: external_exports.enum(["rect", "square", "ellipse", "hexagon", "star", "heart", "contour"]),
     border: external_exports.enum(["white", "none"]),
     offset: finite.min(0).max(50),
     sheet: external_exports.enum(["a6", "a5", "a4", "a3", "custom"]).optional(),
@@ -58845,7 +58982,7 @@ var AiProviderError = class extends Error {
 };
 var CLOUD_AI_LIMITS = { timeoutMs: 5e4, maxRetries: 0 };
 var AnthropicAiService = class {
-  constructor(model = "claude-opus-4-8", limits = CLOUD_AI_LIMITS) {
+  constructor(model = DEFAULT_AI_MODEL, limits = CLOUD_AI_LIMITS) {
     this.model = model;
     this.limits = limits;
   }

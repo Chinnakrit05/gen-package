@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import Anthropic from '@anthropic-ai/sdk'
 import { askClaude, mockSpec, parseCurrent, parseImage } from './boxSpec'
+import { DEFAULT_AI_MODEL } from './config'
 import { isLegacyAiRouteEnabled } from './http/legacyAiGuard'
 import { readRequestApiKey } from './modules/ai/requestApiKey'
 
@@ -100,7 +101,7 @@ export default async function handler(req: Req, res: ServerResponse): Promise<vo
       send(res, 500, { error: 'ยังไม่ได้ตั้ง ANTHROPIC_API_KEY ใน Vercel' })
       return
     }
-    send(res, 200, await askClaude(apiKey, model || 'claude-opus-4-8', prompt, current, image))
+    send(res, 200, await askClaude(apiKey, model || DEFAULT_AI_MODEL, prompt, current, image))
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
       send(res, 502, { error: 'Anthropic API key ไม่ถูกต้อง' })

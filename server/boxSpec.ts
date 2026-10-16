@@ -11,6 +11,7 @@ import { isLegacyAiRouteEnabled } from './http/legacyAiGuard'
 import { readRequestApiKey } from './modules/ai/requestApiKey'
 import { MATERIALS } from '../src/core/materials'
 import { TEMPLATES } from '../src/core/templates'
+import { DEFAULT_AI_MODEL } from './config'
 
 const execFileP = promisify(execFile)
 
@@ -761,7 +762,7 @@ export async function handleBoxSpec(
         send(res, 500, { error: 'BOX_SPEC_BACKEND=api แต่ไม่ได้ตั้ง ANTHROPIC_API_KEY' })
         return
       }
-      send(res, 200, await askClaude(apiKey, model || 'claude-opus-4-8', prompt, current, image))
+      send(res, 200, await askClaude(apiKey, model || DEFAULT_AI_MODEL, prompt, current, image))
       return
     }
     if (backend === 'cli' || !backend) {

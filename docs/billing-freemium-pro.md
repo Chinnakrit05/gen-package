@@ -73,7 +73,7 @@ Open access (migration `supabase/migrations/20261015000700_open_access.sql` — 
 
 Error code ใหม่ใน `shared/contracts/errors.ts`: `PAYMENT_REQUIRED`, `PURCHASE_UNAVAILABLE`, `AI_CREDITS_EXHAUSTED`, `AI_REQUEST_IN_PROGRESS`, `ALREADY_LICENSED`, `ORDER_NOT_FOUND`, `ORDER_NOT_PAYABLE` (client มีรหัสของตัวเองเพิ่ม `NETWORK_ERROR` เมื่อ fetch ล้ม ไม่อยู่ใน union); ถอด `AI_API_KEY_REQUIRED`/`AI_API_KEY_INVALID` ออกจาก union (`server/modules/ai/requestApiKey.ts` ยังอยู่เพราะ legacy `/api/box-spec` ของ local-demo ใช้อ่าน BYOK header และไม่ได้ใช้ union นี้)
 
-`ServerConfig.ai: null | { anthropicApiKey, model }` อ่านจาก `ANTHROPIC_API_KEY` + `BOX_SPEC_MODEL` (default `claude-opus-4-8`; ตัวเลือกรุ่นและข้อแลกเปลี่ยน §6); `createApiRouter` รับ `billingService` หรือ `billingRepository` (เทสต์) เพิ่มแบบ DI เหมือน service อื่น (`server/modules/billing/billingService.ts` + adapter `server/adapters/supabase/billingRepository.ts`; ตัวแปลง error เป็น pure function `mapBillingDatabaseError`)
+`ServerConfig.ai: null | { anthropicApiKey, model }` อ่านจาก `ANTHROPIC_API_KEY` + `BOX_SPEC_MODEL` (default `claude-opus-5-5` = `DEFAULT_AI_MODEL`; ตัวเลือกรุ่นและข้อแลกเปลี่ยน §6); `createApiRouter` รับ `billingService` หรือ `billingRepository` (เทสต์) เพิ่มแบบ DI เหมือน service อื่น (`server/modules/billing/billingService.ts` + adapter `server/adapters/supabase/billingRepository.ts`; ตัวแปลง error เป็น pure function `mapBillingDatabaseError`)
 
 Log ฝั่ง server (`server/logging.ts`): JSON บรรทัดเดียวต่อเหตุการณ์ ตัดคีย์ API/Supabase, bearer token, JWT และอีเมลทิ้งก่อนเขียน; event: `api_unexpected_error`, `ai_provider_error`, `billing_database_error`, `billing_contract_error`, `ai_refund_failed`, `ai_settle_failed`, `order_created`, `order_fulfilled`
 
@@ -111,7 +111,7 @@ Log ฝั่ง server (`server/logging.ts`): JSON บรรทัดเดี�
 
 ## 6. โมเดล AI (`BOX_SPEC_MODEL`) — ตัวเลือกและข้อแลกเปลี่ยน
 
-สถานะ 14 ต.ค. 2026: **ค่าเริ่มต้นยังเป็น `claude-opus-4-8` — เจ้าของผลิตภัณฑ์เป็นผู้เลือกรุ่น** โค้ดรองรับ 4 รุ่นในตารางแล้ว เปลี่ยนรุ่นด้วย env อย่างเดียว (ตั้ง `BOX_SPEC_MODEL` ใน Vercel ทุก environment ที่ใช้ แล้ว redeploy)
+สถานะ 16 ต.ค. 2026: **ค่าเริ่มต้นเป็น `claude-opus-5-5`** (เจ้าของผลิตภัณฑ์เลือก 16 ต.ค. 2026; ก่อนหน้านั้น `claude-opus-4-8`) — โค้ดรองรับ 4 รุ่นในตาราง เปลี่ยนรุ่นด้วย env ได้ (ตั้ง `BOX_SPEC_MODEL` ใน Vercel ทุก environment ที่ใช้ แล้ว redeploy)
 
 `BOX_SPEC_MODEL` คือรุ่น Claude ที่ server เรียกในทุกคำขอ AI (cloud `/api/v1/ai/box-spec` และ legacy `/api/box-spec` backend api; backend cli ส่งต่อเป็น `claude --model`) — 1 คำขอ = 1 เครดิตเท่ากันทุกรุ่น รุ่นจึงมีผลแค่ **ต้นทุนต่อเครดิตของเรา ความเร็ว และคุณภาพสเปก** ไม่กระทบราคาที่ผู้ใช้จ่าย
 
@@ -119,8 +119,8 @@ Log ฝั่ง server (`server/logging.ts`): JSON บรรทัดเดี�
 
 | `BOX_SPEC_MODEL` | ราคา input / output (USD ต่อ 1M โทเคน) | การคิดก่อนตอบ | refusal | หมายเหตุ |
 | --- | --- | --- | --- | --- |
-| `claude-opus-4-8` (ค่าเริ่มต้น) | 5 / 25 | ไม่คิด (ไม่ส่ง `thinking` = ปิดบนรุ่นนี้) ไม่ตั้ง effort — เหมือนก่อนเปลี่ยน | ไม่ส่ง fallbacks | พฤติกรรมเดิมที่ใช้มา แพงสุดในสี่รุ่น |
-| `claude-opus-5-5` | 4 / 20 | คิดเสมอ (ปิดไม่ได้) `effort: "low"` (ค่าเริ่มต้นของ API = medium) | `fallbacks: "default"` — classifier ปฏิเสธแล้ว API ส่งต่อให้รุ่นที่ Anthropic แนะนำตามหมวดในคำขอเดียว | ฉลาดสุด ถูกกว่า 4.8 ต่อโทเคน 20% แต่มีโทเคน thinking เพิ่ม |
+| `claude-opus-4-8` | 5 / 25 | ไม่คิด (ไม่ส่ง `thinking` = ปิดบนรุ่นนี้) ไม่ตั้ง effort | ไม่ส่ง fallbacks | ค่าเริ่มต้นเดิมก่อน 16 ต.ค. 2026 แพงสุดในสี่รุ่น |
+| `claude-opus-5-5` (ค่าเริ่มต้น) | 4 / 20 | คิดเสมอ (ปิดไม่ได้) `effort: "low"` (ค่าเริ่มต้นของ API = medium) | `fallbacks: "default"` — classifier ปฏิเสธแล้ว API ส่งต่อให้รุ่นที่ Anthropic แนะนำตามหมวดในคำขอเดียว | ฉลาดสุด ถูกกว่า 4.8 ต่อโทเคน 20% แต่มีโทเคน thinking เพิ่ม |
 | `claude-sonnet-5-5` | 2 / 10 | adaptive `effort: "low"` (ค่าเริ่มต้นของ API = high) | `fallbacks: "default"` — ส่งต่อเฉพาะหมวด `cyber`/`frontier_llm` (ไป Sonnet 5); `bio`/`reasoning_extraction`/`general_harms` ไม่ส่งต่อ | ราคาครึ่งหนึ่งของ Opus 5.5 |
 | `claude-haiku-5-5` | 0.10 / 0.50 (prompt ≤ 100K โทเคน) | adaptive `effort: "low"` (ค่าเริ่มต้นของ API = medium) | ไม่มี server-side fallback — refusal = ล้ม คืนเครดิต | ถูกสุด (≈ 1/50 ของ Opus 4.8 ต่อโทเคน) และเร็วสุด แต่ต้องวัดว่าคำนวณ layout/fit check ได้ดีพอ |
 

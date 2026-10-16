@@ -90,7 +90,7 @@ cloud mode เชื่อม Auth, project controller, IndexedDB drafts/mutatio
 
 ## คีย์ AI ฝั่ง server และแพ็กเกจ
 
-ตั้งแต่ 13 ตุลาคม 2026 `POST /api/v1/ai/box-spec` ใช้ **`ANTHROPIC_API_KEY` ของระบบ** (server env; บน Vercel ตั้งเป็น Secret) และ `BOX_SPEC_MODEL` (ว่าง = `claude-opus-4-8`) เท่านั้น — browser ไม่ส่งคีย์ของผู้ใช้อีกต่อไป (header BYOK ถูกถอดออก; การกรอกคีย์ใน UI เหลือเฉพาะ local demo กับ legacy `/api/box-spec`) ไม่ตั้งคีย์ → route ตอบ 503 `CONFIGURATION_ERROR` โดยไม่หักเครดิต
+ตั้งแต่ 13 ตุลาคม 2026 `POST /api/v1/ai/box-spec` ใช้ **`ANTHROPIC_API_KEY` ของระบบ** (server env; บน Vercel ตั้งเป็น Secret) และ `BOX_SPEC_MODEL` (ว่าง = `claude-opus-5-5`) เท่านั้น — browser ไม่ส่งคีย์ของผู้ใช้อีกต่อไป (header BYOK ถูกถอดออก; การกรอกคีย์ใน UI เหลือเฉพาะ local demo กับ legacy `/api/box-spec`) ไม่ตั้งคีย์ → route ตอบ 503 `CONFIGURATION_ERROR` โดยไม่หักเครดิต
 
 คำขอ AI หัก 1 เครดิตของ workspace ตอนจอง (`reserve_ai_credit`) และคืนเมื่อ provider ล้ม; เครดิตมาจากการซื้อรายแบบ 149 บาท หรือ Pro 399 บาท/เดือน ตาม [billing-freemium-pro.md](billing-freemium-pro.md) (ตาราง/RPC ใน migration `20261013000600_billing.sql`; ราคาและจำนวนเครดิตแก้ที่ `app_private.plan_catalog`) ยังไม่เลือกผู้ให้บริการชำระเงิน: `POST /api/v1/billing/orders` สร้าง order `pending` (`provider = 'none'`) และ `POST /api/v1/billing/orders/:id/dev-fulfil` จำลองการจ่ายได้เฉพาะ `APP_ENV=development|test` (staging/production ตอบ 404) ห้ามนำ dev-fulfil ไปเปิดบน environment ที่มีผู้ใช้จริง
 

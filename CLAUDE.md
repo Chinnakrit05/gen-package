@@ -73,7 +73,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 
 ## Env / AI backend
 
-ลำดับอัตโนมัติ: มี `ANTHROPIC_API_KEY` → Claude API; ไม่มี → `claude` CLI ในเครื่อง (ใช้ login ของ Claude Code, ต้อง login แล้ว); ไม่มีทั้งคู่ → โหมดจำลอง. บังคับด้วย `BOX_SPEC_BACKEND=api|cli|mock`. `BOX_SPEC_MODEL`: backend api default claude-opus-4-8 (รองรับ claude-opus-5-5 / claude-sonnet-5-5 / claude-haiku-5-5 ด้วย — ดู docs/billing-freemium-pro.md §6), backend cli default โมเดลที่ตั้งใน Claude Code (ใส่ alias haiku/sonnet ได้เพื่อความเร็ว). ดู `.env.example`; เช็คสดทุกรุ่น (เสียเงินจริง): `PACKIT_LIVE_AI=1 ANTHROPIC_API_KEY=… npx vitest run server/boxSpec.live.test.ts`
+ลำดับอัตโนมัติ: มี `ANTHROPIC_API_KEY` → Claude API; ไม่มี → `claude` CLI ในเครื่อง (ใช้ login ของ Claude Code, ต้อง login แล้ว); ไม่มีทั้งคู่ → โหมดจำลอง. บังคับด้วย `BOX_SPEC_BACKEND=api|cli|mock`. `BOX_SPEC_MODEL`: backend api default claude-opus-5-5 (`DEFAULT_AI_MODEL` ใน server/config.ts; รองรับ claude-sonnet-5-5 / claude-haiku-5-5 / claude-opus-4-8 ด้วย — ดู docs/billing-freemium-pro.md §6; รุ่นตระกูล 5 ห้ามบังคับ tool_choice และปิด thinking ไม่ได้ จึงใช้ structured outputs), backend cli default โมเดลที่ตั้งใน Claude Code (ใส่ alias haiku/sonnet ได้เพื่อความเร็ว). ดู `.env.example`; เช็คสดทุกรุ่น (เสียเงินจริง): `PACKIT_LIVE_AI=1 ANTHROPIC_API_KEY=… npx vitest run server/boxSpec.live.test.ts`
 
 หมายเหตุ CLI: server ล้าง env `ANTHROPIC_*`/`CLAUDE*` ก่อน spawn เสมอ (กัน base URL/token ของ session อื่น shadow login ปกติ) และปิด stdin ทันที — อย่าเอาออก ไม่งั้นพังเมื่อรันจากใน Claude Code
 

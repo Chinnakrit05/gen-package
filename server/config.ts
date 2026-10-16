@@ -17,7 +17,9 @@ export interface ServerConfig {
   }
 }
 
-export const DEFAULT_AI_MODEL = 'claude-opus-4-8'
+// Opus 5.5 (ตัดสินใจ 16 ต.ค. 2026) — ถูกกว่า Opus 4.8 ต่อโทเคน ($4/$20 vs $5/$25) และคำขอรองรับแล้ว
+// (structured outputs + effort low + server-side fallback ดู boxSpecModelOptions ใน server/boxSpec.ts)
+export const DEFAULT_AI_MODEL = 'claude-opus-5-5'
 
 export class ServerConfigError extends Error {
   constructor(message: string) {
