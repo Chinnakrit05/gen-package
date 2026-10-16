@@ -60,6 +60,8 @@ export interface PaywallModalProps {
   order?: Order | null
   // ลิงก์ "เปรียบเทียบแพ็กเกจทั้งหมด" → หน้าแพ็กเกจ (ไม่ส่ง = ไม่แสดง เช่นเปิดมาจากหน้าแพ็กเกจเอง)
   onShowPlans?(): void
+  // เปิดเพราะขอไฟล์เฉพาะ Pro (SVG/AI) — ไม่เสนอ "ซื้อรายแบบ" เพราะไม่ปลดล็อกไฟล์นี้
+  proOnly?: boolean
 }
 
 export function PaywallModal({
@@ -73,6 +75,7 @@ export function PaywallModal({
   onAlreadyLicensed,
   order: initialOrder = null,
   onShowPlans,
+  proOnly = false,
 }: PaywallModalProps) {
   const t = useT()
   const [kind, setKind] = useState<OrderKind>(initialKind)
@@ -154,7 +157,7 @@ export function PaywallModal({
   // ยังไม่เปิดขาย: order ค้างจากรอบก่อน (ถ้ามี) ไม่แสดง — สถานะนี้ไม่มีทางชำระต่อ
   const shownOrder = purchasesEnabled ? order : null
   // สมาชิก Pro (เช่นกดต่ออายุ) ไม่ถูกชวนไปรายแบบ — Pro ครอบคลุมทุกแบบอยู่แล้ว (กติกาเดียวกับการ์ดรายแบบในหน้าแพ็กเกจ)
-  const offerSwitch = kind === 'design' || entitlements?.plan !== 'pro'
+  const offerSwitch = !proOnly && (kind === 'design' || entitlements?.plan !== 'pro')
 
   return (
     <div className="modal-overlay" onMouseDown={() => { if (!locked) onClose() }}>
@@ -176,7 +179,7 @@ export function PaywallModal({
         <ul className="paywall-list">
           {kind === 'design' ? (
             <>
-              <li>{t('ดาวน์โหลด SVG / DXF / PDF 1:1 / ใบสเปกขอราคา ของแบบนี้ได้ตลอด (แก้ต่อแล้วโหลดซ้ำได้)', 'Download SVG / DXF / 1:1 PDF / quote sheet for this design, forever (edit and re-download anytime)')}</li>
+              <li>{t('ดาวน์โหลด DXF / PDF 1:1 / ใบสเปกขอราคา ของแบบนี้ได้ตลอด (แก้ต่อแล้วโหลดซ้ำได้) — ไฟล์เวกเตอร์ SVG / AI เฉพาะ Pro', 'Download DXF / 1:1 PDF / quote sheet for this design, forever (edit and re-download anytime) — vector SVG / AI files are Pro only')}</li>
               <li>{t('ไม่มีลายน้ำบนพรีวิวของแบบนี้', 'No watermark on this design’s previews')}</li>
               {credits !== null && (
                 <li>{t(`แถมเครดิต AI ${credits} เครดิต (1 เครดิต = สั่ง AI 1 ครั้ง)`, `Includes ${credits} AI credits (1 credit = 1 AI request)`)}</li>
@@ -184,7 +187,7 @@ export function PaywallModal({
             </>
           ) : (
             <>
-              <li>{t('ดาวน์โหลดไฟล์ผลิตได้ทุกแบบในพื้นที่งาน', 'Download production files for every design in the workspace')}</li>
+              <li>{t('ดาวน์โหลดไฟล์ผลิตได้ทุกแบบในพื้นที่งาน รวมไฟล์เวกเตอร์ SVG / AI (Illustrator)', 'Download production files for every design in the workspace, including vector SVG / AI (Illustrator)')}</li>
               <li>{t('ไม่มีลายน้ำบนพรีวิว', 'No watermark on previews')}</li>
               {credits !== null && (
                 <li>{t(`เครดิต AI ${credits} เครดิต ทุกรอบ ${periodDays} วัน (เครดิตไม่หมดอายุ)`, `${credits} AI credits every ${periodDays} days (credits never expire)`)}</li>

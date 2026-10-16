@@ -36,6 +36,12 @@ export interface Entitlements {
 
 export type LicenseSource = 'purchase' | 'pro' | 'admin'
 
+// รูปแบบไฟล์ผลิตที่ขอสิทธิ์ดาวน์โหลด — SVG/AI (ไฟล์เวกเตอร์แก้ต่อได้) เปิดเฉพาะ Pro (ซื้อรายแบบได้แค่ spec/dxf/pdf)
+export const EXPORT_FORMATS = ['spec', 'dxf', 'pdf', 'svg', 'ai'] as const
+export type ExportFormat = (typeof EXPORT_FORMATS)[number]
+export const PRO_ONLY_EXPORT_FORMATS: readonly ExportFormat[] = ['svg', 'ai']
+export const isProOnlyExport = (format: ExportFormat | undefined) => !!format && PRO_ONLY_EXPORT_FORMATS.includes(format)
+
 export interface ExportAuthorization {
   projectId: string
   source: LicenseSource

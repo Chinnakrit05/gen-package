@@ -18,6 +18,7 @@ export const API_ERROR_CODES = [
   'ORDER_NOT_FOUND',
   'ORDER_NOT_PAYABLE', // 409 — order ถูกยกเลิกแล้ว
   'PAYMENT_REQUIRED', // 402 — ดาวน์โหลดแบบนี้ต้องซื้อ 149 บาท หรือเป็น Pro
+  'PRO_REQUIRED', // 402 — รูปแบบไฟล์นี้ (SVG/AI) เฉพาะสมาชิก Pro แม้ซื้อรายแบบแล้ว
   'PURCHASE_UNAVAILABLE', // 503 — ยังไม่เปิดขาย (ยังไม่มีผู้ให้บริการชำระเงิน) ดู Entitlements.purchasesEnabled
   'REVISION_CONFLICT',
   'SESSION_INVALID',

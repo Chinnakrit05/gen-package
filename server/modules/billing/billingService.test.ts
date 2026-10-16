@@ -122,6 +122,33 @@ describe('BillingService', () => {
     ])
   })
 
+  it('allows vector SVG/AI exports only on Pro: a bought design gets 402 PRO_REQUIRED with the Pro price', async () => {
+    const licensed: StoredEntitlements = { ...stored, licensedProjectIds: [projectId] }
+    const bought = new BillingService(repositoryStub({
+      authorizeExport: async () => ({ projectId, source: 'purchase', entitlements: licensed }),
+    }), { devFulfilEnabled: false, purchasesEnabled: true, openAccess: false })
+    for (const format of ['spec', 'dxf', 'pdf', undefined] as const) {
+      await expect(bought.authorizeExport(actor, projectId, format)).resolves.toMatchObject({ source: 'purchase' })
+    }
+    for (const format of ['svg', 'ai'] as const) {
+      const refusal = await bought.authorizeExport(actor, projectId, format).catch((error: unknown) => error)
+      expect(refusal).toBeInstanceOf(HttpError)
+      expect(refusal).toMatchObject({
+        status: 402,
+        code: 'PRO_REQUIRED',
+        details: { projectId, format, price: stored.catalog.pro },
+      })
+    }
+
+    const pro: StoredEntitlements = { ...stored, plan: 'pro', proUntil: '2026-11-14T00:00:00.000Z' }
+    const proService = new BillingService(repositoryStub({
+      authorizeExport: async () => ({ projectId, source: 'pro', entitlements: pro }),
+    }), { devFulfilEnabled: false, purchasesEnabled: true, openAccess: false })
+    for (const format of ['svg', 'ai'] as const) {
+      await expect(proService.authorizeExport(actor, projectId, format)).resolves.toMatchObject({ source: 'pro' })
+    }
+  })
+
   it('refuses orders with 503 PURCHASE_UNAVAILABLE before touching the repository when purchases are off', async () => {
     let called = false
     const service = new BillingService(repositoryStub({

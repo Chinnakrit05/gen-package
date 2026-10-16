@@ -1,9 +1,11 @@
-import type {
-  CreateOrderInput,
-  Entitlements,
-  ExportAuthorization,
-  LicenseSource,
-  Order,
+import {
+  isProOnlyExport,
+  type CreateOrderInput,
+  type Entitlements,
+  type ExportAuthorization,
+  type ExportFormat,
+  type LicenseSource,
+  type Order,
 } from '../../../shared/contracts/billing'
 import { HttpError } from '../../http/errors'
 import { logServerEvent } from '../../logging'
@@ -96,10 +98,20 @@ export class BillingService {
     return this.withServerFlags(stored)
   }
 
-  async authorizeExport(actor: Actor, projectId: string): Promise<ExportAuthorization> {
+  // format: รูปแบบไฟล์ที่จะดาวน์โหลด — SVG/AI เฉพาะ Pro: ผ่านด่านสิทธิ์แบบปกติก่อน (ไม่มีสิทธิ์ = 402 PAYMENT_REQUIRED เดิม)
+  // แล้วถ้าไม่ใช่ Pro (เช่น ซื้อรายแบบ) → 402 PRO_REQUIRED พร้อมราคา Pro ให้ client เปิดหน้าสมัคร
+  // (open access = plan 'pro' อยู่แล้วจึงผ่าน); Pro ที่ได้ license จาก RPC ตามปกติไม่เสียหายอะไร
+  async authorizeExport(actor: Actor, projectId: string, format?: ExportFormat): Promise<ExportAuthorization> {
     const authorization = this.options.openAccess
       ? await this.repository.authorizeOpenAccessExport(actor, projectId)
       : await this.repository.authorizeExport(actor, projectId)
+    if (isProOnlyExport(format) && authorization.entitlements.plan !== 'pro') {
+      throw new HttpError(402, 'PRO_REQUIRED', 'ไฟล์ SVG / AI ดาวน์โหลดได้เฉพาะสมาชิก Pro', {
+        projectId,
+        format,
+        price: authorization.entitlements.catalog.pro,
+      })
+    }
     return { ...authorization, entitlements: this.withServerFlags(authorization.entitlements) }
   }
 

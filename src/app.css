@@ -4331,6 +4331,13 @@ aside .art-actions .file-pick:only-child {
   background: rgba(186, 117, 23, 0.18);
   color: #f0c57a;
 }
+/* ป้าย Pro บนไฟล์เวกเตอร์ (SVG/AI) — สีแบรนด์แทนสีเตือนราคา */
+.export-item .export-lock.pro,
+:root[data-theme='dark'] .export-item .export-lock.pro {
+  border-color: var(--accent);
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+}
 
 /* paywall modal */
 .paywall-modal {

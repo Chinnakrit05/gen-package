@@ -773,6 +773,35 @@ describe('API router', () => {
       body: { force: true },
     }, withPayload.res)
     expect(withPayload.res.statusCode).toBe(422)
+
+    // format บอกรูปแบบไฟล์: svg/ai ของแบบที่ซื้อรายแบบ (ไม่ใช่ Pro) → 402 PRO_REQUIRED; รูปแบบไม่รู้จัก → 422
+    const vector = response()
+    await configuredRouter({
+      method: 'POST',
+      url: `/api/v1/projects/${projectId}/export-authorizations`,
+      headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
+      body: { format: 'svg' },
+    }, vector.res)
+    expect(vector.res.statusCode).toBe(402)
+    expect(vector.readBody()).toMatchObject({ error: { code: 'PRO_REQUIRED', details: { projectId, format: 'svg' } } })
+
+    const dxf = response()
+    await configuredRouter({
+      method: 'POST',
+      url: `/api/v1/projects/${projectId}/export-authorizations`,
+      headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
+      body: { format: 'dxf' },
+    }, dxf.res)
+    expect(dxf.res.statusCode).toBe(200)
+
+    const unknown = response()
+    await configuredRouter({
+      method: 'POST',
+      url: `/api/v1/projects/${projectId}/export-authorizations`,
+      headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
+      body: { format: 'eps' },
+    }, unknown.res)
+    expect(unknown.res.statusCode).toBe(422)
   })
 
   it.each(['staging', 'production'] as const)(

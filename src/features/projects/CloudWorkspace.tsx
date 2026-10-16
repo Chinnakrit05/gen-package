@@ -443,8 +443,8 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     entitlements,
     entitlementsStatus,
     refreshEntitlements: () => refreshEntitlements(),
-    authorizeExport: async (projectId) => {
-      const authorization = await authorizeRemoteExport(props.apiBaseUrl, tokenRef.current, projectId)
+    authorizeExport: async (projectId, format) => {
+      const authorization = await authorizeRemoteExport(props.apiBaseUrl, tokenRef.current, projectId, format)
       setEntitlements(authorization.entitlements)
       setEntitlementsStatus('ready')
       return authorization

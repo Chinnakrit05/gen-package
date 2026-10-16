@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import type { IncomingHttpHeaders } from 'node:http'
-import { ZodError } from 'zod'
+import { z, ZodError } from 'zod'
 import type { ApiSuccess } from '../../shared/contracts/http'
 import type { SessionBootstrapData } from '../../shared/contracts/auth'
 import type { HealthData } from '../../shared/contracts/system'
 import type { DeleteProjectInput, SaveProjectInput } from '../../shared/contracts/projects'
+import { EXPORT_FORMATS, type ExportFormat } from '../../shared/contracts/billing'
 import { createSupabaseAssetService } from '../adapters/supabase/assetService'
 import { createSupabaseBillingRepository } from '../adapters/supabase/billingRepository'
 import { createSupabaseProjectRepository } from '../adapters/supabase/projectRepository'
@@ -128,6 +129,15 @@ function rejectDeleteBody(req: HttpRequest): void {
 }
 
 // POST ที่ไม่ต้องการข้อมูล: ยอมรับไม่มี body หรือ {} เท่านั้น (client บางตัวส่ง {} มาเสมอ)
+// body ของขอสิทธิ์ดาวน์โหลด: ว่าง / {} / { format } — format บอกรูปแบบไฟล์ (SVG/AI เฉพาะ Pro)
+const exportAuthorizationBodySchema = z.object({ format: z.enum(EXPORT_FORMATS).optional() }).strict()
+async function readExportAuthorizationBody(req: HttpRequest): Promise<{ format?: ExportFormat }> {
+  const contentLength = Number(headerValue(req, 'content-length') ?? 0)
+  if (req.body === undefined && contentLength <= 0 && !headerValue(req, 'transfer-encoding')) return {}
+  requireJsonContentType(req)
+  return parseOrThrow(exportAuthorizationBodySchema.safeParse(await readJsonBody(req)))
+}
+
 async function rejectNonEmptyBody(req: HttpRequest): Promise<void> {
   const contentLength = Number(headerValue(req, 'content-length') ?? 0)
   if (req.body === undefined && contentLength <= 0 && !headerValue(req, 'transfer-encoding')) return
@@ -622,8 +632,8 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
         }
         const actor = await sessionService.authenticate(bearerToken(req), requestId)
         const projectId = parseOrThrow(projectIdSchema.safeParse(exportAuthorizationMatch[1]))
-        await rejectNonEmptyBody(req)
-        const data = await billingService.authorizeExport(actor, projectId)
+        const { format } = await readExportAuthorizationBody(req)
+        const data = await billingService.authorizeExport(actor, projectId, format)
         sendJson(res, 200, { data, requestId }, requestId)
       } catch (error) {
         const httpError = error instanceof HttpError

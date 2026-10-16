@@ -137,7 +137,8 @@ export function PricingPage({ viewer, catalog, purchasesEnabled, onClose, onChoo
       unit: t('ต่อแบบ · จ่ายครั้งเดียว', 'per design · one-time'),
       features: [
         { ok: true, text: t('ทุกอย่างใน Freemium', 'Everything in Freemium') },
-        { ok: true, text: t('ดาวน์โหลด SVG · DXF · PDF 1:1 · ใบสเปก ของแบบนั้นได้ตลอด', 'SVG · DXF · 1:1 PDF · quote sheet for that design, forever') },
+        { ok: true, text: t('ดาวน์โหลด DXF · PDF 1:1 · ใบสเปก ของแบบนั้นได้ตลอด', 'DXF · 1:1 PDF · quote sheet for that design, forever') },
+        { ok: false, text: t('ไฟล์เวกเตอร์ SVG · AI (เฉพาะ Pro)', 'Vector SVG · AI files (Pro only)') },
         { ok: true, text: t('แก้ต่อแล้วดาวน์โหลดใหม่ได้ ไม่ต้องจ่ายเพิ่ม', 'Edit and re-download at no extra cost') },
         { ok: true, text: t('ไม่มีลายน้ำบนแบบนั้น', 'No watermark on that design') },
         {
@@ -168,6 +169,7 @@ export function PricingPage({ viewer, catalog, purchasesEnabled, onClose, onChoo
       unit: t('ต่อเดือน', 'per month'),
       features: [
         { ok: true, text: t('ดาวน์โหลดไฟล์ผลิตได้ทุกแบบ', 'Production files for every design') },
+        { ok: true, text: t('ไฟล์เวกเตอร์แก้ต่อได้ SVG · AI (Illustrator)', 'Editable vector SVG · AI (Illustrator) files') },
         { ok: true, text: t('ไม่มีลายน้ำบนพรีวิวทุกงาน', 'No watermark on any preview') },
         {
           ok: true,
@@ -176,7 +178,7 @@ export function PricingPage({ viewer, catalog, purchasesEnabled, onClose, onChoo
             : t(`เครดิต AI ทุก ${periodDays} วัน`, `AI credits every ${periodDays} days`),
         },
         { ok: true, text: t('เครดิตไม่หมดอายุ ใช้ต่อได้แม้เลิก Pro', 'Credits never expire, even after Pro ends') },
-        { ok: true, text: t('แบบที่โหลดตอนเป็น Pro ยังโหลดได้หลังหมดอายุ', 'Designs downloaded while Pro stay downloadable') },
+        { ok: true, text: t('แบบที่โหลดตอนเป็น Pro ยังโหลด DXF · PDF · ใบสเปก ได้หลังหมดอายุ', 'Designs downloaded while Pro keep DXF · PDF · quote sheet after it ends') },
       ],
       cta: !purchasesEnabled
         ? isPro
@@ -217,8 +219,12 @@ export function PricingPage({ viewer, catalog, purchasesEnabled, onClose, onChoo
       ],
     },
     {
-      label: t('ไฟล์ผลิต SVG · DXF · PDF 1:1', 'Production SVG · DXF · 1:1 PDF'),
+      label: t('ไฟล์ผลิต DXF · PDF 1:1', 'Production DXF · 1:1 PDF'),
       cells: [false, t('แบบที่ซื้อ', 'Bought design'), t('ทุกแบบ', 'Every design')],
+    },
+    {
+      label: t('ไฟล์เวกเตอร์ SVG · AI', 'Vector SVG · AI'),
+      cells: [false, false, t('ทุกแบบ', 'Every design')],
     },
     {
       label: t('ใบสเปกขอราคา (PDF)', 'Quote sheet (PDF)'),

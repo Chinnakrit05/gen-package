@@ -2,6 +2,7 @@ import type {
   CreateOrderInput,
   Entitlements,
   ExportAuthorization,
+  ExportFormat,
   Order,
 } from '../../../shared/contracts/billing'
 import { requestApi } from './client'
@@ -22,11 +23,13 @@ export function getEntitlements(
   })
 }
 
-// ขอสิทธิ์ดาวน์โหลดไฟล์ผลิตของแบบนี้ — 402 PAYMENT_REQUIRED เมื่อยังไม่ซื้อ/ไม่ใช่ Pro (ApiClientError.code)
+// ขอสิทธิ์ดาวน์โหลดไฟล์ผลิตของแบบนี้ — 402 PAYMENT_REQUIRED เมื่อยังไม่ซื้อ/ไม่ใช่ Pro;
+// 402 PRO_REQUIRED เมื่อขอรูปแบบที่เฉพาะ Pro (SVG/AI) แต่ไม่ใช่ Pro (ApiClientError.code)
 export function authorizeExport(
   apiBaseUrl: string,
   accessToken: string,
   projectId: string,
+  format?: ExportFormat,
   signal?: AbortSignal,
 ): Promise<ExportAuthorization> {
   return requestApi<ExportAuthorization>(
@@ -35,7 +38,7 @@ export function authorizeExport(
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: '{}',
+      body: JSON.stringify(format ? { format } : {}),
       signal,
     },
   )

@@ -127,7 +127,7 @@ import {
 } from './core/project'
 import { serializeProject, parseProjectFile, projectFileName } from './core/projectFile'
 import type { ProjectSummary } from '../shared/contracts/projects'
-import type { Entitlements, ExportAuthorization, Order, OrderKind } from '../shared/contracts/billing'
+import { isProOnlyExport, type Entitlements, type ExportAuthorization, type ExportFormat, type Order, type OrderKind } from '../shared/contracts/billing'
 import type { ProjectSaveState } from './services/projects/durableSaveQueue'
 import { ApiClientError } from './services/api/client'
 import { PaywallModal } from './components/PaywallModal'
@@ -987,8 +987,9 @@ export interface CloudProjectBridge {
   entitlementsStatus: EntitlementsStatus
   // โหลดสิทธิ์ใหม่ (คำขอซ้อนกันใช้ promise เดียว) — App เรียกตอนเปิดหน้าแพ็กเกจ/paywall, ปุ่มลองใหม่บนชิป, เครดิตหมด
   refreshEntitlements(): Promise<Entitlements | null>
-  // ขอสิทธิ์ดาวน์โหลดไฟล์ผลิตของแบบ (server ตัดสิน) — โยน ApiClientError PAYMENT_REQUIRED เมื่อต้องซื้อ
-  authorizeExport(projectId: string): Promise<ExportAuthorization>
+  // ขอสิทธิ์ดาวน์โหลดไฟล์ผลิตของแบบ (server ตัดสิน) — โยน ApiClientError PAYMENT_REQUIRED เมื่อต้องซื้อ,
+  // PRO_REQUIRED เมื่อขอรูปแบบเฉพาะ Pro (SVG/AI) แต่ไม่ใช่ Pro
+  authorizeExport(projectId: string, format?: ExportFormat): Promise<ExportAuthorization>
   createOrder(kind: OrderKind, projectId?: string): Promise<Order>
   devFulfilOrder(orderId: string): Promise<Order>
 }
@@ -1266,7 +1267,8 @@ export default function App({
     ? new Date(entitlements.proUntil).toLocaleDateString(lang === 'en' ? 'en-GB' : 'th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
     : ''
   // paywall ที่เปิดอยู่ + action ที่ค้าง (ดาวน์โหลด) ทำต่อหลังได้สิทธิ์
-  const [paywall, setPaywall] = useState<{ kind: OrderKind; after?: () => void | Promise<void> } | null>(null)
+  // proOnly = เปิดเพราะไฟล์เฉพาะ Pro (SVG/AI) → modal ไม่เสนอซื้อรายแบบ
+  const [paywall, setPaywall] = useState<{ kind: OrderKind; after?: () => void | Promise<void>; proOnly?: boolean } | null>(null)
   const [paywallBusy, setPaywallBusy] = useState(false)
   // หน้าแพ็กเกจและราคา (cloud) — เปิดจากชิปแพ็กเกจ/ลิงก์ใน paywall/ปุ่ม AI เมื่อเครดิตหมด; ปุ่มซื้อเปิด paywall ซ้อนด้านบน
   const [pricingOpen, setPricingOpen] = useState(false)
@@ -1285,6 +1287,13 @@ export default function App({
         : t('ไฟล์ผลิตดาวน์โหลดได้เมื่อซื้อแบบนี้หรือเป็น Pro — ยังไม่เปิดขาย', 'Production files need this design bought or Pro — not on sale yet')}
     >
       {designPrice} ฿
+    </span>
+  ) : null
+  // ป้าย Pro บนปุ่มไฟล์เวกเตอร์ (SVG/AI) — เฉพาะ Pro (ซื้อรายแบบแล้วก็ยังโหลดไม่ได้); local-demo ไม่มีด่าน
+  const isProPlan = entitlements?.plan === 'pro'
+  const proLock = cloud && !isProPlan ? (
+    <span className="export-lock pro" title={t('เฉพาะสมาชิก Pro', 'Pro members only')}>
+      Pro
     </span>
   ) : null
   // หน่วยวัดช่องขนาด (มม./นิ้ว) — ค่าจริงเก็บเป็น มม. เสมอ สลับแค่การแสดงผล
@@ -2296,7 +2305,9 @@ export default function App({
 
   // PDF สเกล 1:1 สำหรับพิมพ์ตรวจ/ส่งโรงงาน — เลเยอร์ปิด-เปิดได้ใน Acrobat
   // ลายฝังเป็นภาพ 300 dpi (ไทยได้ ไม่ต้องฝังฟอนต์) ใต้เส้น cut/crease
-  const downloadPDF = async () => {
+  // ext 'ai' = ไฟล์ Illustrator: เนื้อหาเป็น PDF ชุดเดียวกัน (Illustrator เปิด .ai แบบ PDF-compatible ได้ตรง ๆ)
+  // เลเยอร์ artwork/cut/crease/dims ยังแยกให้แก้ต่อ
+  const downloadPDF = async (ext: 'pdf' | 'ai' = 'pdf') => {
     if (!dieline) return
     let art
     // รูปพื้น (ถ้ามี) baked เข้า raster เป็นชั้นล่างสุด — จึงไม่ต้องวาดสีพื้น vector ซ้ำ
@@ -2345,9 +2356,10 @@ export default function App({
         await whiteInkForExport(),
       ),
       'application/pdf',
-      'pdf',
+      ext,
     )
   }
+  const downloadAI = () => downloadPDF('ai')
 
   // เลือกได้หลายชิ้น — เมื่อเลือกชิ้นเดียวจึงโชว์แผงแก้ไขรายชิ้น; หลายชิ้นโชว์แผงหลายชิ้น
   const multi = selectedIds.length > 1
@@ -2407,9 +2419,14 @@ export default function App({
   // ดาวน์โหลดไฟล์ผลิต (ใบสเปก/DXF/PDF/SVG) ผ่านด่านสิทธิ์: local → ทำทันที; cloud → authorizeExport ก่อนเสมอ
   // (server ตัดสิน; Pro ได้ license อัตโนมัติ) → ไม่มีสิทธิ์ (402 PAYMENT_REQUIRED) → เปิด paywall รายแบบ
   // แล้วทำต่อหลังชำระ/จำลองการชำระ; .genpkg.json (exportProject) ไม่ผ่านด่านนี้โดยเจตนา
-  const gatedDownload = async (run: () => void | Promise<void>) => {
+  const gatedDownload = async (run: () => void | Promise<void>, format?: ExportFormat) => {
     if (!cloud) {
       await run()
+      return
+    }
+    // SVG/AI เฉพาะ Pro: รู้สิทธิ์แล้วว่าไม่ใช่ Pro → เปิดหน้าสมัคร Pro เลย (server ยังตรวจซ้ำด้านล่างเสมอ)
+    if (isProOnlyExport(format) && entitlementsStatus === 'ready' && !isProPlan) {
+      setPaywall({ kind: 'pro', after: run, proOnly: true })
       return
     }
     // ขอสิทธิ์จาก server ไม่ได้ขณะออฟไลน์ — ปุ่มถูก disable อยู่แล้ว กันกรณีหลุดออฟไลน์ระหว่างทาง (เช่น หลังชำระใน paywall)
@@ -2418,9 +2435,13 @@ export default function App({
       return
     }
     try {
-      await cloud.authorizeExport(activeId)
+      await cloud.authorizeExport(activeId, format)
       await run()
     } catch (e) {
+      if (e instanceof ApiClientError && e.code === 'PRO_REQUIRED') {
+        setPaywall({ kind: 'pro', after: run, proOnly: true })
+        return
+      }
       if (e instanceof ApiClientError && e.code === 'PAYMENT_REQUIRED') {
         // สิทธิ์ฝั่ง client อาจค้าง (เช่น Pro หมดอายุระหว่างเปิดแท็บ) — เปิด paywall แล้ว effect โหลดสิทธิ์ใหม่
         // (ซิงก์ชิป/ลายน้ำ/ป้ายราคา/เปิดขายหรือยัง ข้างหลัง modal)
@@ -5559,7 +5580,7 @@ export default function App({
                   <p className="hint export-offline" role="status">{exportOfflineMessage}</p>
                 )}
                 <div className="export-list">
-                  {/* ไฟล์ผลิตทั้ง 4 ผ่าน gatedDownload (cloud: server ตัดสินสิทธิ์ก่อนสร้างไฟล์) — ป้ายราคาเมื่อยังไม่มีสิทธิ์;
+                  {/* ไฟล์ผลิตทั้งหมดผ่าน gatedDownload (cloud: server ตัดสินสิทธิ์ก่อนสร้างไฟล์) — ป้ายราคาเมื่อยังไม่มีสิทธิ์;
                       ออฟไลน์ขอสิทธิ์ไม่ได้จึงกดไม่ได้ (.genpkg.json สำรองงานยังส่งออกได้) */}
                   <button className="export-item primary" disabled={exportOffline} onClick={() => void gatedDownload(downloadSpecSheet)}>
                     <span className="export-badge">PDF</span>
@@ -5585,13 +5606,22 @@ export default function App({
                     </span>
                     {exportLock}
                   </button>
-                  <button className="export-item" disabled={exportOffline} onClick={() => void gatedDownload(downloadSVG)}>
+                  {/* ไฟล์เวกเตอร์แก้ต่อได้ (SVG/AI) เฉพาะ Pro — server ตอบ PRO_REQUIRED ถ้าไม่ใช่ Pro แม้ซื้อรายแบบแล้ว */}
+                  <button className="export-item" disabled={exportOffline} onClick={() => void gatedDownload(downloadSVG, 'svg')}>
                     <span className="export-badge">SVG</span>
                     <span className="export-body">
                       <span className="export-name">dieline เวกเตอร์</span>
                       <span className="export-desc">เปิด/แก้ต่อใน Illustrator, CorelDRAW, Inkscape</span>
                     </span>
-                    {exportLock}
+                    {proLock}
+                  </button>
+                  <button className="export-item" disabled={exportOffline} onClick={() => void gatedDownload(downloadAI, 'ai')}>
+                    <span className="export-badge">AI</span>
+                    <span className="export-body">
+                      <span className="export-name">ไฟล์ Adobe Illustrator</span>
+                      <span className="export-desc">เปิดใน Illustrator ได้ทันที · เลเยอร์ artwork/cut/crease แยก · สเกล 1:1</span>
+                    </span>
+                    {proLock}
                   </button>
                 </div>
                 <p className="hint">
@@ -5952,6 +5982,7 @@ export default function App({
         <PaywallModal
           key={paywall.kind}
           kind={paywall.kind}
+          proOnly={paywall.proOnly}
           entitlements={cloud.entitlements}
           projectName={activeName}
           busy={paywallBusy}

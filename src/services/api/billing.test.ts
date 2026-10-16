@@ -83,6 +83,14 @@ describe('billing API client', () => {
     })
   })
 
+  it('sends the requested format so the server can gate vector files to Pro', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      expect(JSON.parse(String(init.body))).toEqual({ format: 'ai' })
+      return ok({ projectId: 'project-1', source: 'pro', entitlements })
+    }))
+    await expect(authorizeExport('/api/v1', 'token', 'project-1', 'ai')).resolves.toMatchObject({ source: 'pro' })
+  })
+
   it('creates an order with the full input body and no price fields', async () => {
     const input = { workspaceId: 'space', operationId: crypto.randomUUID(), kind: 'design' as const, projectId: 'project-1' }
     vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {

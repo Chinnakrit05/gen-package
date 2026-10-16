@@ -8,7 +8,7 @@
 // downloads authorized without licenses, purchases off.
 import { StrictMode, useCallback, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import type { BillingCatalog, Entitlements, Order, OrderKind } from '../../shared/contracts/billing'
+import { isProOnlyExport, type BillingCatalog, type Entitlements, type Order, type OrderKind } from '../../shared/contracts/billing'
 import type { ProjectSummary } from '../../shared/contracts/projects'
 import App, { type CloudProjectBridge, type EntitlementsStatus, type ProjectStoreSnapshot } from '../../src/App'
 import { PricingPage } from '../../src/components/PricingPage'
@@ -180,9 +180,23 @@ function buildBridge(state: FakeState, flagsRef: { current: Flags }, bump: () =>
       }
       return snapshot(state, flagsRef.current)
     },
-    authorizeExport: async (projectId) => {
+    authorizeExport: async (projectId, format) => {
       await delay(200)
       online()
+      // SVG/AI เฉพาะ Pro (open access = Pro ฟรี) — ซื้อรายแบบแล้วก็ยังได้ PRO_REQUIRED
+      if (isProOnlyExport(format) && !isPro() && !ent.openAccess) {
+        if (!licensed(projectId)) {
+          throw new ApiClientError(402, 'PAYMENT_REQUIRED', 'ต้องซื้อแบบนี้ (149 บาท) หรือสมัคร Pro ก่อนดาวน์โหลด', {
+            projectId,
+            price: CATALOG.design,
+          })
+        }
+        throw new ApiClientError(402, 'PRO_REQUIRED', 'ไฟล์ SVG / AI ดาวน์โหลดได้เฉพาะสมาชิก Pro', {
+          projectId,
+          format,
+          price: CATALOG.pro,
+        })
+      }
       if (licensed(projectId)) return { projectId, source: 'purchase', entitlements: snapshot(state, flagsRef.current) }
       // open access: ได้สิทธิ์จากรอบ Pro ฟรีโดยไม่ออก license ถาวร (authorize_open_access_export)
       if (ent.openAccess) return { projectId, source: 'pro', entitlements: snapshot(state, flagsRef.current) }
