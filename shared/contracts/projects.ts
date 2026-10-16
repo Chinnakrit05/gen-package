@@ -13,6 +13,7 @@ export interface CloudProjectDocumentV1 {
   fillColor: string | null
   fillImage?: Record<string, unknown> | null
   labelStyle?: string
+  neckH?: number
   pouchStyle?: string
   zipper?: boolean
   pouchAddons?: Record<string, boolean | number>

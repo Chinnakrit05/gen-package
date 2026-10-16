@@ -51,6 +51,7 @@ export interface Project {
   fillColor: string | null
   fillImage?: FillImage | null // รูปพื้นแพ็กเกจ (ถ้ามี = ใช้แทน/ทับ fillColor)
   labelStyle?: LabelStyle // รูปแบบฉลาก (เฉพาะโหมดภาชนะ) — ไม่ใส่ = 'body'
+  neckH?: number // ความสูงคอขวด มม. (เฉพาะโหมดภาชนะ; H = สูงรวม) — ไม่ใส่ = สัดส่วนมาตรฐานตามวัสดุ
   pouchStyle?: PouchStyle // รูปแบบถุง (เฉพาะโหมดถุง) — ไม่ใส่ = 'stand'
   zipper?: boolean // ซิปล็อก + รอยฉีก (เฉพาะโหมดถุง) — เก็บเฉพาะเมื่อ true
   pouchAddons?: PouchAddons // ออปชันเสริมถุง (รูแขวน/วาล์ว/tin-tie) — เก็บเฉพาะที่เปิด + ตำแหน่งซิป/รอยบากที่ตั้งเอง
@@ -151,6 +152,7 @@ export function parseProject(v: unknown, idx: number): Project | null {
     fillColor: typeof o.fillColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.fillColor) ? o.fillColor : null,
     fillImage: parseFillImage(o.fillImage),
     labelStyle: LABEL_STYLES.some((s) => s.id === o.labelStyle) ? (o.labelStyle as LabelStyle) : undefined,
+    neckH: typeof o.neckH === 'number' && Number.isFinite(o.neckH) ? clamp(Math.round(o.neckH * 2) / 2, 1, 300) : undefined,
     pouchStyle: POUCH_STYLES.some((s) => s.id === o.pouchStyle) ? (o.pouchStyle as PouchStyle) : undefined,
     zipper: o.zipper === true ? true : undefined,
     pouchAddons: parsePouchAddons(o.pouchAddons),

@@ -184,6 +184,7 @@ export const cloudProjectDocumentSchema = z.object({
   fillColor: color.nullable(),
   fillImage: fillImageSchema.nullable().optional(),
   labelStyle: z.enum(['body', 'full', 'band', 'neck']).optional(),
+  neckH: finite.min(1).max(300).optional(),
   pouchStyle: z.enum(['stand', 'flat', 'gusset', 'box', 'pillow', 'spout']).optional(),
   zipper: z.boolean().optional(),
   pouchAddons: z.object({

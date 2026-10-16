@@ -88,7 +88,7 @@ import {
   resolveStickerSheet,
   type SheetLayout,
 } from './core/stickerSheet'
-import { generateVessel, LABEL_STYLES, type LabelStyle } from './core/vessel'
+import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, type LabelStyle } from './core/vessel'
 import {
   generatePouch,
   POUCH_STYLES,
@@ -877,6 +877,7 @@ interface EditSnapshot {
   fillColor: string | null
   fillImage: FillImage | null
   labelStyle: LabelStyle
+  neckH: number | undefined
   pouchStyle: PouchStyle
   zipper: boolean
   pouchAddons: PouchAddons
@@ -896,6 +897,7 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.fillColor === b.fillColor &&
   a.fillImage === b.fillImage &&
   a.labelStyle === b.labelStyle &&
+  a.neckH === b.neckH &&
   a.pouchStyle === b.pouchStyle &&
   a.zipper === b.zipper &&
   a.pouchAddons === b.pouchAddons &&
@@ -1187,6 +1189,8 @@ export default function App({
   // พรีวิวสีงานพิมพ์ CMYK บน blueprint (soft-proof) — ตั้งใจไม่จำค่าข้ามรอบ กันลืมเปิดค้างแล้วนึกว่าสีลายเพี้ยน
   const [softProof, setSoftProof] = useState(false)
   const [labelStyle, setLabelStyle] = useState<LabelStyle>(initialActive.labelStyle ?? 'body')
+  // ความสูงคอขวด (มม.) — undefined = สัดส่วนมาตรฐานตามวัสดุ; ตั้งเองเมื่อผู้ใช้ปรับคอ/ตัวแยกกัน
+  const [neckH, setNeckH] = useState<number | undefined>(initialActive.neckH)
   const [pouchStyle, setPouchStyle] = useState<PouchStyle>(initialActive.pouchStyle ?? 'stand')
   const [zipper, setZipper] = useState<boolean>(initialActive.zipper ?? false)
   const [pouchAddons, setPouchAddons] = useState<PouchAddons>(initialActive.pouchAddons ?? {})
@@ -1521,9 +1525,23 @@ export default function App({
   const isTube = kind === 'vessel' && mat.form === 'tube'
   // วัสดุพับไม่ได้แยกเป็น 2 เส้นทาง: ภาชนะ (revolve + ฉลากพันรอบ) กับ ถุงฟิล์ม (doypack)
   // ทั้งคู่ผลิต Dieline ธรรมดา ระบบเดิม (artwork/export/guides/ใบสเปก/CMYK) จึงใช้ต่อได้เลย
+  // ขวด/โหล/กระป๋อง: แยกขนาดตัวกับคอ — H ยังเป็นความสูงรวม (ตัว = H − คอ)
+  const showNeck = kind === 'vessel' && hasNeck(mat.id)
+  const neckEff = showNeck ? resolveNeckH(mat.id, H, neckH) : 0
+  const bodyH = H - neckEff
+  // ปรับสูงตัว: ตรึงคอที่ค่าปัจจุบัน (ไม่ให้คอเลื่อนตามสัดส่วน) แล้วสูงรวม = ตัว + คอ
+  const setBodyH = (v: number) => {
+    setNeckH(neckEff)
+    setH(clamp(v + neckEff, 30, 300))
+  }
+  // ปรับสูงคอ: ตัวคงเดิม สูงรวมเปลี่ยนตาม
+  const setNeckLen = (v: number) => {
+    setNeckH(v)
+    setH(clamp(bodyH + v, 30, 300))
+  }
   const vessel = useMemo(
-    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle) : null),
-    [W, D, H, handle, mat, labelStyle, kind],
+    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, neckH) : null),
+    [W, D, H, handle, mat, labelStyle, neckH, kind],
   )
   const pouch = useMemo(
     () =>
@@ -1716,6 +1734,7 @@ export default function App({
               && p.fillColor === fillColor
               && p.fillImage === fillImage
               && (p.labelStyle ?? 'body') === labelStyle
+              && p.neckH === neckH
               && (p.pouchStyle ?? 'stand') === pouchStyle
               && Boolean(p.zipper) === zipper
               && samePouchAddons(p.pouchAddons, pouchAddons)
@@ -1732,6 +1751,7 @@ export default function App({
                     fillColor,
                     fillImage,
                     labelStyle,
+                    neckH,
                     pouchStyle,
                     zipper,
                     pouchAddons,
@@ -1747,7 +1767,7 @@ export default function App({
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
 
   // local demo เขียน localStorage; cloud ส่ง active project เข้า durable IndexedDB/save queue
   useEffect(() => {
@@ -1828,6 +1848,7 @@ export default function App({
     fillColor,
     fillImage,
     labelStyle,
+    neckH,
     pouchStyle,
     zipper,
     pouchAddons,
@@ -1855,7 +1876,7 @@ export default function App({
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -1869,6 +1890,7 @@ export default function App({
     setFillColor(s.fillColor)
     setFillImage(s.fillImage ?? null)
     setLabelStyle(s.labelStyle ?? 'body')
+    setNeckH(s.neckH)
     setPouchStyle(s.pouchStyle ?? 'stand')
     setZipper(s.zipper ?? false)
     setPouchAddons(s.pouchAddons ?? {})
@@ -1961,6 +1983,7 @@ export default function App({
           && p.fillColor === fillColor
           && p.fillImage === fillImage
           && (p.labelStyle ?? 'body') === labelStyle
+          && p.neckH === neckH
           && (p.pouchStyle ?? 'stand') === pouchStyle
           && Boolean(p.zipper) === zipper
           && samePouchAddons(p.pouchAddons, pouchAddons)
@@ -1970,7 +1993,7 @@ export default function App({
           && p.history === history
           && p.histIdx === histIdx
             ? p
-            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
+            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -1986,6 +2009,7 @@ export default function App({
     setFillColor(p.fillColor)
     setFillImage(p.fillImage ?? null)
     setLabelStyle(p.labelStyle ?? 'body')
+    setNeckH(p.neckH)
     setPouchStyle(p.pouchStyle ?? 'stand')
     setZipper(p.zipper ?? false)
     setPouchAddons(p.pouchAddons ?? {})
@@ -2767,7 +2791,7 @@ export default function App({
     kind === 'vessel'
       ? [
           { label: '⌀ ตัว', mm: W },
-          { label: '⌀ ปาก', mm: D },
+          { label: showNeck ? '⌀ คอ' : '⌀ ปาก', mm: D },
           { label: 'สูง', mm: H },
         ]
       : [
@@ -3660,6 +3684,17 @@ export default function App({
               disabled={aiBusy || perSheetLocked}
               onChange={setW}
             />
+            {showNeck && (
+              <DimField
+                imperial={imperial}
+                label={t('สูงตัวขวด', 'Body height')}
+                value={bodyH}
+                min={Math.max(BODY_MIN, 30 - neckEff)}
+                max={300 - neckEff}
+                disabled={aiBusy}
+                onChange={setBodyH}
+              />
+            )}
             {/* ซองแบน/หลังกลางไม่มีก้น-จีบ, นามบัตร/สติกเกอร์เป็นแผ่นแบน → ซ่อนช่อง D */}
             {!(kind === 'pouch' && (pouchStyle === 'flat' || pouchStyle === 'pillow')) &&
               !(kind === 'box' && (templateId === 'card' || templateId === 'sticker')) && (
@@ -3672,7 +3707,9 @@ export default function App({
                       ? pouchStyle === 'gusset' || pouchStyle === 'box'
                         ? t('จีบข้าง D', 'Side gusset D')
                         : t('ลึกก้น D', 'Bottom depth D')
-                      : t('⌀ ปาก/คอ D', '⌀ mouth/neck D')
+                      : showNeck
+                        ? t('⌀ คอขวด D', '⌀ neck D')
+                        : t('⌀ ปาก/คอ D', '⌀ mouth/neck D')
                 }
                 value={D}
                 min={20}
@@ -3681,15 +3718,34 @@ export default function App({
                 onChange={setD}
               />
             )}
-            <DimField
-              imperial={imperial}
-              label={kind === 'pouch' ? t('สูงลำตัว H', 'Body height H') : t('สูง H', 'Height H')}
-              value={H}
-              min={isSticker ? STICKER_MIN_SIZE : 30}
-              max={300}
-              disabled={aiBusy || perSheetLocked}
-              onChange={setH}
-            />
+            {showNeck ? (
+              <>
+                <DimField
+                  imperial={imperial}
+                  label={t('สูงคอขวด', 'Neck height')}
+                  value={neckEff}
+                  min={NECK_MIN}
+                  max={Math.max(NECK_MIN, Math.min(150, 300 - bodyH))}
+                  disabled={aiBusy}
+                  onChange={setNeckLen}
+                />
+                <p className="hint">
+                  {imperial
+                    ? t(`สูงรวม ${(H / MM_PER_IN).toFixed(2)} นิ้ว`, `Total height ${(H / MM_PER_IN).toFixed(2)} in`)
+                    : t(`สูงรวม ${fmtMm(H)} มม.`, `Total height ${fmtMm(H)} mm`)}
+                </p>
+              </>
+            ) : (
+              <DimField
+                imperial={imperial}
+                label={kind === 'pouch' ? t('สูงลำตัว H', 'Body height H') : t('สูง H', 'Height H')}
+                value={H}
+                min={isSticker ? STICKER_MIN_SIZE : 30}
+                max={300}
+                disabled={aiBusy || perSheetLocked}
+                onChange={setH}
+              />
+            )}
             {perSheetLocked && (
               <p className="hint">
                 {t(

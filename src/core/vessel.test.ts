@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LABEL_OVERLAP, TUBE_CAP_FRAC, TUBE_SEAL, generateVessel, isVessel, tubeSection } from './vessel'
+import { BODY_MIN, LABEL_OVERLAP, NECK_MIN, TUBE_CAP_FRAC, TUBE_SEAL, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
 import { ellipsePerimeter } from './pouch'
 import { MATERIALS, getMaterial } from './materials'
 import { computeGuides } from './guides'
@@ -192,5 +192,39 @@ describe('vessel: กันข้อมูลพิลึก', () => {
     const v = generateVessel({ W: 60, D: 150, H: 100, handle: false }, getMaterial('glass'))
     const neckR = v.profile[v.profile.length - 1].x
     expect(neckR).toBeLessThan(30) // < W/2
+  })
+})
+
+// ขวด/โหล/กระป๋อง: ปรับตัวกับคอแยกกัน — ตัว = ก้นถึงปลายไหล่ (รัศมีถึง ⌀คอ), คอ = ปลายไหล่ถึงปาก
+describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: แยกความสูงตัว/คอ %s', (id) => {
+  const mat = getMaterial(id)
+  const rn = box.D / 2
+  // ระดับที่รัศมีลดถึง ⌀คอ ครั้งแรก = ปลายไหล่ (เริ่มคอ)
+  const neckBase = (neckH?: number) => generateVessel(box, mat, 'body', neckH).profile.find((p) => p.y > 0 && Math.abs(p.x - rn) < 1e-6)!.y
+
+  it('ตั้งความสูงคอ → คอเริ่มที่ H − คอ, สูงรวมยังเป็น H', () => {
+    for (const nh of [8, 30, 60]) {
+      expect(neckBase(nh)).toBeCloseTo(box.H - nh, 6)
+      const v = generateVessel(box, mat, 'body', nh)
+      expect(Math.max(...v.profile.map((p) => p.y))).toBeCloseTo(box.H)
+    }
+  })
+
+  it('ไม่ตั้งค่า = สัดส่วนมาตรฐานของวัสดุ', () => {
+    expect(neckBase()).toBeCloseTo(box.H - defaultNeckH(id, box.H), 6)
+  })
+
+  it('คอยาวขึ้น → ตัวเตี้ยลง ฉลากย้ายลงตาม (ยังอยู่บนตัว)', () => {
+    const short = generateVessel(box, mat, 'body', 10)
+    const long = generateVessel(box, mat, 'body', 80)
+    expect(long.labelY1).toBeLessThan(short.labelY1)
+    expect(long.labelY1).toBeLessThan(box.H - 80)
+  })
+
+  it('คอถูกจำกัดให้ตัวเหลืออย่างน้อย BODY_MIN และคออย่างน้อย NECK_MIN', () => {
+    expect(resolveNeckH(id, box.H, 500)).toBe(box.H - BODY_MIN)
+    expect(resolveNeckH(id, box.H, 0)).toBe(NECK_MIN)
+    const v = generateVessel(box, mat, 'body', 500)
+    expect(v.profile.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true)
   })
 })

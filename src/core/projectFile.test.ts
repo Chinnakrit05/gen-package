@@ -53,6 +53,17 @@ describe('projectFile: round-trip', () => {
     expect(JSON.parse(serializeProject(p)).project.stickerCut).toBeUndefined()
   })
 
+  it('ความสูงคอขวด: เก็บเฉพาะเมื่อตั้งเอง และอ่านกลับได้', () => {
+    const p = sampleProject()
+    p.live = { template: 'tuck-end', materialId: 'pet-bottle', W: 40, D: 20, H: 75.5, handle: false }
+    expect(JSON.parse(serializeProject(p)).project.neckH).toBeUndefined()
+    p.neckH = 22.5
+    const res = parseProjectFile(serializeProject(p))
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.project.neckH).toBe(22.5)
+  })
+
   it('นำเข้าได้ id ใหม่เสมอ (กันชนกับงานที่เปิดอยู่)', () => {
     const p = sampleProject()
     const res = parseProjectFile(serializeProject(p))
