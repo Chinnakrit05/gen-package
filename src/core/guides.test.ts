@@ -39,21 +39,26 @@ describe('computeGuides: ขอบร่วมสองแผง = รอยพ�
     { id: 'A', parentId: null, outline: [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 30 }, { x: 0, y: 30 }], stage: 0 },
     { id: 'B', parentId: 'A', outline: [{ x: 20, y: 0 }, { x: 40, y: 0 }, { x: 40, y: 30 }, { x: 20, y: 30 }], stage: 0 },
   ]
-  const g = computeGuides(panels)
+  const segments = [
+    { kind: 'cut' as const, d: 'M 0 0 L 40 0 L 40 30 L 0 30 Z' },
+    { kind: 'crease' as const, d: 'M 20 0 L 20 30' },
+  ]
+  const g = computeGuides({ panels, segments })
+  const segs = g.bleed.flatMap((l) => l.slice(1).map((b, i) => [l[i], b] as const))
 
   it('มี safe ทั้งสองแผง', () => {
     expect(g.safe).toHaveLength(2)
   })
 
   it('ขอบร่วมที่ x=20 ไม่มีเส้น bleed', () => {
-    const shared = g.bleed.filter(
+    const shared = segs.filter(
       ([a, b]) => Math.abs(a.x - b.x) < 0.01 && Math.abs((a.x + b.x) / 2 - 20) < BLEED_MM + 0.5,
     )
     expect(shared).toHaveLength(0)
   })
 
   it('ขอบนอกซ้ายมีเส้น bleed ที่ x=-3', () => {
-    const left = g.bleed.filter(
+    const left = segs.filter(
       ([a, b]) => Math.abs(a.x - b.x) < 0.01 && Math.abs((a.x + b.x) / 2 - -BLEED_MM) < 0.5,
     )
     expect(left.length).toBeGreaterThanOrEqual(1)
@@ -62,7 +67,7 @@ describe('computeGuides: ขอบร่วมสองแผง = รอยพ�
 
 describe.each(TEMPLATES.map((t) => [t.id, t] as const))('guides: template %s', (_id, t) => {
   const d = t.generate({ ...t.defaults, handle: t.supportsHandle }, getMaterial('carton-300'))
-  const g = computeGuides(d.panels)
+  const g = computeGuides(d)
 
   it('มี safe/bleed และทุกจุด finite ในช่วง [−bleed, ขนาด+bleed]', () => {
     expect(g.safe.length).toBeGreaterThanOrEqual(1)

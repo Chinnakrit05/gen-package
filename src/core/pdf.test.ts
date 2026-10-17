@@ -116,7 +116,7 @@ describe('pdf: เลเยอร์เสริม', () => {
   })
 
   it('guides: เป็น OCG ของตัวเอง และ xref ถูกเมื่อรวมทุกเลเยอร์', () => {
-    const g = computeGuides(d.panels)
+    const g = computeGuides(d)
     const s = dec(dielinePDFBytes(d, true, { jpeg: fakeJpeg(), w: 10, h: 10 }, g))
     expect(s.includes('(guides)')).toBe(true)
     expect(s.includes('/OC /OCg BDC')).toBe(true)
@@ -126,7 +126,7 @@ describe('pdf: เลเยอร์เสริม', () => {
   })
 
   it('fill: สีพื้นเป็น OCG vector (CMYK k + f) และ xref ถูกเมื่อรวมทุกเลเยอร์', () => {
-    const g = computeGuides(d.panels)
+    const g = computeGuides(d)
     const s = dec(dielinePDFBytes(d, true, { jpeg: fakeJpeg(), w: 10, h: 10 }, g, '#0f6e56'))
     expect(s.includes('(fill)')).toBe(true)
     expect(s.includes('/OC /OCf BDC')).toBe(true)
@@ -140,7 +140,7 @@ describe('pdf: เลเยอร์เสริม', () => {
   })
 
   it('สีเป็น CMYK: เส้น/เติมใช้ K/k (4 ค่า) ไม่มี operator RGB (RG/rg) หลงเหลือ', () => {
-    const g = computeGuides(d.panels)
+    const g = computeGuides(d)
     const s = dec(dielinePDFBytes(d, true, undefined, g, '#0f6e56'))
     expect(/[\d.]+ [\d.]+ [\d.]+ [\d.]+ K\b/.test(s)).toBe(true) // เส้น cut/crease/guide CMYK
     expect(/[\d.]+ [\d.]+ [\d.]+ [\d.]+ k\b/.test(s)).toBe(true) // สีพื้น/ป้าย CMYK

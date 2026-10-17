@@ -62,10 +62,10 @@ describe.each(VESSEL_IDS.map((id) => [id] as const))('vessel: dieline ฉลา�
 
   it('สองแผง (label + glue) — รอยต่อกาวเป็นขอบร่วม ไม่ใช่ขอบนอก', () => {
     expect(v.label.panels.map((p) => p.id)).toEqual(['label', 'glue'])
-    const g = computeGuides(v.label.panels)
+    const g = computeGuides(v.label)
     // ขอบร่วมที่ x = เส้นรอบวง ต้องไม่มี bleed (เหมือนรอยพับของกล่อง)
     const circ = Math.PI * box.W
-    const atSeam = g.bleed.filter(
+    const atSeam = g.bleed.flatMap((l) => l.slice(1).map((b, i) => [l[i], b] as const)).filter(
       ([a, b]) => Math.abs(a.x - b.x) < 0.01 && Math.abs((a.x + b.x) / 2 - circ) < 4,
     )
     expect(atSeam).toHaveLength(0)

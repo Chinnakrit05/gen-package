@@ -1627,7 +1627,7 @@ export default function App({
   )
   // ไดคัทตามรูปไม่ใช้เส้นเผื่อตัด 3 มม. แบบกล่อง — สติกเกอร์ใช้กติกาเผื่อสี/ระยะห่างของตัวเอง (ตรวจด้านล่าง)
   const guides = useMemo(
-    () => (showGuides && dieline && !(isSticker && stickerLoops) ? computeGuides(dieline.panels) : null),
+    () => (showGuides && dieline && !(isSticker && stickerLoops) ? computeGuides(dieline) : null),
     [showGuides, dieline, isSticker, stickerLoops],
   )
   // ตรวจไฟล์สติกเกอร์ตามข้อจำกัดการผลิตไดคัท (ระยะจากเส้นตัด/เผื่อสี/ระยะห่าง/ช่องเจาะ/มุมแหลม)

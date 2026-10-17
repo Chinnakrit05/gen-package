@@ -170,7 +170,7 @@ describe('rollover-mailer: ตำแหน่งหลังพับสุด (
 
 describe('rollover-mailer: เข้ากับระบบอื่น', () => {
   it('guides + DXF ไม่มี NaN', () => {
-    const g = computeGuides(d.panels)
+    const g = computeGuides(d)
     expect(g.bleed.length).toBeGreaterThan(0)
     const dxf = dielineDXFString(d)
     expect(dxf).toContain('EOF')

@@ -260,8 +260,10 @@ export function dielinePDFBytes(
     }
     parts.push('S')
     parts.push(`${cmyk(BLEED)} K`, '[3 2] 0 d')
-    for (const [a, b] of guides.bleed) {
-      parts.push(`${n(tx(a.x))} ${n(ty(a.y))} m\n${n(tx(b.x))} ${n(ty(b.y))} l`)
+    for (const line of guides.bleed) {
+      if (line.length < 2) continue
+      parts.push(`${n(tx(line[0].x))} ${n(ty(line[0].y))} m`)
+      for (let i = 1; i < line.length; i++) parts.push(`${n(tx(line[i].x))} ${n(ty(line[i].y))} l`)
     }
     parts.push('S')
     guideBody = `q\n/OC /OCg BDC\n${parts.join('\n')}\nEMC\nQ\n`

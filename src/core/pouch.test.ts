@@ -236,7 +236,7 @@ describe('pouch: dieline แผ่นฟิล์มแบน', () => {
 
   it('dieline ไหลผ่าน guides + export PDF (CMYK) ได้เหมือน Dieline ปกติ', () => {
     const p = generatePouch({ W: 120, D: 70, H: 180 }, mat)
-    expect(() => computeGuides(p.label.panels)).not.toThrow()
+    expect(() => computeGuides(p.label)).not.toThrow()
     const s = new TextDecoder('latin1').decode(dielinePDFBytes(p.label, true))
     expect(s.startsWith('%PDF-1.5')).toBe(true)
     expect(s.trimEnd().endsWith('%%EOF')).toBe(true)

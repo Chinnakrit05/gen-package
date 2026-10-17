@@ -138,7 +138,7 @@ describe('gable: ตำแหน่งหลังพับสุด (fold=1)', 
 
 describe('gable: เข้ากับระบบอื่น', () => {
   it('guides คำนวณได้', () => {
-    const g = computeGuides(d.panels)
+    const g = computeGuides(d)
     expect(g.safe.length).toBeGreaterThanOrEqual(5)
     expect(g.bleed.length).toBeGreaterThan(0)
   })

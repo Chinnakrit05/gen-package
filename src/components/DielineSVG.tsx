@@ -1528,13 +1528,11 @@ export const DielineSVG = memo(function DielineSVG({
               vectorEffect="non-scaling-stroke"
             />
           ))}
-          {guides.bleed.map(([a, b], i) => (
-            <line
+          {guides.bleed.map((line, i) => (
+            <polyline
               key={`b${i}`}
-              x1={a.x}
-              y1={a.y}
-              x2={b.x}
-              y2={b.y}
+              points={line.map((p) => `${p.x},${p.y}`).join(' ')}
+              fill="none"
               stroke={BLEED_COLOR}
               strokeWidth={0.8}
               strokeDasharray="3 2"
