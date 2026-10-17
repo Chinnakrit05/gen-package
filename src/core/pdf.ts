@@ -13,9 +13,10 @@ import { dimTextSize } from './templates/shared'
 // Acrobat/Illustrator กดปิด-เปิดได้ ทำให้ปิดเลเยอร์ dims ก่อนส่งโรงงานได้
 // เหมือนฝั่ง SVG ไม่ต้องมานั่งลบเส้นทีละเส้น
 //
-// หมายเหตุ: ใช้ฟอนต์ Helvetica มาตรฐาน (base-14) จึงไม่ต้องฝังฟอนต์
-// แต่รองรับแค่ ASCII — ป้ายบอกขนาดตอนนี้เป็น "W 80.8" อยู่แล้ว
-// ถ้าอนาคตมีข้อความไทยต้องเปลี่ยนไปฝังฟอนต์จริง
+// หมายเหตุ: ป้าย ASCII ("W 80.8") ใช้ฟอนต์ Helvetica มาตรฐาน (base-14) จึงไม่ต้องฝังฟอนต์;
+// ป้ายภาษาไทย ("รอบวง 207.3" ฯลฯ) Helvetica ไม่มีอักษร → ผู้เรียก (เบราว์เซอร์) render เป็นภาพ 1 บิต
+// (`PdfTextMask`, ImageMask = ทาสีปัจจุบันเฉพาะจุดตัวอักษร พื้นโปร่ง) ส่งมาทาง dimMasks;
+// ไม่มี mask (เช่นในเทสต์ node) → ตัดอักขระนอก ASCII ทิ้ง เหลือตัวเลข แทนการขึ้นเครื่องหมายคำถาม
 
 const K = 72 / 25.4 // มม. → point (หน่วยของ PDF)
 
@@ -50,6 +51,51 @@ const CHAR_W: Record<string, number> = { ' ': 0.278, '.': 0.278, ',': 0.278 }
 const textWidth = (s: string, size: number) =>
   size * [...s].reduce((w, c) => w + (CHAR_W[c] ?? (/[A-Z]/.test(c) ? 0.7 : 0.556)), 0)
 
+// ข้อความเป็นภาพ 1 บิต (แถวบน→ล่าง, 1 บิต/พิกเซล ชิดซ้าย เติมเต็มไบต์ท้ายแถว; 0 = หมึก)
+// ขนาดจริงบนแผ่น มม. + ระยะใต้ baseline (descent) ใช้วางให้ baseline ตรงกับตำแหน่งข้อความเดิม
+export interface PdfTextMask {
+  w: number
+  h: number
+  bits: Uint8Array
+  widthMm: number
+  heightMm: number
+  descentMm: number
+}
+
+// แปลง RGBA (จาก canvas) เป็นบิตแมสก์ 1 บิต: alpha ≥ threshold = หมึก (บิต 0)
+export function packTextMask(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, threshold = 110): Uint8Array {
+  const rowBytes = Math.ceil(w / 8)
+  const out = new Uint8Array(rowBytes * h).fill(0xff)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (rgba[(y * w + x) * 4 + 3] >= threshold) out[y * rowBytes + (x >> 3)] &= ~(0x80 >> (x & 7))
+    }
+  }
+  return out
+}
+
+// RunLengthDecode (PDF): ไบต์ยาว 0..127 = คัดลอก n+1 ไบต์ถัดไป, 129..255 = ไบต์ถัดไปซ้ำ 257−n ครั้ง, 128 = จบ
+// แมสก์ตัวอักษรเป็นพื้นว่างเสียส่วนใหญ่ บีบได้หลายเท่าโดยไม่ต้องใช้ zlib (ฟังก์ชันนี้ sync)
+export function runLengthEncode(data: Uint8Array): Uint8Array {
+  const out: number[] = []
+  let i = 0
+  while (i < data.length) {
+    let run = 1
+    while (i + run < data.length && run < 128 && data[i + run] === data[i]) run++
+    if (run >= 2) {
+      out.push(257 - run, data[i])
+      i += run
+      continue
+    }
+    const start = i
+    while (i < data.length && i - start < 128 && !(i + 1 < data.length && data[i + 1] === data[i])) i++
+    if (i === start) i++
+    out.push(i - start - 1, ...data.subarray(start, i))
+  }
+  out.push(128)
+  return Uint8Array.from(out)
+}
+
 export interface PdfArtwork {
   jpeg: Uint8Array
   w: number
@@ -64,6 +110,8 @@ export function dielinePDFBytes(
   fillColor?: string | null,
   // หมึกขาวรอง (สติกเกอร์ฟิล์มใส): loop ปิดในพิกัดแผ่น เติมแบบ even-odd ด้วยสี spot "White"
   white?: Vec2[][] | null,
+  // ภาพ 1 บิตของป้ายบอกขนาด (ลำดับตรง d.dims) — ป้ายที่เป็น null ใช้ Helvetica ตามเดิม
+  dimMasks?: (PdfTextMask | null)[] | null,
 ): Uint8Array {
   const pad = withDims ? 26 : 5
   const pageW = (d.width + pad * 2) * K
@@ -124,16 +172,25 @@ export function dielinePDFBytes(
     const strokes = parts.length ? parts.join('\n') + '\nS' : ''
 
     const labels = d.dims
-      .map((m) => {
+      .map((m, i) => {
         const vert = Math.abs(m.a.x - m.b.x) < 0.001
         const mx = tx((m.a.x + m.b.x) / 2)
         const my = ty((m.a.y + m.b.y) / 2)
-        const half = textWidth(m.label, size) / 2
+        const mask = dimMasks?.[i]
+        if (mask) {
+          // ภาพตัวอักษร: baseline วางที่เดียวกับข้อความ Helvetica (ห่างเส้น gap) จัดกึ่งกลางเส้นบอกขนาด
+          const { widthMm: w, heightMm: h, descentMm: dsc } = mask
+          return vert
+            ? `q\n0 ${n(w)} ${n(-h)} 0 ${n(mx - gap + dsc)} ${n(my - w / 2)} cm\n/Dm${i} Do\nQ`
+            : `q\n${n(w)} 0 0 ${n(h)} ${n(mx - w / 2)} ${n(my + gap - dsc)} cm\n/Dm${i} Do\nQ`
+        }
+        const label = m.label.replace(/[^\x20-\x7e]/g, '').replace(/\s+/g, ' ').trim()
+        const half = textWidth(label, size) / 2
         // แนวตั้งหมุนข้อความ 90° ให้อ่านจากล่างขึ้นบน (เมทริกซ์ 0 1 -1 0)
         const tm = vert
           ? `0 1 -1 0 ${n(mx - gap)} ${n(my - half)} Tm`
           : `1 0 0 1 ${n(mx - half)} ${n(my + gap)} Tm`
-        return `BT\n/F1 ${n(size)} Tf\n${tm}\n${pdfStr(m.label)} Tj\nET`
+        return `BT\n/F1 ${n(size)} Tf\n${tm}\n${pdfStr(label)} Tj\nET`
       })
       .join('\n')
 
@@ -153,6 +210,8 @@ export function dielinePDFBytes(
   const hasWhite = !!white && white.some((l) => l.length >= 3)
   const whiteOCG = hasWhite ? num++ : 0
   const imgNum = artwork ? num++ : 0
+  // ภาพป้ายไทย (เฉพาะเมื่อมีเลเยอร์ dims)
+  const maskNums = (withDims ? d.dims : []).map((_, i) => (dimMasks?.[i] ? num++ : 0))
   const lastObj = num - 1
 
   // เลเยอร์สีพื้น: เติมสีลง polygon ของทุกแผงจริง (ล่างสุด) — vector
@@ -234,7 +293,11 @@ export function dielinePDFBytes(
   const cs = hasWhite
     ? ` /ColorSpace << /CSW [/Separation /White /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0.45 0 0.05 0] /N 1 >>] >>`
     : ''
-  const xobj = artwork ? ` /XObject << /Im0 ${imgNum} 0 R >>` : ''
+  const xobjEntries = [
+    ...(artwork ? [`/Im0 ${imgNum} 0 R`] : []),
+    ...maskNums.flatMap((m, i) => (m ? [`/Dm${i} ${m} 0 R`] : [])),
+  ]
+  const xobj = xobjEntries.length ? ` /XObject << ${xobjEntries.join(' ')} >>` : ''
 
   const enc = new TextEncoder()
   const parts: Uint8Array[] = []
@@ -279,6 +342,18 @@ export function dielinePDFBytes(
     push(artwork.jpeg)
     push('\nendstream\nendobj\n')
   }
+  maskNums.forEach((m, i) => {
+    const mask = dimMasks?.[i]
+    if (!m || !mask) return
+    const data = runLengthEncode(mask.bits)
+    offsets.push(len)
+    push(
+      `${m} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${mask.w} /Height ${mask.h} ` +
+        `/ImageMask true /BitsPerComponent 1 /Filter /RunLengthDecode /Length ${data.length} >>\nstream\n`,
+    )
+    push(data)
+    push('\nendstream\nendobj\n')
+  })
 
   const xrefPos = len
   let xref = `xref\n0 ${lastObj + 1}\n0000000000 65535 f \n`

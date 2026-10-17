@@ -104,6 +104,10 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - เปลี่ยนเวอร์ชัน dependency แล้วต้องลบ `node_modules/.vite` แล้วรีสตาร์ท dev server ไม่งั้น pre-bundle เก่าค้าง
 - พิกัดแผ่นคลี่: x ขวา y ลง หน่วย mm; แปลงเป็น 3D ที่ (x, -y, 0)
 - ฟอนต์ไทย self-host ผ่าน `@fontsource/*` (import ใน main.tsx, ไม่พึ่ง Google CDN); ข้อความเลือกได้หลายฟอนต์ (registry `FONTS` ใน artwork.ts: noto/sarabun/prompt/kanit) + น้ำหนัก 400/700 — เพิ่มฟอนต์ใหม่ต้องทำ 3 จุด: import css ใน main.tsx, เพิ่มใน `FONTS`, และ `ensureThaiFont` โหลดให้; ก่อน rasterize ลง canvas (renderArtworkCanvas/ใบสเปก) ต้อง `await ensureThaiFont()` เพราะ fontsource โหลด subset ต่อน้ำหนักแบบ lazy — ถ้าไม่รอ canvas จะ fallback ทำให้ไทยในไฟล์ export เพี้ยน
+- PDF (`dielinePDFBytes`) ใช้ Helvetica (ASCII เท่านั้น): ป้ายบอกขนาดภาษาไทย (ฉลาก/ถุง) ต้องส่ง `dimMasks` = ภาพ 1 บิตจาก
+  `renderDimTextMasks` (src/core/pdfDimText.ts, canvas 600 dpi + Noto Sans Thai) → ImageMask + RunLengthDecode ในเลเยอร์ dims
+  (ไม่ส่ง = ตัดอักษรนอก ASCII ทิ้ง ไม่ขึ้น ?); ภาพลายใน PDF เป็น JPEG ทึบ → สีพื้นต้อง bake ลง raster ด้วย
+  (`renderArtworkCanvas` base.fillColor) ไม่งั้นพื้นขาวของภาพทับเลเยอร์สีพื้นเวกเตอร์จนหาย
 - ขนาดตัวอักษรป้ายบอกขนาด = `dimTextSize` (ตามขนาดแผ่น 3.5–6 มม.) ใช้ร่วม blueprint/SVG/PDF — อย่าใส่ fontSize ตายตัว (แผ่นเล็กตัวเลขล้น)
 - ตัวเลขบน blueprint คือระยะ score จริง (บวกเผื่อความหนาแล้ว) จึงใหญ่กว่าค่าที่ผู้ใช้ตั้งเล็กน้อย — ตั้งใจ ไม่ใช่บั๊ก
 - แผนเฟสเดิม (FEFCO 0427, sleeve, export PDF/DXF, โลโก้/ข้อความ, ขวด revolve + ฉลาก) เสร็จครบแล้ว

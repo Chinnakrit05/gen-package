@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { dielinePDFBytes } from './pdf'
+import { dielinePDFBytes, packTextMask, runLengthEncode } from './pdf'
+import { generateVessel } from './vessel'
 import { dielineDXFString } from './dxf'
 import { computeGuides } from './guides'
 import { TEMPLATES } from './templates'
@@ -172,5 +173,62 @@ describe('pdf: เลเยอร์หมึกขาวรอง (สติก
     const s = dec(dielinePDFBytes(d, false, undefined, null, null, []))
     expect(s).not.toContain('/Separation')
     expect(s).not.toContain('(White)')
+  })
+})
+
+// ถอด RunLengthDecode ตามสเปก PDF — ใช้ตรวจตัวเข้ารหัส
+function rlDecode(b: Uint8Array): number[] {
+  const out: number[] = []
+  let i = 0
+  while (i < b.length) {
+    const len = b[i++]
+    if (len === 128) break
+    if (len < 128) {
+      for (let k = 0; k <= len; k++) out.push(b[i++])
+    } else {
+      const v = b[i++]
+      for (let k = 0; k < 257 - len; k++) out.push(v)
+    }
+  }
+  return out
+}
+
+describe('pdf: ป้ายบอกขนาดภาษาไทย', () => {
+  const label = generateVessel({ W: 66, D: 30, H: 140, handle: false }, getMaterial('glass')).label // ป้าย "รอบวง/กาว/สูงฉลาก"
+
+  it('ไม่มีภาพป้าย → ตัดอักษรไทยทิ้ง เหลือตัวเลข ไม่ขึ้นเครื่องหมายคำถาม', () => {
+    const s = dec(dielinePDFBytes(label, true))
+    expect(s).not.toMatch(/\(\?+/)
+    expect(s).toContain('(207.3) Tj')
+  })
+
+  it('มีภาพป้าย → ฝังเป็น ImageMask (RunLength) วาดในเลเยอร์ dims และ xref ยังถูกต้อง', () => {
+    const w = 20
+    const h = 6
+    const rgba = new Uint8Array(w * h * 4)
+    for (let x = 2; x < 9; x++) rgba[(3 * w + x) * 4 + 3] = 255 // แถวกลางมีหมึก 7 จุด
+    const mask = { w, h, bits: packTextMask(rgba, w, h), widthMm: 10, heightMm: 3, descentMm: 1 }
+    const masks = label.dims.map(() => mask)
+    const s = dec(dielinePDFBytes(label, true, undefined, null, null, null, masks))
+    expect(xrefOffsetsOk(s).detail).toBe('')
+    expect((s.match(/\/ImageMask true \/BitsPerComponent 1 \/Filter \/RunLengthDecode/g) ?? []).length).toBe(label.dims.length)
+    expect(s).toContain('/Dm0 Do')
+    expect(s).not.toContain(') Tj') // ทุกป้ายใช้ภาพแทนข้อความ
+    // แนวนอน: กว้าง 10 สูง 3 มม. จัดกึ่งกลาง; แนวตั้งหมุน 90°
+    expect(s).toMatch(/10\.000 0 0 3\.000 [\d.]+ [\d.]+ cm\n\/Dm0 Do/)
+    expect(s).toMatch(/0 10\.000 -3\.000 0 [\d.]+ [\d.]+ cm\n\/Dm2 Do/)
+  })
+
+  it('packTextMask: 0 = หมึก แถวเติมเต็มไบต์; runLengthEncode ถอดกลับได้ตรง', () => {
+    const w = 10
+    const h = 2
+    const rgba = new Uint8Array(w * h * 4)
+    rgba[(0 * w + 0) * 4 + 3] = 255
+    rgba[(1 * w + 9) * 4 + 3] = 200
+    const bits = packTextMask(rgba, w, h)
+    expect([...bits]).toEqual([0x7f, 0xff, 0xff, 0xbf])
+    for (const data of [bits, new Uint8Array(300).fill(0xff), Uint8Array.from({ length: 500 }, (_, i) => (i * 37) % 251), new Uint8Array(0)]) {
+      expect(rlDecode(runLengthEncode(data))).toEqual([...data])
+    }
   })
 })

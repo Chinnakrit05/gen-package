@@ -12,6 +12,7 @@ import type { AiBoxSpec, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
 import { dimTextSize } from './core/templates/shared'
 import { dielinePDFBytes } from './core/pdf'
+import { renderDimTextMasks } from './core/pdfDimText'
 import { specSheetPDFBytes } from './core/specSheet'
 import {
   loadImageFile,
@@ -2310,8 +2311,9 @@ export default function App({
   const downloadPDF = async (ext: 'pdf' | 'ai' = 'pdf') => {
     if (!dieline) return
     let art
-    // รูปพื้น (ถ้ามี) baked เข้า raster เป็นชั้นล่างสุด — จึงไม่ต้องวาดสีพื้น vector ซ้ำ
-    const base = fillImage ? { dieline, fillImage } : null
+    // รูปพื้น/สีพื้น baked เข้า raster เป็นชั้นล่างสุด — ภาพลายเป็น JPEG ทึบ ถ้าไม่ bake สีพื้นลงไป
+    // พื้นขาวของภาพจะทับเลเยอร์สีพื้นเวกเตอร์ข้างใต้จนสีพื้นหายจาก PDF
+    const base = fillImage ? { dieline, fillImage } : fillColor ? { dieline, fillColor } : null
     let canvas = await renderArtworkCanvas(decos, dieline.width, dieline.height, 300, base)
     if (canvas && sheetOut) {
       // แผ่นหลายดวง: วางภาพลายดวงเดียวซ้ำตามตำแหน่ง (หมุนตามแผน) คลิปกรอบเส้นตัด + เผื่อสี
@@ -2354,6 +2356,10 @@ export default function App({
         sheetOut ? null : guides,
         fillImage ? null : fillColor,
         await whiteInkForExport(),
+        // ป้ายบอกขนาดภาษาไทย (ฉลาก/ถุง) → ภาพ 1 บิต — Helvetica ใน PDF ไม่มีอักษรไทย
+        showDims
+          ? await renderDimTextMasks(exportDieline.dims.map((m) => m.label), dimTextSize(exportDieline.width, exportDieline.height))
+          : null,
       ),
       'application/pdf',
       ext,

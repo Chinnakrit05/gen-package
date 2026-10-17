@@ -1527,11 +1527,13 @@ export async function renderArtworkCanvas(
   sheetW: number,
   sheetH: number,
   dpi: number,
-  base?: { dieline: Dieline; fillImage: FillImage } | null,
+  // พื้นใต้ลาย: รูปพื้น (fillImage) หรือสีพื้น (fillColor) ครอปตามแผงจริง — ภาพลายใน PDF เป็น JPEG ทึบ
+  // จึงต้อง bake สีพื้นลงภาพด้วย ไม่งั้นพื้นขาวของภาพทับเลเยอร์สีพื้นเวกเตอร์ที่อยู่ข้างใต้จนมองไม่เห็น
+  base?: { dieline: Dieline; fillImage?: FillImage | null; fillColor?: string | null } | null,
 ): Promise<HTMLCanvasElement | null> {
   const visible = decos.filter((d) => !d.hidden)
-  // ไม่มีทั้งลายและรูปพื้น → ไม่ต้อง raster (สีพื้นทึบวาดเป็น vector ใน PDF เอง)
-  if (!visible.length && !base) return null
+  // ไม่มีทั้งลายและรูปพื้น → ไม่ต้อง raster (สีพื้นทึบล้วนวาดเป็น vector ใน PDF เอง)
+  if (!visible.length && !base?.fillImage) return null
   await ensureThaiFont(visible) // ให้ตัวอักษรที่ฝังลง PDF ตรงกับที่เห็นบนจอ
   const s = dpi / 25.4
   const canvas = document.createElement('canvas')
@@ -1542,7 +1544,7 @@ export async function renderArtworkCanvas(
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
   const srcs = [...new Set(visible.filter((d) => d.type === 'image').map((d) => (d as { src: string }).src))]
-  if (base) srcs.push(base.fillImage.src)
+  if (base?.fillImage) srcs.push(base.fillImage.src)
   const imgs = new Map<string, HTMLImageElement>()
   await Promise.all(
     [...new Set(srcs)].map(
@@ -1558,8 +1560,21 @@ export async function renderArtworkCanvas(
         }),
     ),
   )
-  // รูปพื้นเป็นชั้นล่างสุด (ครอปตามแผงจริง) แล้วค่อยลายทับ
-  if (base) {
+  // สีพื้น/รูปพื้นเป็นชั้นล่างสุด (ครอปตามแผงจริง) แล้วค่อยลายทับ
+  if (base?.fillColor && !base.fillImage) {
+    ctx.save()
+    ctx.fillStyle = base.fillColor
+    ctx.beginPath()
+    for (const p of base.dieline.panels) {
+      if (p.outline.length < 3) continue
+      ctx.moveTo(p.outline[0].x * s, p.outline[0].y * s)
+      for (const q of p.outline.slice(1)) ctx.lineTo(q.x * s, q.y * s)
+      ctx.closePath()
+    }
+    ctx.fill()
+    ctx.restore()
+  }
+  if (base?.fillImage) {
     const img = imgs.get(base.fillImage.src)
     if (img) drawFillImage(ctx, base.dieline, img, base.fillImage, s)
   }
