@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PackIt — ทดลอง AI ประกอบโครงสร้างกล่อง (ภาษาแผง)</title>
+    <style>
+      :root { color-scheme: light; }
+      body { margin: 0; font: 14px/1.5 'Noto Sans Thai', system-ui, sans-serif; color: #154049; background: #eef4f4; }
+      .lab { display: grid; grid-template-columns: 380px 1fr; gap: 14px; padding: 14px; min-height: 100vh; box-sizing: border-box; }
+      .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+      .card { background: #fff; border: 1px solid #c9dadc; border-radius: 12px; padding: 12px 14px; }
+      .card h2 { margin: 0 0 8px; font-size: 14px; }
+      label { display: block; font-size: 12px; color: #4c5c5f; }
+      input, textarea, select, button { font: inherit; }
+      input[type="text"], input[type="number"], input[type="password"], textarea, select { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #aac4c8; border-radius: 8px; background: #fbfdfd; color: inherit; }
+      textarea { resize: vertical; }
+      textarea.json { font: 12px/1.4 ui-monospace, Menlo, monospace; min-height: 260px; }
+      .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      button { padding: 7px 12px; border: 1px solid #17677a; border-radius: 999px; background: #17677a; color: #fff; cursor: pointer; }
+      button.secondary { background: #f2f7f7; color: #154049; border-color: #aac4c8; }
+      button:disabled { opacity: 0.5; cursor: wait; }
+      .issues { margin: 0; padding: 0; list-style: none; font-size: 13px; }
+      .issues li { padding: 4px 0; border-top: 1px dashed #dbe6e7; }
+      .issues li.error { color: #a3261f; }
+      .issues li.warning { color: #8a5a00; }
+      .issues li.info { color: #4c5c5f; }
+      .round { font-size: 12px; color: #4c5c5f; margin: 6px 0 0; }
+      .viewer { height: 440px; border-radius: 12px; overflow: hidden; border: 1px solid #c9dadc; background: #fff; }
+      svg.blueprint { width: 100%; height: 360px; background: #fff; border: 1px solid #c9dadc; border-radius: 12px; }
+      .meta { font-size: 12px; color: #4c5c5f; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+      .meta b { color: #154049; }
+      .examples button { margin: 0 6px 6px 0; }
+      @media (max-width: 900px) { .lab { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./structure.tsx"></script>
+  </body>
+</html>

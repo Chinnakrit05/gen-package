@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { handleBoxSpec } from './server/boxSpec'
+import { handleBoxStructure } from './server/boxStructure'
 import { createViteApiMiddleware } from './server/entrypoints/vite'
 
 // endpoint ฝั่ง server สำหรับ AI แปลง prompt → สเปกกล่อง
@@ -12,10 +13,17 @@ function boxSpecApi(env: Record<string, string | undefined>): Plugin {
       server.middlewares.use('/api/box-spec', (req, res) => {
         void handleBoxSpec(req, res, env)
       })
+      // ทดลอง: AI ประกอบโครงสร้างกล่องจาก "ภาษาแผง" (local dev เท่านั้น — ดู server/boxStructure.ts)
+      server.middlewares.use('/api/box-structure', (req, res) => {
+        void handleBoxStructure(req, res, env)
+      })
     },
     configurePreviewServer(server) {
       server.middlewares.use('/api/box-spec', (req, res) => {
         void handleBoxSpec(req, res, env)
+      })
+      server.middlewares.use('/api/box-structure', (req, res) => {
+        void handleBoxStructure(req, res, env)
       })
     },
   }

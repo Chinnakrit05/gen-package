@@ -55562,7 +55562,10 @@ function rollEndLayout(box, mat, opts = {}) {
   const lid = opts.lid !== false;
   const longFlap = opts.flap === "long";
   const over = lid && opts.front === "wide";
-  const flapStage = over ? 3 : 4;
+  const flapStage = 4;
+  const lidStage = over ? 4 : 5;
+  const EARLY = [0, 0.35];
+  const LID_LAG = [0.3, 1];
   const { W, D, H } = box;
   const t = mat.thickness;
   const Wp = W + 2 * t;
@@ -55811,7 +55814,8 @@ function rollEndLayout(box, mat, opts = {}) {
       hingeA: P(lx0, y2),
       hingeB: P(lx1, y2),
       foldAngle: 90,
-      stage: 5
+      stage: lidStage,
+      ...over ? { within: LID_LAG } : {}
     },
     {
       id: "lid-flap-left",
@@ -55820,7 +55824,8 @@ function rollEndLayout(box, mat, opts = {}) {
       hingeA: P(lx0, y1 + flapIn),
       hingeB: P(lx0, y2 - flapIn),
       foldAngle: -90,
-      stage: flapStage
+      stage: flapStage,
+      ...over ? { within: EARLY } : {}
     },
     {
       id: "lid-flap-right",
@@ -55829,7 +55834,8 @@ function rollEndLayout(box, mat, opts = {}) {
       hingeA: P(lx1, y1 + flapIn),
       hingeB: P(lx1, y2 - flapIn),
       foldAngle: 90,
-      stage: flapStage
+      stage: flapStage,
+      ...over ? { within: EARLY } : {}
     },
     ...over ? [
       // ตัวลิ้น: เสียบด้านในผนังหน้า (tuck ผูกมุมกับฝา) กว้างพอดีระหว่างชั้นทบสองข้าง
@@ -55840,7 +55846,7 @@ function rollEndLayout(box, mat, opts = {}) {
         hingeA: P(lx0, y1),
         hingeB: P(lx1, y1),
         foldAngle: 90,
-        stage: 5,
+        stage: lidStage,
         zOffset: layer,
         tuck: true
       },
@@ -55854,9 +55860,10 @@ function rollEndLayout(box, mat, opts = {}) {
         hingeA: P(lx0, 0),
         hingeB: P(lx0, y1),
         foldAngle: -180,
-        stage: 4,
+        stage: lidStage,
+        within: EARLY,
         zOffset: -layer,
-        refold: { angle: 90, stage: 6, dz: 2 * layer }
+        refold: { angle: 90, stage: lidStage + 1, dz: 2 * layer }
       },
       {
         id: "lip-ear-right",
@@ -55865,9 +55872,10 @@ function rollEndLayout(box, mat, opts = {}) {
         hingeA: P(lx1, 0),
         hingeB: P(lx1, y1),
         foldAngle: 180,
-        stage: 4,
+        stage: lidStage,
+        within: EARLY,
         zOffset: -layer,
-        refold: { angle: -90, stage: 6, dz: 2 * layer }
+        refold: { angle: -90, stage: lidStage + 1, dz: 2 * layer }
       }
     ] : [
       {
