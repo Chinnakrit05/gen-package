@@ -15,6 +15,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ผ่าน `computeMatrices` แทนการดูภาพ — เพิ่ม template/รูปแบบไฟล์ใหม่ให้เพิ่มเทสต์แนวเดียวกัน
   (ดู `fefco0427.test.ts` เป็นแบบ) config อยู่ `vitest.config.ts` แยกจาก vite.config.ts
   โดยเจตนา เพื่อไม่โหลด middleware /api/box-spec ตอนรันเทสต์
+- `scripts/showcase/` — เครื่องมือพิสูจน์ไฟล์งาน `.genpkg.json` ผ่านแอปจริง (ใช้ตอนให้ agent ออกแบบงานเป็นไฟล์): `bundle-core.mjs` รวม core ด้วย esbuild เป็น `tmp/showcase/core.mjs` สำหรับ Node → `validate.mjs <file> [--write]` (แปลง `file:<svg>`/`preset:<id>:<#สี>` เป็น data URL แล้ว parse ด้วย `parseProjectFile` รายงาน problems/dropped) · `layout.mjs <file>` (กรอบแต่ละแผงเป็น มม. + element ที่อยู่นอกแผง) · `render.mjs <file…>` (Playwright + Chrome: ยัดงานเข้า localStorage ของ dev server โหมด local-demo ถ่าย 3D/กลางทางพับ/แผ่นคลี่ แล้วกดปุ่มส่งออก PDF/SVG จริง; env `SHOWCASE_BASE_URL` ค่าเริ่มต้น http://localhost:5175, `PACKIT_E2E_CHROME`, `SHOWCASE_OUT`); ผลลัพธ์อยู่ใต้ `tmp/` ซึ่ง ignore ไว้
 
 ## โครงสร้าง
 
