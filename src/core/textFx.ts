@@ -2,16 +2,17 @@
 // ให้ blueprint / ไฟล์ SVG / canvas (3D, PDF, ไดคัทตามรูป, หมึกขาว) วาดตามรายการเดียวกัน ผลจึงตรงกันทุกทาง
 // ระยะ/ความหนา/เบลอ เก็บเป็น % ของขนาดฟอนต์ → ย่อขยายตัวอักษรแล้วหน้าตา effect คงเดิม
 
-export type TextFxKind = 'drop' | 'background' | 'hollow' | 'splice' | 'double'
+export type TextFxKind = 'drop' | 'background' | 'hollow' | 'splice' | 'double' | 'echo' | 'glow' | 'long'
 
 export interface TextFx {
   kind: TextFxKind
-  color?: string // drop: สีเงา · background: สีกล่อง · splice: สีเงาทึบ · double: สีขอบใน
+  // drop: สีเงา · background: สีกล่อง · splice: สีเงาทึบ · double: สีขอบใน · echo/glow/long: ไม่ใส่ = ตามสีตัวอักษร
+  color?: string
   color2?: string // double: สีขอบนอก
-  dist?: number // drop/splice: ระยะเยื้อง (% ขนาดฟอนต์)
-  angle?: number // drop/splice: ทิศเยื้อง องศา (0 = ขวา, 90 = ลง — แกน y ลงเหมือนแผ่นคลี่)
-  blur?: number // drop: ความฟุ้ง σ (% ขนาดฟอนต์)
-  alpha?: number // drop/background: ความทึบ 0–100
+  dist?: number // drop/splice/echo: ระยะเยื้อง · long: ความยาวเงา (% ขนาดฟอนต์)
+  angle?: number // drop/splice/echo/long: ทิศเยื้อง องศา (0 = ขวา, 90 = ลง — แกน y ลงเหมือนแผ่นคลี่)
+  blur?: number // drop/glow: ความฟุ้ง σ (% ขนาดฟอนต์)
+  alpha?: number // drop/background/glow: ความทึบ 0–100
   width?: number // hollow/splice: ความหนาเส้น · double: ความหนาขอบใน (% ขนาดฟอนต์)
   width2?: number // double: ความหนาขอบนอก (% ขนาดฟอนต์)
   pad?: number // background: ระยะขอบกล่อง (% ขนาดฟอนต์)
@@ -24,6 +25,9 @@ export const TEXT_FX_KINDS: { id: TextFxKind; nameTh: string; nameEn: string }[]
   { id: 'hollow', nameTh: 'กลวง', nameEn: 'Hollow' },
   { id: 'splice', nameTh: 'ซ้อนเหลื่อม', nameEn: 'Splice' },
   { id: 'double', nameTh: 'ขอบสองชั้น', nameEn: 'Double outline' },
+  { id: 'echo', nameTh: 'เงาซ้อน', nameEn: 'Echo' },
+  { id: 'glow', nameTh: 'เรืองแสง', nameEn: 'Glow' },
+  { id: 'long', nameTh: 'เงายาว 3D', nameEn: 'Long shadow' },
 ]
 
 type Resolved = Required<TextFx>
@@ -46,7 +50,16 @@ export const TEXT_FX_DEFAULTS: Record<TextFxKind, Resolved> = {
   hollow: { ...BASE, kind: 'hollow', width: 6 },
   splice: { ...BASE, kind: 'splice', color: '#f2b8cc', width: 6, dist: 10, angle: 45 },
   double: { ...BASE, kind: 'double', color: '#ffffff', width: 8, color2: '#222222', width2: 5 },
+  // สี '' = อัตโนมัติจากสีตัวอักษร (echo/glow = สีเดียวกัน, long = เข้มลง) — ดู textFxAutoColor
+  echo: { ...BASE, kind: 'echo', color: '', dist: 8, angle: 45 },
+  glow: { ...BASE, kind: 'glow', color: '', blur: 12, alpha: 80 },
+  long: { ...BASE, kind: 'long', color: '', dist: 12, angle: 45 },
 }
+
+// echo: สำเนาจางลงตามระยะ (ไกลสุด → ใกล้สุด)
+export const ECHO_ALPHAS = [0.2, 0.4, 0.6]
+// long: จำนวนสำเนาเรียงต่อกันเป็นแท่งทึบ — ระยะห่างแต่ละชั้น ≈1% ขนาดฟอนต์ (ขั้นบันไดเล็กกว่าที่ตาเห็น/พิมพ์ออก)
+export const LONG_MAX_COPIES = 60
 
 // ช่วงค่าที่ UI/parse ยอมรับ (หน่วยตามคอมเมนต์ของ TextFx)
 export const TEXT_FX_RANGE = {
@@ -59,6 +72,9 @@ export const TEXT_FX_RANGE = {
   pad: [0, 100],
   round: [0, 100],
 } as const
+
+// ช่วงที่ UI/parse/schema cloud ยอมรับของระยะห่างตัวอักษร TextEl.ls (% ขนาดฟอนต์)
+export const LETTER_SPACING_RANGE = [-20, 100] as const
 
 // เส้นบางกว่านี้หายตอนพิมพ์ (ไดคัท/ออฟเซ็ตส่วนใหญ่รับเส้นบวก ≥ 0.15 มม.)
 export const MIN_PRINT_LINE_MM = 0.15
@@ -128,9 +144,14 @@ export interface TextFxPlan {
 // ตัวคูณความหนาขอบเดิม (strokeColor/strokeW): ขอบคร่อมเส้น ครึ่งถูก fill ทับ → ×2 ให้ "ส่วนที่เห็น" ≈ strokeW มม.
 export const TEXT_STROKE_MUL = 2
 
+// สีตัวอักษรเป็นไล่สี (TextEl.grad): ตัววาดแทนค่านี้ด้วย gradient ของข้อความ (ชั้นที่เบลอใช้สีแรกแทน
+// เพราะเงา canvas รับได้แค่สีทึบ)
+export const TEXT_GRAD_PAINT = '@grad'
+
 export interface TextFxSource {
   size: number
   color: string
+  grad?: { from: string }
   strokeColor?: string
   strokeW?: number
   fx?: TextFx
@@ -138,13 +159,28 @@ export interface TextFxSource {
 }
 
 const pct = (size: number, v: number) => (size * v) / 100
+
+// ผสมสีกับดำ (t = สัดส่วนดำ) — ค่าเริ่มต้นเงายาวให้เข้ากับสีตัวอักษร
+export function darkenHex(hex: string, t = 0.45): string {
+  if (!HEX.test(hex)) return '#333333'
+  const n = parseInt(hex.slice(1), 16)
+  const ch = (v: number) => Math.round(v * (1 - t)).toString(16).padStart(2, '0')
+  return `#${ch((n >> 16) & 255)}${ch((n >> 8) & 255)}${ch(n & 255)}`
+}
+
+// สีที่ใช้จริงเมื่อผู้ใช้ยังไม่ได้เลือกสีของเอฟเฟกต์ (fx.color = '') — UI ใช้โชว์ในช่องสี
+export function textFxAutoColor(kind: TextFxKind, e: { color: string; grad?: { from: string } }): string {
+  const solid = e.grad?.from ?? e.color
+  return kind === 'long' ? darkenHex(solid) : solid
+}
 const line = (size: number, v: number) => Math.max(MIN_PRINT_LINE_MM, pct(size, v))
 
 export function textFxPlan(e: TextFxSource): TextFxPlan {
   const fx = resolveTextFx(e)
   const userStroke: TextPaint =
     e.strokeColor && (e.strokeW ?? 0) > 0 ? { stroke: e.strokeColor, strokeW: (e.strokeW as number) * TEXT_STROKE_MUL } : {}
-  const plain: TextPaint = { fill: e.color, ...userStroke }
+  const ink = e.grad ? TEXT_GRAD_PAINT : e.color // สีตัวอักษร (อาจเป็นไล่สี)
+  const plain: TextPaint = { fill: ink, ...userStroke }
   if (!fx) return { box: null, under: [], main: plain }
   const rad = (fx.angle * Math.PI) / 180
   const off = pct(e.size, fx.dist)
@@ -173,12 +209,12 @@ export function textFxPlan(e: TextFxSource): TextFxPlan {
         main: plain,
       }
     case 'hollow':
-      return { box: null, under: [], main: { stroke: e.color, strokeW: line(e.size, fx.width) } }
+      return { box: null, under: [], main: { stroke: ink, strokeW: line(e.size, fx.width) } }
     case 'splice':
       return {
         box: null,
         under: [{ dx, dy, fill: fx.color }],
-        main: { stroke: e.color, strokeW: line(e.size, fx.width) },
+        main: { stroke: ink, strokeW: line(e.size, fx.width) },
       }
     case 'double': {
       // ขอบในกว้าง w1 รอบตัวอักษร แล้วขอบนอก w2 รอบขอบใน — stroke คร่อมขอบ จึงกว้างเต็ม = 2×ระยะจากขอบตัวอักษร
@@ -190,8 +226,43 @@ export function textFxPlan(e: TextFxSource): TextFxPlan {
           { dx: 0, dy: 0, stroke: fx.color2, strokeW: 2 * (w1 + w2) },
           { dx: 0, dy: 0, stroke: fx.color, strokeW: 2 * w1 },
         ],
-        main: { fill: e.color },
+        main: { fill: ink },
       }
+    }
+    case 'echo': {
+      // สำเนาสีเดียวกับตัวอักษร (หรือสีที่เลือก) จางลงตามระยะ — วาดไกลสุดก่อน
+      const c = fx.color || ink
+      const n = ECHO_ALPHAS.length
+      return {
+        box: null,
+        under: ECHO_ALPHAS.map((alpha, i) => {
+          const k = n - i
+          return { dx: dx * k, dy: dy * k, fill: c, ...(userStroke.stroke ? { stroke: c, strokeW: userStroke.strokeW } : {}), alpha }
+        }),
+        main: plain,
+      }
+    }
+    case 'glow': {
+      const c = fx.color || textFxAutoColor('glow', e)
+      const blur = pct(e.size, fx.blur)
+      return {
+        box: null,
+        under: [
+          // แสงฟุ้งรอบตัวอักษร: เส้นหนาใต้ตัว (ดันแสงออกพ้นขอบ ไม่จมใต้ตัวอักษร) + เบลอ
+          { dx: 0, dy: 0, fill: c, stroke: c, strokeW: Math.max(userStroke.strokeW ?? 0, blur * 0.6), blur, alpha: fx.alpha / 100 },
+        ],
+        main: plain,
+      }
+    }
+    case 'long': {
+      // แท่งทึบต่อเนื่อง: สำเนาถี่ ๆ ตามทิศ จากปลายเงา (ไกลสุด) เข้ามาหาตัวอักษร
+      const c = fx.color || textFxAutoColor('long', e)
+      const n = Math.max(1, Math.min(LONG_MAX_COPIES, Math.ceil(off / Math.max(0.05, e.size * 0.01))))
+      const under: TextLayer[] = []
+      for (let k = n; k >= 1 && off > 0; k--) {
+        under.push({ dx: (dx * k) / n, dy: (dy * k) / n, fill: c, ...(userStroke.stroke ? { stroke: c, strokeW: userStroke.strokeW } : {}) })
+      }
+      return { box: null, under, main: plain }
     }
   }
 }

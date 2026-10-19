@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ECHO_ALPHAS,
+  LONG_MAX_COPIES,
   MIN_PRINT_LINE_MM,
+  TEXT_GRAD_PAINT,
+  darkenHex,
+  textFxAutoColor,
   TEXT_FX_DEFAULTS,
   TEXT_FX_KINDS,
   lightenHex,
@@ -105,5 +110,52 @@ describe('lightenHex', () => {
     expect(lightenHex('#000000', 0.5)).toBe('#808080')
     expect(lightenHex('#ffffff')).toBe('#ffffff')
     expect(lightenHex('oops')).toBe(TEXT_FX_DEFAULTS.splice.color)
+  })
+})
+
+describe('ระยะ 2: เงาซ้อน / เรืองแสง / เงายาว / ไล่สี', () => {
+  it('echo: สำเนา 3 ชั้น ไกล→ใกล้ จางลงตามระยะ สีตามตัวอักษรเมื่อไม่ได้เลือก', () => {
+    const p = textFxPlan({ ...base, fx: { kind: 'echo', dist: 10, angle: 0 } })
+    expect(p.under.map((l) => l.dx)).toEqual([6, 4, 2].map((v) => expect.closeTo(v, 9)))
+    expect(p.under.map((l) => l.alpha)).toEqual(ECHO_ALPHAS)
+    expect(p.under.every((l) => l.fill === '#336699')).toBe(true)
+    expect(textFxPlan({ ...base, fx: { kind: 'echo', color: '#ff0000' } }).under[0].fill).toBe('#ff0000')
+  })
+
+  it('glow: ชั้นเดียวไม่เยื้อง เบลอ + เส้นหนาใต้ตัว ความเข้มเป็นความทึบ', () => {
+    const [l] = textFxPlan({ ...base, fx: { kind: 'glow', blur: 10, alpha: 50 } }).under
+    expect(l).toMatchObject({ dx: 0, dy: 0, fill: '#336699', stroke: '#336699', blur: 2, alpha: 0.5 })
+    expect(l.strokeW).toBeCloseTo(1.2, 9)
+  })
+
+  it('long: สำเนาต่อเนื่องห่างกันไม่เกิน ~1% ขนาดฟอนต์ ปลายสุดยาวเท่าที่ตั้ง ไม่เกินเพดานจำนวน', () => {
+    const p = textFxPlan({ ...base, fx: { kind: 'long', dist: 12, angle: 90 } })
+    const n = p.under.length
+    expect(n).toBe(12) // 12% ÷ 1% ต่อชั้น
+    expect(p.under[0].dy).toBeCloseTo(2.4, 9) // วาดปลายเงาก่อน
+    expect(p.under[n - 1].dy).toBeCloseTo(0.2, 9)
+    for (let i = 1; i < n; i++) expect(p.under[i - 1].dy - p.under[i].dy).toBeCloseTo(0.2, 9)
+    expect(p.under[0].fill).toBe(darkenHex('#336699'))
+    expect(textFxPlan({ ...base, fx: { kind: 'long', dist: 50 } }).under.length).toBeLessThanOrEqual(LONG_MAX_COPIES)
+    expect(textFxPlan({ ...base, fx: { kind: 'long', dist: 0 } }).under).toEqual([])
+  })
+
+  it('ไล่สี: ตัวอักษร/กลวง/เงาซ้อนใช้ไล่สี แต่สีอัตโนมัติของแสง/เงายาวใช้สีทึบแรก', () => {
+    const g = { ...base, grad: { from: '#ff0000' } }
+    expect(textFxPlan(g).main.fill).toBe(TEXT_GRAD_PAINT)
+    expect(textFxPlan({ ...g, fx: { kind: 'hollow' } }).main.stroke).toBe(TEXT_GRAD_PAINT)
+    expect(textFxPlan({ ...g, fx: { kind: 'echo' } }).under[0].fill).toBe(TEXT_GRAD_PAINT)
+    expect(textFxPlan({ ...g, fx: { kind: 'glow' } }).under[0].fill).toBe('#ff0000')
+    expect(textFxAutoColor('long', g)).toBe(darkenHex('#ff0000'))
+  })
+
+  it('สีอัตโนมัติ ("") ไม่ถูกเก็บ; สีที่เลือกเก็บ', () => {
+    expect(parseTextFx({ kind: 'glow', color: '' })).toEqual({ kind: 'glow' })
+    expect(parseTextFx({ kind: 'glow', color: '#00ff00' })).toEqual({ kind: 'glow', color: '#00ff00' })
+  })
+
+  it('darkenHex: ผสมดำตามสัดส่วน', () => {
+    expect(darkenHex('#ffffff', 0.5)).toBe('#808080')
+    expect(darkenHex('nope')).toBe('#333333')
   })
 })

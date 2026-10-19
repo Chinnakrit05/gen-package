@@ -36,6 +36,12 @@ import {
   isPolyShape,
   textInnerSVG,
   textLocalBounds,
+  textRuns,
+  textGradGeom,
+  textGradId,
+  runGradGeom,
+  textSpacing,
+  graphemes,
   textBoxRect,
   isCurvedText,
   curvedGlyphs,
@@ -700,6 +706,89 @@ describe('มาสก์รูปตามทรง + ข้อความเ�
     const svg = svgArtworkLayer([t])
     expect(svg).toContain('<g transform="rotate(30 10 6.25)">')
     expect((svg.match(/<text /g) || []).length).toBe(2) // ชั้นเงาทึบ + ตัวอักษรกลวง
+  })
+})
+
+describe('ระยะห่างตัวอักษร + ไล่สีตัวอักษร', () => {
+  // stub วัด: กว้าง 0.6×(ค่าแรกในสตริง font) ต่ออักขระ — ฟอนต์ "400 10px" → 240 ต่ออักขระ ใช้เทียบสัดส่วนได้
+  const t = (over: Partial<TextEl> = {}): TextEl => ({ id: 's', type: 'text', text: 'ABCD', size: 10, color: '#000000', w: 0, x: 0, y: 0, rot: 0, ...over }) as TextEl
+
+  it('graphemes: วรรณยุกต์/สระบนล่างไทยอยู่กลุ่มเดียวกับพยัญชนะ', () => {
+    expect(graphemes('ที่นี่')).toEqual(['ที่', 'นี่'])
+    expect(graphemes('ข้าว')).toEqual(['ข้', 'า', 'ว'])
+  })
+
+  it('withTextW: เว้นระยะ = กว้างขึ้น (จำนวนกลุ่มอักษร − 1) × ระยะ', () => {
+    const a = withTextW(t())
+    const b = withTextW(t({ ls: 50 }))
+    expect(b.w - a.w).toBeCloseTo(3 * 5, 6) // 3 ช่อง × 50% ของ 10 มม.
+    expect(textSpacing(b)).toBe(5)
+  })
+
+  it('textRuns: ไม่เว้นระยะ = ทีละบรรทัดจุดยึดตามการจัดชิด; เว้นระยะ = ทีละกลุ่มอักษรจากซ้าย จัดชิดได้', () => {
+    expect(textRuns(withTextW(t({ align: 'center' })))).toEqual([{ str: 'ABCD', x: 0, y: 0, rot: 0, anchor: 'middle' }])
+    const left = withTextW(t({ ls: 50 }))
+    const runs = textRuns(left)
+    expect(runs).toHaveLength(4)
+    expect(runs.every((r) => r.anchor === 'start')).toBe(true)
+    expect(runs[0].x).toBeCloseTo(-left.w / 2, 9)
+    expect(runs[1].x - runs[0].x).toBeCloseTo(runs[2].x - runs[1].x, 9)
+    // บรรทัดสั้นกว่าจัดขวา: อักษรสุดท้ายจบที่ขอบขวาของกรอบ
+    const two = withTextW(t({ ls: 50, text: 'ABCD\nAB', align: 'right' }))
+    const r2 = textRuns(two).filter((r) => r.y > 0)
+    const step = runs[1].x - runs[0].x
+    expect(r2[1].x + step - 5).toBeCloseTo(two.w / 2, 6)
+  })
+
+  it('svgArtworkLayer: เว้นระยะ = tspan ต่อกลุ่มอักษรใน <text> เดียว (ยังแก้ไขเป็นข้อความได้)', () => {
+    const svg = svgArtworkLayer([withTextW(t({ ls: 20 }))])
+    expect((svg.match(/<text /g) || []).length).toBe(1)
+    expect((svg.match(/<tspan /g) || []).length).toBe(4)
+  })
+
+  it('ไล่สี: SVG ใช้ gradient userSpaceOnUse คร่อมกรอบตัวอักษร + ตัวอักษรอ้าง url', () => {
+    const e = withTextW(t({ x: 10, y: 20, grad: { from: '#ff0000', to: '#0000ff', angle: 0 } }))
+    const svg = textInnerSVG(e)
+    expect(svg).toContain(`<linearGradient id="${textGradId('s')}" gradientUnits="userSpaceOnUse" x1="10" y1="26.25" x2="${10 + e.w}" y2="26.25">`)
+    expect(svg).toContain(`fill="url(#${textGradId('s')})"`)
+    const g = textGradGeom({ ...e, grad: { from: '#000000', to: '#ffffff', angle: 0, radial: true } })
+    expect(g).toEqual({ radial: true, cx: 0, cy: 0, r: e.w / 2 })
+  })
+
+  it('ไล่สี + เงาซ้อน: ชั้นเยื้องใช้ไล่สีเดียวกัน (เลื่อนไปกับชั้น), ชั้นเบลอใช้สีทึบแรก', () => {
+    const e = withTextW(t({ grad: { from: '#ff0000', to: '#0000ff', angle: 0 } }))
+    const echo = textInnerSVG({ ...e, fx: { kind: 'echo' } })
+    expect((echo.match(/fill="url\(#tgr-s\)"/g) || []).length).toBe(4) // 3 สำเนา + ตัวจริง
+    const glow = textInnerSVG({ ...e, fx: { kind: 'glow' } })
+    expect(glow).toMatch(/filter="url\(#tfx-s-0\)"/)
+    expect(glow.split('filter="url(#tfx-s-0)"')[0]).not.toBe(glow) // มีชั้นเบลอ
+    expect(glow).toContain('stroke="#ff0000"')
+  })
+
+  it('ไล่สี + โค้ง: gradient แยกต่ออักษร จุดไล่สีแปลงเข้าพิกัดอักษร (หมุนกลับแล้วได้จุดเดิม)', () => {
+    const e = withTextW(t({ curve: 120, grad: { from: '#ff0000', to: '#0000ff', angle: 0 } }))
+    const runs = textRuns(e)
+    const base = textGradGeom(e)
+    if (base.radial) throw new Error('linear expected')
+    for (const r of runs) {
+      const g = runGradGeom(base, r)
+      if (g.radial) throw new Error('linear expected')
+      // จากพิกัดอักษรกลับสู่พิกัดข้อความ: หมุน +rot แล้วเลื่อนไป (r.x, r.y)
+      const a = (r.rot * Math.PI) / 180
+      const back = (x: number, y: number) => ({ x: r.x + x * Math.cos(a) - y * Math.sin(a), y: r.y + x * Math.sin(a) + y * Math.cos(a) })
+      expect(back(g.x1, g.y1).x).toBeCloseTo(base.x1, 6)
+      expect(back(g.x2, g.y2).y).toBeCloseTo(base.y2, 6)
+    }
+    const svg = textInnerSVG(e)
+    expect((svg.match(/<linearGradient /g) || []).length).toBe(runs.length)
+    expect(svg).toContain(`fill="url(#${textGradId('s')}-0)"`)
+  })
+
+  it('parseDeco: ls clamp + ทิ้ง 0, grad ของข้อความ', () => {
+    const p = parseDeco({ type: 'text', text: 'ab', size: 10, color: '#000', x: 0, y: 0, rot: 0, ls: 500, grad: { from: '#111111', to: '#222222', angle: 30 } }) as TextEl
+    expect(p.ls).toBe(100)
+    expect(p.grad).toEqual({ from: '#111111', to: '#222222', angle: 30 })
+    expect((parseDeco({ type: 'text', text: 'ab', size: 10, color: '#000', x: 0, y: 0, rot: 0, ls: 0 }) as TextEl).ls).toBeUndefined()
   })
 })
 

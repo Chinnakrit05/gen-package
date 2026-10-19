@@ -1,5 +1,5 @@
 import type { Dieline, Vec2 } from './types'
-import { parseTextFx, textFxPlan, type TextFx, type TextPaint } from './textFx'
+import { LETTER_SPACING_RANGE, TEXT_GRAD_PAINT, parseTextFx, textFxPlan, type TextFx, type TextPaint } from './textFx'
 export { TEXT_STROKE_MUL } from './textFx'
 
 // องค์ประกอบที่แปะบนแผ่นคลี่ (เฟส A: พรีวิวบนจอเท่านั้น ยังไม่เข้าไฟล์ผลิต)
@@ -55,6 +55,8 @@ export interface TextEl extends BaseEl {
   strokeColor?: string // สีเส้นขอบตัวอักษร (ไม่ใส่ = ไม่มีขอบ)
   strokeW?: number // ความหนาขอบ (มม.) — ต้องมี strokeColor ด้วย
   shadow?: boolean // (งานเก่า) เงาค่าคงที่ — parse แปลงเป็น fx { kind: 'drop' } แล้ว
+  ls?: number // ระยะห่างตัวอักษร (% ขนาดฟอนต์, ลบ = ชิด) — ไม่ใส่ = 0
+  grad?: GradientDef // ไล่สีตัวอักษร (แทน color) — เอฟเฟกต์ที่ใช้ "สีตัวอักษร" ใช้ไล่สีนี้ด้วย
   fx?: TextFx // เอฟเฟกต์ข้อความ (เงา/พื้นหลัง/กลวง/ซ้อนเหลื่อม/ขอบสองชั้น) — ดู textFx.ts
   curve?: number // ดัดข้อความเป็นส่วนโค้ง: องศารวมของส่วนโค้ง (+ = โก่งขึ้น, − = โก่งลง; 0 = ตรง)
 }
@@ -221,16 +223,37 @@ export const textAnchorX = (e: TextEl): number =>
 // y กึ่งกลางของบรรทัดที่ i (ใช้กับ dominant-baseline central)
 export const textLineY = (e: TextEl, i: number): number => e.y + textLineH(e) * (i + 0.5)
 
-// --- ข้อความโค้ง (arc) : เรนเดอร์ทีละอักษรเหมือนกันทั้ง canvas และ SVG ให้ตรงกันเป๊ะ ---
+// --- ระยะห่างตัวอักษร + การตัดเป็นกลุ่มอักษร (grapheme) ---
+// แยกตาม grapheme ไม่ใช่ code point: สระบน/ล่างและวรรณยุกต์ไทย (เช่น "ข้", "ที่") อยู่ก้อนเดียวกับพยัญชนะ
+// ไม่งั้นข้อความโค้ง/เว้นระยะจะวางวรรณยุกต์แยกเป็นตัวลอย ๆ
+type SegmenterLike = { segment(s: string): Iterable<{ segment: string }> }
+const SegmenterCtor = (Intl as unknown as { Segmenter?: new (loc: string, o: { granularity: 'grapheme' }) => SegmenterLike }).Segmenter
+const segmenter: SegmenterLike | null = SegmenterCtor ? new SegmenterCtor('th', { granularity: 'grapheme' }) : null
+export const graphemes = (s: string): string[] => (segmenter ? Array.from(segmenter.segment(s), (x) => x.segment) : Array.from(s))
+
+// ระยะห่างตัวอักษร (มม.) จาก ls (% ขนาดฟอนต์)
+export const textSpacing = (e: { size: number; ls?: number }): number => ((e.ls ?? 0) * e.size) / 100
+
+// ความกว้างบรรทัดหนึ่ง (มม.): ไม่เว้นระยะ = วัดทั้งบรรทัด (มี kerning); เว้นระยะ = ผลรวมกลุ่มอักษร + ระยะระหว่างกลุ่ม
+export function textLineWidth(e: { size: number; font?: string; weight?: number; ls?: number }, line: string): number {
+  const sp = textSpacing(e)
+  if (!sp) return measureText(line, e.size, e.font, e.weight)
+  const gs = graphemes(line)
+  const sum = gs.reduce((a, g) => a + measureRaw(g, e.size, e.font, e.weight), 0)
+  return Math.max(1, sum + sp * Math.max(0, gs.length - 1))
+}
+
+// --- ข้อความโค้ง (arc) : เรนเดอร์ทีละกลุ่มอักษรเหมือนกันทั้ง canvas และ SVG ให้ตรงกันเป๊ะ ---
 export const isCurvedText = (e: TextEl) => !!e.curve && Math.abs(e.curve) >= 1
 const curvedString = (e: TextEl) => textLinesOf(e).join(' ') // โค้งใช้บรรทัดเดียว
 
 // เรขาคณิตส่วนโค้ง (พิกัดท้องถิ่นกึ่งกลางชิ้น): วางอักษรบนวงกลมรัศมี |Rs|, จัดกึ่งกลางแนวตั้งด้วย yOff
-// คืนตำแหน่ง+มุมหมุน+ความกว้างของแต่ละอักษร (มม./องศา)
+// คืนตำแหน่ง+มุมหมุน+ความกว้างของแต่ละกลุ่มอักษร (มม./องศา) — ระยะห่างตัวอักษรนับรวมในความยาวโค้ง
 export function curvedGlyphs(e: TextEl): { ch: string; x: number; y: number; rot: number; w: number }[] {
-  const chars = [...curvedString(e)]
-  const widths = chars.map((c) => measureText(c, e.size, e.font, e.weight))
-  const total = widths.reduce((a, b) => a + b, 0) || 1
+  const chars = graphemes(curvedString(e))
+  const widths = chars.map((c) => measureRaw(c, e.size, e.font, e.weight))
+  const sp = textSpacing(e)
+  const total = widths.reduce((a, b) => a + b, 0) + sp * Math.max(0, chars.length - 1) || 1
   const theta = (Math.max(-300, Math.min(300, e.curve!)) * Math.PI) / 180
   const Rs = total / theta // รัศมีมีเครื่องหมาย (+ โก่งลง/rainbow, − โก่งขึ้น)
   const yOff = (Rs * (1 - Math.cos(theta / 2))) / 2
@@ -245,13 +268,55 @@ export function curvedGlyphs(e: TextEl): { ch: string; x: number; y: number; rot
       rot: (phi * 180) / Math.PI,
       w: widths[i],
     })
-    d += widths[i]
+    d += widths[i] + sp
   }
   return out
 }
 
+// ชิ้นข้อความที่ต้องวาด (พิกัดท้องถิ่น มม., กึ่งกลางชิ้น = 0,0) — ตัววาดทุกทางวางตามรายการนี้
+// ข้อความตรงไม่เว้นระยะ = ทีละบรรทัด (จุดยึดตามการจัดชิด); เว้นระยะ = ทีละกลุ่มอักษร (จุดยึดซ้าย);
+// โค้ง = ทีละกลุ่มอักษรพร้อมมุมหมุน; ช่องว่างล้วนไม่ต้องวาด
+export interface TextRun {
+  str: string
+  x: number
+  y: number
+  rot: number
+  anchor: 'start' | 'middle' | 'end'
+}
+export function textRuns(e: TextEl): TextRun[] {
+  if (isCurvedText(e)) {
+    return curvedGlyphs(e)
+      .filter((g) => g.ch.trim())
+      .map((g) => ({ str: g.ch, x: g.x, y: g.y, rot: g.rot, anchor: 'middle' as const }))
+  }
+  const lines = textLinesOf(e)
+  const lineH = textLineH(e)
+  const totalH = lines.length * lineH
+  const align = e.align ?? 'left'
+  const sp = textSpacing(e)
+  const out: TextRun[] = []
+  lines.forEach((ln, i) => {
+    const y = -totalH / 2 + lineH * (i + 0.5)
+    if (!ln.trim()) return
+    if (!sp) {
+      const x = align === 'left' ? -e.w / 2 : align === 'right' ? e.w / 2 : 0
+      out.push({ str: ln, x, y, rot: 0, anchor: textAnchor(e) })
+      return
+    }
+    const gs = graphemes(ln)
+    const ws = gs.map((g) => measureRaw(g, e.size, e.font, e.weight))
+    const lw = ws.reduce((a, b) => a + b, 0) + sp * Math.max(0, gs.length - 1)
+    let x = align === 'left' ? -e.w / 2 : align === 'right' ? e.w / 2 - lw : -lw / 2
+    gs.forEach((g, k) => {
+      if (g.trim()) out.push({ str: g, x, y, rot: 0, anchor: 'start' })
+      x += ws[k] + sp
+    })
+  })
+  return out
+}
+
 // กรอบของตัวอักษร (พิกัดท้องถิ่น กึ่งกลางชิ้น = 0,0) — ข้อความตรง = กล่อง w × ความสูงบรรทัดรวม;
-// ข้อความโค้ง = รวมกล่องของทุกอักษร (กว้างตามอักษร × สูงหนึ่งบรรทัด) หลังหมุน → ใช้วางกล่องพื้นหลัง/ขอบเขต filter
+// ข้อความโค้ง = รวมกล่องของทุกอักษร (กว้างตามอักษร × สูงหนึ่งบรรทัด) หลังหมุน → ใช้วางกล่องพื้นหลัง/ไล่สี/ขอบเขต filter
 export function textLocalBounds(e: TextEl): { x: number; y: number; w: number; h: number } {
   if (!isCurvedText(e)) {
     const h = elH(e)
@@ -287,32 +352,63 @@ export function textBoxRect(e: TextEl, box: { pad: number; round: number }) {
   return { x: b.x - box.pad, y: b.y - box.pad, w, h, r: (Math.min(w, h) / 2) * box.round }
 }
 
+// ไล่สีตัวอักษร (TextEl.grad) ในพิกัดท้องถิ่น — เส้นไล่คร่อมกรอบตัวอักษรตามมุม (สูตรเดียวกับรูปทรง gradVec),
+// วงกลม = จากกลางกรอบถึงครึ่งด้านยาว; SVG ใช้ userSpaceOnUse ด้วยตัวเลขชุดนี้ จึงตรงกับ canvas
+export function textGradGeom(e: TextEl):
+  | { radial: false; x1: number; y1: number; x2: number; y2: number }
+  | { radial: true; cx: number; cy: number; r: number } {
+  const b = textLocalBounds(e)
+  if (e.grad?.radial) return { radial: true, cx: b.x + b.w / 2, cy: b.y + b.h / 2, r: Math.max(b.w, b.h) / 2 }
+  const v = gradVec(e.grad?.angle ?? 90)
+  return { radial: false, x1: b.x + v.x1 * b.w, y1: b.y + v.y1 * b.h, x2: b.x + v.x2 * b.w, y2: b.y + v.y2 * b.h }
+}
+export const textGradId = (id: string) => `tgr-${id}`
+
+type TextGradGeom = ReturnType<typeof textGradGeom>
+// ไล่สีในพิกัดของชิ้นที่หมุน (อักษรโค้ง): ทั้ง SVG (gradient อ้างพิกัดของ element ที่มี transform) และ canvas
+// (gradient ตีความตาม transform ตอนวาด) จึงต้องแปลงจุดไล่สีเข้าพิกัดอักษรนั้น — การเลื่อน+หมุนไม่บิดไล่สี จึงแปลงแค่จุด
+export function runGradGeom(g: TextGradGeom, r: { x: number; y: number; rot: number }): TextGradGeom {
+  if (!r.rot) return g
+  const a = (-r.rot * Math.PI) / 180
+  const c = Math.cos(a)
+  const s = Math.sin(a)
+  const map = (x: number, y: number) => {
+    const u = x - r.x
+    const v = y - r.y
+    return { x: u * c - v * s, y: u * s + v * c }
+  }
+  if (g.radial) {
+    const p = map(g.cx, g.cy)
+    return { radial: true, cx: p.x, cy: p.y, r: g.r }
+  }
+  const p1 = map(g.x1, g.y1)
+  const p2 = map(g.x2, g.y2)
+  return { radial: false, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y }
+}
+
 const fmt = (v: number) => String(Math.round(v * 1000) / 1000)
 
 // ข้อความหนึ่งชั้น (ลงสีชุดเดียว) เป็นสตริง SVG — พิกัดสัมบูรณ์ของแผ่น ไม่รวมการหมุน/พลิก/ความทึบของชิ้น
 // stroke วาดก่อน fill เสมอ (ข้อความตรง: paint-order; โค้ง: ชุดอักษรเส้นขอบก่อน แล้วชุดพื้น) ให้ตรงกับ canvas
-function textPaintSVG(e: TextEl, p: TextPaint, extra: string): string {
+function textPaintSVG(e: TextEl, runs: TextRun[], p: TextPaint, extra: string, paintOf: (c: string, k?: number) => string): string {
+  const c = elCenter(e)
   const font =
     `font-size="${e.size}" font-weight="${e.weight ?? 400}" font-family="${fontCss(e.font)}, sans-serif"` +
     ` dominant-baseline="central"`
-  const strokeA = (p: TextPaint) =>
-    p.stroke ? ` stroke="${p.stroke}" stroke-width="${fmt(p.strokeW ?? 0)}" stroke-linejoin="round"` : ''
-  if (isCurvedText(e)) {
-    const c = elCenter(e)
-    const glyphs = curvedGlyphs(e)
-    const set = (attrs: string) =>
-      glyphs
-        .map((g) => `<text ${font} text-anchor="middle"${attrs} transform="translate(${fmt(c.x + g.x)} ${fmt(c.y + g.y)}) rotate(${fmt(g.rot)})">${xmlEsc(g.ch)}</text>`)
+  const strokeA = (k?: number) =>
+    p.stroke ? ` stroke="${paintOf(p.stroke, k)}" stroke-width="${fmt(p.strokeW ?? 0)}" stroke-linejoin="round"` : ''
+  if (runs.some((r) => r.rot)) {
+    const set = (attrs: (k: number) => string) =>
+      runs
+        .map((r, k) => `<text ${font} text-anchor="${r.anchor}"${attrs(k)} transform="translate(${fmt(c.x + r.x)} ${fmt(c.y + r.y)}) rotate(${fmt(r.rot)})">${xmlEsc(r.str)}</text>`)
         .join('')
-    const strokes = p.stroke ? set(` fill="none"${strokeA(p)}`) : ''
-    const fills = p.fill ? set(` fill="${p.fill}"`) : ''
+    const strokes = p.stroke ? set((k) => ` fill="none"${strokeA(k)}`) : ''
+    const fills = p.fill ? set((k) => ` fill="${paintOf(p.fill as string, k)}"`) : ''
     return `<g${extra}>${strokes}${fills}</g>`
   }
-  const tspans = textLinesOf(e)
-    .map((ln, i) => `<tspan x="${fmt(textAnchorX(e))}" y="${fmt(textLineY(e, i))}">${xmlEsc(ln)}</tspan>`)
-    .join('')
-  const paint = ` fill="${p.fill ?? 'none'}"${strokeA(p)}${p.stroke && p.fill ? ' paint-order="stroke"' : ''}`
-  return `<text ${font} text-anchor="${textAnchor(e)}"${paint}${extra}>${tspans}</text>`
+  const tspans = runs.map((r) => `<tspan x="${fmt(c.x + r.x)}" y="${fmt(c.y + r.y)}">${xmlEsc(r.str)}</tspan>`).join('')
+  const paint = ` fill="${p.fill ? paintOf(p.fill) : 'none'}"${strokeA()}${p.stroke && p.fill ? ' paint-order="stroke"' : ''}`
+  return `<text ${font} text-anchor="${runs[0]?.anchor ?? textAnchor(e)}"${paint}${extra}>${tspans}</text>`
 }
 
 // id ฟิลเตอร์เบลอของชั้นที่ i (เงา) — ต่อชิ้น
@@ -323,7 +419,28 @@ export const textFxFilterId = (id: string, i: number) => `tfx-${id}-${i}`
 export function textInnerSVG(e: TextEl): string {
   const plan = textFxPlan(e)
   const c = elCenter(e)
+  const runs = textRuns(e)
   const out: string[] = []
+  // อักษรโค้งมี transform ต่ออักษร → ไล่สีแยกต่ออักษร (แปลงจุดไล่สีเข้าพิกัดอักษร) ไม่งั้นทุกตัวได้สีช่วงเดียวกัน
+  const rotated = runs.some((r) => r.rot)
+  const gradIdOf = (k?: number) => (rotated && k !== undefined ? `${textGradId(e.id)}-${k}` : textGradId(e.id))
+  const paintOf = (col: string, k?: number) =>
+    col === TEXT_GRAD_PAINT ? (e.grad ? `url(#${gradIdOf(k)})` : e.color) : col
+  const solidOf = (col: string) => (col === TEXT_GRAD_PAINT ? (e.grad?.from ?? e.color) : col)
+  if (e.grad) {
+    const base = textGradGeom(e)
+    const stops = `<stop offset="0" stop-color="${e.grad.from}"/><stop offset="1" stop-color="${e.grad.to}"/>`
+    // พิกัดสัมบูรณ์สำหรับข้อความตรง (tspan อยู่ในพิกัดแผ่น); พิกัดอักษรสำหรับข้อความโค้ง
+    const def = (id: string, g: TextGradGeom, ox: number, oy: number) =>
+      g.radial
+        ? `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${fmt(ox + g.cx)}" cy="${fmt(oy + g.cy)}" r="${fmt(g.r)}">${stops}</radialGradient>`
+        : `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${fmt(ox + g.x1)}" y1="${fmt(oy + g.y1)}" x2="${fmt(ox + g.x2)}" y2="${fmt(oy + g.y2)}">${stops}</linearGradient>`
+    out.push(
+      rotated
+        ? `<defs>${runs.map((r, k) => def(gradIdOf(k), runGradGeom(base, r), 0, 0)).join('')}</defs>`
+        : `<defs>${def(gradIdOf(), base, c.x, c.y)}</defs>`,
+    )
+  }
   if (plan.box) {
     const r = textBoxRect(e, plan.box)
     out.push(
@@ -335,19 +452,21 @@ export function textInnerSVG(e: TextEl): string {
   plan.under.forEach((l, i) => {
     let extra = l.dx || l.dy ? ` transform="translate(${fmt(l.dx)} ${fmt(l.dy)})"` : ''
     if (l.alpha !== undefined && l.alpha < 1) extra += ` opacity="${fmt(l.alpha)}"`
-    if (l.blur && l.blur > 0) {
+    const blurred = !!l.blur && l.blur > 0
+    if (blurred) {
       // พื้นที่ filter เป็นพิกัดของชั้นเอง (ก่อนเยื้อง) — เผื่อเส้นขอบ + 3σ ไม่งั้นเงาฟุ้งถูกตัดเป็นขอบเหลี่ยม
-      const m = (l.strokeW ?? 0) / 2 + 3 * l.blur + 1
+      const m = (l.strokeW ?? 0) / 2 + 3 * (l.blur as number) + 1
       const id = textFxFilterId(e.id, i)
       out.push(
         `<defs><filter id="${id}" filterUnits="userSpaceOnUse" x="${fmt(c.x + b.x - m)}" y="${fmt(c.y + b.y - m)}"` +
-          ` width="${fmt(b.w + 2 * m)}" height="${fmt(b.h + 2 * m)}"><feGaussianBlur stdDeviation="${fmt(l.blur)}"/></filter></defs>`,
+          ` width="${fmt(b.w + 2 * m)}" height="${fmt(b.h + 2 * m)}"><feGaussianBlur stdDeviation="${fmt(l.blur as number)}"/></filter></defs>`,
       )
       extra += ` filter="url(#${id})"`
     }
-    out.push(textPaintSVG(e, l, extra))
+    // ชั้นเบลอใช้สีทึบเสมอ (canvas เบลอผ่านเงาซึ่งเป็นสีเดียว) — ให้สองทางตรงกัน
+    out.push(textPaintSVG(e, runs, l, extra, blurred ? solidOf : paintOf))
   })
-  out.push(textPaintSVG(e, plan.main, ''))
+  out.push(textPaintSVG(e, runs, plan.main, '', paintOf))
   return out.join('')
 }
 
@@ -363,50 +482,69 @@ function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
   ctx.closePath()
 }
 
-// วาดข้อความ (อาจหลายบรรทัด/โค้ง) + เอฟเฟกต์ลง canvas — ctx ถูก translate ไปกึ่งกลาง+หมุน+พลิกไว้แล้ว
+const CANVAS_ALIGN = { start: 'left', middle: 'center', end: 'right' } as const
+
+// วาดข้อความ (อาจหลายบรรทัด/โค้ง/เว้นระยะ) + เอฟเฟกต์ลง canvas — ctx ถูก translate ไปกึ่งกลาง+หมุน+พลิกไว้แล้ว
 // พิกัดท้องถิ่น: กึ่งกลางชิ้น = (0,0); ใช้ทั้ง Viewer3D และ export (drawDeco2D) — ลำดับชั้นเดียวกับ textInnerSVG
 export function drawText2D(ctx: CanvasRenderingContext2D, e: TextEl, s: number) {
   const plan = textFxPlan(e)
+  const runs = textRuns(e)
   ctx.font = textFont(e, s)
   ctx.textBaseline = 'middle'
-  // ชิ้นข้อความย่อย (มม. ท้องถิ่น): ข้อความตรง = ทีละบรรทัด, โค้ง = ทีละอักษร (หมุน)
-  let runs: { str: string; x: number; y: number; rot: number }[]
-  if (isCurvedText(e)) {
-    ctx.textAlign = 'center'
-    runs = curvedGlyphs(e).map((g) => ({ str: g.ch, x: g.x, y: g.y, rot: g.rot }))
-  } else {
-    const lines = textLinesOf(e)
-    const lineH = textLineH(e)
-    const totalH = lines.length * lineH
-    const align = e.align ?? 'left'
-    ctx.textAlign = align === 'left' ? 'left' : align === 'right' ? 'right' : 'center'
-    const x = align === 'left' ? -e.w / 2 : align === 'right' ? e.w / 2 : 0
-    runs = lines.map((ln, i) => ({ str: ln, x, y: -totalH / 2 + lineH * (i + 0.5), rot: 0 }))
+  // ไล่สีต่อชิ้น (ข้อความโค้ง = ต่ออักษร ในพิกัดอักษรที่หมุนแล้ว) — ตัวเลขชุดเดียวกับ textInnerSVG
+  const baseGrad = e.grad ? textGradGeom(e) : null
+  const gradCache = new Map<number, CanvasGradient>()
+  const gradFor = (k: number): CanvasGradient | null => {
+    if (!baseGrad || !e.grad) return null
+    let cg = gradCache.get(k)
+    if (!cg) {
+      const g = runGradGeom(baseGrad, runs[k])
+      cg = g.radial
+        ? ctx.createRadialGradient(g.cx * s, g.cy * s, 0, g.cx * s, g.cy * s, g.r * s)
+        : ctx.createLinearGradient(g.x1 * s, g.y1 * s, g.x2 * s, g.y2 * s)
+      cg.addColorStop(0, e.grad.from)
+      cg.addColorStop(1, e.grad.to)
+      gradCache.set(k, cg)
+    }
+    return cg
   }
-  const each = (dx: number, dy: number, draw: (str: string, px: number, py: number) => void) => {
-    for (const r of runs) {
+  const paintOf = (col: string, k: number): string | CanvasGradient => (col === TEXT_GRAD_PAINT ? (gradFor(k) ?? e.color) : col)
+  const each = (draw: (str: string, px: number, py: number, k: number) => void) => {
+    runs.forEach((r, k) => {
+      ctx.textAlign = CANVAS_ALIGN[r.anchor]
       if (!r.rot) {
-        draw(r.str, (r.x + dx) * s, (r.y + dy) * s)
-        continue
+        // ข้อความตรง: ไล่สีอยู่ในพิกัดกึ่งกลางชิ้น (ตำแหน่งชิ้นอยู่ในพิกัดวาด ไม่ได้ translate)
+        draw(r.str, r.x * s, r.y * s, k)
+        return
       }
       ctx.save()
-      ctx.translate((r.x + dx) * s, (r.y + dy) * s)
+      ctx.translate(r.x * s, r.y * s)
       ctx.rotate((r.rot * Math.PI) / 180)
-      draw(r.str, 0, 0)
+      draw(r.str, 0, 0, k)
       ctx.restore()
-    }
+    })
   }
+  // ชั้นที่เยื้องใช้ translate ทั้งชั้น (ไม่ใช่เลื่อนแต่ละชิ้น) ไล่สีจึงเลื่อนตามชั้น เหมือน transform ใน SVG
   const paint = (p: TextPaint, dx: number, dy: number) => {
+    ctx.save()
+    if (dx || dy) ctx.translate(dx * s, dy * s)
     if (p.stroke) {
       ctx.lineJoin = 'round'
       ctx.lineWidth = (p.strokeW ?? 0) * s
-      ctx.strokeStyle = p.stroke
-      each(dx, dy, (str, px, py) => ctx.strokeText(str, px, py))
+      const col = p.stroke
+      each((str, px, py, k) => {
+        ctx.strokeStyle = paintOf(col, k)
+        ctx.strokeText(str, px, py)
+      })
     }
     if (p.fill) {
-      ctx.fillStyle = p.fill
-      each(dx, dy, (str, px, py) => ctx.fillText(str, px, py))
+      const col = p.fill
+      each((str, px, py, k) => {
+        ctx.fillStyle = paintOf(col, k)
+        ctx.fillText(str, px, py)
+      })
     }
+    ctx.restore()
   }
   if (plan.box) {
     const r = textBoxRect(e, plan.box)
@@ -429,11 +567,12 @@ export function drawText2D(ctx: CanvasRenderingContext2D, e: TextEl, s: number) 
       const far = (ctx.canvas.width + ctx.canvas.height) * 2 + 10_000
       const vx = (m.d * far) / det // เวกเตอร์ท้องถิ่นที่ไปเป็น (far, 0) บนจอ
       const vy = (-m.b * far) / det
-      ctx.shadowColor = l.fill ?? l.stroke ?? '#000000'
+      const solid = (col?: string) => (col === TEXT_GRAD_PAINT ? (e.grad?.from ?? e.color) : col)
+      ctx.shadowColor = solid(l.fill ?? l.stroke) ?? '#000000'
       ctx.shadowBlur = 2 * l.blur * s * scale // canvas: σ = shadowBlur / 2
       ctx.shadowOffsetX = m.a * l.dx * s + m.c * l.dy * s - far
       ctx.shadowOffsetY = m.b * l.dx * s + m.d * l.dy * s
-      paint(l, vx / s, vy / s)
+      paint({ fill: solid(l.fill), stroke: solid(l.stroke), strokeW: l.strokeW }, vx / s, vy / s)
     } else {
       paint(l, l.dx, l.dy)
     }
@@ -450,6 +589,14 @@ export function measureText(text: string, size: number, font?: string, weight?: 
   if (!measureCtx) return Math.max(1, (text.length || 1) * size * 0.6)
   measureCtx.font = textFont({ size, font, weight })
   return Math.max(1, measureCtx.measureText(text || ' ').width)
+}
+// ความกว้างจริงไม่ปัดขั้นต่ำ — ใช้วัดทีละกลุ่มอักษร (อักษรแคบ/ช่องว่างกว้างไม่ถึง 1 มม. ได้)
+function measureRaw(text: string, size: number, font?: string, weight?: number): number {
+  if (!text) return 0
+  if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')
+  if (!measureCtx) return text.length * size * 0.6
+  measureCtx.font = textFont({ size, font, weight })
+  return measureCtx.measureText(text).width
 }
 
 const FONT_LOAD_SAMPLE = 'กขคง้๊AaZz09'
@@ -486,7 +633,7 @@ export async function ensureThaiFont(decos: readonly Deco[] = []): Promise<void>
 // = บรรทัดที่กว้างสุด (รองรับหลายบรรทัด)
 export const withTextW = (e: TextEl): TextEl => ({
   ...e,
-  w: Math.max(...(e.text ?? '').split('\n').map((ln) => measureText(ln, e.size, e.font, e.weight))),
+  w: Math.max(...(e.text ?? '').split('\n').map((ln) => textLineWidth(e, ln))),
 })
 
 // --- โหลดไฟล์รูป ---
@@ -1776,6 +1923,18 @@ function parseBase(
   }
 }
 
+// ไล่สี (รูปทรง/เส้น/ข้อความใช้ร่วม): ต้องมี from/to ที่เป็นสตริง; มุมไม่ใช่ตัวเลข = 90
+function parseGrad(v: unknown): GradientDef | undefined {
+  const gr = v as Record<string, unknown> | undefined
+  if (!gr || typeof gr.from !== 'string' || typeof gr.to !== 'string') return undefined
+  return {
+    from: gr.from,
+    to: gr.to,
+    angle: Number.isFinite(Number(gr.angle)) ? Number(gr.angle) : 90,
+    ...(gr.radial === true ? { radial: true } : {}),
+  }
+}
+
 export function parseDeco(v: unknown): Deco | null {
   if (typeof v !== 'object' || v === null) return null
   const o = v as Record<string, unknown>
@@ -1822,6 +1981,9 @@ export function parseDeco(v: unknown): Deco | null {
   }
   if (o.type === 'text') {
     const text = typeof o.text === 'string' ? o.text : ''
+    const ls = Number(o.ls)
+    const lsOk = Number.isFinite(ls) && ls !== 0 ? clampNum(ls, LETTER_SPACING_RANGE[0], LETTER_SPACING_RANGE[1]) : undefined
+    const tgrad = parseGrad(o.grad)
     // กันเหนียว: ขนาดฟอนต์ที่เพี้ยน → clamp เข้าช่วงปลอดภัย (แทนที่จะปล่อยให้ NaN ทำ SVG พัง)
     const size = clampFinite(o.size, 1, 400, 20)
     const color = typeof o.color === 'string' ? o.color : '#222222'
@@ -1832,7 +1994,7 @@ export function parseDeco(v: unknown): Deco | null {
     const wRaw = Number(o.w)
     const w = Number.isFinite(wRaw) && wRaw > 0
       ? wRaw
-      : finiteOr(Math.max(...text.split('\n').map((ln) => measureText(ln, size, font, weight))), size * 4)
+      : finiteOr(Math.max(...text.split('\n').map((ln) => textLineWidth({ size, font, weight, ls: lsOk }, ln))), size * 4)
     const strokeColor = typeof o.strokeColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.strokeColor) ? o.strokeColor : undefined
     const strokeW = strokeColor && Number(o.strokeW) > 0 ? clampNum(Number(o.strokeW), 0, 10) : undefined
     // เอฟเฟกต์: งานเก่าที่มีแค่ shadow: true → เงาค่าเริ่มต้น (หน้าตาเดิม)
@@ -1849,6 +2011,8 @@ export function parseDeco(v: unknown): Deco | null {
       ...(align ? { align } : {}),
       ...(lh ? { lh } : {}),
       ...(strokeColor && strokeW ? { strokeColor, strokeW } : {}),
+      ...(lsOk ? { ls: lsOk } : {}),
+      ...(tgrad ? { grad: tgrad } : {}),
       ...(fx ? { fx } : {}),
       ...(Number.isFinite(Number(o.curve)) && Math.abs(Number(o.curve)) >= 1
         ? { curve: clampNum(Number(o.curve), -300, 300) }
@@ -1865,16 +2029,7 @@ export function parseDeco(v: unknown): Deco | null {
     const fill = typeof o.fill === 'string' ? o.fill : '#2f8a99'
     const stroke = typeof o.stroke === 'string' ? o.stroke : 'none'
     const strokeW = Number(o.strokeW) >= 0 ? Number(o.strokeW) : 0
-    const gr = o.grad as Record<string, unknown> | undefined
-    const grad =
-      shape !== 'line' && gr && typeof gr.from === 'string' && typeof gr.to === 'string'
-        ? {
-            from: gr.from,
-            to: gr.to,
-            angle: Number.isFinite(Number(gr.angle)) ? Number(gr.angle) : 90,
-            ...(gr.radial === true ? { radial: true } : {}),
-          }
-        : undefined
+    const grad = shape !== 'line' ? parseGrad(o.grad) : undefined
     const sides = Number.isFinite(Number(o.sides)) ? Math.max(3, Math.min(12, Math.round(Number(o.sides)))) : undefined
     return {
       id,

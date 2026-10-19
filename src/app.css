@@ -1765,6 +1765,20 @@ main {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+/* สีเอฟเฟกต์ที่ตามสีตัวอักษร: ป้าย "อัตโนมัติ" / ปุ่มกลับไปใช้อัตโนมัติ */
+.fx-auto,
+.fx-auto-tag {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.fx-auto {
+  padding: 2px 8px;
+  min-height: 0;
+  height: 24px;
+}
+.fx-auto-tag {
+  color: var(--text-2);
+}
 .fx-note {
   font-size: 11px;
   color: var(--text-2);

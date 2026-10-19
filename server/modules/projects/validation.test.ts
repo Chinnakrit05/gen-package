@@ -66,7 +66,7 @@ describe('cloud project validation', () => {
     for (const f of FONTS) expect(cloudProjectDocumentSchema.safeParse(text({ font: f.id })).success, f.id).toBe(true)
     for (const k of TEXT_FX_KINDS) expect(cloudProjectDocumentSchema.safeParse(text({ fx: { kind: k.id } })).success, k.id).toBe(true)
     expect(cloudProjectDocumentSchema.safeParse(text({
-      fx: { kind: 'double', color: '#ffffff', color2: '#000000', width: 8, width2: 4 },
+      fx: { kind: 'double', color: '#ffffff', color2: '#000000', width: 8, width2: 4 }, ls: -5, grad: { from: '#111111', to: '#222222', angle: 10 },
     })).success).toBe(true)
     expect(cloudProjectDocumentSchema.safeParse(text({ fx: { kind: 'neon' } })).success).toBe(false)
     expect(cloudProjectDocumentSchema.safeParse(text({ fx: { kind: 'drop', blur: 999 } })).success).toBe(false)

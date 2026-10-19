@@ -1723,6 +1723,7 @@ export const DielineSVG = memo(function DielineSVG({
           fontFamily: `${fontCss(editText.font)}, sans-serif`,
           fontSize: editBox.fontSize,
           lineHeight: String(editText.lh ?? 1.25),
+          letterSpacing: editText.ls ? `${(editText.ls / 100) * editBox.fontSize}px` : undefined,
           color: editText.color,
           textAlign: editText.align ?? 'left',
           fontWeight: editText.weight ?? 400,

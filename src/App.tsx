@@ -55,7 +55,7 @@ import {
   type ShapeKind,
   type NutriRow,
 } from './core/artwork'
-import { TEXT_FX_KINDS, TEXT_FX_RANGE, MIN_PRINT_LINE_MM, lightenHex, resolveTextFx, textFxReach, type TextFx, type TextFxKind } from './core/textFx'
+import { TEXT_FX_KINDS, TEXT_FX_RANGE, LETTER_SPACING_RANGE, MIN_PRINT_LINE_MM, lightenHex, resolveTextFx, textFxAutoColor, textFxReach, type TextFx, type TextFxKind } from './core/textFx'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import {
   DEFAULT_STICKER_CUT,
@@ -672,6 +672,7 @@ function TextFxPreview({ base, fx }: { base: TextEl; fx: TextFx | undefined }) {
     x: 0,
     y: 0,
     rot: 0,
+    ...(base.grad ? { grad: base.grad } : {}),
     ...(fx ? { fx } : {}),
   }
   const h = size * 1.25
@@ -737,6 +738,28 @@ function TextFxControls({
         <ColorField value={fx[key]} onChange={(hex) => set(key, hex)} palette={palette} onSave={onSave} disabled={disabled} label={label} />
       </div>
     )
+  // สีที่ตามสีตัวอักษรได้ (เงาซ้อน/เรืองแสง/เงายาว): ยังไม่เลือก = อัตโนมัติ, มีปุ่มกลับไปใช้อัตโนมัติ
+  const autoCol = (label: string) =>
+    fx && (
+      <div className="deco-color" key="color">
+        <span>{label}</span>
+        <ColorField
+          value={fx.color || textFxAutoColor(fx.kind, el)}
+          onChange={(hex) => set('color', hex)}
+          palette={palette}
+          onSave={onSave}
+          disabled={disabled}
+          label={label}
+        />
+        {fx.color ? (
+          <button type="button" className="fx-auto" disabled={disabled} onClick={() => set('color', '')}>
+            {t('ตามตัวอักษร', 'Auto')}
+          </button>
+        ) : (
+          <span className="fx-auto-tag">{t('อัตโนมัติ', 'Auto')}</span>
+        )}
+      </div>
+    )
   const kinds: { id: TextFxKind | null; nameTh: string; nameEn: string }[] = [
     { id: null, nameTh: 'ไม่มี', nameEn: 'None' },
     ...TEXT_FX_KINDS,
@@ -794,6 +817,33 @@ function TextFxControls({
           {num('width', t('หนาขอบใน', 'Inner thickness'))}
           {col('color2', t('สีขอบนอก', 'Outer outline'))}
           {num('width2', t('หนาขอบนอก', 'Outer thickness'))}
+        </>
+      )}
+      {fx?.kind === 'echo' && (
+        <>
+          {autoCol(t('สีเงา', 'Echo colour'))}
+          {num('dist', t('ระยะเยื้อง', 'Offset'))}
+          {num('angle', t('ทิศทาง', 'Direction'), '°')}
+        </>
+      )}
+      {fx?.kind === 'glow' && (
+        <>
+          {autoCol(t('สีแสง', 'Glow colour'))}
+          {num('blur', t('ความฟุ้ง', 'Size'))}
+          {num('alpha', t('ความเข้ม', 'Intensity'))}
+          <div className="fx-note">
+            {t(
+              'หมึกพิมพ์เรืองแสงไม่ได้ — บนกระดาษจะเห็นเป็นเงาฟุ้งสี ใช้ “ดูสีแบบพิมพ์” เช็กก่อนส่งผลิต',
+              'Ink cannot emit light — on paper this prints as a soft coloured haze. Check it with the print-colour preview.',
+            )}
+          </div>
+        </>
+      )}
+      {fx?.kind === 'long' && (
+        <>
+          {autoCol(t('สีเงา', 'Shadow colour'))}
+          {num('dist', t('ความยาว', 'Length'))}
+          {num('angle', t('ทิศทาง', 'Direction'), '°')}
         </>
       )}
       {fx && (fx.kind === 'hollow' || fx.kind === 'splice' || fx.kind === 'double') && (
@@ -5126,9 +5176,17 @@ export default function App({
                           disabled={aiBusy}
                           onChange={(v) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, size: v }) : d))}
                         />
-                        <ToolPopover icon={<IconEffects />} title="เอฟเฟกต์/ระยะข้อความ (ระยะบรรทัด/เส้นขอบ/เงา/โค้ง)">
+                        <ToolPopover icon={<IconEffects />} title="เอฟเฟกต์ข้อความ (เงา/เรืองแสง/ไล่สี/ระยะตัวอักษร/เส้นขอบ/โค้ง)">
                           {/* ในป็อปโอเวอร์มีที่ → ปิดโหมด pop ให้ DimField เป็นสไลเดอร์เต็ม */}
                           <TopBarCtx.Provider value={false}>
+                            <div className="pop-title">{t('เอฟเฟกต์', 'Effect')}</div>
+                            <TextFxControls
+                              el={selected}
+                              disabled={aiBusy}
+                              palette={palette}
+                              onSave={saveSwatch}
+                              patch={(fn) => patchSelected((d) => (d.type === 'text' ? fn(d) : d))}
+                            />
                             <div className="pop-title">ระยะบรรทัด</div>
                             <DimField
                               label="ระยะบรรทัด"
@@ -5140,6 +5198,83 @@ export default function App({
                               disabled={aiBusy}
                               onChange={(v) => patchSelected((d) => (d.type === 'text' ? { ...d, lh: v === 1.25 ? undefined : v } : d))}
                             />
+                            <DimField
+                              label={t('ระยะห่างตัวอักษร', 'Letter spacing')}
+                              value={selected.ls ?? 0}
+                              min={LETTER_SPACING_RANGE[0]}
+                              max={LETTER_SPACING_RANGE[1]}
+                              step={1}
+                              unit="%"
+                              disabled={aiBusy}
+                              onChange={(v) => patchSelected((d) => (d.type === 'text' ? withTextW({ ...d, ls: v || undefined }) : d))}
+                            />
+                            <div className="pop-title">{t('ไล่สีตัวอักษร', 'Gradient fill')}</div>
+                            <label className="check">
+                              <input
+                                type="checkbox"
+                                checked={!!selected.grad}
+                                disabled={aiBusy}
+                                onChange={(e) => {
+                                  const on = e.target.checked
+                                  patchSelected((d) =>
+                                    d.type === 'text'
+                                      ? { ...d, grad: on ? { from: d.color, to: lightenHex(d.color, 0.55), angle: 90 } : undefined }
+                                      : d,
+                                  )
+                                }}
+                              />
+                              {t('ไล่สีในตัวอักษร', 'Fill letters with a gradient')}
+                            </label>
+                            {selected.grad && (
+                              <>
+                                <div className="deco-color">
+                                  <span>{t('สีเริ่ม', 'From')}</span>
+                                  <ColorField
+                                    value={selected.grad.from}
+                                    onChange={(hex) => patchSelected((d) => (d.type === 'text' && d.grad ? { ...d, grad: { ...d.grad, from: hex } } : d))}
+                                    palette={palette}
+                                    onSave={saveSwatch}
+                                    disabled={aiBusy}
+                                    label={t('สีเริ่มไล่', 'Gradient start')}
+                                  />
+                                </div>
+                                <div className="deco-color">
+                                  <span>{t('สีปลาย', 'To')}</span>
+                                  <ColorField
+                                    value={selected.grad.to}
+                                    onChange={(hex) => patchSelected((d) => (d.type === 'text' && d.grad ? { ...d, grad: { ...d.grad, to: hex } } : d))}
+                                    palette={palette}
+                                    onSave={saveSwatch}
+                                    disabled={aiBusy}
+                                    label={t('สีปลายไล่', 'Gradient end')}
+                                  />
+                                </div>
+                                <label className="check">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!selected.grad.radial}
+                                    disabled={aiBusy}
+                                    onChange={(e) => {
+                                      const radial = e.target.checked
+                                      patchSelected((d) => (d.type === 'text' && d.grad ? { ...d, grad: { ...d.grad, radial: radial || undefined } } : d))
+                                    }}
+                                  />
+                                  {t('แบบวงกลม (จากกลางออก)', 'Radial (from the centre)')}
+                                </label>
+                                {!selected.grad.radial && (
+                                  <DimField
+                                    label={t('มุมไล่สี', 'Angle')}
+                                    value={selected.grad.angle}
+                                    min={0}
+                                    max={360}
+                                    step={1}
+                                    unit="°"
+                                    disabled={aiBusy}
+                                    onChange={(v) => patchSelected((d) => (d.type === 'text' && d.grad ? { ...d, grad: { ...d.grad, angle: v } } : d))}
+                                  />
+                                )}
+                              </>
+                            )}
                             {/* กลวง/ซ้อนเหลื่อม/ขอบสองชั้น กำหนดเส้นขอบเอง → ซ่อนเส้นขอบแยก (ไม่ถูกใช้) */}
                             {!['hollow', 'splice', 'double'].includes(resolveTextFx(selected)?.kind ?? '') && (
                               <>
@@ -5165,14 +5300,6 @@ export default function App({
                               />
                               </>
                             )}
-                            <div className="pop-title">{t('เอฟเฟกต์', 'Effect')}</div>
-                            <TextFxControls
-                              el={selected}
-                              disabled={aiBusy}
-                              palette={palette}
-                              onSave={saveSwatch}
-                              patch={(fn) => patchSelected((d) => (d.type === 'text' ? fn(d) : d))}
-                            />
                             <div className="pop-title">ดัดโค้ง</div>
                             <DimField
                               label="โค้ง (0=ตรง, +ขึ้น −ลง)"

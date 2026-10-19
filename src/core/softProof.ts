@@ -83,7 +83,9 @@ export function proofHex(color: string): string {
 // สีของเอฟเฟกต์ข้อความ — ค่าที่ไม่ได้เก็บ (ใช้ค่าเริ่มต้น) ก็ต้องแปลงด้วย ไม่งั้นเงา/พื้นหลังโชว์สีจอ
 function proofTextFx(fx: TextFx): TextFx {
   const def = TEXT_FX_DEFAULTS[fx.kind]
-  return { ...fx, color: proofHex(fx.color ?? def.color), color2: proofHex(fx.color2 ?? def.color2) }
+  // สี '' = อัตโนมัติจากสีตัวอักษร (ซึ่งแปลงแล้ว) — คงไว้ ไม่งั้น proofHex('') กลายเป็นสีอื่น
+  const color = fx.color ?? def.color
+  return { ...fx, color: color ? proofHex(color) : color, color2: proofHex(fx.color2 ?? def.color2) }
 }
 
 function proofGrad(g: GradientDef): GradientDef {
@@ -99,6 +101,7 @@ export function proofDeco(d: Deco): Deco {
         ...d,
         color: proofHex(d.color),
         ...(d.strokeColor !== undefined ? { strokeColor: proofHex(d.strokeColor) } : {}),
+        ...(d.grad ? { grad: proofGrad(d.grad) } : {}),
         ...(d.fx ? { fx: proofTextFx(d.fx) } : {}),
       }
     case 'shape':

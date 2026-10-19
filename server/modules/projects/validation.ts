@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { MATERIALS } from '../../../src/core/materials'
 import { TEMPLATES } from '../../../src/core/templates'
-import { TEXT_FX_KINDS, TEXT_FX_RANGE, type TextFxKind } from '../../../src/core/textFx'
+import { LETTER_SPACING_RANGE, TEXT_FX_KINDS, TEXT_FX_RANGE, type TextFxKind } from '../../../src/core/textFx'
 
 const finite = z.number().finite()
 const coordinate = finite.min(-1_000_000).max(1_000_000)
@@ -84,6 +84,8 @@ const textSchema = z.object({
   strokeW: finite.min(0).max(1_000).optional(),
   shadow: z.boolean().optional(), // งานเก่า — งานใหม่เก็บเงาเป็น fx
   fx: textFxSchema.optional(),
+  ls: finite.min(LETTER_SPACING_RANGE[0]).max(LETTER_SPACING_RANGE[1]).optional(),
+  grad: gradientSchema.optional(),
   curve: finite.min(-360).max(360).optional(),
 }).strict()
 
