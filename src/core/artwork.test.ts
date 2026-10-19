@@ -34,9 +34,9 @@ import {
   shapeSVG,
   shapeVertices,
   isPolyShape,
-  textFxAttrs,
-  textShadowSVG,
-  textShadowId,
+  textInnerSVG,
+  textLocalBounds,
+  textBoxRect,
   isCurvedText,
   curvedGlyphs,
   svgArtworkLayer,
@@ -639,25 +639,67 @@ describe('มาสก์รูปตามทรง + ข้อความเ�
     expect(bad.frame).toBeUndefined()
   })
 
-  it('textFxAttrs/textShadowSVG: ขอบใช้ paint-order, เงาสร้าง filter + feDropShadow', () => {
-    const t = { id: 't', type: 'text' as const, text: 'HI', size: 20, color: '#000', w: 30, x: 0, y: 0, rot: 0, strokeColor: '#fff', strokeW: 1, shadow: true }
-    const attrs = textFxAttrs(t)
-    expect(attrs).toContain('paint-order="stroke"')
-    expect(attrs).toContain('stroke="#fff"')
-    expect(attrs).toContain(`url(#${textShadowId('t')})`)
-    const defs = textShadowSVG(t)
-    expect(defs).toContain('<feDropShadow')
-    expect(textShadowSVG({ ...t, shadow: false })).toBe('') // ไม่มีเงา → ว่าง
+  it('textInnerSVG: ขอบเดิมใช้ paint-order, เงาสร้าง filter เบลอ + ชั้นเยื้องใต้ตัวอักษร', () => {
+    const t = { id: 't', type: 'text' as const, text: 'HI', size: 20, color: '#000000', w: 30, x: 0, y: 0, rot: 0, strokeColor: '#ffffff', strokeW: 1, fx: { kind: 'drop' as const } }
+    const svg = textInnerSVG(t)
+    expect(svg).toContain('paint-order="stroke"')
+    expect(svg).toContain('stroke="#ffffff"')
+    expect(svg).toContain('<feGaussianBlur stdDeviation="1"') // เบลอ 5% ของ 20 มม.
+    expect(svg).toContain('filter="url(#tfx-t-0)"')
+    // ชั้นเงามาก่อนตัวอักษรจริง (อยู่ใต้)
+    expect(svg.indexOf('filter="url(#tfx-t-0)"')).toBeLessThan(svg.lastIndexOf('<text'))
+    expect(textInnerSVG({ ...t, fx: undefined })).not.toContain('<filter') // ไม่มีเงา → ไม่มี filter
   })
 
-  it('parseDeco: text รับ strokeColor+strokeW (คู่กัน) และ shadow', () => {
-    const p = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', strokeColor: '#ffffff', strokeW: 2, shadow: true, x: 0, y: 0, rot: 0 }) as { strokeColor?: string; strokeW?: number; shadow?: boolean }
+  it('parseDeco: text รับ strokeColor+strokeW (คู่กัน); shadow เดิม → fx drop', () => {
+    const p = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', strokeColor: '#ffffff', strokeW: 2, shadow: true, x: 0, y: 0, rot: 0 }) as TextEl
     expect(p.strokeColor).toBe('#ffffff')
     expect(p.strokeW).toBe(2)
-    expect(p.shadow).toBe(true)
+    expect(p.fx).toEqual({ kind: 'drop' })
+    expect(p.shadow).toBeUndefined()
     // strokeW โดยไม่มีสี → ไม่เก็บ
     const noColor = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', strokeW: 2, x: 0, y: 0, rot: 0 }) as { strokeW?: number }
     expect(noColor.strokeW).toBeUndefined()
+  })
+
+  it('parseDeco: fx เก็บเฉพาะคีย์ที่ต่างจากค่าเริ่มต้น + clamp + ทิ้งแบบที่ไม่รู้จัก', () => {
+    const p = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', w: 5, x: 0, y: 0, rot: 0, fx: { kind: 'background', color: '#123456', pad: 999, round: 40, junk: 1 } }) as TextEl
+    expect(p.fx).toEqual({ kind: 'background', color: '#123456', pad: 100 })
+    const bad = parseDeco({ type: 'text', text: 'a', size: 10, color: '#000', w: 5, x: 0, y: 0, rot: 0, fx: { kind: 'neon' } }) as TextEl
+    expect(bad.fx).toBeUndefined()
+  })
+
+  it('textInnerSVG: พื้นหลัง = rect ใต้ข้อความ ครอบกรอบตัวอักษร + ระยะขอบ', () => {
+    const t: TextEl = { id: 'b', type: 'text', text: 'HI', size: 10, color: '#000000', w: 20, x: 5, y: 7, rot: 0, fx: { kind: 'background', pad: 20, round: 100 } }
+    const svg = textInnerSVG(t)
+    // กรอบ 20 × 12.5 (1 บรรทัด × 1.25) + ขอบ 2 มม. → rect ที่ (3, 5) 24 × 16.5 รัศมีครึ่งด้านสั้น
+    expect(svg).toMatch(/^<rect x="3" y="5" width="24" height="16.5" rx="8.25" fill="#ffd54a"\/>/)
+    expect(textBoxRect(t, { pad: 2, round: 0 })).toEqual({ x: -12, y: -8.25, w: 24, h: 16.5, r: 0 })
+  })
+
+  it('textInnerSVG: กลวง = ตัวอักษรไม่มีพื้น เส้นสีตัวอักษร', () => {
+    const t: TextEl = { id: 'h', type: 'text', text: 'HI', size: 10, color: '#aa0000', w: 20, x: 0, y: 0, rot: 0, fx: { kind: 'hollow' } }
+    const svg = textInnerSVG(t)
+    expect(svg).toContain('fill="none" stroke="#aa0000" stroke-width="0.6"')
+    expect((svg.match(/<text /g) || []).length).toBe(1)
+  })
+
+  it('textInnerSVG: ขอบสองชั้น = เส้นนอกกว้างกว่าเส้นใน วาดก่อน แล้วตัวอักษรทับ', () => {
+    const t: TextEl = { id: 'd', type: 'text', text: 'HI', size: 10, color: '#aa0000', w: 20, x: 0, y: 0, rot: 0, fx: { kind: 'double' } }
+    const svg = textInnerSVG(t)
+    const outer = svg.indexOf('stroke="#222222" stroke-width="2.6"') // 2 × (0.8 + 0.5)
+    const inner = svg.indexOf('stroke="#ffffff" stroke-width="1.6"')
+    const main = svg.lastIndexOf('fill="#aa0000"')
+    expect(outer).toBeGreaterThanOrEqual(0)
+    expect(inner).toBeGreaterThan(outer)
+    expect(main).toBeGreaterThan(inner)
+  })
+
+  it('svgArtworkLayer: ข้อความที่หมุนครอบ <g transform> ทั้งชุดชั้น (เงาหมุนตามข้อความ)', () => {
+    const t: TextEl = { id: 'r', type: 'text', text: 'HI', size: 10, color: '#000000', w: 20, x: 0, y: 0, rot: 30, fx: { kind: 'splice' } }
+    const svg = svgArtworkLayer([t])
+    expect(svg).toContain('<g transform="rotate(30 10 6.25)">')
+    expect((svg.match(/<text /g) || []).length).toBe(2) // ชั้นเงาทึบ + ตัวอักษรกลวง
   })
 })
 
@@ -685,6 +727,31 @@ describe('ข้อความโค้ง (curved text)', () => {
     const up = curvedGlyphs(t({ curve: 120 }))
     const down = curvedGlyphs(t({ curve: -120 }))
     expect(Math.sign(up[0].y)).toBe(-Math.sign(down[0].y))
+  })
+
+  it('textLocalBounds: โค้งครอบทุกอักษรหลังหมุน (โก่งแล้วสูงกว่าบรรทัดตรง แคบกว่าความยาวเดิม)', () => {
+    const e = t({ curve: 180 })
+    const b = textLocalBounds(e)
+    const gs = curvedGlyphs(e)
+    const total = gs.reduce((a, g) => a + g.w, 0)
+    expect(b.h).toBeGreaterThan(e.size * 1.25)
+    expect(b.w).toBeLessThan(total + e.size)
+    for (const g of gs) {
+      expect(g.x).toBeGreaterThan(b.x)
+      expect(g.x).toBeLessThan(b.x + b.w)
+      expect(g.y).toBeGreaterThan(b.y)
+      expect(g.y).toBeLessThan(b.y + b.h)
+    }
+    // ข้อความตรง = กรอบ w × ความสูงบรรทัดรวม กึ่งกลาง 0,0
+    expect(textLocalBounds(t())).toEqual({ x: -15, y: -6.25, w: 30, h: 12.5 })
+  })
+
+  it('svgArtworkLayer: โค้ง + ขอบ = ชุดอักษรเส้นขอบทั้งหมดก่อน แล้วชุดพื้น (ให้ตรงกับ canvas)', () => {
+    const svg = svgArtworkLayer([t({ curve: 120, strokeColor: '#ffffff', strokeW: 1 })])
+    expect((svg.match(/<text /g) || []).length).toBe(10)
+    const lastStroke = svg.lastIndexOf('stroke="#ffffff"')
+    const firstFill = svg.indexOf('fill="#000"')
+    expect(lastStroke).toBeLessThan(firstFill)
   })
 
   it('svgArtworkLayer: โค้ง = หลาย <text> ต่ออักษร ในกลุ่มเดียว', () => {

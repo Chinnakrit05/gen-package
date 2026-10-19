@@ -1,4 +1,6 @@
 import type { Dieline, Vec2 } from './types'
+import { parseTextFx, textFxPlan, type TextFx, type TextPaint } from './textFx'
+export { TEXT_STROKE_MUL } from './textFx'
 
 // องค์ประกอบที่แปะบนแผ่นคลี่ (เฟส A: พรีวิวบนจอเท่านั้น ยังไม่เข้าไฟล์ผลิต)
 //
@@ -52,7 +54,8 @@ export interface TextEl extends BaseEl {
   lh?: number // ตัวคูณระยะบรรทัด — ไม่ใส่ = LINE (1.25)
   strokeColor?: string // สีเส้นขอบตัวอักษร (ไม่ใส่ = ไม่มีขอบ)
   strokeW?: number // ความหนาขอบ (มม.) — ต้องมี strokeColor ด้วย
-  shadow?: boolean // เงาใต้ตัวอักษร (ค่าคงที่: เยื้อง+เบลอตามขนาดฟอนต์)
+  shadow?: boolean // (งานเก่า) เงาค่าคงที่ — parse แปลงเป็น fx { kind: 'drop' } แล้ว
+  fx?: TextFx // เอฟเฟกต์ข้อความ (เงา/พื้นหลัง/กลวง/ซ้อนเหลื่อม/ขอบสองชั้น) — ดู textFx.ts
   curve?: number // ดัดข้อความเป็นส่วนโค้ง: องศารวมของส่วนโค้ง (+ = โก่งขึ้น, − = โก่งลง; 0 = ตรง)
 }
 
@@ -218,48 +221,20 @@ export const textAnchorX = (e: TextEl): number =>
 // y กึ่งกลางของบรรทัดที่ i (ใช้กับ dominant-baseline central)
 export const textLineY = (e: TextEl, i: number): number => e.y + textLineH(e) * (i + 0.5)
 
-// id ฟิลเตอร์เงาข้อความ + สตริง <defs><filter> (SVG จอ/ส่งออกใช้ร่วมกัน)
-export const textShadowId = (id: string) => `tsh-${id}`
-export function textShadowSVG(e: TextEl): string {
-  if (!e.shadow) return ''
-  const sh = textShadow(e)
-  return (
-    `<defs><filter id="${textShadowId(e.id)}" x="-30%" y="-30%" width="160%" height="160%">` +
-    `<feDropShadow dx="${sh.dx}" dy="${sh.dy}" stdDeviation="${sh.blur}" flood-color="black" flood-opacity="0.4"/>` +
-    `</filter></defs>`
-  )
-}
-// แอตทริบิวต์ขอบ+เงาสำหรับ <text> — ขอบวาดใต้พื้นด้วย paint-order="stroke"
-export function textFxAttrs(e: TextEl): string {
-  const stroke = textHasStroke(e)
-    ? ` stroke="${e.strokeColor}" stroke-width="${(e.strokeW as number) * TEXT_STROKE_MUL}" paint-order="stroke" stroke-linejoin="round"`
-    : ''
-  const filter = e.shadow ? ` filter="url(#${textShadowId(e.id)})"` : ''
-  return stroke + filter
-}
-
-// วาดข้อความ (อาจหลายบรรทัด) ลง canvas — ctx ถูก translate ไปกึ่งกลาง+หมุน+พลิกไว้แล้ว
-// พิกัดท้องถิ่น: กึ่งกลางชิ้น = (0,0); ใช้ทั้ง Viewer3D และ export (drawDeco2D)
-// ตัวคูณความหนาขอบ: canvas/SVG วาดขอบคร่อมเส้น (ครึ่งถูก fill ทับ) → ×2 ให้ "ความหนาที่เห็น" ≈ strokeW มม.
-export const TEXT_STROKE_MUL = 2
-const textHasStroke = (e: TextEl) => !!e.strokeColor && (e.strokeW ?? 0) > 0
-// ค่าเงา (มม.) อิงขนาดฟอนต์ — dieline/SVG/canvas ใช้ชุดเดียวกัน
-export const textShadow = (e: TextEl) => ({ dx: e.size * 0.05, dy: e.size * 0.05, blur: e.size * 0.05 })
-
 // --- ข้อความโค้ง (arc) : เรนเดอร์ทีละอักษรเหมือนกันทั้ง canvas และ SVG ให้ตรงกันเป๊ะ ---
 export const isCurvedText = (e: TextEl) => !!e.curve && Math.abs(e.curve) >= 1
 const curvedString = (e: TextEl) => textLinesOf(e).join(' ') // โค้งใช้บรรทัดเดียว
 
 // เรขาคณิตส่วนโค้ง (พิกัดท้องถิ่นกึ่งกลางชิ้น): วางอักษรบนวงกลมรัศมี |Rs|, จัดกึ่งกลางแนวตั้งด้วย yOff
-// คืนตำแหน่ง+มุมหมุนของแต่ละอักษร (มม./องศา) — total = ความกว้างข้อความตรง (มม.)
-export function curvedGlyphs(e: TextEl): { ch: string; x: number; y: number; rot: number }[] {
+// คืนตำแหน่ง+มุมหมุน+ความกว้างของแต่ละอักษร (มม./องศา)
+export function curvedGlyphs(e: TextEl): { ch: string; x: number; y: number; rot: number; w: number }[] {
   const chars = [...curvedString(e)]
   const widths = chars.map((c) => measureText(c, e.size, e.font, e.weight))
   const total = widths.reduce((a, b) => a + b, 0) || 1
   const theta = (Math.max(-300, Math.min(300, e.curve!)) * Math.PI) / 180
   const Rs = total / theta // รัศมีมีเครื่องหมาย (+ โก่งลง/rainbow, − โก่งขึ้น)
   const yOff = (Rs * (1 - Math.cos(theta / 2))) / 2
-  const out: { ch: string; x: number; y: number; rot: number }[] = []
+  const out: { ch: string; x: number; y: number; rot: number; w: number }[] = []
   let d = 0
   for (let i = 0; i < chars.length; i++) {
     const phi = ((d + widths[i] / 2) / total - 0.5) * theta
@@ -268,68 +243,203 @@ export function curvedGlyphs(e: TextEl): { ch: string; x: number; y: number; rot
       x: Rs * Math.sin(phi),
       y: Rs * (1 - Math.cos(phi)) - yOff,
       rot: (phi * 180) / Math.PI,
+      w: widths[i],
     })
     d += widths[i]
   }
   return out
 }
 
-// วาดข้อความ (อาจหลายบรรทัด/โค้ง) ลง canvas — ctx ถูก translate ไปกึ่งกลาง+หมุน+พลิกไว้แล้ว
-// พิกัดท้องถิ่น: กึ่งกลางชิ้น = (0,0); ใช้ทั้ง Viewer3D และ export (drawDeco2D)
-export function drawText2D(ctx: CanvasRenderingContext2D, e: TextEl, s: number) {
-  const stroked = textHasStroke(e)
-  const setShadow = () => {
-    if (!e.shadow) return
-    const sh = textShadow(e)
-    ctx.shadowColor = 'rgba(0,0,0,0.4)'
-    ctx.shadowBlur = sh.blur * s
-    ctx.shadowOffsetX = sh.dx * s
-    ctx.shadowOffsetY = sh.dy * s
+// กรอบของตัวอักษร (พิกัดท้องถิ่น กึ่งกลางชิ้น = 0,0) — ข้อความตรง = กล่อง w × ความสูงบรรทัดรวม;
+// ข้อความโค้ง = รวมกล่องของทุกอักษร (กว้างตามอักษร × สูงหนึ่งบรรทัด) หลังหมุน → ใช้วางกล่องพื้นหลัง/ขอบเขต filter
+export function textLocalBounds(e: TextEl): { x: number; y: number; w: number; h: number } {
+  if (!isCurvedText(e)) {
+    const h = elH(e)
+    return { x: -e.w / 2, y: -h / 2, w: e.w, h }
   }
-  const clearShadow = () => {
-    ctx.shadowColor = 'transparent'
-    ctx.shadowBlur = 0
-    ctx.shadowOffsetX = 0
-    ctx.shadowOffsetY = 0
-  }
-  // วาดสตริงหนึ่งชิ้นที่ตำแหน่ง (px,py) — ขอบใต้พื้น + เงาใต้สุด
-  const paint = (str: string, px: number, py: number) => {
-    if (stroked) {
-      setShadow()
-      ctx.lineJoin = 'round'
-      ctx.lineWidth = (e.strokeW as number) * TEXT_STROKE_MUL * s
-      ctx.strokeStyle = e.strokeColor as string
-      ctx.strokeText(str, px, py)
-      clearShadow()
-      ctx.fillStyle = e.color
-      ctx.fillText(str, px, py)
-    } else {
-      setShadow()
-      ctx.fillStyle = e.color
-      ctx.fillText(str, px, py)
-      clearShadow()
+  const hh = textLineH(e) / 2
+  let x0 = Infinity
+  let y0 = Infinity
+  let x1 = -Infinity
+  let y1 = -Infinity
+  for (const g of curvedGlyphs(e)) {
+    const r = (g.rot * Math.PI) / 180
+    const c = Math.cos(r)
+    const s = Math.sin(r)
+    for (const [u, v] of [[-g.w / 2, -hh], [g.w / 2, -hh], [g.w / 2, hh], [-g.w / 2, hh]]) {
+      const x = g.x + u * c - v * s
+      const y = g.y + u * s + v * c
+      x0 = Math.min(x0, x)
+      y0 = Math.min(y0, y)
+      x1 = Math.max(x1, x)
+      y1 = Math.max(y1, y)
     }
   }
+  if (!Number.isFinite(x0)) return { x: -e.w / 2, y: -hh, w: e.w, h: 2 * hh }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+}
+
+// กล่องพื้นหลัง (effect background) ในพิกัดท้องถิ่น: กรอบตัวอักษร + pad, รัศมีมุมตามสัดส่วนครึ่งด้านสั้น
+export function textBoxRect(e: TextEl, box: { pad: number; round: number }) {
+  const b = textLocalBounds(e)
+  const w = b.w + 2 * box.pad
+  const h = b.h + 2 * box.pad
+  return { x: b.x - box.pad, y: b.y - box.pad, w, h, r: (Math.min(w, h) / 2) * box.round }
+}
+
+const fmt = (v: number) => String(Math.round(v * 1000) / 1000)
+
+// ข้อความหนึ่งชั้น (ลงสีชุดเดียว) เป็นสตริง SVG — พิกัดสัมบูรณ์ของแผ่น ไม่รวมการหมุน/พลิก/ความทึบของชิ้น
+// stroke วาดก่อน fill เสมอ (ข้อความตรง: paint-order; โค้ง: ชุดอักษรเส้นขอบก่อน แล้วชุดพื้น) ให้ตรงกับ canvas
+function textPaintSVG(e: TextEl, p: TextPaint, extra: string): string {
+  const font =
+    `font-size="${e.size}" font-weight="${e.weight ?? 400}" font-family="${fontCss(e.font)}, sans-serif"` +
+    ` dominant-baseline="central"`
+  const strokeA = (p: TextPaint) =>
+    p.stroke ? ` stroke="${p.stroke}" stroke-width="${fmt(p.strokeW ?? 0)}" stroke-linejoin="round"` : ''
+  if (isCurvedText(e)) {
+    const c = elCenter(e)
+    const glyphs = curvedGlyphs(e)
+    const set = (attrs: string) =>
+      glyphs
+        .map((g) => `<text ${font} text-anchor="middle"${attrs} transform="translate(${fmt(c.x + g.x)} ${fmt(c.y + g.y)}) rotate(${fmt(g.rot)})">${xmlEsc(g.ch)}</text>`)
+        .join('')
+    const strokes = p.stroke ? set(` fill="none"${strokeA(p)}`) : ''
+    const fills = p.fill ? set(` fill="${p.fill}"`) : ''
+    return `<g${extra}>${strokes}${fills}</g>`
+  }
+  const tspans = textLinesOf(e)
+    .map((ln, i) => `<tspan x="${fmt(textAnchorX(e))}" y="${fmt(textLineY(e, i))}">${xmlEsc(ln)}</tspan>`)
+    .join('')
+  const paint = ` fill="${p.fill ?? 'none'}"${strokeA(p)}${p.stroke && p.fill ? ' paint-order="stroke"' : ''}`
+  return `<text ${font} text-anchor="${textAnchor(e)}"${paint}${extra}>${tspans}</text>`
+}
+
+// id ฟิลเตอร์เบลอของชั้นที่ i (เงา) — ต่อชิ้น
+export const textFxFilterId = (id: string, i: number) => `tfx-${id}-${i}`
+
+// ข้อความพร้อมเอฟเฟกต์เป็นสตริง SVG (พิกัดสัมบูรณ์, ยังไม่หมุน/พลิก/ความทึบของชิ้น)
+// blueprint (DielineSVG) กับไฟล์ SVG ส่งออกใช้ฟังก์ชันนี้ตัวเดียว → หน้าจอกับไฟล์ตรงกัน
+export function textInnerSVG(e: TextEl): string {
+  const plan = textFxPlan(e)
+  const c = elCenter(e)
+  const out: string[] = []
+  if (plan.box) {
+    const r = textBoxRect(e, plan.box)
+    out.push(
+      `<rect x="${fmt(c.x + r.x)}" y="${fmt(c.y + r.y)}" width="${fmt(r.w)}" height="${fmt(r.h)}" rx="${fmt(r.r)}"` +
+        ` fill="${plan.box.color}"${plan.box.alpha < 1 ? ` fill-opacity="${fmt(plan.box.alpha)}"` : ''}/>`,
+    )
+  }
+  const b = textLocalBounds(e)
+  plan.under.forEach((l, i) => {
+    let extra = l.dx || l.dy ? ` transform="translate(${fmt(l.dx)} ${fmt(l.dy)})"` : ''
+    if (l.alpha !== undefined && l.alpha < 1) extra += ` opacity="${fmt(l.alpha)}"`
+    if (l.blur && l.blur > 0) {
+      // พื้นที่ filter เป็นพิกัดของชั้นเอง (ก่อนเยื้อง) — เผื่อเส้นขอบ + 3σ ไม่งั้นเงาฟุ้งถูกตัดเป็นขอบเหลี่ยม
+      const m = (l.strokeW ?? 0) / 2 + 3 * l.blur + 1
+      const id = textFxFilterId(e.id, i)
+      out.push(
+        `<defs><filter id="${id}" filterUnits="userSpaceOnUse" x="${fmt(c.x + b.x - m)}" y="${fmt(c.y + b.y - m)}"` +
+          ` width="${fmt(b.w + 2 * m)}" height="${fmt(b.h + 2 * m)}"><feGaussianBlur stdDeviation="${fmt(l.blur)}"/></filter></defs>`,
+      )
+      extra += ` filter="url(#${id})"`
+    }
+    out.push(textPaintSVG(e, l, extra))
+  })
+  out.push(textPaintSVG(e, plan.main, ''))
+  return out.join('')
+}
+
+// สร้าง path สี่เหลี่ยมมุมมน (ไม่พึ่ง ctx.roundRect ที่เบราว์เซอร์เก่าไม่มี)
+function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2))
+  ctx.beginPath()
+  ctx.moveTo(x + rr, y)
+  ctx.arcTo(x + w, y, x + w, y + h, rr)
+  ctx.arcTo(x + w, y + h, x, y + h, rr)
+  ctx.arcTo(x, y + h, x, y, rr)
+  ctx.arcTo(x, y, x + w, y, rr)
+  ctx.closePath()
+}
+
+// วาดข้อความ (อาจหลายบรรทัด/โค้ง) + เอฟเฟกต์ลง canvas — ctx ถูก translate ไปกึ่งกลาง+หมุน+พลิกไว้แล้ว
+// พิกัดท้องถิ่น: กึ่งกลางชิ้น = (0,0); ใช้ทั้ง Viewer3D และ export (drawDeco2D) — ลำดับชั้นเดียวกับ textInnerSVG
+export function drawText2D(ctx: CanvasRenderingContext2D, e: TextEl, s: number) {
+  const plan = textFxPlan(e)
   ctx.font = textFont(e, s)
   ctx.textBaseline = 'middle'
+  // ชิ้นข้อความย่อย (มม. ท้องถิ่น): ข้อความตรง = ทีละบรรทัด, โค้ง = ทีละอักษร (หมุน)
+  let runs: { str: string; x: number; y: number; rot: number }[]
   if (isCurvedText(e)) {
     ctx.textAlign = 'center'
-    for (const g of curvedGlyphs(e)) {
+    runs = curvedGlyphs(e).map((g) => ({ str: g.ch, x: g.x, y: g.y, rot: g.rot }))
+  } else {
+    const lines = textLinesOf(e)
+    const lineH = textLineH(e)
+    const totalH = lines.length * lineH
+    const align = e.align ?? 'left'
+    ctx.textAlign = align === 'left' ? 'left' : align === 'right' ? 'right' : 'center'
+    const x = align === 'left' ? -e.w / 2 : align === 'right' ? e.w / 2 : 0
+    runs = lines.map((ln, i) => ({ str: ln, x, y: -totalH / 2 + lineH * (i + 0.5), rot: 0 }))
+  }
+  const each = (dx: number, dy: number, draw: (str: string, px: number, py: number) => void) => {
+    for (const r of runs) {
+      if (!r.rot) {
+        draw(r.str, (r.x + dx) * s, (r.y + dy) * s)
+        continue
+      }
       ctx.save()
-      ctx.translate(g.x * s, g.y * s)
-      ctx.rotate((g.rot * Math.PI) / 180)
-      paint(g.ch, 0, 0)
+      ctx.translate((r.x + dx) * s, (r.y + dy) * s)
+      ctx.rotate((r.rot * Math.PI) / 180)
+      draw(r.str, 0, 0)
       ctx.restore()
     }
-    return
   }
-  const lines = textLinesOf(e)
-  const lineH = textLineH(e)
-  const totalH = lines.length * lineH
-  const align = e.align ?? 'left'
-  ctx.textAlign = align === 'left' ? 'left' : align === 'right' ? 'right' : 'center'
-  const x = align === 'left' ? (-e.w / 2) * s : align === 'right' ? (e.w / 2) * s : 0
-  lines.forEach((ln, i) => paint(ln, x, (-totalH / 2 + lineH * (i + 0.5)) * s))
+  const paint = (p: TextPaint, dx: number, dy: number) => {
+    if (p.stroke) {
+      ctx.lineJoin = 'round'
+      ctx.lineWidth = (p.strokeW ?? 0) * s
+      ctx.strokeStyle = p.stroke
+      each(dx, dy, (str, px, py) => ctx.strokeText(str, px, py))
+    }
+    if (p.fill) {
+      ctx.fillStyle = p.fill
+      each(dx, dy, (str, px, py) => ctx.fillText(str, px, py))
+    }
+  }
+  if (plan.box) {
+    const r = textBoxRect(e, plan.box)
+    ctx.save()
+    ctx.globalAlpha *= plan.box.alpha
+    ctx.fillStyle = plan.box.color
+    roundRectPath(ctx, r.x * s, r.y * s, r.w * s, r.h * s, r.r * s)
+    ctx.fill()
+    ctx.restore()
+  }
+  for (const l of plan.under) {
+    ctx.save()
+    if (l.alpha !== undefined) ctx.globalAlpha *= l.alpha
+    if (l.blur && l.blur > 0) {
+      // เบลอด้วยเงาของ canvas (ใช้ได้ทุกเบราว์เซอร์ ต่างจาก ctx.filter): วาดตัวต้นแบบไกลออกนอกภาพ แล้วเลื่อน
+      // เงากลับมาที่ (dx, dy) — ค่า shadowOffset/Blur เป็นพิกเซลจอ ไม่ตาม transform จึงแปลงเองผ่านเมทริกซ์ปัจจุบัน
+      const m = ctx.getTransform()
+      const det = m.a * m.d - m.b * m.c || 1
+      const scale = Math.sqrt(Math.abs(det))
+      const far = (ctx.canvas.width + ctx.canvas.height) * 2 + 10_000
+      const vx = (m.d * far) / det // เวกเตอร์ท้องถิ่นที่ไปเป็น (far, 0) บนจอ
+      const vy = (-m.b * far) / det
+      ctx.shadowColor = l.fill ?? l.stroke ?? '#000000'
+      ctx.shadowBlur = 2 * l.blur * s * scale // canvas: σ = shadowBlur / 2
+      ctx.shadowOffsetX = m.a * l.dx * s + m.c * l.dy * s - far
+      ctx.shadowOffsetY = m.b * l.dx * s + m.d * l.dy * s
+      paint(l, vx / s, vy / s)
+    } else {
+      paint(l, l.dx, l.dy)
+    }
+    ctx.restore()
+  }
+  paint(plan.main, 0, 0)
 }
 
 // วัดความกว้างข้อความด้วย canvas (ในหน่วย px = มม. เพราะวัดที่สเกล 1:1)
@@ -1461,26 +1571,10 @@ export function svgArtworkLayer(decos: Deco[]): string {
         el = pathSVG(e, rot)
       } else if (e.type === 'nutrition') {
         el = `<g${rot}>${nutritionInnerSVG(e)}</g>`
-      } else if (isCurvedText(e)) {
-        // โค้ง: <text> ต่ออักษร ในกรอบที่หมุน/พลิกด้วย <g> (เงาไว้บนกลุ่ม, ขอบต่ออักษร)
-        const strokeA = textHasStroke(e)
-          ? ` stroke="${e.strokeColor}" stroke-width="${(e.strokeW as number) * TEXT_STROKE_MUL}" paint-order="stroke" stroke-linejoin="round"`
-          : ''
-        const common =
-          `font-size="${e.size}" fill="${e.color}" font-weight="${e.weight ?? 400}"` +
-          ` font-family="${fontCss(e.font)}, sans-serif" text-anchor="middle" dominant-baseline="central"${strokeA}`
-        const glyphs = curvedGlyphs(e)
-          .map((g) => `<text ${common} transform="translate(${c.x + g.x} ${c.y + g.y}) rotate(${g.rot})">${xmlEsc(g.ch)}</text>`)
-          .join('')
-        const filterA = e.shadow ? ` filter="url(#${textShadowId(e.id)})"` : ''
-        el = textShadowSVG(e) + `<g${rot}${filterA}>${glyphs}</g>`
       } else {
-        const tspans = textLinesOf(e)
-          .map((ln, i) => `<tspan x="${textAnchorX(e)}" y="${textLineY(e, i)}">${xmlEsc(ln)}</tspan>`)
-          .join('')
-        el = textShadowSVG(e) + `<text font-size="${e.size}" fill="${e.color}"${textFxAttrs(e)}` +
-          ` text-anchor="${textAnchor(e)}" dominant-baseline="central" font-weight="${e.weight ?? 400}"` +
-          ` font-family="${fontCss(e.font)}, sans-serif"${rot}>${tspans}</text>`
+        // ข้อความ + เอฟเฟกต์ — สตริงเดียวกับที่ blueprint แสดง (ข้อความยังเป็น <text> แก้ไขได้ใน Illustrator)
+        const inner = textInnerSVG(e)
+        el = rot ? `<g${rot}>${inner}</g>` : inner
       }
       // ความทึบ: ครอบด้วย <g opacity> เมื่อ < 1
       return e.opacity !== undefined && e.opacity < 1 ? `    <g opacity="${e.opacity}">${el}</g>` : `    ${el}`
@@ -1741,6 +1835,8 @@ export function parseDeco(v: unknown): Deco | null {
       : finiteOr(Math.max(...text.split('\n').map((ln) => measureText(ln, size, font, weight))), size * 4)
     const strokeColor = typeof o.strokeColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.strokeColor) ? o.strokeColor : undefined
     const strokeW = strokeColor && Number(o.strokeW) > 0 ? clampNum(Number(o.strokeW), 0, 10) : undefined
+    // เอฟเฟกต์: งานเก่าที่มีแค่ shadow: true → เงาค่าเริ่มต้น (หน้าตาเดิม)
+    const fx = parseTextFx(o.fx) ?? (o.shadow === true ? { kind: 'drop' as const } : undefined)
     return {
       id,
       type: 'text',
@@ -1753,7 +1849,7 @@ export function parseDeco(v: unknown): Deco | null {
       ...(align ? { align } : {}),
       ...(lh ? { lh } : {}),
       ...(strokeColor && strokeW ? { strokeColor, strokeW } : {}),
-      ...(o.shadow === true ? { shadow: true } : {}),
+      ...(fx ? { fx } : {}),
       ...(Number.isFinite(Number(o.curve)) && Math.abs(Number(o.curve)) >= 1
         ? { curve: clampNum(Number(o.curve), -300, 300) }
         : {}),

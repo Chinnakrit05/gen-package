@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark } from '../core/types'
-import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imageMaskSVG, imageDrawAttrs, imageCoverRect, maskId, panelsBBox, fillImageRect, textLinesOf, textAnchor, textAnchorX, textLineY, shapeVertices, isPolyShape, dashArray, TEXT_STROKE_MUL, textShadowSVG, textShadowId, isCurvedText, curvedGlyphs, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type ImageEl, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
+import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imageMaskSVG, imageDrawAttrs, imageCoverRect, maskId, panelsBBox, fillImageRect, shapeVertices, isPolyShape, dashArray, textInnerSVG, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type ImageEl, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 import { dimTextSize } from '../core/templates/shared'
@@ -172,58 +172,8 @@ function decoInner(e: Deco) {
   if (e.type === 'path') {
     return <g dangerouslySetInnerHTML={{ __html: pathSVG(e, '') }} />
   }
-  const tStroke =
-    e.strokeColor && (e.strokeW ?? 0) > 0
-      ? { stroke: e.strokeColor, strokeWidth: (e.strokeW as number) * TEXT_STROKE_MUL, paintOrder: 'stroke' as const, strokeLinejoin: 'round' as const }
-      : { stroke: 'none' as const }
-  const shDefs = e.shadow ? <g dangerouslySetInnerHTML={{ __html: textShadowSVG(e) }} /> : null
-  const fontProps = {
-    fontSize: e.size,
-    fontWeight: e.weight ?? 400,
-    fontFamily: `${fontCss(e.font)}, sans-serif`,
-    fill: e.color,
-  }
-  if (isCurvedText(e)) {
-    const c = elCenter(e)
-    return (
-      <>
-        {shDefs}
-        <g filter={e.shadow ? `url(#${textShadowId(e.id)})` : undefined} style={{ userSelect: 'none' }}>
-          {curvedGlyphs(e).map((g, i) => (
-            <text
-              key={i}
-              transform={`translate(${c.x + g.x} ${c.y + g.y}) rotate(${g.rot})`}
-              textAnchor="middle"
-              dominantBaseline="central"
-              {...fontProps}
-              {...tStroke}
-            >
-              {g.ch}
-            </text>
-          ))}
-        </g>
-      </>
-    )
-  }
-  return (
-    <>
-      {shDefs}
-      <text
-        textAnchor={textAnchor(e)}
-        dominantBaseline="central"
-        {...fontProps}
-        filter={e.shadow ? `url(#${textShadowId(e.id)})` : undefined}
-        {...tStroke}
-        style={{ userSelect: 'none' }}
-      >
-        {textLinesOf(e).map((ln, i) => (
-          <tspan key={i} x={textAnchorX(e)} y={textLineY(e, i)}>
-            {ln}
-          </tspan>
-        ))}
-      </text>
-    </>
-  )
+  // ข้อความ + เอฟเฟกต์: สตริงเดียวกับไฟล์ SVG ส่งออก (textInnerSVG) → หน้าจอกับไฟล์ตรงกัน
+  return <g style={{ userSelect: 'none' }} dangerouslySetInnerHTML={{ __html: textInnerSVG(e) }} />
 }
 
 function DecoBody({ e }: { e: Deco }) {
@@ -1309,6 +1259,8 @@ export const DielineSVG = memo(function DielineSVG({
             {/* รูปที่ถูกครอป/ใส่กรอบจะคลิกได้เฉพาะพื้นที่ที่เห็น — เพิ่มพื้นที่จับใส (โปร่งใสแต่รับคลิก)
                 คลุมทั้งกรอบ เพื่อให้เลือก/ลาก/ย่อได้จากทั้งกล่องเหมือนรูปปกติ */}
             {d.type === 'image' && cropId !== d.id && <rect x={d.x} y={d.y} width={w} height={h} fill="transparent" />}
+            {/* ข้อความรับคลิกทั้งกรอบ (ไม่ใช่แค่เส้นอักษร) — จำเป็นกับเอฟเฟกต์กลวง/ซ้อนเหลื่อมที่ตัวอักษรไม่มีพื้น */}
+            {d.type === 'text' && <rect x={d.x} y={d.y} width={w} height={h} fill="transparent" />}
             {d.type === 'image' && cropId !== d.id && lowResDpi?.has(d.id) && (
               <LowResBadge x={d.x} y={d.y} fs={badgeFs} text={`⚠ ${lowResDpi.get(d.id)} dpi`} />
             )}

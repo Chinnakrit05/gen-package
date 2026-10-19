@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { cloudProjectDocumentSchema, createProjectInputSchema, legacyImportInputSchema } from './validation'
+import { FONTS } from '../../../src/core/artwork'
+import { TEXT_FX_KINDS } from '../../../src/core/textFx'
 
 const validDocument = () => ({
   live: {
@@ -54,6 +56,21 @@ describe('cloud project validation', () => {
       zipper: true,
       pouchAddons: { valve: true, zipAt: 40, tearAt: 22 },
     }).success).toBe(true)
+  })
+
+  it('accepts every editor font and text effects, rejects unknown effects', () => {
+    const text = (over: Record<string, unknown>) => ({
+      ...validDocument(),
+      decos: [{ id: 't1', type: 'text', text: 'สวัสดี', color: '#222222', size: 10, w: 30, x: 0, y: 0, rot: 0, ...over }],
+    })
+    for (const f of FONTS) expect(cloudProjectDocumentSchema.safeParse(text({ font: f.id })).success, f.id).toBe(true)
+    for (const k of TEXT_FX_KINDS) expect(cloudProjectDocumentSchema.safeParse(text({ fx: { kind: k.id } })).success, k.id).toBe(true)
+    expect(cloudProjectDocumentSchema.safeParse(text({
+      fx: { kind: 'double', color: '#ffffff', color2: '#000000', width: 8, width2: 4 },
+    })).success).toBe(true)
+    expect(cloudProjectDocumentSchema.safeParse(text({ fx: { kind: 'neon' } })).success).toBe(false)
+    expect(cloudProjectDocumentSchema.safeParse(text({ fx: { kind: 'drop', blur: 999 } })).success).toBe(false)
+    expect(cloudProjectDocumentSchema.safeParse(text({ fx: { kind: 'drop', extra: 1 } })).success).toBe(false)
   })
 
   it('requires immutable asset IDs instead of browser image URLs', () => {

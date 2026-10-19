@@ -1,5 +1,6 @@
 import { CMYK_PROOF_LUT_B64, CMYK_PROOF_N } from './cmykProofLut'
 import type { Deco, GradientDef } from './artwork'
+import { TEXT_FX_DEFAULTS, type TextFx } from './textFx'
 
 // Soft-proof CMYK: จำลองบนจอว่าสีจะออกมาอย่างไรเมื่อพิมพ์ด้วยหมึก CMYK
 // ใช้ 3D LUT ที่อบจาก ICC จริง (scripts/build-cmyk-lut.py: sRGB → CMYK → sRGB + แก้ gray balance)
@@ -79,6 +80,12 @@ export function proofHex(color: string): string {
   return `#${to2(r)}${to2(g)}${to2(b)}${h.length === 8 ? h.slice(6) : ''}`
 }
 
+// สีของเอฟเฟกต์ข้อความ — ค่าที่ไม่ได้เก็บ (ใช้ค่าเริ่มต้น) ก็ต้องแปลงด้วย ไม่งั้นเงา/พื้นหลังโชว์สีจอ
+function proofTextFx(fx: TextFx): TextFx {
+  const def = TEXT_FX_DEFAULTS[fx.kind]
+  return { ...fx, color: proofHex(fx.color ?? def.color), color2: proofHex(fx.color2 ?? def.color2) }
+}
+
 function proofGrad(g: GradientDef): GradientDef {
   return { ...g, from: proofHex(g.from), to: proofHex(g.to) }
 }
@@ -92,6 +99,7 @@ export function proofDeco(d: Deco): Deco {
         ...d,
         color: proofHex(d.color),
         ...(d.strokeColor !== undefined ? { strokeColor: proofHex(d.strokeColor) } : {}),
+        ...(d.fx ? { fx: proofTextFx(d.fx) } : {}),
       }
     case 'shape':
     case 'path':

@@ -33,6 +33,8 @@ import {
   recenter,
   cloneDeco,
   withTextW,
+  measureText,
+  textInnerSVG,
   makePathEl,
   type RawAnchor,
   type PathAnchor,
@@ -53,6 +55,7 @@ import {
   type ShapeKind,
   type NutriRow,
 } from './core/artwork'
+import { TEXT_FX_KINDS, TEXT_FX_RANGE, MIN_PRINT_LINE_MM, lightenHex, resolveTextFx, textFxReach, type TextFx, type TextFxKind } from './core/textFx'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import {
   DEFAULT_STICKER_CUT,
@@ -585,24 +588,31 @@ function ToolPopover({
     setOpen((v) => !v)
   }
   // clamp เข้าจอหลังเมนูเรนเดอร์ (ปุ่มอยู่ชิดขวา เมนูกว้างจะล้นขอบ → ดันซ้าย/ชิดขวาปุ่ม)
+  // วัดใหม่เมื่อเนื้อหาเปลี่ยนขนาดด้วย (เช่นเลือกเอฟเฟกต์แล้วมีแถบปรับค่าเพิ่ม) ไม่งั้นเมนูยาวขึ้นแล้วล้นจอ
   useLayoutEffect(() => {
     if (!open) return
     const menu = menuRef.current
     const btn = btnRef.current
     if (!menu || !btn) return
-    const m = 8
-    const w = menu.offsetWidth
-    const h = menu.offsetHeight
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    const br = btn.getBoundingClientRect()
-    let left = br.left
-    if (left + w > vw - m) left = br.right - w // ชิดขวาปุ่มก่อน
-    left = Math.max(m, Math.min(left, vw - m - w)) // แล้ว hard-clamp เข้าจอเสมอ (กันปุ่มที่เลื่อนพ้นขอบ)
-    let top = br.bottom + 6
-    if (top + h > vh - m) top = br.top - 6 - h // เด้งขึ้นบนถ้าล้นล่าง
-    top = Math.max(m, Math.min(top, vh - m - h))
-    setPos({ left, top })
+    const place = () => {
+      const m = 8
+      const w = menu.offsetWidth
+      const h = menu.offsetHeight
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const br = btn.getBoundingClientRect()
+      let left = br.left
+      if (left + w > vw - m) left = br.right - w // ชิดขวาปุ่มก่อน
+      left = Math.max(m, Math.min(left, vw - m - w)) // แล้ว hard-clamp เข้าจอเสมอ (กันปุ่มที่เลื่อนพ้นขอบ)
+      let top = br.bottom + 6
+      if (top + h > vh - m) top = br.top - 6 - h // เด้งขึ้นบนถ้าล้นล่าง
+      top = Math.max(m, Math.min(top, vh - m - h))
+      setPos((p) => (p && p.left === left && p.top === top ? p : { left, top }))
+    }
+    place()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
+    ro?.observe(menu)
+    return () => ro?.disconnect()
   }, [open])
   useEffect(() => {
     if (!open) return
@@ -644,6 +654,157 @@ function ToolPopover({
           document.body,
         )}
     </div>
+  )
+}
+
+// ตัวอย่าง "Ag" ของเอฟเฟกต์ — วาดด้วย textInnerSVG ตัวเดียวกับ blueprint/ไฟล์ จึงตรงกับที่ได้จริง (สี/ฟอนต์ของข้อความที่เลือก)
+function TextFxPreview({ base, fx }: { base: TextEl; fx: TextFx | undefined }) {
+  const size = 20
+  const sample: TextEl = {
+    id: `fxprev-${fx?.kind ?? 'none'}`,
+    type: 'text',
+    text: 'Ag',
+    size,
+    color: base.color,
+    font: base.font,
+    weight: base.weight ?? 700,
+    w: measureText('Ag', size, base.font, base.weight ?? 700),
+    x: 0,
+    y: 0,
+    rot: 0,
+    ...(fx ? { fx } : {}),
+  }
+  const h = size * 1.25
+  const m = textFxReach(sample) + 2
+  return (
+    <svg
+      viewBox={`${-m} ${-m} ${sample.w + 2 * m} ${h + 2 * m}`}
+      aria-hidden="true"
+      dangerouslySetInnerHTML={{ __html: textInnerSVG(sample) }}
+    />
+  )
+}
+
+// เลือก/ปรับเอฟเฟกต์ข้อความ (ในป็อปโอเวอร์เอฟเฟกต์ของข้อความ)
+function TextFxControls({
+  el,
+  disabled,
+  palette,
+  onSave,
+  patch,
+}: {
+  el: TextEl
+  disabled: boolean
+  palette: string[]
+  onSave: (hex: string) => void
+  patch: (fn: (d: TextEl) => TextEl) => void
+}) {
+  const t = useT()
+  const fx = resolveTextFx(el)
+  const kind = fx?.kind ?? null
+  const choose = (k: TextFxKind | null) =>
+    patch((d) => {
+      const { shadow: _legacy, ...rest } = d
+      if (!k) return { ...rest, fx: undefined }
+      if (resolveTextFx(d)?.kind === k) return d
+      return { ...rest, fx: k === 'splice' ? { kind: k, color: lightenHex(d.color) } : { kind: k } }
+    })
+  const set = (key: keyof TextFx, v: number | string) =>
+    patch((d) => {
+      const cur = resolveTextFx(d)
+      if (!cur) return d
+      const { shadow: _legacy, ...rest } = d
+      return { ...rest, fx: { ...(d.fx ?? { kind: cur.kind }), [key]: v } }
+    })
+  const num = (key: keyof typeof TEXT_FX_RANGE, label: string, unit = '%') =>
+    fx && (
+      <DimField
+        key={key}
+        label={label}
+        value={Math.round(fx[key])}
+        min={TEXT_FX_RANGE[key][0]}
+        max={TEXT_FX_RANGE[key][1]}
+        step={1}
+        unit={unit}
+        disabled={disabled}
+        onChange={(v) => set(key, v)}
+      />
+    )
+  const col = (key: 'color' | 'color2', label: string) =>
+    fx && (
+      <div className="deco-color" key={key}>
+        <span>{label}</span>
+        <ColorField value={fx[key]} onChange={(hex) => set(key, hex)} palette={palette} onSave={onSave} disabled={disabled} label={label} />
+      </div>
+    )
+  const kinds: { id: TextFxKind | null; nameTh: string; nameEn: string }[] = [
+    { id: null, nameTh: 'ไม่มี', nameEn: 'None' },
+    ...TEXT_FX_KINDS,
+  ]
+  return (
+    <>
+      <div className="fx-grid" role="radiogroup" aria-label={t('เอฟเฟกต์ข้อความ', 'Text effect')}>
+        {kinds.map((k) => (
+          <button
+            key={k.id ?? 'none'}
+            type="button"
+            role="radio"
+            aria-checked={kind === k.id}
+            className={`fx-tile${kind === k.id ? ' on' : ''}`}
+            disabled={disabled}
+            onClick={() => choose(k.id)}
+          >
+            <TextFxPreview
+              base={el}
+              fx={k.id ? (k.id === 'splice' ? { kind: k.id, color: lightenHex(el.color) } : { kind: k.id }) : undefined}
+            />
+            <span>{t(k.nameTh, k.nameEn)}</span>
+          </button>
+        ))}
+      </div>
+      {fx?.kind === 'drop' && (
+        <>
+          {col('color', t('สีเงา', 'Shadow colour'))}
+          {num('dist', t('ระยะเยื้อง', 'Offset'))}
+          {num('angle', t('ทิศทาง', 'Direction'), '°')}
+          {num('blur', t('ความฟุ้ง', 'Blur'))}
+          {num('alpha', t('ความทึบ', 'Opacity'))}
+        </>
+      )}
+      {fx?.kind === 'background' && (
+        <>
+          {col('color', t('สีพื้นหลัง', 'Background colour'))}
+          {num('pad', t('ระยะขอบ', 'Padding'))}
+          {num('round', t('ความมนมุม', 'Roundness'))}
+          {num('alpha', t('ความทึบ', 'Opacity'))}
+        </>
+      )}
+      {fx?.kind === 'hollow' && num('width', t('ความหนาเส้น', 'Thickness'))}
+      {fx?.kind === 'splice' && (
+        <>
+          {num('width', t('ความหนาเส้น', 'Thickness'))}
+          {col('color', t('สีเงาทึบ', 'Offset colour'))}
+          {num('dist', t('ระยะเยื้อง', 'Offset'))}
+          {num('angle', t('ทิศทาง', 'Direction'), '°')}
+        </>
+      )}
+      {fx?.kind === 'double' && (
+        <>
+          {col('color', t('สีขอบใน', 'Inner outline'))}
+          {num('width', t('หนาขอบใน', 'Inner thickness'))}
+          {col('color2', t('สีขอบนอก', 'Outer outline'))}
+          {num('width2', t('หนาขอบนอก', 'Outer thickness'))}
+        </>
+      )}
+      {fx && (fx.kind === 'hollow' || fx.kind === 'splice' || fx.kind === 'double') && (
+        <div className="fx-note">
+          {t(
+            `ค่าเป็น % ของขนาดตัวอักษร · เส้นบางสุด ${MIN_PRINT_LINE_MM} มม. เพื่อให้พิมพ์ติด`,
+            `Values are % of font size · lines never go below ${MIN_PRINT_LINE_MM} mm so they print`,
+          )}
+        </div>
+      )}
+    </>
   )
 }
 
@@ -4979,36 +5140,39 @@ export default function App({
                               disabled={aiBusy}
                               onChange={(v) => patchSelected((d) => (d.type === 'text' ? { ...d, lh: v === 1.25 ? undefined : v } : d))}
                             />
-                            <div className="pop-title">เส้นขอบตัวอักษร</div>
-                            <div className="deco-color">
-                              <span>สี</span>
-                              <ColorField
-                                value={selected.strokeColor ?? '#ffffff'}
-                                onChange={(hex) => patchSelected((d) => (d.type === 'text' ? { ...d, strokeColor: hex, strokeW: d.strokeW && d.strokeW > 0 ? d.strokeW : 0.8 } : d))}
-                                palette={palette}
-                                onSave={saveSwatch}
+                            {/* กลวง/ซ้อนเหลื่อม/ขอบสองชั้น กำหนดเส้นขอบเอง → ซ่อนเส้นขอบแยก (ไม่ถูกใช้) */}
+                            {!['hollow', 'splice', 'double'].includes(resolveTextFx(selected)?.kind ?? '') && (
+                              <>
+                              <div className="pop-title">เส้นขอบตัวอักษร</div>
+                              <div className="deco-color">
+                                <span>สี</span>
+                                <ColorField
+                                  value={selected.strokeColor ?? '#ffffff'}
+                                  onChange={(hex) => patchSelected((d) => (d.type === 'text' ? { ...d, strokeColor: hex, strokeW: d.strokeW && d.strokeW > 0 ? d.strokeW : 0.8 } : d))}
+                                  palette={palette}
+                                  onSave={saveSwatch}
+                                  disabled={aiBusy}
+                                  label="สีเส้นขอบตัวอักษร"
+                                />
+                              </div>
+                              <DimField
+                                label="ความหนา (0=ไม่มี)"
+                                value={selected.strokeW ?? 0}
+                                min={0}
+                                max={5}
                                 disabled={aiBusy}
-                                label="สีเส้นขอบตัวอักษร"
+                                onChange={(v) => patchSelected((d) => (d.type === 'text' ? { ...d, strokeW: v || undefined, strokeColor: v > 0 ? d.strokeColor ?? '#ffffff' : d.strokeColor } : d))}
                               />
-                            </div>
-                            <DimField
-                              label="ความหนา (0=ไม่มี)"
-                              value={selected.strokeW ?? 0}
-                              min={0}
-                              max={5}
+                              </>
+                            )}
+                            <div className="pop-title">{t('เอฟเฟกต์', 'Effect')}</div>
+                            <TextFxControls
+                              el={selected}
                               disabled={aiBusy}
-                              onChange={(v) => patchSelected((d) => (d.type === 'text' ? { ...d, strokeW: v || undefined, strokeColor: v > 0 ? d.strokeColor ?? '#ffffff' : d.strokeColor } : d))}
+                              palette={palette}
+                              onSave={saveSwatch}
+                              patch={(fn) => patchSelected((d) => (d.type === 'text' ? fn(d) : d))}
                             />
-                            <div className="pop-title">เงา</div>
-                            <label className="check">
-                              <input
-                                type="checkbox"
-                                checked={!!selected.shadow}
-                                disabled={aiBusy}
-                                onChange={(e) => patchSelected((d) => (d.type === 'text' ? { ...d, shadow: e.target.checked || undefined } : d))}
-                              />
-                              เงาใต้ตัวอักษร
-                            </label>
                             <div className="pop-title">ดัดโค้ง</div>
                             <DimField
                               label="โค้ง (0=ตรง, +ขึ้น −ลง)"

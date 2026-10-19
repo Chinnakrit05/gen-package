@@ -29,6 +29,12 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `src/core/fold.ts` — fold engine: panel หมุนรอบ crease ในพิกัดแผ่นคลี่ คูณ matrix แม่เป็นลูกโซ่; ด้านในกล่อง = +z; stage 0-3 (ลำตัว→ลิ้นกันฝุ่น→ฝาเสียบ→ลิ้น); zOffset ดันชั้นวัสดุที่ซ้อนกันกัน z-fighting
 - `src/components/Viewer3D.tsx` — R3F viewer + FitCamera (วัดจากส่วนแผ่นที่ยื่นไกลสุดจากแผงหน้า ไม่ใช่ครึ่งแผ่น)
 - `src/components/DielineSVG.tsx` — blueprint preview + เส้นบอกขนาด (toggle ได้) + ลาก/หมุน/ลบ artwork; การลากมี snap; ซูม/แพน (Ctrl+ล้อ), กริด, ไม้บรรทัด, เส้นไกด์ลากเอง (state ใน component; guideLines ≠ prop `guides` ที่เป็น bleed/safe); เส้นไกด์เข้า snapTargets ตอนลาก
+- เอฟเฟกต์ข้อความ `TextEl.fx` (`src/core/textFx.ts`, pure): drop/background/hollow/splice/double — `textFxPlan` แปลงเป็นชั้น
+  (กล่องพื้นหลัง → ชั้นใต้ตัวอักษร เยื้อง/เบลอ/ทึบ → ตัวอักษร) แล้วตัววาดทุกทางวาดตามรายการเดียว: `textInnerSVG` (artwork.ts)
+  ใช้ทั้ง blueprint (DielineSVG ผ่าน innerHTML) และไฟล์ SVG; `drawText2D` (canvas → 3D/PDF/ไดคัทตามรูป/หมึกขาว) เบลอด้วยเงา canvas
+  แบบวาดต้นแบบนอกภาพ (ไม่ใช้ ctx.filter) — เพิ่มเอฟเฟกต์ใหม่ = เพิ่มเคสใน `textFxPlan` เท่านั้น อย่าเขียนแยกต่อตัววาด;
+  ค่าเก็บเป็น % ขนาดฟอนต์, เส้นไม่บางกว่า `MIN_PRINT_LINE_MM`; `shadow: true` เดิม parse เป็น `{ kind: 'drop' }`;
+  สีของ fx ต้องผ่าน soft-proof (`proofTextFx`) และ schema cloud (`textFxSchema`); PROJECT_FILE_VERSION 17
 - `src/core/guides.ts` — `computeGuides(dieline)`: safe = inset ต่อแผง; bleed = polyline ต่อเนื่องจาก "เส้นตัดขอบนอก" จริง (segments kind cut → ทดสอบฝั่งเนื้อวัสดุด้วย outline แผง, ร่องผ่าที่มีเนื้อสองฝั่งตกไป) ไม่ใช่ offset ทีละแผง (แบบเดิมได้เส้นซ้อนกลางแผ่น/หยุดที่รอยต่อกาว)
 - `src/core/softProof.ts` + `src/components/useSoftProof.ts` — soft-proof CMYK บน blueprint (ปุ่ม "ดูสีแบบพิมพ์" ท้ายแถบเครื่องมือซ้ายบน ผ่าน prop `toolsExtra`, state ไม่จำข้ามรอบโดยเจตนา): ส่ง "สำเนา" ลาย/สีพื้น/รูปที่แปลงสีแล้วเข้า DielineSVG เท่านั้น — callback ของ blueprint อ้าง id/ค่าตัวเลข จึงแก้ไขระหว่างพรีวิวได้โดยสีจำลองไม่หลุดลงงาน/ไฟล์ส่งออก; รูปแปลงผ่าน canvas แบบ async + แคช. ใช้ 3D LUT 17³ ใน `src/core/cmykProofLut.ts` = **ไฟล์ที่ถูก generate** โดย `scripts/build-cmyk-lut.py` (Pillow/LittleCMS: sRGB→CMYK→sRGB relative+BPC แล้วแก้ gray balance ให้เทา/ขาว/ดำคงเดิม) — อย่าแก้ตรง ๆ; เปลี่ยน profile โรงพิมพ์ได้ด้วย `python scripts/build-cmyk-lut.py path.icc` (ค่าเริ่มต้น RSWOP.icm ของ Windows). สูตร RGB→CMYK ตรง ๆ ใน pdf.ts ใช้จำลองไม่ได้เพราะแปลงกลับได้ค่าเดิมเป๊ะ
 - `src/core/imageDpi.ts` + `src/components/useImageDpi.ts` — เตือนรูปความละเอียดต่ำ: dpi = พิกเซลจริงของรูป ÷ ขนาดที่วาดจริง (สูตรเดียวกับ `drawImageFit`: cover×cropZoom/contain/stretch; รูปพื้นใช้ `fillImageRect`) — <150 dpi = ป้ายแดงบนรูปใน blueprint (`LowResBadge` สูงคงที่ ~11px บนจอ, ไม่ไปถึงไฟล์ส่งออก) + สรุปในแท็บส่งออก; รูปที่เลือกโชว์ dpi ในแผง (เขียว ≥300 / เหลือง / แดง); ข้าม SVG (เวกเตอร์) และลายจากไลบรารี (preset)
@@ -188,7 +194,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
-  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 16); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 17); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° ได้สันโค้งจาก `rollBeads` ใน fold.ts (ทรงกระบอกบาง รัศมี = ครึ่งระยะสองชั้น) — ตอนนี้ไม่มี template ใช้แล้ว
 - FEFCO 0427 ตามผัง dieline มาตรฐาน: ผนังข้างทบเป็นรอยพับคู่ (ผนัง → สัน กว้าง sp = 3t+0.2 = ผนัง+หู+ชั้นทบ → ชั้นทบ)
   ลิ้นปลายชั้นทบลงช่องบนฐานที่ sp − t/2; ฝาแคบกว่ากล่องข้างละ sp มีปีกข้างคางหมูพับลงด้านในชั้นทบ (stage 4 ก่อนฝาปิด 5),

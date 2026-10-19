@@ -1722,6 +1722,54 @@ main {
   color: var(--text-2);
   margin-top: 2px;
 }
+/* เอฟเฟกต์ข้อความ: ตาราง 3 คอลัมน์ ตัวอย่าง "Ag" วาดจากตัวเรนเดอร์จริง */
+.tool-pop-menu {
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+.fx-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 100%;
+}
+.fx-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px 4px;
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-solid);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.fx-tile svg {
+  width: 100%;
+  height: 34px;
+  overflow: visible;
+}
+.fx-tile:hover:not(:disabled) {
+  border-color: var(--accent-border);
+}
+.fx-tile.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  background: var(--accent-weak);
+}
+.fx-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.fx-note {
+  font-size: 11px;
+  color: var(--text-2);
+  line-height: 1.35;
+}
 .tool-pop-menu .pop-row {
   display: flex;
   gap: 6px;

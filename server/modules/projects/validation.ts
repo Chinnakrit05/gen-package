@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { MATERIALS } from '../../../src/core/materials'
 import { TEMPLATES } from '../../../src/core/templates'
+import { TEXT_FX_KINDS, TEXT_FX_RANGE, type TextFxKind } from '../../../src/core/textFx'
 
 const finite = z.number().finite()
 const coordinate = finite.min(-1_000_000).max(1_000_000)
@@ -47,6 +48,27 @@ const imageSchema = z.object({
   presetColor: color.optional(),
 }).strict()
 
+const fxRange = (key: keyof typeof TEXT_FX_RANGE) =>
+  finite.min(TEXT_FX_RANGE[key][0]).max(TEXT_FX_RANGE[key][1]).optional()
+const textFxSchema = z.object({
+  kind: z.enum(TEXT_FX_KINDS.map((k) => k.id) as [TextFxKind, ...TextFxKind[]]),
+  color: color.optional(),
+  color2: color.optional(),
+  dist: fxRange('dist'),
+  angle: fxRange('angle'),
+  blur: fxRange('blur'),
+  alpha: fxRange('alpha'),
+  width: fxRange('width'),
+  width2: fxRange('width2'),
+  pad: fxRange('pad'),
+  round: fxRange('round'),
+}).strict()
+
+// ต้องตรงกับ FONTS ใน src/core/artwork.ts (validation.test ตรวจครบทุกตัว)
+export const TEXT_FONT_IDS = [
+  'noto', 'sarabun', 'prompt', 'kanit', 'bai-jamjuree', 'mitr', 'chakra-petch', 'mali', 'pridi', 'kodchasan',
+] as const
+
 const textSchema = z.object({
   ...baseFields,
   type: z.literal('text'),
@@ -54,13 +76,14 @@ const textSchema = z.object({
   color,
   size: finite.positive().max(10_000),
   w: positiveSize,
-  font: z.enum(['noto', 'sarabun', 'prompt', 'kanit']).optional(),
+  font: z.enum(TEXT_FONT_IDS).optional(),
   weight: z.union([z.literal(400), z.literal(700)]).optional(),
   align: z.enum(['left', 'center', 'right']).optional(),
   lh: finite.min(0.5).max(5).optional(),
   strokeColor: color.optional(),
   strokeW: finite.min(0).max(1_000).optional(),
-  shadow: z.boolean().optional(),
+  shadow: z.boolean().optional(), // งานเก่า — งานใหม่เก็บเงาเป็น fx
+  fx: textFxSchema.optional(),
   curve: finite.min(-360).max(360).optional(),
 }).strict()
 
