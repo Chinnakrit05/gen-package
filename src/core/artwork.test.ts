@@ -784,6 +784,14 @@ describe('ระยะห่างตัวอักษร + ไล่สีต�
     expect(svg).toContain(`fill="url(#${textGradId('s')}-0)"`)
   })
 
+  it('parseDeco: งานพิมพ์พิเศษ finish เก็บเฉพาะชนิดที่รู้จัก ทุกชนิดชิ้น', () => {
+    const txt = parseDeco({ type: 'text', text: 'ab', size: 10, color: '#000', x: 0, y: 0, rot: 0, finish: 'foil-gold' }) as TextEl
+    expect(txt.finish).toBe('foil-gold')
+    const shp = parseDeco({ type: 'shape', shape: 'rect', w: 5, h: 5, fill: '#000', stroke: 'none', strokeW: 0, x: 0, y: 0, rot: 0, finish: 'spot-uv' })
+    expect(shp?.finish).toBe('spot-uv')
+    expect(parseDeco({ type: 'text', text: 'ab', size: 10, color: '#000', x: 0, y: 0, rot: 0, finish: 'glitter' })?.finish).toBeUndefined()
+  })
+
   it('parseDeco: ls clamp + ทิ้ง 0, grad ของข้อความ', () => {
     const p = parseDeco({ type: 'text', text: 'ab', size: 10, color: '#000', x: 0, y: 0, rot: 0, ls: 500, grad: { from: '#111111', to: '#222222', angle: 30 } }) as TextEl
     expect(p.ls).toBe(100)

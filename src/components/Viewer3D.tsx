@@ -1,6 +1,8 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useArtTexture } from './useArtTexture'
+import { useFinishMaps, finishMaterialProps, type FinishMaps } from './useFinishMaps'
+import { finishDef } from '../core/finish'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
@@ -11,6 +13,7 @@ import {
   drawImageFit,
   drawShape2D,
   drawText2D,
+  drawSilhouette,
   drawNutrition2D,
   drawPath2D,
   elW,
@@ -122,7 +125,10 @@ function useSheetTexture(
       for (const e of decos) {
         if (e.hidden) continue
         try {
-          drawDeco(ctx, e, s, imgOf)
+          // ฟอยล์ = รูปทรงสีโลหะ (ไม่มีหมึกใต้) — ความเงาโลหะมาจากแผนที่ผิว (useFinishMaps)
+          const foil = finishDef(e.finish)?.foil
+          if (foil) drawSilhouette(ctx, e, s, imgOf, foil.base)
+          else drawDeco(ctx, e, s, imgOf)
         } catch (err) {
           console.warn('วาดองค์ประกอบลง texture ไม่สำเร็จ (ข้ามชิ้นนี้)', e.type, err)
         }
@@ -205,9 +211,10 @@ interface PanelMeshProps {
   matrix: THREE.Matrix4
   mat: Material
   tex: THREE.CanvasTexture | null
+  maps: FinishMaps
 }
 
-function PanelMesh({ geometry, edges, matrix, mat, tex }: PanelMeshProps) {
+function PanelMesh({ geometry, edges, matrix, mat, tex, maps }: PanelMeshProps) {
   const ref = useRef<THREE.Mesh>(null!)
   const matRef = useRef<THREE.MeshStandardMaterial>(null!)
   useLayoutEffect(() => {
@@ -220,9 +227,11 @@ function PanelMesh({ geometry, edges, matrix, mat, tex }: PanelMeshProps) {
   // เปลี่ยน define ต้องสั่ง needsUpdate ให้ recompile เอง ไม่งั้น texture ที่เพิ่งใส่จะไม่ขึ้น
   // เช็คเฉพาะ "มี/ไม่มี" (boolean) ไม่ใช่ตัว texture — ตอนลากรูปเดิมถูกใช้ซ้ำ ไม่ควร recompile
   const hasTex = !!tex
+  const hasOrm = !!maps.orm
+  const hasBump = !!maps.bump
   useLayoutEffect(() => {
     if (matRef.current) matRef.current.needsUpdate = true
-  }, [hasTex])
+  }, [hasTex, hasOrm, hasBump])
 
   return (
     <mesh ref={ref} geometry={geometry}>
@@ -233,8 +242,8 @@ function PanelMesh({ geometry, edges, matrix, mat, tex }: PanelMeshProps) {
         map={tex}
         // texture มีสีวัสดุอยู่ในตัวแล้ว ถ้าคูณสีซ้ำภาพจะมืดลง
         color={tex ? '#ffffff' : mat.color}
-        roughness={mat.roughness ?? 0.8}
-        metalness={mat.metalness ?? 0}
+        // งานพิมพ์พิเศษ (ฟอยล์/Spot UV/ปั๊ม): แผนที่ผิวพิกัดเดียวกับลาย — ไม่มี = ค่าคงที่ของวัสดุ
+        {...finishMaterialProps(maps, mat.roughness ?? 0.8, mat.metalness ?? 0)}
         // ฟิล์มใส: ความโปร่งอยู่ใน alpha ของ texture แล้ว (ไม่มี texture = ฟิล์มเปล่า โปร่งทั้งแผ่น)
         transparent={mat.opacity !== undefined || !!mat.clear}
         opacity={mat.clear ? (tex ? 1 : 0.25) : (mat.opacity ?? 1)}
@@ -278,6 +287,13 @@ interface ModelProps {
 
 function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillColor, fillImage, dims, imperial, dimVariant, watermark }: ModelProps) {
   const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage, watermark)
+  const maps = useFinishMaps({
+    sheetW: dieline.width,
+    sheetH: dieline.height,
+    decos: decos ?? [],
+    baseRough: mat.roughness ?? 0.8,
+    baseMetal: mat.metalness ?? 0,
+  })
 
   const geoms = useMemo(
     () =>
@@ -353,6 +369,7 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillCol
               matrix={matrices.get(p.id)!}
               mat={mat}
               tex={tex}
+              maps={maps}
             />
           ))}
           {beads.map((bd) => (
@@ -377,6 +394,7 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillCol
 // จึงคำนวณ UV ของแต่ละหน้าให้ชี้ไปช่วง x ของหน้านั้น ๆ — หลังกลับ (หมุนรอบแกน Y) ให้อ่านถูกด้าน
 function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial, dimVariant, watermark }: ModelProps) {
   const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage, watermark)
+  const maps = useFinishMaps({ sheetW: dieline.width, sheetH: dieline.height, decos: decos ?? [], baseRough: mat.roughness ?? 0.8, baseMetal: 0 })
   const front = dieline.panels[0]
   const back = dieline.panels[1]
   const fxs = front.outline.map((p) => p.x)
@@ -425,10 +443,12 @@ function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial, 
   const frontMat = useRef<THREE.MeshStandardMaterial>(null!)
   const backMat = useRef<THREE.MeshStandardMaterial>(null!)
   const hasTex = !!tex
+  const hasOrm = !!maps.orm
+  const hasBump = !!maps.bump
   useLayoutEffect(() => {
     if (frontMat.current) frontMat.current.needsUpdate = true
     if (backMat.current) backMat.current.needsUpdate = true
-  }, [hasTex])
+  }, [hasTex, hasOrm, hasBump])
 
   const modelRef = useRef<THREE.Group>(null)
 
@@ -442,11 +462,11 @@ function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial, 
         </mesh>
         {/* ด้านหน้า (+Z) */}
         <mesh geometry={frontGeo} position={[0, 0, t / 2 + eps]}>
-          <meshStandardMaterial ref={frontMat} map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
+          <meshStandardMaterial ref={frontMat} map={tex} color={tex ? '#ffffff' : mat.color} {...finishMaterialProps(maps, rough, 0)} />
         </mesh>
         {/* ด้านหลัง (-Z) — หมุน 180° รอบแกน Y ให้ลายอ่านถูกด้านเมื่อพลิกการ์ด */}
         <mesh geometry={backGeo} position={[0, 0, -t / 2 - eps]} rotation={[0, Math.PI, 0]}>
-          <meshStandardMaterial ref={backMat} map={tex} color={tex ? '#ffffff' : mat.color} roughness={rough} metalness={0} />
+          <meshStandardMaterial ref={backMat} map={tex} color={tex ? '#ffffff' : mat.color} {...finishMaterialProps(maps, rough, 0)} />
         </mesh>
       </group>
       {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant={dimVariant} />}

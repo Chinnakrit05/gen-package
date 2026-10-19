@@ -1,7 +1,7 @@
 import type { Dieline } from './types'
 import type { VentConfig } from './vents'
 import { pathToPolylines } from './dxf'
-import { ensureThaiFont, drawFill, drawFillImage, drawDeco2D, type Deco, type FillImage } from './artwork'
+import { ensureThaiFont, drawFill, drawFillImage, drawDecoPreview, type Deco, type FillImage } from './artwork'
 
 // ใบสรุปสเปก 1 หน้า (A4) สำหรับส่งโรงงานขอราคา — ไม่ใช่ไฟล์ผลิต
 //
@@ -22,6 +22,7 @@ export interface SpecSheetInput {
   qty: number
   handle: boolean
   vents?: VentConfig
+  finishes?: string[] // งานพิมพ์พิเศษ เช่น "ฟอยล์ทอง (2 ชิ้น) · เพลต Foil_Gold"
   assumptions: string[]
   layoutNote: string
   reasoning: string
@@ -91,7 +92,7 @@ function drawDielinePreview(
     if (art.fillColor) drawFill(ctx, d, art.fillColor, 1)
     const fimg = art.fillImage ? art.imgs.get(art.fillImage.src) : undefined
     if (art.fillImage && fimg) drawFillImage(ctx, d, fimg, art.fillImage, 1)
-    for (const e of art.decos) if (!e.hidden) drawDeco2D(ctx, e, 1, (src) => art.imgs.get(src))
+    for (const e of art.decos) if (!e.hidden) drawDecoPreview(ctx, e, 1, (src) => art.imgs.get(src))
   }
   for (const seg of d.segments) {
     ctx.beginPath()
@@ -167,6 +168,7 @@ function renderCanvas(input: SpecSheetInput, imgs: Map<string, HTMLImageElement>
           ],
         ] as [string, string][])
       : []),
+    ...(input.finishes?.length ? ([['งานพิมพ์พิเศษ', input.finishes.join(' · ')]] as [string, string][]) : []),
     ['จำนวนสั่งผลิต', `${input.qty.toLocaleString('th-TH')} ใบ`],
   ]
   const labelX = M

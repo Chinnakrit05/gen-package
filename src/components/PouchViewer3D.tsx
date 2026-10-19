@@ -30,7 +30,8 @@ import {
   VALVE_V,
   TINTIE_INSET,
 } from '../core/pouch'
-import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
+import { drawDecoPreview, fillImageRect, type Deco, type FillImage } from '../core/artwork'
+import { useFinishMaps, finishMaterialProps } from './useFinishMaps'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
 import { SceneLighting, type LightMode } from './SceneLighting'
 
@@ -101,7 +102,7 @@ function usePouchTexture(
         ctx.drawImage(fimg, r.x * s, r.y * s, r.w * s, r.h * s)
         ctx.restore()
       }
-      for (const e of decos) drawDeco2D(ctx, e, s, imgOf)
+      for (const e of decos) drawDecoPreview(ctx, e, s, imgOf)
     },
   })
 }
@@ -694,6 +695,16 @@ function PouchModel({
   watermark?: string | null
 }) {
   const tex = usePouchTexture(pouch, decos, fillColor, fillImage, watermark)
+  const maps = useFinishMaps({
+    sheetW: pouch.label.width,
+    sheetH: pouch.label.height,
+    decos,
+    baseRough: mat.roughness ?? 0.6,
+    baseMetal: mat.metalness ?? 0,
+    configure: (t) => {
+      t.flipY = false // ต้องตรงกับ texture ลายของถุง
+    },
+  })
   const geo = usePouchGeometry(pouch)
   useEffect(() => () => geo.dispose(), [geo])
 
@@ -702,7 +713,7 @@ function PouchModel({
   const hasTex = !!tex
   useLayoutEffect(() => {
     if (matRef.current) matRef.current.needsUpdate = true
-  }, [hasTex])
+  }, [hasTex, !!maps.orm, !!maps.bump])
 
   // brick: ทรงตามความยาวฟิล์ม (ไหล่เอียง) → ซิป/วาล์ว/tin-tie วางตามระยะบน dieline ผ่าน brickAt
   const brick = useMemo(() => (pouch.style === 'gusset' ? brickShape(pouch) : null), [pouch])
@@ -867,8 +878,7 @@ function PouchModel({
           ref={matRef}
           map={tex}
           color={tex ? '#ffffff' : mat.color}
-          roughness={mat.roughness ?? 0.6}
-          metalness={mat.metalness ?? 0}
+          {...finishMaterialProps(maps, mat.roughness ?? 0.6, mat.metalness ?? 0)}
           transparent={mat.opacity !== undefined}
           opacity={mat.opacity ?? 1}
           side={THREE.DoubleSide}

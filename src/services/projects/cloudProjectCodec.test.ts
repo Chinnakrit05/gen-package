@@ -53,7 +53,7 @@ function fullProject(): Project {
       {
         id: 'text-1', type: 'text', text: 'ข้อความ\nสองบรรทัด', color: '#112233', size: 12, w: 44,
         font: 'sarabun', weight: 700, align: 'center', lh: 1.5, strokeColor: '#ffffff', strokeW: 1,
-        fx: { kind: 'drop', color: '#123456', dist: 12 }, ls: 15, grad: { from: '#111111', to: '#eeeeee', angle: 45, radial: true }, curve: 30, x: 3, y: 4, rot: 5,
+        fx: { kind: 'drop', color: '#123456', dist: 12 }, ls: 15, grad: { from: '#111111', to: '#eeeeee', angle: 45, radial: true }, finish: 'foil-gold', curve: 30, x: 3, y: 4, rot: 5,
       },
       {
         id: 'shape-1', type: 'shape', shape: 'polygon', w: 20, h: 21, fill: '#445566',

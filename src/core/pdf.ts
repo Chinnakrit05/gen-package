@@ -102,6 +102,13 @@ export interface PdfArtwork {
   h: number
 }
 
+// เพลตสี spot หนึ่งชนิด: ชื่อ = ชื่อ Separation และชื่อเลเยอร์ (OCG); alt = สีสำรอง CMYK ตอนแสดงผล
+export interface PdfSpotPlate {
+  name: string
+  alt: [number, number, number, number]
+  loops: Vec2[][]
+}
+
 export function dielinePDFBytes(
   d: Dieline,
   withDims: boolean,
@@ -112,6 +119,8 @@ export function dielinePDFBytes(
   white?: Vec2[][] | null,
   // ภาพ 1 บิตของป้ายบอกขนาด (ลำดับตรง d.dims) — ป้ายที่เป็น null ใช้ Helvetica ตามเดิม
   dimMasks?: (PdfTextMask | null)[] | null,
+  // เพลตงานพิมพ์พิเศษ (ฟอยล์/Spot UV/ปั๊ม): สี spot ต่อชนิด ทึบ 100% ตั้ง overprint (ไม่ลบหมึก CMYK ข้างใต้)
+  spots?: PdfSpotPlate[] | null,
 ): Uint8Array {
   const pad = withDims ? 26 : 5
   const pageW = (d.width + pad * 2) * K
@@ -209,6 +218,11 @@ export function dielinePDFBytes(
   const fillOCG = hasFill ? num++ : 0
   const hasWhite = !!white && white.some((l) => l.length >= 3)
   const whiteOCG = hasWhite ? num++ : 0
+  // ชื่อ spot ใน PDF เป็น name object — ตัดอักขระที่ต้อง escape ออก (ชื่อของเราเป็น ASCII อยู่แล้ว)
+  const plates = (spots ?? [])
+    .filter((p) => p.loops.some((l) => l.length >= 3))
+    .map((p) => ({ ...p, name: p.name.replace(/[^A-Za-z0-9_.-]/g, '_') }))
+  const spotOCGs = plates.map(() => num++)
   const imgNum = artwork ? num++ : 0
   // ภาพป้ายไทย (เฉพาะเมื่อมีเลเยอร์ dims)
   const maskNums = (withDims ? d.dims : []).map((_, i) => (dimMasks?.[i] ? num++ : 0))
@@ -245,6 +259,22 @@ export function dielinePDFBytes(
     whiteBody = `q\n/OC /OCw BDC\n${parts.join('\n')}\nEMC\nQ\n`
   }
 
+  // เลเยอร์งานพิมพ์พิเศษ: เหนือลาย ใต้เส้นตัด — /GSop เปิด overprint ให้ RIP ไม่เจาะหมึก CMYK ใต้เพลต
+  // (Spot UV/ปั๊มทำบนงานพิมพ์ ต้องคงหมึกไว้; ฟอยล์ไม่มีหมึกใต้อยู่แล้วเพราะชิ้นฟอยล์ไม่อยู่ในภาพลาย)
+  const spotBody = plates
+    .map((p, i) => {
+      const parts: string[] = ['/GSop gs', `/CSs${i} cs`, '1 scn']
+      for (const l of p.loops) {
+        if (l.length < 3) continue
+        parts.push(`${n(tx(l[0].x))} ${n(ty(l[0].y))} m`)
+        for (let k = 1; k < l.length; k++) parts.push(`${n(tx(l[k].x))} ${n(ty(l[k].y))} l`)
+        parts.push('h')
+      }
+      parts.push('f*')
+      return `q\n/OC /OCs${i} BDC\n${parts.join('\n')}\nEMC\nQ\n`
+    })
+    .join('')
+
   // เลเยอร์ไกด์: safe (น้ำเงินประ ปิด polygon) + bleed (ม่วงประ เฉพาะขอบนอก)
   // เปลี่ยนสี/เส้นประกลางเลเยอร์ได้เพราะ state ค้างอยู่ใน q/Q เดียวกัน
   let guideBody = ''
@@ -276,7 +306,7 @@ export function dielinePDFBytes(
     : ''
 
   // ทั้งหน้าอยู่ในระบบ มม. โดยสเกลครั้งเดียวที่นี่ ตัวเลขในสตรีมจึงอ่านเป็น มม. ตรง ๆ
-  const stream = `q\n${n(K)} 0 0 ${n(K)} 0 0 cm\n${whiteBody}${fillBody}${artBody}${cutBody}${creaseBody}${guideBody}${dimsBody}Q\n`
+  const stream = `q\n${n(K)} 0 0 ${n(K)} 0 0 cm\n${whiteBody}${fillBody}${artBody}${spotBody}${cutBody}${creaseBody}${guideBody}${dimsBody}Q\n`
 
   const ocgRefs: string[] = [`${cutOCG} 0 R`, `${creaseOCG} 0 R`]
   if (dimsOCG) ocgRefs.push(`${dimsOCG} 0 R`)
@@ -284,6 +314,7 @@ export function dielinePDFBytes(
   if (guidesOCG) ocgRefs.push(`${guidesOCG} 0 R`)
   if (fillOCG) ocgRefs.push(`${fillOCG} 0 R`)
   if (whiteOCG) ocgRefs.push(`${whiteOCG} 0 R`)
+  for (const o of spotOCGs) ocgRefs.push(`${o} 0 R`)
   const ocgList = ocgRefs.join(' ')
 
   const props: string[] = [`/OC1 ${cutOCG} 0 R`, `/OC2 ${creaseOCG} 0 R`]
@@ -292,9 +323,15 @@ export function dielinePDFBytes(
   if (guidesOCG) props.push(`/OCg ${guidesOCG} 0 R`)
   if (fillOCG) props.push(`/OCf ${fillOCG} 0 R`)
   if (whiteOCG) props.push(`/OCw ${whiteOCG} 0 R`)
-  const cs = hasWhite
-    ? ` /ColorSpace << /CSW [/Separation /White /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0.45 0 0.05 0] /N 1 >>] >>`
-    : ''
+  spotOCGs.forEach((o, i) => props.push(`/OCs${i} ${o} 0 R`))
+  const sep = (name: string, c1: number[]) =>
+    `[/Separation /${name} /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [${c1.join(' ')}] /N 1 >>]`
+  const csEntries = [
+    ...(hasWhite ? [`/CSW ${sep('White', [0.45, 0, 0.05, 0])}`] : []),
+    ...plates.map((p, i) => `/CSs${i} ${sep(p.name, p.alt)}`),
+  ]
+  const cs = csEntries.length ? ` /ColorSpace << ${csEntries.join(' ')} >>` : ''
+  const gs = plates.length ? ' /ExtGState << /GSop << /Type /ExtGState /OP true /op true /OPM 1 >> >>' : ''
   const xobjEntries = [
     ...(artwork ? [`/Im0 ${imgNum} 0 R`] : []),
     ...maskNums.flatMap((m, i) => (m ? [`/Dm${i} ${m} 0 R`] : [])),
@@ -324,7 +361,7 @@ export function dielinePDFBytes(
   obj('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n')
   obj(
     `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(pageW)} ${n(pageH)}] ` +
-      `/Contents 4 0 R /Resources << /Font << /F1 5 0 R >>${xobj}${cs} /Properties << ${props.join(' ')} >> >> >>\nendobj\n`,
+      `/Contents 4 0 R /Resources << /Font << /F1 5 0 R >>${xobj}${cs}${gs} /Properties << ${props.join(' ')} >> >> >>\nendobj\n`,
   )
   obj(`4 0 obj\n<< /Length ${enc.encode(stream).length} >>\nstream\n${stream}endstream\nendobj\n`)
   obj('5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n')
@@ -335,6 +372,7 @@ export function dielinePDFBytes(
   if (guidesOCG) obj(`${guidesOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('guides')} >>\nendobj\n`)
   if (fillOCG) obj(`${fillOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('fill')} >>\nendobj\n`)
   if (whiteOCG) obj(`${whiteOCG} 0 obj\n<< /Type /OCG /Name ${pdfStr('White')} >>\nendobj\n`)
+  spotOCGs.forEach((o, i) => obj(`${o} 0 obj\n<< /Type /OCG /Name ${pdfStr(plates[i].name)} >>\nendobj\n`))
   if (artwork) {
     offsets.push(len)
     push(

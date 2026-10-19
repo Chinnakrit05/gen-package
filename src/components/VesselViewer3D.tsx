@@ -6,7 +6,8 @@ import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
 import { capShape, CORK_COLOR, defaultCapColor, tubeSection, type CapStyle, type Vessel } from '../core/vessel'
-import { drawDeco2D, fillImageRect, type Deco, type FillImage } from '../core/artwork'
+import { drawDecoPreview, fillImageRect, type Deco, type FillImage } from '../core/artwork'
+import { useFinishMaps, finishMaterialProps } from './useFinishMaps'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
 import { SceneLighting, type LightMode } from './SceneLighting'
 import { ovalFlipCapGeometry } from './tubeCapGeometry'
@@ -34,10 +35,7 @@ function useLabelTexture(
     deps: [fillColor, fillImage, vessel.labelR, vessel.labelArc],
     // พันรอบ: โชว์เฉพาะช่วงเส้นรอบวงจริง — หางทับซ้อน (กาว) มุดใต้รอยต่อ มองไม่เห็นบนขวด
     // ฉลากแผ่นหน้า: ทั้งแผ่นเต็มช่วงมุมที่หุ้ม
-    configure: (t) => {
-      t.repeat.x = Math.min(1, (vessel.labelArc * vessel.labelR) / width)
-      t.wrapS = THREE.ClampToEdgeWrapping
-    },
+    configure: (t) => labelTextureConfigure(vessel, t),
     // ผิวทรงกระบอกมองจากด้านนอก UV อ่านตรง — ไม่ต้องมิเรอร์แบบกล่อง; ฉลากพื้นขาว (กระดาษพิมพ์)
     draw: (ctx, s, imgOf) => {
       ctx.fillStyle = fillColor || '#ffffff'
@@ -58,9 +56,15 @@ function useLabelTexture(
         ctx.drawImage(fimg, r.x * s, r.y * s, r.w * s, r.h * s)
         ctx.restore()
       }
-      for (const e of decos) drawDeco2D(ctx, e, s, imgOf)
+      for (const e of decos) drawDecoPreview(ctx, e, s, imgOf)
     },
   })
+}
+
+// พันรอบ: โชว์เฉพาะช่วงเส้นรอบวงจริง — ใช้ร่วม texture ลายกับแผนที่ผิวงานพิเศษ (ต้องตรงกัน)
+function labelTextureConfigure(vessel: Vessel, t: THREE.CanvasTexture) {
+  t.repeat.x = Math.min(1, (vessel.labelArc * vessel.labelR) / vessel.label.width)
+  t.wrapS = THREE.ClampToEdgeWrapping
 }
 
 function VesselModel({
@@ -87,6 +91,15 @@ function VesselModel({
   capColor?: string | null
 }) {
   const tex = useLabelTexture(vessel, decos, fillColor, fillImage, watermark)
+  const maps = useFinishMaps({
+    sheetW: vessel.label.width,
+    sheetH: vessel.label.height,
+    decos,
+    baseRough: 0.8,
+    baseMetal: 0,
+    configure: (t) => labelTextureConfigure(vessel, t),
+    deps: [vessel.labelArc, vessel.labelR],
+  })
 
   // three คอมไพล์ shader ตาม define ตอนสร้าง — พอ map เปลี่ยนจาก null → texture
   // ต้องสั่ง needsUpdate ให้ recompile ไม่งั้นลาย/สีบนฉลากจะไม่ขึ้น (เหมือน PanelMesh ของกล่อง)
@@ -94,7 +107,7 @@ function VesselModel({
   const hasTex = !!tex
   useLayoutEffect(() => {
     if (labelMatRef.current) labelMatRef.current.needsUpdate = true
-  }, [hasTex])
+  }, [hasTex, !!maps.orm, !!maps.bump])
 
   const metal = mat.id === 'aluminum'
   const isTube = mat.form === 'tube'
@@ -312,11 +325,11 @@ function VesselModel({
       {/* ฉลาก: หลอด = เปลือก loft ตามผิว (วาง y จริง); ภาชนะอื่น = ทรงกระบอกจัดกึ่งกลาง band หมุนรอยต่อไปหลัง */}
       {tube ? (
         <mesh geometry={labelGeo}>
-          <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} roughness={0.8} metalness={0} side={THREE.DoubleSide} />
+          <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} {...finishMaterialProps(maps, 0.8, 0)} side={THREE.DoubleSide} />
         </mesh>
       ) : (
         <mesh geometry={labelGeo} position={[0, (vessel.labelY0 + vessel.labelY1) / 2, 0]} rotation={[0, Math.PI + vessel.labelRot, 0]}>
-          <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} roughness={0.8} metalness={0} />
+          <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} {...finishMaterialProps(maps, 0.8, 0)} />
         </mesh>
       )}
       {cap && capGeo && (

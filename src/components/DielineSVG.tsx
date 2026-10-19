@@ -6,6 +6,7 @@ import type { Guides } from '../core/guides'
 import { dimTextSize } from '../core/templates/shared'
 import { WATERMARK_ALPHA, watermarkTiles } from '../core/watermark'
 import { useT } from '../i18n'
+import { finishDef } from '../core/finish'
 
 const DIM_COLOR = '#1b6ea8'
 const SEL_COLOR = '#1b6ea8'
@@ -180,7 +181,94 @@ function DecoBody({ e }: { e: Deco }) {
   const ft = flipTransform(e).trim()
   const inner = decoInner(e)
   const flipped = ft ? <g transform={ft}>{inner}</g> : inner
-  return e.opacity !== undefined && e.opacity < 1 ? <g opacity={e.opacity}>{flipped}</g> : flipped
+  const body = <FinishLook e={e}>{flipped}</FinishLook>
+  return e.opacity !== undefined && e.opacity < 1 ? <g opacity={e.opacity}>{body}</g> : body
+}
+
+// หน้าตางานพิมพ์พิเศษบน blueprint (พรีวิวเท่านั้น — ไฟล์ส่งออกใช้เพลต spot แยก):
+// ฟอยล์ = รูปทรงชิ้นเติมไล่แสงโลหะ (ไม่มีหมึกเดิมให้เห็น), Spot UV = ลายเดิม + แถบเงาสะท้อน,
+// ปั๊มนูน/จม = ลายเดิม + ขอบไฮไลต์/เงาจาก alpha ที่เบลอแล้วเลื่อน (นูน: สว่างซ้ายบน, จม: กลับด้าน)
+function FinishLook({ e, children }: { e: Deco; children: React.ReactNode }) {
+  const def = finishDef(e.finish)
+  if (!def) return <>{children}</>
+  const w = elW(e)
+  const h = elH(e)
+  // พื้นที่ mask/สีเผื่อส่วนที่ยื่นเลยกรอบ (เงา/เส้นขอบ/ข้อความโค้ง)
+  const m = Math.max(w, h) * 0.6 + 6
+  const area = { x: e.x - m, y: e.y - m, width: w + 2 * m, height: h + 2 * m }
+  const mid = `fin-m-${e.id}`
+  const gid = `fin-g-${e.id}`
+  const mask = (
+    <mask id={mid} maskUnits="userSpaceOnUse" {...area} style={{ maskType: 'alpha' }}>
+      {children}
+    </mask>
+  )
+  if (def.foil) {
+    const f = def.foil
+    return (
+      <>
+        <defs>
+          {mask}
+          <linearGradient id={gid} gradientUnits="userSpaceOnUse" x1={e.x} y1={e.y} x2={e.x + w} y2={e.y + h}>
+            <stop offset="0" stopColor={f.dark} />
+            <stop offset="0.3" stopColor={f.light} />
+            <stop offset="0.5" stopColor={f.base} />
+            <stop offset="0.72" stopColor={f.dark} />
+            <stop offset="0.9" stopColor={f.light} />
+            <stop offset="1" stopColor={f.base} />
+          </linearGradient>
+        </defs>
+        {/* ตัวชิ้นจริงแบบโปร่งใส = พื้นที่คลิก (mask ไม่ตัดพื้นที่รับคลิก จึงให้สี่เหลี่ยมสีไม่รับคลิก) */}
+        <g opacity={0}>{children}</g>
+        <rect {...area} fill={`url(#${gid})`} mask={`url(#${mid})`} pointerEvents="none" />
+      </>
+    )
+  }
+  if (def.id === 'spot-uv') {
+    return (
+      <>
+        {children}
+        <defs>
+          {mask}
+          <linearGradient id={gid} gradientUnits="userSpaceOnUse" x1={e.x} y1={e.y} x2={e.x + w} y2={e.y + h}>
+            <stop offset="0.2" stopColor="#ffffff" stopOpacity="0" />
+            <stop offset="0.42" stopColor="#ffffff" stopOpacity="0.75" />
+            <stop offset="0.5" stopColor="#ffffff" stopOpacity="0.2" />
+            <stop offset="0.6" stopColor="#ffffff" stopOpacity="0.55" />
+            <stop offset="0.8" stopColor="#ffffff" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <rect {...area} fill={`url(#${gid})`} mask={`url(#${mid})`} pointerEvents="none" />
+      </>
+    )
+  }
+  // ปั๊มนูน/จม: ระยะเบลอ/เลื่อนตามขนาดชิ้น
+  const sd = Math.max(0.3, Math.min(1.2, Math.min(w, h) * 0.02))
+  const o = sd * 0.8
+  const lightFirst = def.relief > 0
+  return (
+    <>
+      <defs>
+        <filter id={gid} x="-10%" y="-10%" width="120%" height="120%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation={sd} result="b" />
+          <feOffset in="b" dx={-o} dy={-o} result="u" />
+          <feOffset in="b" dx={o} dy={o} result="v" />
+          <feComposite in={lightFirst ? 'u' : 'v'} in2={lightFirst ? 'v' : 'u'} operator="arithmetic" k2="1" k3="-1" result="hiA" />
+          <feComposite in={lightFirst ? 'v' : 'u'} in2={lightFirst ? 'u' : 'v'} operator="arithmetic" k2="1" k3="-1" result="loA" />
+          <feFlood floodColor="#ffffff" floodOpacity="0.9" />
+          <feComposite in2="hiA" operator="in" result="hi" />
+          <feFlood floodColor="#000000" floodOpacity="0.5" />
+          <feComposite in2="loA" operator="in" result="lo" />
+          <feMerge>
+            <feMergeNode in="SourceGraphic" />
+            <feMergeNode in="hi" />
+            <feMergeNode in="lo" />
+          </feMerge>
+        </filter>
+      </defs>
+      <g filter={`url(#${gid})`}>{children}</g>
+    </>
+  )
 }
 
 type Corner = 'nw' | 'ne' | 'sw' | 'se'

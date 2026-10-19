@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { MATERIALS } from '../../../src/core/materials'
 import { TEMPLATES } from '../../../src/core/templates'
+import { FINISHES, type FinishKind } from '../../../src/core/finish'
 import { LETTER_SPACING_RANGE, TEXT_FX_KINDS, TEXT_FX_RANGE, type TextFxKind } from '../../../src/core/textFx'
 
 const finite = z.number().finite()
@@ -23,6 +24,7 @@ const baseFields = {
   flipX: z.boolean().optional(),
   flipY: z.boolean().optional(),
   opacity: finite.min(0).max(1).optional(),
+  finish: z.enum(FINISHES.map((x) => x.id) as [FinishKind, ...FinishKind[]]).optional(),
 }
 
 const gradientSchema = z.object({

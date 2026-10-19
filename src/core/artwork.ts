@@ -1,6 +1,7 @@
 import type { Dieline, Vec2 } from './types'
 import { LETTER_SPACING_RANGE, TEXT_GRAD_PAINT, parseTextFx, textFxPlan, type TextFx, type TextPaint } from './textFx'
 export { TEXT_STROKE_MUL } from './textFx'
+import { finishDef, isFinishKind, printsCmyk, type FinishKind } from './finish'
 
 // องค์ประกอบที่แปะบนแผ่นคลี่ (เฟส A: พรีวิวบนจอเท่านั้น ยังไม่เข้าไฟล์ผลิต)
 //
@@ -21,6 +22,7 @@ export interface BaseEl {
   flipX?: boolean // พลิกแนวนอน (สะท้อนรอบแกนตั้งผ่านจุดกึ่งกลาง)
   flipY?: boolean // พลิกแนวตั้ง
   opacity?: number // ความทึบ 0..1 (ไม่ใส่ = 1 ทึบเต็ม)
+  finish?: FinishKind // งานพิมพ์พิเศษ (ฟอยล์/Spot UV/ปั๊มนูน-จม) — ดู finish.ts
 }
 
 export interface ImageEl extends BaseEl {
@@ -1771,8 +1773,11 @@ export async function renderArtworkCanvas(
   // พื้นใต้ลาย: รูปพื้น (fillImage) หรือสีพื้น (fillColor) ครอปตามแผงจริง — ภาพลายใน PDF เป็น JPEG ทึบ
   // จึงต้อง bake สีพื้นลงภาพด้วย ไม่งั้นพื้นขาวของภาพทับเลเยอร์สีพื้นเวกเตอร์ที่อยู่ข้างใต้จนมองไม่เห็น
   base?: { dieline: Dieline; fillImage?: FillImage | null; fillColor?: string | null } | null,
+  // 'print' = เพลต CMYK สำหรับไฟล์ผลิต (ชิ้นฟอยล์ไม่พิมพ์หมึก → ข้าม; ฟอยล์ไปอยู่เพลต spot แยก)
+  // 'preview' = ภาพดูดีไซน์ (ใบสเปก/ภาพย่อ) — ฟอยล์วาดเป็นสีโลหะ
+  mode: 'print' | 'preview' = 'preview',
 ): Promise<HTMLCanvasElement | null> {
-  const visible = decos.filter((d) => !d.hidden)
+  const visible = decos.filter((d) => !d.hidden && (mode === 'preview' || printsCmyk(d)))
   // ไม่มีทั้งลายและรูปพื้น → ไม่ต้อง raster (สีพื้นทึบล้วนวาดเป็น vector ใน PDF เอง)
   if (!visible.length && !base?.fillImage) return null
   await ensureThaiFont(visible) // ให้ตัวอักษรที่ฝังลง PDF ตรงกับที่เห็นบนจอ
@@ -1819,8 +1824,57 @@ export async function renderArtworkCanvas(
     const img = imgs.get(base.fillImage.src)
     if (img) drawFillImage(ctx, base.dieline, img, base.fillImage, s)
   }
-  for (const e of visible) drawDeco2D(ctx, e, s, (src) => imgs.get(src))
+  for (const e of visible) drawDecoPreview(ctx, e, s, (src) => imgs.get(src))
   return canvas
+}
+
+// --- งานพิมพ์พิเศษบน canvas ---
+// วาดชิ้นลงแผ่นพักขนาดเดียวกับเป้าหมาย (transform เดียวกัน) แล้วระบายทับเฉพาะพื้นที่ที่วาดด้วยสีเดียว
+// = เงา (silhouette) ของชิ้น ไม่ว่าชิ้นเป็นรูป/ข้อความ/รูปทรง — ใช้ทำผิวฟอยล์และแผนที่ผิว 3D
+let scratch: HTMLCanvasElement | null = null
+export function drawSilhouette(
+  ctx: CanvasRenderingContext2D,
+  e: Deco,
+  s: number,
+  imgOf: (src: string) => HTMLImageElement | undefined,
+  color: string,
+) {
+  const { width: w, height: h } = ctx.canvas
+  if (!scratch) scratch = document.createElement('canvas')
+  if (scratch.width !== w || scratch.height !== h) {
+    scratch.width = w
+    scratch.height = h
+  }
+  const sc = scratch.getContext('2d')
+  if (!sc) return
+  sc.setTransform(1, 0, 0, 1, 0, 0)
+  sc.globalCompositeOperation = 'source-over'
+  sc.clearRect(0, 0, w, h)
+  sc.setTransform(ctx.getTransform())
+  drawDeco2D(sc, { ...e, opacity: undefined }, s, imgOf)
+  sc.setTransform(1, 0, 0, 1, 0, 0)
+  sc.globalCompositeOperation = 'source-in'
+  sc.fillStyle = color
+  sc.fillRect(0, 0, w, h)
+  sc.globalCompositeOperation = 'source-over'
+  ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  if (e.opacity !== undefined && e.opacity < 1) ctx.globalAlpha *= e.opacity
+  ctx.drawImage(scratch, 0, 0)
+  ctx.restore()
+}
+
+// วาดชิ้นแบบ "ที่ตาเห็นบนงานจริง": ฟอยล์ = รูปทรงชิ้นเป็นสีโลหะ (ไม่มีหมึกข้างใต้), อย่างอื่น = ตามปกติ
+// (Spot UV/ปั๊ม ไม่เปลี่ยนสี — ความมัน/นูนเป็นแผนที่ผิวแยกใน 3D)
+export function drawDecoPreview(
+  ctx: CanvasRenderingContext2D,
+  e: Deco,
+  s: number,
+  imgOf: (src: string) => HTMLImageElement | undefined,
+) {
+  const foil = finishDef(e.finish)?.foil
+  if (foil) drawSilhouette(ctx, e, s, imgOf, foil.base)
+  else drawDeco2D(ctx, e, s, imgOf)
 }
 
 // ย่อ/ขยายลายทั้งชุดรอบจุด (0,0) ของแผ่นด้วยตัวคูณ k — ตำแหน่ง ขนาดกรอบ ตัวอักษร เส้นขอบ มุมโค้ง
@@ -1905,7 +1959,7 @@ export async function renderArtworkAlpha(
 // --- persistence ---
 function parseBase(
   o: Record<string, unknown>,
-): { x: number; y: number; rot: number; hidden?: boolean; locked?: boolean } | null {
+): { x: number; y: number; rot: number; hidden?: boolean; locked?: boolean; finish?: FinishKind } | null {
   // กันเหนียว: พิกัด/มุมที่เพี้ยน (NaN/Infinity/หาย) → 0 แทนที่จะทิ้งทั้งชิ้นหรือปล่อยให้เรนเดอร์พัง
   return {
     x: finiteOr(o.x, 0),
@@ -1920,6 +1974,7 @@ function parseBase(
     ...(Number.isFinite(Number(o.opacity)) && Number(o.opacity) < 1
       ? { opacity: Math.min(1, Math.max(0, Number(o.opacity))) }
       : {}),
+    ...(isFinishKind(o.finish) ? { finish: o.finish } : {}),
   }
 }
 

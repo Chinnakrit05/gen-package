@@ -5,6 +5,7 @@ import { dielineDXFString } from './dxf'
 import { computeGuides } from './guides'
 import { TEMPLATES } from './templates'
 import { getMaterial } from './materials'
+import { FINISHES } from './finish'
 
 const dec = (b: Uint8Array) => new TextDecoder('latin1').decode(b) // 1 อักขระ = 1 ไบต์
 
@@ -230,5 +231,52 @@ describe('pdf: ป้ายบอกขนาดภาษาไทย', () => {
     for (const data of [bits, new Uint8Array(300).fill(0xff), Uint8Array.from({ length: 500 }, (_, i) => (i * 37) % 251), new Uint8Array(0)]) {
       expect(rlDecode(runLengthEncode(data))).toEqual([...data])
     }
+  })
+})
+
+describe('pdf: เพลตงานพิมพ์พิเศษ (ฟอยล์/Spot UV/ปั๊ม)', () => {
+  const d = TEMPLATES[0].generate({ W: 80, D: 50, H: 120, handle: false }, getMaterial('carton-300'))
+  const sq = (x: number, y: number, w: number) => [
+    { x, y },
+    { x: x + w, y },
+    { x: x + w, y: y + w },
+    { x, y: y + w },
+  ]
+  const spots = FINISHES.filter((f) => f.id === 'foil-gold' || f.id === 'spot-uv').map((f, i) => ({
+    name: f.spot,
+    alt: f.alt,
+    loops: [sq(40 + i * 30, 60, 20)],
+  }))
+
+  it('สี spot ต่อชนิด + เลเยอร์ชื่อเดียวกัน + overprint, อยู่เหนือลายใต้เส้นตัด และ xref ถูกต้อง', () => {
+    for (const art of [undefined, { jpeg: fakeJpeg(), w: 4, h: 4 }]) {
+      const s = dec(dielinePDFBytes(d, true, art, null, '#ff0000', null, null, spots))
+      expect(s).toContain('/Separation /Foil_Gold /DeviceCMYK')
+      expect(s).toContain('/Separation /Spot_UV /DeviceCMYK')
+      expect(s).toContain('/Name (Foil_Gold)')
+      expect(s).toContain('/Name (Spot_UV)')
+      expect(s).toContain('/GSop << /Type /ExtGState /OP true /op true /OPM 1 >>')
+      expect((s.match(/\/GSop gs/g) ?? []).length).toBe(2)
+      const plate = s.indexOf('/OC /OCs0')
+      expect(plate).toBeGreaterThan(s.indexOf('/OC /OCf'))
+      if (art) expect(plate).toBeGreaterThan(s.indexOf('/OC /OCa'))
+      expect(plate).toBeLessThan(s.indexOf('/OC /OC1')) // เส้นตัดทับเพลต
+      expect(xrefOffsetsOk(s).detail).toBe('')
+      expect((s.match(/BDC/g) ?? []).length).toBe((s.match(/EMC/g) ?? []).length)
+    }
+  })
+
+  it('อยู่ร่วมกับหมึกขาวได้ (colorspace สองชุดใน dict เดียว)', () => {
+    const s = dec(dielinePDFBytes(d, false, undefined, null, null, [sq(10, 10, 10)], null, spots))
+    expect(s).toMatch(/\/ColorSpace << \/CSW \[\/Separation \/White .*\/CSs0 \[\/Separation \/Foil_Gold .*\/CSs1 \[\/Separation \/Spot_UV /)
+    expect(xrefOffsetsOk(s).detail).toBe('')
+  })
+
+  it('เพลตว่าง/ไม่มี → ไม่มี colorspace/ExtGState เพิ่ม; ชื่อแปลก ๆ ถูกทำให้เป็น name ที่ถูกต้อง', () => {
+    const none = dec(dielinePDFBytes(d, false, undefined, null, null, null, null, [{ name: 'X', alt: [0, 0, 0, 1], loops: [] }]))
+    expect(none).not.toContain('/Separation')
+    expect(none).not.toContain('ExtGState')
+    const odd = dec(dielinePDFBytes(d, false, undefined, null, null, null, null, [{ name: 'Gold Foil/1', alt: [0, 0, 0, 1], loops: [sq(5, 5, 5)] }]))
+    expect(odd).toContain('/Separation /Gold_Foil_1 ')
   })
 })

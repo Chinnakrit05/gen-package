@@ -39,6 +39,16 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ให้สระ/วรรณยุกต์ไทยไม่หลุดจากพยัญชนะ); ไล่สีตัวอักษร `TextEl.grad` = `TEXT_GRAD_PAINT` ในแผน → ตัววาดแทนเป็น gradient
   (ชั้นเบลอใช้สีแรก เพราะเงา canvas เป็นสีเดียว); อักษรโค้งมี transform ต่ออักษร → ไล่สีต่ออักษรผ่าน `runGradGeom`
   (ทั้ง SVG userSpaceOnUse และ canvas ตีความ gradient ตาม transform ของตัวที่วาด); PROJECT_FILE_VERSION 18
+- งานพิมพ์พิเศษต่อชิ้น `BaseEl.finish` (`src/core/finish.ts`, pure: `FINISHES` ฟอยล์ทอง/เงิน/โรสโกลด์, Spot UV, ปั๊มนูน/จม):
+  ไฟล์ส่งออกได้เพลตสี spot แยกต่อชนิด (ชื่อ `def.spot` เช่น Foil_Gold/Spot_UV) — PDF: `dielinePDFBytes` อาร์กิวเมนต์ `spots`
+  (Separation + OCG ชื่อเดียวกัน + ExtGState `/GSop` overprint, อยู่เหนือลายใต้เส้นตัด), SVG: เลเยอร์ต่อชนิด; เส้นเพลต trace จาก alpha
+  ของชิ้น (`renderArtworkAlpha` → `traceWhiteInk(m, 0)`, `finishPlatesForExport` ใน App, แผ่นสติกเกอร์วางซ้ำผ่าน `placePoint`);
+  **ฟอยล์ไม่พิมพ์ CMYK** (`printsCmyk`) → `renderArtworkCanvas(..., 'print')` และเลเยอร์ artwork ของ SVG ข้ามชิ้นฟอยล์;
+  พรีวิว: blueprint `FinishLook` (DielineSVG: ฟอยล์ = mask alpha + ไล่แสงโลหะ, UV = แถบเงา, ปั๊ม = ฟิลเตอร์ไฮไลต์/เงา —
+  สี่เหลี่ยมที่มี mask ต้อง pointerEvents none เพราะ mask ไม่ตัดพื้นที่คลิก), canvas `drawDecoPreview`/`drawSilhouette`
+  (ฟอยล์ = รูปทรงสีโลหะ; ใบสเปก/ภาพย่อ/texture 3D), 3D `useFinishMaps` → roughness/metalness map (G/B) + bump map
+  พิกัดเดียวกับ texture ลาย (configure flipY/repeat ต้องตรงกัน) ใช้ใน Viewer3D/VesselViewer3D/PouchViewer3D ผ่าน `finishMaterialProps`;
+  PROJECT_FILE_VERSION 19
 - `src/core/guides.ts` — `computeGuides(dieline)`: safe = inset ต่อแผง; bleed = polyline ต่อเนื่องจาก "เส้นตัดขอบนอก" จริง (segments kind cut → ทดสอบฝั่งเนื้อวัสดุด้วย outline แผง, ร่องผ่าที่มีเนื้อสองฝั่งตกไป) ไม่ใช่ offset ทีละแผง (แบบเดิมได้เส้นซ้อนกลางแผ่น/หยุดที่รอยต่อกาว)
 - `src/core/softProof.ts` + `src/components/useSoftProof.ts` — soft-proof CMYK บน blueprint (ปุ่ม "ดูสีแบบพิมพ์" ท้ายแถบเครื่องมือซ้ายบน ผ่าน prop `toolsExtra`, state ไม่จำข้ามรอบโดยเจตนา): ส่ง "สำเนา" ลาย/สีพื้น/รูปที่แปลงสีแล้วเข้า DielineSVG เท่านั้น — callback ของ blueprint อ้าง id/ค่าตัวเลข จึงแก้ไขระหว่างพรีวิวได้โดยสีจำลองไม่หลุดลงงาน/ไฟล์ส่งออก; รูปแปลงผ่าน canvas แบบ async + แคช. ใช้ 3D LUT 17³ ใน `src/core/cmykProofLut.ts` = **ไฟล์ที่ถูก generate** โดย `scripts/build-cmyk-lut.py` (Pillow/LittleCMS: sRGB→CMYK→sRGB relative+BPC แล้วแก้ gray balance ให้เทา/ขาว/ดำคงเดิม) — อย่าแก้ตรง ๆ; เปลี่ยน profile โรงพิมพ์ได้ด้วย `python scripts/build-cmyk-lut.py path.icc` (ค่าเริ่มต้น RSWOP.icm ของ Windows). สูตร RGB→CMYK ตรง ๆ ใน pdf.ts ใช้จำลองไม่ได้เพราะแปลงกลับได้ค่าเดิมเป๊ะ
 - `src/core/imageDpi.ts` + `src/components/useImageDpi.ts` — เตือนรูปความละเอียดต่ำ: dpi = พิกเซลจริงของรูป ÷ ขนาดที่วาดจริง (สูตรเดียวกับ `drawImageFit`: cover×cropZoom/contain/stretch; รูปพื้นใช้ `fillImageRect`) — <150 dpi = ป้ายแดงบนรูปใน blueprint (`LowResBadge` สูงคงที่ ~11px บนจอ, ไม่ไปถึงไฟล์ส่งออก) + สรุปในแท็บส่งออก; รูปที่เลือกโชว์ dpi ในแผง (เขียว ≥300 / เหลือง / แดง); ข้าม SVG (เวกเตอร์) และลายจากไลบรารี (preset)
@@ -198,7 +208,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
-  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 18); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 19); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° ได้สันโค้งจาก `rollBeads` ใน fold.ts (ทรงกระบอกบาง รัศมี = ครึ่งระยะสองชั้น) — ตอนนี้ไม่มี template ใช้แล้ว
 - FEFCO 0427 ตามผัง dieline มาตรฐาน: ผนังข้างทบเป็นรอยพับคู่ (ผนัง → สัน กว้าง sp = 3t+0.2 = ผนัง+หู+ชั้นทบ → ชั้นทบ)
   ลิ้นปลายชั้นทบลงช่องบนฐานที่ sp − t/2; ฝาแคบกว่ากล่องข้างละ sp มีปีกข้างคางหมูพับลงด้านในชั้นทบ (stage 4 ก่อนฝาปิด 5),

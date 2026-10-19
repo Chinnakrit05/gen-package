@@ -11,7 +11,7 @@ import type { Dieline, Vec2 } from './core/types'
 import type { AiBoxSpec, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
 import { dimTextSize } from './core/templates/shared'
-import { dielinePDFBytes } from './core/pdf'
+import { dielinePDFBytes, type PdfSpotPlate } from './core/pdf'
 import { renderDimTextMasks } from './core/pdfDimText'
 import { specSheetPDFBytes } from './core/specSheet'
 import {
@@ -70,6 +70,7 @@ import {
 } from './core/stickerContour'
 import { preflightSticker, type PreflightIssue } from './core/stickerPreflight'
 import { WHITE_SPOT, traceWhiteInk, whiteInkPath } from './core/whiteInk'
+import { FINISHES, finishDef, finishGroups, finishSmallText, printsCmyk, FINISH_MIN_TEXT_MM, type FinishKind, type FinishPlate } from './core/finish'
 import { generateSticker, generateStickerContour, STICKER_BASIC_SHAPES, stickerOutline } from './core/templates/sticker'
 import {
   SHEET_GAP,
@@ -955,6 +956,7 @@ function dielineSVGString(
   fillImage: FillImage | null = null,
   sheet: { piece: Dieline; layout: SheetLayout } | null = null,
   white: Vec2[][] | null = null,
+  finishes: FinishPlate[] = [],
 ): string {
   const pathsOf = (kind: 'cut' | 'crease') =>
     d.segments
@@ -996,6 +998,8 @@ function dielineSVGString(
   // สีพื้นอยู่ล่างสุด แล้วลาย แล้วเส้น cut/crease โชว์ทับเป็นไกด์ — ตรงกับที่เห็นบนจอ
   // รูปพื้น (ถ้ามี) มาก่อนสีพื้น — ครอปตามแผงจริงเหมือนกัน
   let fillLayer = fillImage ? fillImageSVGLayer(d, fillImage) : fillSVGLayer(d, fillColor)
+  // ชิ้นฟอยล์ไม่พิมพ์หมึก CMYK — อยู่ในเลเยอร์ Foil_* แทน
+  decos = decos.filter((e) => printsCmyk(e))
   let artLayer = svgArtworkLayer(decos)
   if (sheet) {
     // แผ่นหลายดวง: สีพื้น+ลายของดวงเดียวเก็บใน defs แล้ววางซ้ำตามตำแหน่ง (คลิปกรอบเส้นตัด + เผื่อสี)
@@ -1019,6 +1023,16 @@ function dielineSVGString(
     ? svgLayer(WHITE_SPOT, 'fill="#8fd3f4" fill-rule="evenodd"', `    <path d="${whiteInkPath(white)}"/>`)
     : ''
 
+  // งานพิมพ์พิเศษ: เลเยอร์ละชนิด ชื่อ = ชื่อสี spot (ทึบเต็ม — สีเลเยอร์มีไว้มองเห็น ไม่ใช่สีจริง)
+  const finishLayers = finishes
+    .map((p) => {
+      const def = finishDef(p.kind)
+      return def && p.loops.length
+        ? svgLayer(def.spot, `fill="${def.display}" fill-rule="evenodd"`, `    <path d="${whiteInkPath(p.loops)}"/>`)
+        : ''
+    })
+    .join('')
+
   const w = d.width + pad * 2
   const h = d.height + pad * 2
   return (
@@ -1026,8 +1040,8 @@ function dielineSVGString(
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"` +
     ` xmlns:xlink="http://www.w3.org/1999/xlink"` +
     ` width="${w}mm" height="${h}mm" viewBox="${-pad} ${-pad} ${w} ${h}">\n` +
-    `<!-- สเกลจริง 1:1 หน่วย mm | White = หมึกขาวรอง (ฟิล์มใส) | fill = สีพื้น | artwork = ลายพิมพ์ | cut = เส้นตัด (แดง) | crease = เส้นพับ (เขียวประ) | guides = เผื่อตัด/ปลอดภัย | dims = เส้นบอกขนาด (ห้ามใช้ผลิต) -->\n` +
-    `${whiteLayer}${fillLayer}${artLayer}${cutLayer}${creaseLayer}${guideLayer}${dimLayer}</svg>\n`
+    `<!-- สเกลจริง 1:1 หน่วย mm | White = หมึกขาวรอง (ฟิล์มใส) | fill = สีพื้น | artwork = ลายพิมพ์ (ไม่รวมชิ้นฟอยล์) | Foil_*/Spot_UV/Emboss/Deboss = เพลตงานพิมพ์พิเศษ | cut = เส้นตัด (แดง) | crease = เส้นพับ (เขียวประ) | guides = เผื่อตัด/ปลอดภัย | dims = เส้นบอกขนาด (ห้ามใช้ผลิต) -->\n` +
+    `${whiteLayer}${fillLayer}${artLayer}${finishLayers}${cutLayer}${creaseLayer}${guideLayer}${dimLayer}</svg>\n`
   )
 }
 
@@ -1898,6 +1912,29 @@ export default function App({
     return loops.length ? loops : null
   }
 
+  // เพลตงานพิมพ์พิเศษสำหรับไฟล์ส่งออก: แต่ละชนิด trace จากรูปทรงจริงของชิ้น (alpha) เป็นเส้นปิด
+  // ไม่หด/ขยาย (choke 0) — โรงพิมพ์ปรับ trap ของเพลตเอง; แผ่นหลายดวงวางซ้ำตามตำแหน่งแต่ละดวง
+  const finishPlatesForExport = async (): Promise<FinishPlate[]> => {
+    if (!dieline) return []
+    const groups = finishGroups(decos)
+    if (!groups.length) return []
+    const s = Math.max(4, Math.min(12, Math.sqrt(8e6 / (dieline.width * dieline.height))))
+    const out: FinishPlate[] = []
+    for (const g of groups) {
+      const m = await renderArtworkAlpha(g.items, dieline.width, dieline.height, s, 0)
+      if (!m) continue
+      let loops = traceWhiteInk(m, 0)
+      if (sheetOut) loops = sheetOut.layout.placements.flatMap((pl) => loops.map((l) => l.map((q) => placePoint(pl, q))))
+      if (loops.length) out.push({ kind: g.def.id, loops })
+    }
+    return out
+  }
+  const pdfSpots = (plates: FinishPlate[]): PdfSpotPlate[] =>
+    plates.flatMap((p) => {
+      const def = finishDef(p.kind)
+      return def ? [{ name: def.spot, alt: def.alt, loops: p.loops }] : []
+    })
+
   // กำหนดจำนวนต่อแผ่น: ขนาดดวงถูกล็อกตามจำนวน (ช่อง W/H แก้เองไม่ได้)
   const perSheetLocked = isSticker && !!stickerCut.sheet && !!stickerCut.perSheet
   // ย่อ/ขยายดวง (แผ่นออกแบบ + ลายทั้งชุด) ให้ได้ n ดวงต่อแผ่นที่ขนาดใหญ่สุด — คืน false ถ้าใส่ไม่ครบ
@@ -2503,7 +2540,7 @@ export default function App({
     const white = await whiteInkForExport()
     // แผ่นหลายดวง: ไม่ใส่เส้นเผื่อตัด 3 มม. ของดวงเดียว (ดวงเรียงชิดกันตามกติกาเว้น 2 มม. อยู่แล้ว)
     saveFile(
-      dielineSVGString(exportDieline, showDims, decos, sheetOut ? null : guides, fillColor, fillImage, sheetOut, white),
+      dielineSVGString(exportDieline, showDims, decos, sheetOut ? null : guides, fillColor, fillImage, sheetOut, white, await finishPlatesForExport()),
       'image/svg+xml',
       'svg',
     )
@@ -2525,7 +2562,8 @@ export default function App({
     // รูปพื้น/สีพื้น baked เข้า raster เป็นชั้นล่างสุด — ภาพลายเป็น JPEG ทึบ ถ้าไม่ bake สีพื้นลงไป
     // พื้นขาวของภาพจะทับเลเยอร์สีพื้นเวกเตอร์ข้างใต้จนสีพื้นหายจาก PDF
     const base = fillImage ? { dieline, fillImage } : fillColor ? { dieline, fillColor } : null
-    let canvas = await renderArtworkCanvas(decos, dieline.width, dieline.height, 300, base)
+    // 'print' = เพลต CMYK: ชิ้นฟอยล์ไม่อยู่ในภาพลาย (ไปอยู่เพลต spot ของตัวเอง)
+    let canvas = await renderArtworkCanvas(decos, dieline.width, dieline.height, 300, base, 'print')
     if (canvas && sheetOut) {
       // แผ่นหลายดวง: วางภาพลายดวงเดียวซ้ำตามตำแหน่ง (หมุนตามแผน) คลิปกรอบเส้นตัด + เผื่อสี
       const sc = 300 / 25.4
@@ -2571,6 +2609,7 @@ export default function App({
         showDims
           ? await renderDimTextMasks(exportDieline.dims.map((m) => m.label), dimTextSize(exportDieline.width, exportDieline.height))
           : null,
+        pdfSpots(await finishPlatesForExport()),
       ),
       'application/pdf',
       ext,
@@ -2629,6 +2668,7 @@ export default function App({
       decos,
       fillColor,
       fillImage,
+      finishes: finishGroups(decos).map((g) => `${g.def.nameTh} (${g.items.length} ชิ้น) · เพลต ${g.def.spot}`),
     })
     saveFile(bytes, 'application/pdf', 'spec.pdf')
   }
@@ -4791,6 +4831,48 @@ export default function App({
                 )}
                 {selected && (
                   <div className="layer-quick">
+                    {selected.type !== 'nutrition' && (
+                      <label className="finish-field">
+                        <span>{t('งานพิมพ์พิเศษ', 'Print finish')}</span>
+                        <select
+                          value={selected.finish ?? ''}
+                          disabled={aiBusy}
+                          aria-label={t('งานพิมพ์พิเศษ', 'Print finish')}
+                          onChange={(e) => {
+                            const v = e.target.value as FinishKind | ''
+                            patchSelected((d) => ({ ...d, finish: v || undefined }))
+                          }}
+                        >
+                          <option value="">{t('ไม่มี (พิมพ์สีปกติ)', 'None (regular print)')}</option>
+                          {FINISHES.map((f) => (
+                            <option key={f.id} value={f.id}>
+                              {t(f.nameTh, f.nameEn)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {selected.finish && (
+                      <p className="finish-note">
+                        {finishDef(selected.finish)?.foil
+                          ? t(
+                              'ฟอยล์ปั๊มแทนหมึก — ชิ้นนี้ไม่พิมพ์สี CMYK ใต้ฟอยล์ ไฟล์ส่งออกแยกเป็นเพลต ' + finishDef(selected.finish)?.spot,
+                              'Foil replaces ink — this item is left out of the CMYK print and exported as plate ' + finishDef(selected.finish)?.spot,
+                            )
+                          : t(
+                              'ทำบนงานที่พิมพ์แล้ว — ชิ้นนี้ยังพิมพ์สีตามปกติ + เพลต ' + finishDef(selected.finish)?.spot + ' ในไฟล์ส่งออก',
+                              'Applied on top of the print — this item still prints normally, plus plate ' + finishDef(selected.finish)?.spot,
+                            )}
+                        {selected.type === 'text' && selected.size < FINISH_MIN_TEXT_MM[selected.finish] && (
+                          <b className="finish-small">
+                            {t(
+                              ` ⚠ ตัวอักษรเล็กกว่า ${FINISH_MIN_TEXT_MM[selected.finish]} มม. อาจทำงานนี้ไม่ติด/ไม่คม`,
+                              ` ⚠ Text under ${FINISH_MIN_TEXT_MM[selected.finish]} mm may not take this finish cleanly`,
+                            )}
+                          </b>
+                        )}
+                      </p>
+                    )}
                     <DimField
                       label="ความทึบ (%)"
                       value={Math.round((selected.opacity ?? 1) * 100)}
@@ -5860,6 +5942,37 @@ export default function App({
                       `Downloads contain the whole ${sheetOut.layout.sheet.nameTh} sheet (${sheetOut.layout.sheet.w}×${sheetOut.layout.sheet.h} mm) with ${sheetOut.layout.count} stickers`,
                     )}
                   </p>
+                )}
+                {finishGroups(decos).length > 0 && (
+                  <div className="finish-summary">
+                    <b>{t('งานพิมพ์พิเศษในไฟล์ PDF / AI / SVG', 'Print finishes in the PDF / AI / SVG files')}</b>
+                    <ul>
+                      {finishGroups(decos).map((g) => (
+                        <li key={g.def.id}>
+                          <span className="finish-swatch" style={{ background: g.def.display }} aria-hidden="true" />
+                          {t(g.def.nameTh, g.def.nameEn)} · {g.items.length} {t('ชิ้น', 'item(s)')} →{' '}
+                          {t('เลเยอร์/สี spot', 'layer/spot')} <code>{g.def.spot}</code>
+                        </li>
+                      ))}
+                    </ul>
+                    <span className="hint">
+                      {t(
+                        'เพลตทึบ 100% ตั้ง overprint · ฟอยล์ไม่อยู่ในภาพลาย CMYK · DXF มีแต่เส้นตัด/พับ',
+                        'Plates are 100% solid, set to overprint · foil is left out of the CMYK artwork · DXF has cut/crease only',
+                      )}
+                    </span>
+                    {finishSmallText(decos).length > 0 && (
+                      <span className="finish-small">
+                        {t(
+                          `⚠ ข้อความเล็กเกินสำหรับงานพิเศษ ${finishSmallText(decos).length} ชิ้น: `,
+                          `⚠ ${finishSmallText(decos).length} text item(s) too small for their finish: `,
+                        )}
+                        {finishSmallText(decos)
+                          .map((d) => `${decoLabel(d)} (${Math.round((d as TextEl).size * 10) / 10} / ≥${FINISH_MIN_TEXT_MM[d.finish as FinishKind]} มม.)`)
+                          .join(', ')}
+                      </span>
+                    )}
+                  </div>
                 )}
                 {imgDpi.low.length > 0 && (
                   <div className="lowres-warn" role="alert">
