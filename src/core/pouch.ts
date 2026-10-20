@@ -689,6 +689,7 @@ export function pillowRows(
 // → ครีบซีลบนแบนตั้งตรง กว้างเต็มหน้า. ความยาวตามผิวหน้า (ลำตัว+ไหล่) = H, ครีบ = แถบซีลบนของ dieline
 // → ลายจาก dieline ลงผิว 3D ตามความยาวฟิล์มจริง ไม่ยืด
 export const BRICK_SHOULDER = 0.9 // ความสูงไหล่ ÷ ครึ่งความลึกลำตัว (มาก = ไหล่ชัน)
+export const BRICK_ZIP_BAND = 5 // ความกว้างแถบซิปใน 3D (มม.) — ช่วงแบนใต้ซีลต้องคลุมแถบนี้
 
 export interface BrickShape {
   H: number // ความยาวฟิล์มหน้า (ลำตัว+ไหล่) = ความสูงลำตัวบน dieline
@@ -698,6 +699,7 @@ export interface BrickShape {
   creaseIn: number // รอยจีบกลางลำตัวพับเข้า
   gussetHalf: number // ความยาวครึ่งจีบ (สันข้าง→รอยจีบกลาง) — ฟิล์มไม่ยืด จึงคงที่ทุกระดับ
   baseL: number // ความยาวฟิล์มปลายล่างของแผงที่พับเป็นก้นแบน (ลายส่วนนี้ไปอยู่ใต้ถุง)
+  flatL: number // ความยาวฟิล์มใต้ซีลบนที่ซิปหนีบหน้า-หลังแบนติดกัน (ไม่มีซิป = 0) — ไหล่เริ่มใต้ช่วงนี้
   bodyH: number // ความสูงลำตัวตั้งตรง (ก้นที่ y=0)
   shoulderH: number // ความสูงไหล่ (แนวดิ่ง)
   shoulderL: number // ความยาวไหล่ตามผิวฟิล์ม
@@ -705,18 +707,23 @@ export interface BrickShape {
   topY: number // ความสูงรวมถึงปลายครีบ
 }
 
-export function brickShape(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect'>): BrickShape {
+export function brickShape(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect' | 'zipY'>): BrickShape {
   const a = p.W / 2
   const b0 = p.depth3D
   const finHalf = 0.35 // ซีลเป็นฟิล์มบาง ความหนาไม่เพิ่มตามขนาดถุง
   const creaseIn = Math.min(a * 0.14, b0 * 0.28)
   const drop = b0 - finHalf
-  // ไหล่ไม่กินเกิน 60% ของความยาวหน้า (ถุงเตี้ย-จีบลึก → ไหล่ราบลง)
-  const shoulderH = Math.min(b0 * BRICK_SHOULDER, Math.sqrt(Math.max(0, (p.H * 0.6) ** 2 - drop * drop)))
+  // ซิปล็อกหนีบฟิล์มหน้า-หลังติดกัน: จากซีลบนลงมาถึงใต้แถบซิปถุงต้องแบน แล้วไหล่จึงค่อยกางออก
+  // (เดิมไหล่เริ่มที่ซีลบนเสมอ — ถุงจีบแคบไหล่สั้นกว่าระยะซิป แถบซิปจึงไปคร่อมขอบลำตัวแล้วยื่นออกนอกถุง)
+  const flatL =
+    p.zipY === undefined ? 0 : Math.min(p.H * 0.45, Math.max(0, p.zipY - p.frontRect.y + BRICK_ZIP_BAND / 2 + 1))
+  const rest = p.H - flatL
+  // ไหล่ไม่กินเกิน 60% ของความยาวหน้าที่เหลือ (ถุงเตี้ย-จีบลึก → ไหล่ราบลง)
+  const shoulderH = Math.min(b0 * BRICK_SHOULDER, Math.sqrt(Math.max(0, (rest * 0.6) ** 2 - drop * drop)))
   const shoulderL = Math.hypot(shoulderH, drop)
   // ก้นแบนกินฟิล์มปลายล่างราวครึ่งความลึก (หน้า/หลังพับเข้าหาแนวซีลก้น) — ผนังตั้งจึงเตี้ยกว่า H เท่านี้
-  const baseL = Math.min(b0, p.H * 0.25)
-  const bodyH = Math.max(p.H * 0.15, p.H - shoulderL - baseL) // ไหล่ ≤ 0.6H + ก้น ≤ 0.25H → ปกติไม่ติดขั้นต่ำ
+  const baseL = Math.min(b0, rest * 0.25)
+  const bodyH = Math.max(rest * 0.15, rest - shoulderL - baseL) // ไหล่ ≤ 0.6 + ก้น ≤ 0.25 ของที่เหลือ → ปกติไม่ติดขั้นต่ำ
   const finH = p.frontRect.y
   return {
     H: p.H,
@@ -726,11 +733,12 @@ export function brickShape(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect'>):
     creaseIn,
     gussetHalf: Math.hypot(b0, creaseIn),
     baseL,
+    flatL,
     bodyH,
     shoulderH,
     shoulderL,
     finH,
-    topY: bodyH + shoulderH + finH,
+    topY: bodyH + shoulderH + flatL + finH,
   }
 }
 
@@ -745,21 +753,28 @@ export interface BrickRow {
 }
 
 // แถวโปรไฟล์ก้น → ปลายครีบ พร้อมพิกัด dieline: ลำตัว = ส่วนล่างของแผงหน้า (เว้นปลาย baseL ที่พับเป็นก้น),
-// ไหล่ = ส่วนบน, ครีบ = แถบซีลบน [0..st]
+// ไหล่ = ส่วนบน, ช่วงแบนที่ซิปหนีบ (flatL) = ใต้ซีลบน, ครีบ = แถบซีลบน [0..st]
 export function brickRows(s: BrickShape, st: number, nBody = 12, nShoulder = 16, nFin = 3): BrickRow[] {
   const rows: BrickRow[] = []
+  const top = st + s.flatL // แนวบนสุดของไหล่บน dieline
   for (let i = 0; i <= nBody; i++) {
     const t = i / nBody
-    rows.push({ y: t * s.bodyH, b: s.b0, d: s.creaseIn, dly: st + s.shoulderL + (1 - t) * (s.H - s.shoulderL - s.baseL) })
+    rows.push({ y: t * s.bodyH, b: s.b0, d: s.creaseIn, dly: top + s.shoulderL + (1 - t) * (s.H - s.flatL - s.shoulderL - s.baseL) })
   }
   for (let i = 1; i <= nShoulder; i++) {
     const t = i / nShoulder
     const b = s.b0 + (s.finHalf - s.b0) * t
-    rows.push({ y: s.bodyH + t * s.shoulderH, b, d: brickFold(s, b), dly: st + (1 - t) * s.shoulderL })
+    rows.push({ y: s.bodyH + t * s.shoulderH, b, d: brickFold(s, b), dly: top + (1 - t) * s.shoulderL })
+  }
+  const flatY = s.bodyH + s.shoulderH
+  const nFlat = s.flatL > 0 ? 3 : 0
+  for (let i = 1; i <= nFlat; i++) {
+    const t = i / nFlat
+    rows.push({ y: flatY + t * s.flatL, b: s.finHalf, d: brickFold(s, s.finHalf), dly: st + (1 - t) * s.flatL })
   }
   for (let i = 1; i <= nFin; i++) {
     const t = i / nFin
-    rows.push({ y: s.bodyH + s.shoulderH + t * s.finH, b: s.finHalf, d: brickFold(s, s.finHalf), dly: (1 - t) * st })
+    rows.push({ y: flatY + s.flatL + t * s.finH, b: s.finHalf, d: brickFold(s, s.finHalf), dly: (1 - t) * st })
   }
   return rows
 }
@@ -768,11 +783,14 @@ export function brickRows(s: BrickShape, st: number, nBody = 12, nShoulder = 16,
 // ให้ตรงตำแหน่งบน dieline; tilt = มุมเอียงของผิวจากแนวดิ่ง (ไหล่เอียงไปด้านหลัง)
 export function brickAt(s: BrickShape, dl: number): { y: number; b: number; d: number; tilt: number } {
   const L = s.shoulderL
-  if (dl < L) {
-    const t = Math.max(0, dl) / L // 0 = โคนครีบ, 1 = ขอบบนลำตัว
+  // ช่วงแบนใต้ซีลที่ซิปหนีบ: หน้า-หลังประกบ ตั้งตรง
+  if (dl < s.flatL) return { y: s.bodyH + s.shoulderH + (s.flatL - Math.max(0, dl)), b: s.finHalf, d: brickFold(s, s.finHalf), tilt: 0 }
+  const ds = dl - s.flatL
+  if (ds < L) {
+    const t = ds / L // 0 = ใต้ช่วงแบน (หรือโคนครีบ), 1 = ขอบบนลำตัว
     const b = s.finHalf + (s.b0 - s.finHalf) * t
     return { y: s.bodyH + s.shoulderH * (1 - t), b, d: brickFold(s, b), tilt: Math.atan2(s.b0 - s.finHalf, s.shoulderH) }
   }
-  const t = Math.min(1, (dl - L) / Math.max(1e-6, s.H - L - s.baseL))
+  const t = Math.min(1, (ds - L) / Math.max(1e-6, s.H - s.flatL - L - s.baseL))
   return { y: s.bodyH * (1 - t), b: s.b0, d: s.creaseIn, tilt: 0 }
 }

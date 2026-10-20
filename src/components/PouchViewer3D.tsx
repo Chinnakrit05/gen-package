@@ -221,22 +221,31 @@ export function buildPouchGeometry(pouch: Pouch) {
           }
           previous = start
         }
-        const nSeal = 4
-        for (let i = 1; i <= nSeal; i++) {
-          const length = (i / nSeal) * sealLength
+        // ซีลก้นพับแนบใต้ฐานไปทางหลัง — ฐานแคบกว่าความยาวซีล (จีบข้างแคบ) ส่วนที่เกินพับขึ้นแนบผนังหลังด้านนอก
+        // (เดิมยื่นเลยฐานออกไปเป็นแผ่นแบนนอกถุง)
+        const flatRun = Math.max(1, Math.min(sealLength, rootZ + s.b0 - 0.8))
+        const backZ = -s.b0 - 0.6
+        const lengths = [...new Set([flatRun, ...[1, 2, 3, 4].map((i) => (i / 4) * sealLength)])]
+          .filter((l) => l <= sealLength + 1e-9)
+          .sort((p, q) => p - q)
+        let sealEnd = { y: rootY, z: rootZ }
+        for (const length of lengths) {
           const start = pos.length / 3
+          const up = Math.max(0, length - flatRun)
           for (const fX of us) {
             const [x, z] = boxSectionPt(fX, W, g, s.a, s.finHalf, 0)
-            pos.push(x, rootY - z, rootZ - length)
+            if (up > 0) pos.push(x, rootY + up, backZ + z)
+            else pos.push(x, rootY - z, rootZ - length)
             uv.push(fX / dw, (st + H + length) / dh)
           }
+          sealEnd = up > 0 ? { y: rootY + up, z: backZ } : { y: rootY, z: rootZ - length }
           for (let iu = 0; iu < cols - 1; iu++) {
             idx.push(previous + iu, previous + iu + 1, start + iu,
               previous + iu + 1, start + iu + 1, start + iu)
           }
           previous = start
         }
-        bottomSeal = { end: previous, y: rootY, z: rootZ - sealLength }
+        bottomSeal = { end: previous, y: sealEnd.y, z: sealEnd.z }
       }
       const sideIdxCount = idx.length
       // ปิดปลายครีบ/ก้น (fan) = material 1 สีพื้น (เลี่ยงลายยืดที่ปลายเรียว/ก้นแบน)
