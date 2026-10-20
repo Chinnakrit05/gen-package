@@ -44,13 +44,13 @@ describe('3D ซองข้างจีบ: ซิปอยู่ช่วง�
       const r = brickAt(s, d)
       expect(r.b).toBeCloseTo(s.finHalf, 6) // หน้า-หลังประกบ (ซิปหนีบ)
       expect(r.tilt).toBe(0)
-      expect(r.y).toBeGreaterThan(s.bodyH + s.shoulderH)
+      expect(r.y).toBeGreaterThanOrEqual(s.bodyH)
     }
     // ความยาวผิวหน้ายังเท่ากับ H (UV ไม่ยืด)
-    expect(s.flatL + s.shoulderL + s.bodyH + s.baseL).toBeCloseTo(H, 6)
+    expect(s.flatL + s.wallL + s.baseL).toBeCloseTo(H, 3)
   })
 
-  it('ไม่มีซิป = ไหล่เริ่มที่ซีลบนเหมือนเดิม', () => {
+  it('ไม่มีซิป = ผนังเรียวขึ้นไปถึงซีลบนเลย ไม่มีช่วงแบน', () => {
     const s = brickShape(generatePouch({ W: 100, D: 60, H: 210 }, mat, { style: 'gusset' }))
     expect(s.flatL).toBe(0)
   })

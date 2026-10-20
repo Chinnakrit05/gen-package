@@ -50,14 +50,20 @@ export function getPouchSealColor(
 // จุดบนหน้าตัดทรงกล่องที่ตำแหน่งรอบรูป fX ของแผ่นฟิล์ม [หน้า W | จีบขวา g | หลัง W | จีบซ้าย g]
 // a = ครึ่งกว้าง, b = ครึ่งลึก, d = รอยจีบกลางพับเข้า → คืน [x, z] (หน้าอยู่ +z)
 function boxSectionPt(fX: number, W: number, g: number, a: number, b: number, d: number): [number, number] {
+  // ช่วงที่หน้า-หลังประกบ (b บาง): จีบที่พับแบนอยู่ข้างในห่างผิวหน้าแค่เศษมม. → z-fighting เป็นรอยหยักที่ขอบ
+  // จึงบีบจีบเข้าแกนกลางเร็วขึ้น (ยังต่อกับขอบพับที่ t=0/1 พอดี); ช่วงผนังเปิด และซีลก้นที่จีบไม่พับเข้า (d=0) คงรูปเดิม
+  const gz = (t: number) => {
+    const u = 1 - 2 * t
+    return b < 1.5 && d > 1 ? Math.sign(u) * Math.abs(u) ** 24 : u
+  }
   if (fX <= W) return [-a + 2 * a * (fX / W), b] // หน้า: ซ้าย→ขวา
   if (fX <= W + g) {
     const t = (fX - W) / g // จีบขวา: หน้า→หลัง พับกลางเข้า
-    return [a - d * (1 - Math.abs(1 - 2 * t)), b * (1 - 2 * t)]
+    return [a - d * (1 - Math.abs(1 - 2 * t)), b * gz(t)]
   }
   if (fX <= 2 * W + g) return [a - 2 * a * ((fX - (W + g)) / W), -b] // หลัง: ขวา→ซ้าย
   const t = (fX - (2 * W + g)) / g // จีบซ้าย: หลัง→หน้า พับกลางเข้า
-  return [-a + d * (1 - Math.abs(1 - 2 * t)), -b + 2 * b * t]
+  return [-a + d * (1 - Math.abs(1 - 2 * t)), -b * gz(t)]
 }
 
 // พรีวิวถุงฟิล์มตั้งได้ (doypack): พื้นผิว loft หน้าตัดวงรีเปลี่ยนตามความสูง
@@ -136,19 +142,22 @@ export function buildPouchGeometry(pouch: Pouch) {
       // ตำแหน่งรอบรูปบนแผ่นฟิล์ม (fX) ของแต่ละคอลัมน์
       let us: number[]
       if (style === 'gusset') {
-        // brick แบบถุงกาแฟ: ลำตัวก้นแบน → ไหล่ (จีบพับเข้าเป็นสามเหลี่ยม) → ครีบซีลตั้งตรงเต็มหน้า
+        // brick แบบถุงกาแฟซิปล็อก: หน้าเต็มกว้างถึงขอบบน จีบข้างเปิดเต็มที่ก้นแล้วเรียวปิดขึ้นไปหาปาก (ข้างเป็นหัวกระสุน)
         const s = brickShape(pouch)
-        rows = brickRows(s, st).map((r) => ({ ...r, a: s.a }))
+        // มุมมนซีลบน: หดครึ่งกว้างเฉพาะแถวในรัศมีมุม (ซีลบนสุด ~6 มม.) — ผิวเรียบไม่มีจุดซ้อน ลายบีบแค่ขอบซีล
+        rows = brickRows(s, st).map((r) => ({ ...r, a: s.a - (r.cut ?? 0) }))
         // คอลัมน์ลงตรงสันพับ/รอยจีบพอดี → ขอบแท่งคม ไม่ถูกตัดมุมระหว่างจุด
         us = []
-        const seg = (x0: number, x1: number, n: number) => {
-          for (let i = us.length ? 1 : 0; i <= n; i++) us.push(x0 + ((x1 - x0) * i) / n)
+        // สันข้าง (หน้า↔จีบ, จีบ↔หลัง) = รอยพับจริง: เริ่มช่วงใหม่ด้วยจุดซ้ำ (คอลัมน์กว้างศูนย์) ให้ normal ไม่เฉลี่ยข้ามสัน
+        // ไม่งั้นช่วงซีลบนที่จีบพับแบนกลับเข้าข้างใน normal ที่สันเฉลี่ยกลับทิศ เห็นเป็นเงาดำที่ขอบ
+        const seg = (x0: number, x1: number, n: number, sharp = false) => {
+          for (let i = us.length && !sharp ? 1 : 0; i <= n; i++) us.push(x0 + ((x1 - x0) * i) / n)
         }
         seg(0, W, 16)
-        seg(W, W + g / 2, 6)
+        seg(W, W + g / 2, 6, true)
         seg(W + g / 2, W + g, 6)
-        seg(W + g, 2 * W + g, 16)
-        seg(2 * W + g, 2 * W + 1.5 * g, 6)
+        seg(W + g, 2 * W + g, 16, true)
+        seg(2 * W + g, 2 * W + 1.5 * g, 6, true)
         seg(2 * W + 1.5 * g, wp, 6)
       } else {
         // box: ลำตัวแบนเต็มทั้งความสูง ก้นแบนตั้ง — การบีบซีลเกิดเฉพาะในส่วนครีบ
@@ -175,13 +184,16 @@ export function buildPouchGeometry(pouch: Pouch) {
       const cols = us.length
       for (const r of rows) {
         for (const fX of us) {
-          const [x, z] = boxSectionPt(fX, W, g, r.a, r.b, r.d)
+          const [x, z] = boxSectionPt(fX, W, g, r.a, r.b, Math.min(r.d, r.a))
           pos.push(x, r.y, z)
           uv.push(fX / dw, r.dly / dh)
         }
       }
+      // คอลัมน์ซ้ำที่สันพับ (ตำแหน่ง fX เดียวกัน) = รอยต่อเฉย ๆ ไม่สร้างสามเหลี่ยมกว้างศูนย์ระหว่างกัน
+      const seam = (iu: number) => us[iu + 1] === us[iu]
       for (let iv = 0; iv < rows.length - 1; iv++) {
         for (let iu = 0; iu < cols - 1; iu++) {
+          if (seam(iu)) continue
           const p = iv * cols + iu
           idx.push(p, p + cols, p + 1, p + 1, p + cols, p + cols + 1)
         }
@@ -216,6 +228,7 @@ export function buildPouchGeometry(pouch: Pouch) {
             uv.push(fX / dw, (st + H - s.baseL * (1 - t)) / dh)
           }
           for (let iu = 0; iu < cols - 1; iu++) {
+            if (seam(iu)) continue
             idx.push(previous + iu, previous + iu + 1, start + iu,
               previous + iu + 1, start + iu + 1, start + iu)
           }
@@ -240,6 +253,7 @@ export function buildPouchGeometry(pouch: Pouch) {
           }
           sealEnd = up > 0 ? { y: rootY + up, z: backZ } : { y: rootY, z: rootZ - length }
           for (let iu = 0; iu < cols - 1; iu++) {
+            if (seam(iu)) continue
             idx.push(previous + iu, previous + iu + 1, start + iu,
               previous + iu + 1, start + iu + 1, start + iu)
           }
@@ -254,6 +268,7 @@ export function buildPouchGeometry(pouch: Pouch) {
         pos.push(0, rowY, rowZ)
         uv.push((frontRect.x + W / 2) / dw, 0)
         for (let iu = 0; iu < cols - 1; iu++) {
+          if (seam(iu)) continue
           const p0 = rowBase + iu
           const p1 = rowBase + iu + 1
           if (flip) idx.push(center, p1, p0)

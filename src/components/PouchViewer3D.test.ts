@@ -50,7 +50,8 @@ describe.each([
       const tri = [index.getX(i), index.getX(i + 1), index.getX(i + 2)]
       const print = tri.map((v) => [uv.getX(v) * pouch.label.width, uv.getY(v) * pouch.label.height])
       if (!print.every(([x]) => x >= -0.0001 && x <= size.W + 0.0001)) continue
-      const top = print.every(([, y]) => y <= 20.0001)
+      // ซีลบนช่วงมุมมน (บนสุด cornerR มม.) หดครึ่งกว้างตามส่วนโค้งโดยเจตนา — ตรวจไม่ยืดเฉพาะส่วนตรงของแถบ
+      const top = print.every(([, y]) => y <= 20.0001 && y >= brickShape(pouch).cornerR - 1e-4)
       const bottom = print.every(([, y]) => y >= size.H + 19.9999)
       if (!top && !bottom) continue
       found[top ? 'top' : 'bottom']++

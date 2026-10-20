@@ -684,46 +684,75 @@ export function pillowRows(
   ]
 }
 
-// --- ทรง 3D ซองข้างจีบ (brick) แบบถุงกาแฟ/ถุงข้าวสุญญากาศ ---
-// ลำตัวเหลี่ยมก้นแบน (ตั้งได้; ซีลก้นพับซ่อนใต้ฐาน) → "ไหล่" หน้า-หลังลาดเข้าหากัน จีบข้างพับเข้าเป็นสามเหลี่ยม
-// → ครีบซีลบนแบนตั้งตรง กว้างเต็มหน้า. ความยาวตามผิวหน้า (ลำตัว+ไหล่) = H, ครีบ = แถบซีลบนของ dieline
-// → ลายจาก dieline ลงผิว 3D ตามความยาวฟิล์มจริง ไม่ยืด
-export const BRICK_SHOULDER = 0.9 // ความสูงไหล่ ÷ ครึ่งความลึกลำตัว (มาก = ไหล่ชัน)
+// --- ทรง 3D ซองข้างจีบ (brick) แบบถุงกาแฟซิปล็อก ---
+// หน้า-หลังกว้างเต็มตั้งแต่ก้นถึงขอบบน (ไม่มีไหล่หลังคา) ก้นแบนตั้งได้ (ซีลก้นพับซ่อนใต้ฐาน) จีบข้างเปิดเต็มที่ก้น
+// แล้วค่อย ๆ ปิดเรียวขึ้นไปจนแบนที่ปาก — มองด้านข้างเป็นทรงหัวกระสุน (ผนังตั้งตรงที่ก้น โค้งเข้าหาปาก)
+// ซิปหนีบหน้า-หลังติดกัน: จากใต้แถบซิปถึงซีลบนแบน (`flatL`); ซีลบนมุมมน `BRICK_CORNER_R`
+// ความยาวตามผิวหน้า (ผนังโค้ง + ช่วงแบน + ก้นพับ) = H และแถบซีลบน = ครีบ → ลายจาก dieline ลงผิว 3D ไม่ยืด
+export const BRICK_BULLET = 2.4 // เลขชี้กำลังโปรไฟล์ด้านข้าง 1−u^p (มาก = ป่องเต็มนานแล้วค่อยปิดใกล้ปาก)
 export const BRICK_ZIP_BAND = 5 // ความกว้างแถบซิปใน 3D (มม.) — ช่วงแบนใต้ซีลต้องคลุมแถบนี้
+export const BRICK_CORNER_R = 6 // รัศมีมุมมนของซีลบน (ไดคัทมุมถุง)
+
+interface BrickSample {
+  y: number // ความสูง
+  b: number // ครึ่งความลึก
+  s: number // ความยาวฟิล์มจากก้นผนัง (ตามผิวหน้า)
+  tilt: number // มุมผิวจากแนวดิ่ง (เอียงเข้าหาแกน)
+}
 
 export interface BrickShape {
-  H: number // ความยาวฟิล์มหน้า (ลำตัว+ไหล่) = ความสูงลำตัวบน dieline
-  a: number // ครึ่งกว้าง = W/2 คงที่ตั้งแต่ก้นถึงปลายครีบ
-  b0: number // ครึ่งความลึกลำตัว
-  finHalf: number // ครึ่งความหนาครีบ (ฟิล์มสองชั้นประกบ)
-  creaseIn: number // รอยจีบกลางลำตัวพับเข้า
+  H: number // ความยาวฟิล์มหน้าบน dieline (ผนัง + ช่วงแบน + ก้นพับ)
+  a: number // ครึ่งกว้าง = W/2 คงที่ตั้งแต่ก้นถึงซีลบน
+  b0: number // ครึ่งความลึกที่ก้น (จีบเปิดเต็ม)
+  finHalf: number // ครึ่งความหนาช่วงที่หน้า-หลังประกบ (ฟิล์มสองชั้น)
+  creaseIn: number // รอยจีบพับเข้าที่ก้น
   gussetHalf: number // ความยาวครึ่งจีบ (สันข้าง→รอยจีบกลาง) — ฟิล์มไม่ยืด จึงคงที่ทุกระดับ
   baseL: number // ความยาวฟิล์มปลายล่างของแผงที่พับเป็นก้นแบน (ลายส่วนนี้ไปอยู่ใต้ถุง)
-  flatL: number // ความยาวฟิล์มใต้ซีลบนที่ซิปหนีบหน้า-หลังแบนติดกัน (ไม่มีซิป = 0) — ไหล่เริ่มใต้ช่วงนี้
-  bodyH: number // ความสูงลำตัวตั้งตรง (ก้นที่ y=0)
-  shoulderH: number // ความสูงไหล่ (แนวดิ่ง)
-  shoulderL: number // ความยาวไหล่ตามผิวฟิล์ม
-  finH: number // ความสูงครีบ = แถบซีลบน
-  topY: number // ความสูงรวมถึงปลายครีบ
+  flatL: number // ความยาวฟิล์มใต้ซีลบนที่ซิปหนีบหน้า-หลังแบนติดกัน (ไม่มีซิป = 0)
+  wallL: number // ความยาวฟิล์มของผนังโค้ง (ก้น → เริ่มช่วงแบน)
+  bodyH: number // ความสูงผนังโค้ง (ก้นที่ y=0)
+  finH: number // ความสูงซีลบน = แถบซีลบน
+  cornerR: number // รัศมีมุมมนซีลบน
+  topY: number // ความสูงรวมถึงขอบบน
+  samples: BrickSample[] // โปรไฟล์ผนัง (y ขึ้น, s สะสม) ใช้วาง/สุ่มแถว
 }
+
+const brickB = (b0: number, finHalf: number, u: number) => finHalf + (b0 - finHalf) * (1 - Math.max(0, Math.min(1, u)) ** BRICK_BULLET)
 
 export function brickShape(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect' | 'zipY'>): BrickShape {
   const a = p.W / 2
   const b0 = p.depth3D
   const finHalf = 0.35 // ซีลเป็นฟิล์มบาง ความหนาไม่เพิ่มตามขนาดถุง
   const creaseIn = Math.min(a * 0.14, b0 * 0.28)
-  const drop = b0 - finHalf
-  // ซิปล็อกหนีบฟิล์มหน้า-หลังติดกัน: จากซีลบนลงมาถึงใต้แถบซิปถุงต้องแบน แล้วไหล่จึงค่อยกางออก
-  // (เดิมไหล่เริ่มที่ซีลบนเสมอ — ถุงจีบแคบไหล่สั้นกว่าระยะซิป แถบซิปจึงไปคร่อมขอบลำตัวแล้วยื่นออกนอกถุง)
   const flatL =
     p.zipY === undefined ? 0 : Math.min(p.H * 0.45, Math.max(0, p.zipY - p.frontRect.y + BRICK_ZIP_BAND / 2 + 1))
-  const rest = p.H - flatL
-  // ไหล่ไม่กินเกิน 60% ของความยาวหน้าที่เหลือ (ถุงเตี้ย-จีบลึก → ไหล่ราบลง)
-  const shoulderH = Math.min(b0 * BRICK_SHOULDER, Math.sqrt(Math.max(0, (rest * 0.6) ** 2 - drop * drop)))
-  const shoulderL = Math.hypot(shoulderH, drop)
-  // ก้นแบนกินฟิล์มปลายล่างราวครึ่งความลึก (หน้า/หลังพับเข้าหาแนวซีลก้น) — ผนังตั้งจึงเตี้ยกว่า H เท่านี้
-  const baseL = Math.min(b0, rest * 0.25)
-  const bodyH = Math.max(rest * 0.15, rest - shoulderL - baseL) // ไหล่ ≤ 0.6 + ก้น ≤ 0.25 ของที่เหลือ → ปกติไม่ติดขั้นต่ำ
+  const baseL = Math.min(b0, (p.H - flatL) * 0.25)
+  const wallL = Math.max(1, p.H - flatL - baseL)
+  // หาความสูงผนัง hw ที่ความยาวโค้ง z = b(y/hw) เท่ากับฟิล์ม wallL (ฟิล์มไม่ยืด)
+  const N = 64
+  const build = (hw: number): BrickSample[] => {
+    const out: BrickSample[] = []
+    let s = 0
+    for (let i = 0; i <= N; i++) {
+      const u = i / N
+      const y = u * hw
+      const b = brickB(b0, finHalf, u)
+      if (i) s += Math.hypot(y - out[i - 1].y, b - out[i - 1].b)
+      const slope = ((b0 - finHalf) * BRICK_BULLET * u ** (BRICK_BULLET - 1)) / hw // −db/dy
+      out.push({ y, b, s, tilt: Math.atan(slope) })
+    }
+    return out
+  }
+  let lo = 0
+  let hi = wallL
+  for (let k = 0; k < 40; k++) {
+    const mid = (lo + hi) / 2
+    const t = build(mid)
+    if (t[N].s > wallL) hi = mid
+    else lo = mid
+  }
+  const samples = build(lo)
+  const bodyH = lo
   const finH = p.frontRect.y
   return {
     H: p.H,
@@ -734,11 +763,12 @@ export function brickShape(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect' | 
     gussetHalf: Math.hypot(b0, creaseIn),
     baseL,
     flatL,
+    wallL: samples[N].s,
     bodyH,
-    shoulderH,
-    shoulderL,
     finH,
-    topY: bodyH + shoulderH + flatL + finH,
+    cornerR: Math.max(0, Math.min(BRICK_CORNER_R, finH * 0.6, a * 0.3)),
+    topY: bodyH + flatL + finH,
+    samples,
   }
 }
 
@@ -750,47 +780,57 @@ export interface BrickRow {
   b: number // ครึ่งความลึก
   d: number // รอยจีบพับเข้า
   dly: number // พิกัดแนวตั้งบน dieline (UV)
+  cut?: number // มุมมนซีลบน: ขอบซ้าย-ขวาหดเข้ามาเท่านี้ (มม.) ตามส่วนโค้งวงกลมของมุม
 }
 
-// แถวโปรไฟล์ก้น → ปลายครีบ พร้อมพิกัด dieline: ลำตัว = ส่วนล่างของแผงหน้า (เว้นปลาย baseL ที่พับเป็นก้น),
-// ไหล่ = ส่วนบน, ช่วงแบนที่ซิปหนีบ (flatL) = ใต้ซีลบน, ครีบ = แถบซีลบน [0..st]
-export function brickRows(s: BrickShape, st: number, nBody = 12, nShoulder = 16, nFin = 3): BrickRow[] {
+// แถวโปรไฟล์ก้น → ขอบบน พร้อมพิกัด dieline: ผนัง = ส่วนล่างของแผงหน้า (เว้นปลาย baseL ที่พับเป็นก้น),
+// ช่วงแบนที่ซิปหนีบ (flatL) = ใต้ซีลบน, ซีลบน = แถบซีลบน [0..st] (แถวถี่ช่วงมุมมน)
+export function brickRows(s: BrickShape, st: number, nBody = 40, nFin = 3): BrickRow[] {
   const rows: BrickRow[] = []
-  const top = st + s.flatL // แนวบนสุดของไหล่บน dieline
-  for (let i = 0; i <= nBody; i++) {
-    const t = i / nBody
-    rows.push({ y: t * s.bodyH, b: s.b0, d: s.creaseIn, dly: top + s.shoulderL + (1 - t) * (s.H - s.flatL - s.shoulderL - s.baseL) })
+  const top = st + s.flatL
+  const step = Math.max(1, Math.round((s.samples.length - 1) / nBody))
+  for (let i = 0; i < s.samples.length; i += step) {
+    const q = s.samples[i]
+    rows.push({ y: q.y, b: q.b, d: brickFold(s, q.b), dly: top + (s.wallL - q.s) })
   }
-  for (let i = 1; i <= nShoulder; i++) {
-    const t = i / nShoulder
-    const b = s.b0 + (s.finHalf - s.b0) * t
-    rows.push({ y: s.bodyH + t * s.shoulderH, b, d: brickFold(s, b), dly: top + (1 - t) * s.shoulderL })
-  }
-  const flatY = s.bodyH + s.shoulderH
+  const last = s.samples[s.samples.length - 1]
+  if (rows[rows.length - 1].y < last.y) rows.push({ y: last.y, b: last.b, d: brickFold(s, last.b), dly: top })
+  const flatY = s.bodyH
   const nFlat = s.flatL > 0 ? 3 : 0
+  const dFlat = brickFold(s, s.finHalf)
   for (let i = 1; i <= nFlat; i++) {
     const t = i / nFlat
-    rows.push({ y: flatY + t * s.flatL, b: s.finHalf, d: brickFold(s, s.finHalf), dly: st + (1 - t) * s.flatL })
+    rows.push({ y: flatY + t * s.flatL, b: s.finHalf, d: dFlat, dly: st + (1 - t) * s.flatL })
   }
+  // ซีลบน: ตรงจนถึงโคนมุมมน แล้วแถวถี่ไล่ตามส่วนโค้งวงกลมของมุม
+  const y0 = flatY + s.flatL
+  const r = s.cornerR
+  const straight = Math.max(0, s.finH - r)
   for (let i = 1; i <= nFin; i++) {
     const t = i / nFin
-    rows.push({ y: flatY + s.flatL + t * s.finH, b: s.finHalf, d: brickFold(s, s.finHalf), dly: (1 - t) * st })
+    rows.push({ y: y0 + t * straight, b: s.finHalf, d: dFlat, dly: st - t * straight })
+  }
+  const nArc = r > 0 ? 6 : 0
+  for (let i = 1; i <= nArc; i++) {
+    const t = i / nArc
+    const h = t * r // สูงเหนือโคนมุม
+    rows.push({ y: y0 + straight + h, b: s.finHalf, d: dFlat, dly: st - straight - h, cut: r - Math.sqrt(Math.max(0, r * r - h * h)) })
   }
   return rows
 }
 
-// จุดบนเส้นกึ่งกลางหน้าที่ระยะ dl ตามผิวฟิล์ม นับจากแนวซีลบน (โคนครีบ) ลงมา — ใช้วางซิป/วาล์ว/tin-tie
-// ให้ตรงตำแหน่งบน dieline; tilt = มุมเอียงของผิวจากแนวดิ่ง (ไหล่เอียงไปด้านหลัง)
+// จุดบนเส้นกึ่งกลางหน้าที่ระยะ dl ตามผิวฟิล์ม นับจากแนวซีลบน (โคนซีล) ลงมา — ใช้วางซิป/วาล์ว/tin-tie
+// ให้ตรงตำแหน่งบน dieline; tilt = มุมเอียงของผิวจากแนวดิ่ง (ผนังโค้งเข้าหาปาก)
 export function brickAt(s: BrickShape, dl: number): { y: number; b: number; d: number; tilt: number } {
-  const L = s.shoulderL
-  // ช่วงแบนใต้ซีลที่ซิปหนีบ: หน้า-หลังประกบ ตั้งตรง
-  if (dl < s.flatL) return { y: s.bodyH + s.shoulderH + (s.flatL - Math.max(0, dl)), b: s.finHalf, d: brickFold(s, s.finHalf), tilt: 0 }
-  const ds = dl - s.flatL
-  if (ds < L) {
-    const t = ds / L // 0 = ใต้ช่วงแบน (หรือโคนครีบ), 1 = ขอบบนลำตัว
-    const b = s.finHalf + (s.b0 - s.finHalf) * t
-    return { y: s.bodyH + s.shoulderH * (1 - t), b, d: brickFold(s, b), tilt: Math.atan2(s.b0 - s.finHalf, s.shoulderH) }
-  }
-  const t = Math.min(1, (ds - L) / Math.max(1e-6, s.H - s.flatL - L - s.baseL))
-  return { y: s.bodyH * (1 - t), b: s.b0, d: s.creaseIn, tilt: 0 }
+  if (dl < s.flatL) return { y: s.bodyH + (s.flatL - Math.max(0, dl)), b: s.finHalf, d: brickFold(s, s.finHalf), tilt: 0 }
+  const sw = Math.max(0, Math.min(s.wallL, s.wallL - (dl - s.flatL))) // ระยะจากก้นผนังตามผิว
+  const t = s.samples
+  let i = 1
+  while (i < t.length - 1 && t[i].s < sw) i++
+  const p = t[i - 1]
+  const q = t[i]
+  const f = q.s > p.s ? (sw - p.s) / (q.s - p.s) : 0
+  const y = p.y + (q.y - p.y) * f
+  const b = p.b + (q.b - p.b) * f
+  return { y, b, d: brickFold(s, b), tilt: p.tilt + (q.tilt - p.tilt) * f }
 }

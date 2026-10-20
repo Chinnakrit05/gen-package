@@ -411,7 +411,7 @@ describe('pouch: ถุงมีจุก (spout pouch)', () => {
   })
 })
 
-describe('pouch: ทรง 3D ซองข้างจีบ (brick) แบบถุงกาแฟ', () => {
+describe('pouch: ทรง 3D ซองข้างจีบ (brick) แบบถุงกาแฟซิปล็อก', () => {
   const W = 80,
     D = 50,
     H = 120
@@ -420,54 +420,62 @@ describe('pouch: ทรง 3D ซองข้างจีบ (brick) แบบ�
   const rows = brickRows(s, BRICK_SEAL)
   const top = rows[rows.length - 1]
 
-  it('ก้นแบนเต็มความลึก (ตั้งได้) + กว้างเท่าหน้าตลอดถึงปลายครีบ', () => {
+  it('ก้นแบนเต็มความลึก (ตั้งได้) + กว้างเท่าหน้าตลอดถึงขอบบน (ไม่มีไหล่หลังคา)', () => {
     expect(rows[0].y).toBe(0)
-    expect(rows[0].b).toBe(D / 2)
+    expect(rows[0].b).toBeCloseTo(D / 2, 9)
     expect(s.a).toBe(W / 2)
+    // แถวทั้งหมดใต้มุมมนกว้างเต็ม a (ไม่ตัด)
+    for (const r of rows.filter((q) => q.y < s.topY - s.cornerR - 1e-9)) expect(r.cut ?? 0).toBe(0)
   })
 
-  it('ความยาวผิวหน้า ลำตัว+ไหล่+ก้นพับ = H และครีบสูง = แถบซีลบน (UV ไม่ยืด)', () => {
-    expect(s.bodyH + s.shoulderL + s.baseL).toBeCloseTo(H, 6)
-    expect(s.baseL).toBeGreaterThan(0)
+  it('ความยาวผิวหน้า ผนังโค้ง+ก้นพับ = H และซีลบน = แถบซีลบน (UV ไม่ยืด)', () => {
+    expect(s.wallL + s.flatL + s.baseL).toBeCloseTo(H, 3)
     expect(s.finH).toBe(BRICK_SEAL)
     expect(top.y).toBeCloseTo(s.topY, 6)
-    // dieline แนวตั้ง: ก้น = ขอบล่างแผงหน้า, โคนครีบ = แนวซีลบน, ปลายครีบ = ขอบบนแผ่น
-    // ก้นผนังตั้ง = เหนือขอบล่างแผงหน้า baseL (ส่วนนั้นพับเป็นก้นแบนใต้ถุง)
-    expect(rows[0].dly).toBeCloseTo(BRICK_SEAL + H - s.baseL, 6)
-    expect(rows.find((r) => Math.abs(r.y - (s.bodyH + s.shoulderH)) < 1e-9)?.dly).toBeCloseTo(BRICK_SEAL, 6)
+    expect(rows[0].dly).toBeCloseTo(BRICK_SEAL + H - s.baseL, 3)
     expect(top.dly).toBeCloseTo(0, 6)
     for (let i = 1; i < rows.length; i++) {
-      expect(rows[i].y).toBeGreaterThanOrEqual(rows[i - 1].y)
+      expect(rows[i].y).toBeGreaterThan(rows[i - 1].y)
       expect(rows[i].dly).toBeLessThan(rows[i - 1].dly)
+      // ระยะบน dieline ระหว่างแถว = ระยะตามผิวจริง (หน้าเลื่อนเข้าตามความลึก b)
+      const surf = Math.hypot(rows[i].y - rows[i - 1].y, rows[i].b - rows[i - 1].b)
+      expect(rows[i - 1].dly - rows[i].dly).toBeCloseTo(surf, 1)
     }
   })
 
-  it('ไหล่: หน้า-หลังลาดเข้าเป็นครีบบาง จีบข้างพับเข้า โดยความยาวครึ่งจีบคงที่ (ฟิล์มไม่ยืด)', () => {
-    expect(top.b).toBeLessThan(1) // ครีบ = ฟิล์มสองชั้นประกบ
-    expect(top.d).toBeGreaterThan(D / 2 - 1) // จีบพับเข้าเกือบเต็มครึ่งจีบ
-    expect(top.d).toBeLessThanOrEqual(s.a)
+  it('ด้านข้างทรงหัวกระสุน: ผนังตั้งตรงที่ก้น ความลึกลดลงต่อเนื่องจนแบนที่ปาก จีบพับเข้าโดยครึ่งจีบยาวคงที่', () => {
+    const wall = rows.filter((r) => r.y <= s.bodyH + 1e-9)
+    for (let i = 1; i < wall.length; i++) expect(wall[i].b).toBeLessThanOrEqual(wall[i - 1].b + 1e-9)
+    expect(wall[1].b).toBeGreaterThan(D / 2 - 0.1) // ช่วงแรกยังเต็มเกือบเท่าก้น
+    const mid = brickAt(s, (s.wallL + s.flatL) / 2)
+    expect(mid.b).toBeGreaterThan(D / 2 * 0.6) // ครึ่งทางยังป่อง (ไม่ใช่ลาดตรงเป็นสามเหลี่ยม)
+    expect(top.b).toBeLessThan(1) // ปากแบน: ฟิล์มสองชั้นประกบ
     for (const r of rows) expect(Math.hypot(r.b, r.d)).toBeCloseTo(s.gussetHalf, 6)
-    expect(s.shoulderH).toBeGreaterThan(0)
   })
 
-  it('brickAt วางออปชันตามระยะบน dieline: 0 = โคนครีบ, H = ก้น, บนไหล่เอียง ลำตัวตั้งตรง', () => {
+  it('มุมบนมน: แถวสุดท้ายตัดขอบเท่ารัศมี ไล่ตามส่วนโค้งวงกลม', () => {
+    expect(s.cornerR).toBeGreaterThan(0)
+    expect(top.cut).toBeCloseTo(s.cornerR, 6)
+    for (const r of rows.filter((q) => q.cut)) {
+      const h = r.y - (s.topY - s.cornerR)
+      expect(Math.hypot(s.cornerR - r.cut!, h)).toBeCloseTo(s.cornerR, 6)
+    }
+  })
+
+  it('brickAt วางออปชันตามระยะบน dieline: 0 = โคนซีล, H − ก้นพับ = ก้น, ผนังเอียงเข้าเมื่อใกล้ปาก', () => {
     const fin = brickAt(s, 0)
-    expect(fin.y).toBeCloseTo(s.bodyH + s.shoulderH, 6)
+    expect(fin.y).toBeCloseTo(s.bodyH, 6)
     expect(fin.b).toBeCloseTo(s.finHalf, 6)
-    expect(fin.tilt).toBeGreaterThan(0)
-    const bottom = brickAt(s, H)
+    expect(fin.tilt).toBeGreaterThan(0.3)
+    const bottom = brickAt(s, H - s.baseL)
     expect(bottom.y).toBeCloseTo(0, 6)
-    expect(bottom.b).toBe(s.b0)
-    expect(bottom.tilt).toBe(0)
-    // ระยะตามผิวไหล่ = ระยะบน dieline
-    const mid = brickAt(s, s.shoulderL / 2)
-    expect(Math.hypot(fin.y - mid.y, fin.b - mid.b)).toBeCloseTo(s.shoulderL / 2, 6)
+    expect(bottom.b).toBeCloseTo(s.b0, 6)
+    expect(bottom.tilt).toBeCloseTo(0, 6)
   })
 
-  it('ถุงเตี้ย-จีบลึก: ไหล่ไม่กินเกิน 60% ของหน้า ลำตัวยังมีความสูง', () => {
+  it('ถุงเตี้ย-จีบลึก ยังได้ทรงที่ค่าสมเหตุผล', () => {
     const q = brickShape(generatePouch({ W: 80, D: 80, H: 60 }, mat, { style: 'gusset' }))
-    expect(q.shoulderH).toBeGreaterThanOrEqual(0)
-    expect(q.bodyH).toBeGreaterThanOrEqual(60 * 0.15)
+    expect(q.bodyH).toBeGreaterThan(0)
     expect(q.baseL).toBeLessThanOrEqual(60 * 0.25)
     expect(Number.isFinite(q.topY)).toBe(true)
   })
