@@ -710,7 +710,8 @@ export async function handleBoxSpec(
   // กัน drive-by cross-site POST มาเผาโควต้า API: บังคับ same-origin + JSON เท่านั้น
   // (POST แบบ text/plain เป็น simple request ที่ browser ส่งข้ามเว็บได้โดยไม่มี preflight)
   const origin = req.headers.origin
-  const allowedOrigins = new Set(['http://localhost:5173', 'http://127.0.0.1:5173'])
+  // 5175 = dev server สำรองโหมด local-demo (.claude/launch.json) — ใช้ชุดเดียวกับ box-structure/ai-artwork
+  const allowedOrigins = new Set(['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5175', 'http://127.0.0.1:5175'])
   if (req.headers['sec-fetch-site'] === 'cross-site' || (origin && !allowedOrigins.has(origin))) {
     send(res, 403, { error: 'ต้องเรียกจากหน้าเว็บของแอปเท่านั้น' })
     return

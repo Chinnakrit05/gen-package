@@ -2,6 +2,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { handleBoxSpec } from './server/boxSpec'
 import { handleBoxStructure } from './server/boxStructure'
+import { handleAiArtwork } from './server/aiArtwork'
 import { createViteApiMiddleware } from './server/entrypoints/vite'
 
 // endpoint ฝั่ง server สำหรับ AI แปลง prompt → สเปกกล่อง
@@ -17,6 +18,10 @@ function boxSpecApi(env: Record<string, string | undefined>): Plugin {
       server.middlewares.use('/api/box-structure', (req, res) => {
         void handleBoxStructure(req, res, env)
       })
+      // AI ออกแบบหน้าตาบน template ที่มี (local dev เท่านั้น — ดู server/aiArtwork.ts)
+      server.middlewares.use('/api/ai-artwork', (req, res) => {
+        void handleAiArtwork(req, res, env)
+      })
     },
     configurePreviewServer(server) {
       server.middlewares.use('/api/box-spec', (req, res) => {
@@ -24,6 +29,9 @@ function boxSpecApi(env: Record<string, string | undefined>): Plugin {
       })
       server.middlewares.use('/api/box-structure', (req, res) => {
         void handleBoxStructure(req, res, env)
+      })
+      server.middlewares.use('/api/ai-artwork', (req, res) => {
+        void handleAiArtwork(req, res, env)
       })
     },
   }
