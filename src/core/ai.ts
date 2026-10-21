@@ -72,10 +72,10 @@ export interface ArtworkResponse {
   mock: boolean
 }
 
-export async function requestArtworkPlan(input: ArtworkRequestInput, anthropicApiKey?: string): Promise<ArtworkResponse> {
+export async function requestArtworkPlan(input: ArtworkRequestInput, anthropicApiKey?: string, signal?: AbortSignal): Promise<ArtworkResponse> {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (anthropicApiKey) headers['x-packit-anthropic-api-key'] = anthropicApiKey
-  const res = await fetch('/api/ai-artwork', { method: 'POST', headers, body: JSON.stringify(input) })
+  const res = await fetch('/api/ai-artwork', { method: 'POST', headers, body: JSON.stringify(input), signal })
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null
     throw new Error(body?.error ?? `เกิดข้อผิดพลาด (${res.status})`)

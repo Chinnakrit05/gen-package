@@ -166,8 +166,8 @@ import { useImageDpi } from './components/useImageDpi'
 import { useStickerContour } from './components/useStickerContour'
 import { GOOD_DPI, LOW_DPI, imageDrawMm, pixelsNeeded } from './core/imageDpi'
 import { CMYK_PROOF_PROFILE } from './core/cmykProofLut'
-import { PromptBar } from './components/PromptBar'
-import { AiArtworkPanel, type AiArtworkResult } from './components/AiArtworkPanel'
+import { AiTrigger, CopilotDrawer, type AiArtworkResult } from './components/CopilotDrawer'
+import { CopilotStage, type ArtworkSnapshot } from './components/CopilotStage'
 import { ColorField } from './components/ColorField'
 import { ProjectGallery } from './components/ProjectGallery'
 import {
@@ -1614,12 +1614,30 @@ export default function App({
     backup: false,
   })
   const toggleGroup = (k: keyof typeof groups) => setGroups((g) => ({ ...g, [k]: !g[k] }))
+  // Copilot (แผง AI ด้านขวา) + เวที 3D: ผล artwork แต่ละรอบเก็บเป็น snapshot ให้สลับดูบนเวทีได้
+  const [copilotOpen, setCopilotOpen] = useState(false)
+  const [stageOpen, setStageOpen] = useState(false)
+  const [artSnapshots, setArtSnapshots] = useState<ArtworkSnapshot[]>([])
+  const [artCurrentId, setArtCurrentId] = useState<string | null>(null)
   // AI ออกแบบหน้าตา: ชิ้นงานที่แปลงแล้ววางลงงานในจังหวะเดียว (snapshot undo จับเป็นก้าวเดียว) — สีพื้น/รูปพื้นตั้งเมื่อแผนระบุ
   const applyAiArtwork = (r: AiArtworkResult) => {
-    setDecos((ds) => (r.mode === 'replace' ? r.decos : [...ds, ...r.decos]))
-    if (r.fillColor) setFillColor(r.fillColor)
-    if (r.fillImage) setFillImage(r.fillImage)
-    else if (r.mode === 'replace' && r.fillColor) setFillImage(null)
+    const nextDecos = r.mode === 'replace' ? r.decos : [...decos, ...r.decos]
+    const nextFill = r.fillColor ?? fillColor
+    const nextFillImage = r.fillImage ?? (r.mode === 'replace' && r.fillColor ? null : fillImage)
+    setDecos(nextDecos)
+    setFillColor(nextFill)
+    setFillImage(nextFillImage)
+    const id = `art-${Date.now().toString(36)}`
+    setArtSnapshots((s) => [...s, { id, label: `แบบ ${s.length + 1}`, decos: nextDecos, fillColor: nextFill, fillImage: nextFillImage, explanation: r.explanation, at: Date.now() }])
+    setArtCurrentId(id)
+  }
+  const pickArtSnapshot = (id: string) => {
+    const s = artSnapshots.find((x) => x.id === id)
+    if (!s) return
+    setDecos(s.decos)
+    setFillColor(s.fillColor)
+    setFillImage(s.fillImage)
+    setArtCurrentId(id)
   }
   // แถบปรับแต่งชิ้นที่เลือก ย้ายไปอยู่ "ด้านบน blueprint" แบบ Canva ผ่าน portal (host อยู่ใน main)
   const [decoBar, setDecoBar] = useState<HTMLDivElement | null>(null)
@@ -3386,24 +3404,12 @@ export default function App({
             {t('กำลังโหลดแพ็กเกจ…', 'Loading plan…')}
           </button>
         ))}
-        <PromptBar
-          current={{ template: templateId, materialId, W, D, H, handle }}
-          hasDesign={history.length > 0}
-          onApply={applySpec}
-          onLoadingChange={setAiBusy}
-          allowApiKey={!cloud}
+        <AiTrigger
+          open={copilotOpen}
+          onToggle={() => setCopilotOpen((v) => !v)}
           credits={cloud && entitlementsStatus === 'ready' ? gateCredits : undefined}
           blockedReason={aiBlockedReason}
           onBlocked={() => setPricingOpen(true)}
-          onError={(code) => {
-            // server บอกว่าเครดิตหมด (ฝั่ง client อาจยังเห็นเครดิตค้าง) — ซิงก์สิทธิ์แล้วให้ดูแพ็กเกจ ไม่ใช่ paywall รายแบบ
-            // (Pro ต้องไม่ถูกชวนซื้อรายแบบ)
-            if (code === 'AI_CREDITS_EXHAUSTED' && cloud) {
-              void cloud.refreshEntitlements()
-              setPricingOpen(true)
-            }
-          }}
-          requestSpec={cloud?.requestAiSpec}
         />
         <button
           className="lang-btn"
@@ -4647,19 +4653,12 @@ export default function App({
 
               {!cloud && dieline && (
                 <Group title={t('ออกแบบหน้าตาด้วย AI', 'Design artwork with AI')} open={groups.ai} onToggle={() => toggleGroup('ai')}>
-                  <AiArtworkPanel
-                    dieline={dieline}
-                    kind={kind}
-                    template={templateId}
-                    materialId={materialId}
-                    box={{ W, D, H }}
-                    fillColor={fillColor}
-                    existingCount={decos.length}
-                    disabled={aiBusy || projectBusy}
-                    allowApiKey
-                    onBusy={setAiBusy}
-                    onApply={applyAiArtwork}
-                  />
+                  <p className="hint" style={{ margin: 0 }}>
+                    {t('พิมพ์บอก Copilot (ปุ่ม "สั่ง AI" บน header) แล้วเลือกโหมด "ออกแบบหน้าตาบนแบบนี้" แนบรูปอ้างอิงและโลโก้ได้', 'Open Copilot ("Ask AI" in the header) and choose "Design artwork on this box"; you can attach references and a logo')}
+                  </p>
+                  <button type="button" className="primary" style={{ marginTop: 8 }} disabled={aiBusy || projectBusy} onClick={() => setCopilotOpen(true)}>
+                    {t('เปิด Copilot', 'Open Copilot')}
+                  </button>
                 </Group>
               )}
 
@@ -6380,6 +6379,34 @@ export default function App({
             )}
           </div>
         </main>
+        {copilotOpen && (
+          <CopilotDrawer
+            open
+            onClose={() => setCopilotOpen(false)}
+            current={{ template: templateId, materialId, W, D, H, handle }}
+            hasDesign={history.length > 0}
+            onApplySpec={applySpec}
+            requestSpec={cloud?.requestAiSpec}
+            artwork={!cloud && dieline ? { dieline, kind, template: templateId, materialId, box: { W, D, H }, fillColor, existingCount: decos.length, onApply: applyAiArtwork } : null}
+            lastSnapshotId={artCurrentId}
+            onOpenStage={() => setStageOpen(true)}
+            onLoadingChange={setAiBusy}
+            allowApiKey={!cloud}
+            credits={cloud && entitlementsStatus === 'ready' ? gateCredits : undefined}
+            blockedReason={aiBlockedReason}
+            onBlocked={() => setPricingOpen(true)}
+            onError={(code) => {
+              // server บอกว่าเครดิตหมด (ฝั่ง client อาจยังเห็นเครดิตค้าง) — ซิงก์สิทธิ์แล้วให้ดูแพ็กเกจ ไม่ใช่ paywall รายแบบ
+              if (code === 'AI_CREDITS_EXHAUSTED' && cloud) {
+                void cloud.refreshEntitlements()
+                setPricingOpen(true)
+              }
+            }}
+          />
+        )}
+        {stageOpen && (
+          <CopilotStage onClose={() => setStageOpen(false)} viewer={viewer3D} snapshots={artSnapshots} currentId={artCurrentId} onPick={pickArtSnapshot} />
+        )}
       </div>
       {nameModal && (
         <NameModal

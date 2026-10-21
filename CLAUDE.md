@@ -114,9 +114,14 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   (client คำนวณ) + รูปแนบ ≤ 4 ({ role: reference|logo, assetId }) → วงรอบ `designArtwork` (parse → ตรวจแผงที่ไม่มี → feedback ≤ 2 รอบ;
   ชิ้นที่ผิดถูกตัดตอน parse ถ้ายังเหลือ ≥ 4 ชิ้นไม่เสียรอบแก้) backend api/cli/mock เหมือน box-structure (cli เขียนรูปเป็นไฟล์ tmp ให้เปิดอ่าน);
   `max_tokens` 24k, API timeout 240 วิ, CLI 420 วิ — คำตอบยาวกว่า box-spec มาก จึงยังไม่ขึ้น cloud (ต้องมีงานเบื้องหลัง + เครดิต > 1)
-- UI: `src/components/AiArtworkPanel.tsx` ในแท็บตกแต่ง (กลุ่ม "ออกแบบหน้าตาด้วย AI" ซ่อนเมื่อมี prop `cloud`): prompt + รูปอ้างอิงสไตล์ ≤ 3 +
-  โลโก้ 1 (ส่ง JPEG ย่อให้ AI ดู แต่วางรูปจริงจาก `loadImageFile` ผ่าน `asset:logo`) + แทนที่/เพิ่มต่อลายเดิม; ผลวางผ่าน `applyAiArtwork`
-  ใน App ครั้งเดียว (undo จับเป็นก้าวเดียว); `src/components/refImage.ts` = ตัวย่อรูปใช้ร่วมกับ PromptBar
+- UI = **Copilot** (`src/components/CopilotDrawer.tsx`, แทน PromptBar popover เดิมที่ถูกลบ): ปุ่ม "สั่ง AI" บน header (`AiTrigger`,
+  คง markup เครดิต/blocked เดิม) เปิดแผงด้านขวา 420px ใน `.body` (flex row ถัดจาก `main`) เป็นบทสนทนา 2 โหมดในช่องเดียว —
+  `spec` (box-spec เดิม/cloud `requestAiSpec`) และ `artwork` (เฉพาะเมื่อ App ส่ง `artwork` context = ไม่ใช่ cloud) — prompt + รูปอ้างอิง ≤ 3 +
+  โลโก้ 1 (ส่ง JPEG ย่อให้ AI ดู แต่วางรูปจริงจาก `loadImageFile` ผ่าน `asset:logo`) + แทนที่/เพิ่มต่อลายเดิม + ชิปสไตล์ + ปรับเร็ว;
+  ผลทุกแบบ "วางลงงานทันที" (undo ก้าวเดียว) แล้วเป็นการ์ดในบทสนทนา (ช่อง `[กรอก…]` ดึงมาเตือนด้วย `placeholderFields`); ระหว่างรอ artwork
+  โชว์ลำดับงานตามเวลา (โดยประมาณ — server ไม่สตรีม) + ยกเลิกด้วย AbortController; ผล artwork แต่ละรอบเก็บเป็น `ArtworkSnapshot` ใน App
+  (`artSnapshots`) ให้ **เวที 3D** (`CopilotStage.tsx` โอเวอร์เลย์ z 290 ใช้ `viewer3D` JSX ชุดเดียวกับหน้าหลัก) สลับดู/เลือกแบบ (`pickArtSnapshot`);
+  `src/components/refImage.ts` = ตัวย่อรูปอ้างอิง
 - เทสต์: `src/core/aiArtwork.test.ts` (schema keyword ban, parse, sanitizer, compile), `server/aiArtwork.test.ts` (วงรอบด้วย ask ปลอม, mock)
 
 ## Env / AI backend

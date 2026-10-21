@@ -1,5 +1,5 @@
 // รูปอ้างอิงที่ส่งให้ AI: ย่อฝั่ง client ให้เหลือด้านยาวสุด 1024px เป็น JPEG — payload เล็กและตัด EXIF ทิ้ง
-// ใช้ร่วมกันระหว่าง PromptBar (ออกแบบโครง) และ AiArtworkPanel (ออกแบบหน้าตา)
+// ใช้โดย CopilotDrawer (รูปอ้างอิงสไตล์ + โลโก้ ทั้งโหมดโครงกล่องและออกแบบหน้าตา)
 export interface RefImage {
   base64: string // ไม่มี data: prefix
   preview: string // data URL สำหรับโชว์ thumbnail
