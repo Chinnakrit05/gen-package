@@ -93,7 +93,7 @@ import {
   resolveStickerSheet,
   type SheetLayout,
 } from './core/stickerSheet'
-import { isFreshWork, STANDARD_SIZE, type SizedKind } from './core/standardSize'
+import { isFreshWork, standardSizeFor, VESSEL_STANDARD, type StdSize } from './core/standardSize'
 import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, defaultCapColor, TUBE_CAP_STYLES, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
 import {
   generatePouch,
@@ -2506,11 +2506,9 @@ export default function App({
     if (mat.foldable) play()
   }
 
-  // สลับประเภทงานตอนยังไม่เริ่มงาน → ขนาดมาตรฐานของประเภทนั้น + ล้างทรงขวด/ฉลากที่ตั้งเอง
-  // (มีลาย/รูปพื้นแล้วคงขนาดเดิม ลายจะได้ไม่หลุดตำแหน่ง)
-  const resetKindSize = (k: SizedKind | 'box') => {
-    if (!isFreshWork(decos, fillImage)) return
-    const sz = k === 'box' ? getTemplate(templateId).defaults : STANDARD_SIZE[k]
+  // ตอนยังไม่เริ่มงาน → ตั้งขนาดมาตรฐาน + ล้างทรงขวด/ฉลากที่ตั้งเอง (มีลาย/รูปพื้นแล้วคงขนาดเดิม ลายจะได้ไม่หลุดตำแหน่ง)
+  const applyStdSize = (sz: StdSize | null) => {
+    if (!sz || !isFreshWork(decos, fillImage)) return
     setW(sz.W)
     setD(sz.D)
     setH(sz.H)
@@ -2518,11 +2516,23 @@ export default function App({
     setShoulderH(undefined)
     setLabelBox(undefined)
   }
+  // สลับประเภทงาน: กล่อง = ค่าเริ่มต้นของ template; ภาชนะ = ตามวัสดุที่จะใช้; ถุง = ตามรูปแบบถุงปัจจุบัน
+  const resetKindSize = (k: 'box' | 'vessel' | 'pouch', matId = materialId) =>
+    applyStdSize(k === 'box' ? getTemplate(templateId).defaults : standardSizeFor(matId, pouchStyle, k))
 
   const changeMaterial = (id: string) => {
     cancelAnimationFrame(raf.current)
+    // สลับวัสดุภาชนะ (PET ↔ แก้ว ↔ กระป๋อง) ตอนยังไม่เริ่มงาน → ขนาดมาตรฐานของวัสดุนั้น (ขวด 500 มล. ≠ กระป๋อง 330 มล.)
+    const m = getMaterial(id)
+    if (id !== materialId && kind === 'vessel' && !isTube && packKind(m) === 'vessel' && m.form !== 'tube') {
+      applyStdSize(standardSizeFor(id, pouchStyle, 'vessel'))
+    }
     setMaterialId(id)
-    if (!getMaterial(id).foldable) setFold(1)
+    if (!m.foldable) setFold(1)
+  }
+  const changePouchStyle = (s: PouchStyle) => {
+    if (s !== pouchStyle) applyStdSize(standardSizeFor(materialId, s, 'pouch'))
+    setPouchStyle(s)
   }
 
   const saveFile = (data: BlobPart, mime: string, ext: string) => {
@@ -3476,7 +3486,7 @@ export default function App({
                 onClick={() => {
                   if (kind !== 'vessel' || isTube) {
                     changeMaterial('pet-bottle')
-                    resetKindSize('vessel')
+                    resetKindSize('vessel', 'pet-bottle')
                   }
                 }}
               >
@@ -3515,7 +3525,7 @@ export default function App({
                   if (!isTube) {
                     changeMaterial('tube-laminate')
                     // หลอดครีมทรงชะลูด — ตั้งสัดส่วนเริ่มต้นให้ดูเป็นหลอด ไม่ใช่กระปุก (ตั้งเสมอ แม้มีลายแล้ว)
-                    const sz = STANDARD_SIZE.tube
+                    const sz = VESSEL_STANDARD['tube-laminate']
                     setW(sz.W)
                     setD(sz.D)
                     setH(sz.H)
@@ -3595,7 +3605,7 @@ export default function App({
                     className={`pick-item${pouchStyle === s.id ? ' active' : ''}`}
                     disabled={aiBusy}
                     aria-pressed={pouchStyle === s.id}
-                    onClick={() => setPouchStyle(s.id)}
+                    onClick={() => changePouchStyle(s.id)}
                   >
                     <span className="pick-name">{s.nameTh}</span>
                     <span className="pick-detail">{s.detail}</span>

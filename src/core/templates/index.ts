@@ -48,7 +48,7 @@ export const TEMPLATES: BoxTemplate[] = [
     id: 'mailer',
     nameTh: 'กล่องไปรษณีย์ฝาพับ (≈FEFCO 0426)',
     detail: 'ส่งของออนไลน์ · กล่อง subscription · ชุดของฝากหลายชิ้น',
-    defaults: { W: 200, D: 140, H: 60 },
+    defaults: { W: 200, D: 140, H: 60 }, // กล่องไปรษณีย์ไทยเบอร์ A (14×20×6 ซม.)
     tilt: -Math.PI / 2,
     supportsHandle: true,
     supportsVents: true,
@@ -59,7 +59,7 @@ export const TEMPLATES: BoxTemplate[] = [
     id: 'rollover-mailer',
     nameTh: 'กล่องไปรษณีย์ขอบม้วน (rollover mailer)',
     detail: 'กล่องแบรนด์พรีเมียม · ส่งเสื้อผ้า/เครื่องสำอาง · ของขวัญ',
-    defaults: { W: 220, D: 150, H: 70 },
+    defaults: { W: 250, D: 170, H: 90 }, // กล่องไปรษณีย์ไทยเบอร์ B (17×25×9 ซม.)
     tilt: -Math.PI / 2,
     supportsHandle: false,
     foldDepth: (b, m) => b.H + m.thickness,
@@ -69,7 +69,7 @@ export const TEMPLATES: BoxTemplate[] = [
     id: 'fefco-0427',
     nameTh: 'กล่องไปรษณีย์ฝาล็อก (FEFCO 0427)',
     detail: 'ส่งหนังสือ/ของหนัก · อีคอมเมิร์ซ · สินค้ากันกระแทก',
-    defaults: { W: 200, D: 140, H: 60 },
+    defaults: { W: 200, D: 140, H: 60 }, // กล่องไปรษณีย์ไทยเบอร์ A (14×20×6 ซม.)
     tilt: -Math.PI / 2,
     spin: SPIN_0427,
     supportsHandle: false,
@@ -102,7 +102,7 @@ export const TEMPLATES: BoxTemplate[] = [
     id: 'rsc',
     nameTh: 'กล่องลูกฟูก RSC (FEFCO 0201)',
     detail: 'ลังขนส่งทั่วไป · สต็อก/กระจายสินค้า · สินค้าจำนวนมาก',
-    defaults: { W: 250, D: 200, H: 150 },
+    defaults: { W: 300, D: 200, H: 110 }, // กล่องไปรษณีย์ไทยเบอร์ C (20×30×11 ซม.) — ฝาชน RSC
     tilt: 0,
     supportsHandle: false,
     supportsVents: true,
@@ -206,7 +206,7 @@ export const TEMPLATES: BoxTemplate[] = [
     id: 'card',
     nameTh: 'นามบัตร (business card)',
     detail: 'นามบัตร · การ์ดสะสม · คูปอง/การ์ดเชิญ',
-    defaults: { W: 90, D: 54, H: 54 },
+    defaults: { W: 90, D: 55, H: 55 }, // นามบัตรขนาดที่โรงพิมพ์ไทยใช้ 9×5.5 ซม.
     tilt: 0,
     supportsHandle: false,
     foldDepth: () => 0,
