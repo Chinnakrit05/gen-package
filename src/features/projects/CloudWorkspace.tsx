@@ -4,7 +4,7 @@ import type { CloudProject, ProjectSummary } from '../../../shared/contracts/pro
 import App, { type CloudProjectBridge, type EntitlementsStatus, type ProjectStoreSnapshot } from '../../App'
 import { LoadingStage } from '../../components/LoadingBoundary'
 import { freshProject, type Project } from '../../core/project'
-import { requestCloudBoxSpec } from '../../services/api/ai'
+import { requestCloudArtwork, requestCloudBoxSpec } from '../../services/api/ai'
 import {
   authorizeExport as authorizeRemoteExport,
   createOrder as createRemoteOrder,
@@ -559,6 +559,25 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
         return spec
       } catch (error) {
         // เครดิตหมด: server แนบเครดิตคงเหลือมาใน details → ให้ UI ตรงกับ server ทันที
+        if (error instanceof ApiClientError && typeof error.details?.credits === 'number') {
+          const credits = error.details.credits
+          setEntitlements((current) => (current ? { ...current, credits } : current))
+        }
+        throw error
+      }
+    },
+    // AI ออกแบบหน้าตาบน cloud: สิทธิ์/เครดิตชุดเดียวกับ box-spec (1 เครดิต/แบบ) — คีย์ผู้ใช้ (อาร์กิวเมนต์ที่ 2) ไม่ใช้บน cloud
+    requestAiArtwork: async (input, _anthropicApiKey, signal) => {
+      try {
+        const { credits, ...result } = await requestCloudArtwork(
+          props.apiBaseUrl,
+          tokenRef.current,
+          { ...input, workspaceId: props.workspaceId, operationId: crypto.randomUUID() },
+          signal,
+        )
+        setEntitlements((current) => (current ? { ...current, credits } : current))
+        return result
+      } catch (error) {
         if (error instanceof ApiClientError && typeof error.details?.credits === 'number') {
           const credits = error.details.credits
           setEntitlements((current) => (current ? { ...current, credits } : current))

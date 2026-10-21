@@ -37,6 +37,13 @@ export const aiBoxSpecRequestSchema = z.object({
   image: z.unknown().optional(),
 }).strict()
 
+// body ของ POST /api/v1/ai/artwork — ซอง (workspace/operation) ตรวจที่นี่ ส่วน payload งานศิลป์ (prompt/panels/รูป ≤ 4)
+// ตรวจต่อด้วย parseArtworkRequest ของ aiArtwork.ts (ชุดเดียวกับ legacy /api/ai-artwork)
+export const aiArtworkRequestSchema = z.object({
+  workspaceId: z.uuid(),
+  operationId: z.uuid(),
+}).passthrough()
+
 export const catalogItemResultSchema = z.object({
   kind: orderKindSchema,
   amountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),

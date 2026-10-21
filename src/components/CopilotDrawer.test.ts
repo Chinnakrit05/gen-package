@@ -53,8 +53,8 @@ describe('CopilotDrawer', () => {
     expect(html).toContain('Copilot')
     expect(html).toContain('โครงกล่องจากคำสั่ง')
     expect(html).toContain('ออกแบบหน้าตาบนแบบนี้')
-    // cloud (ไม่มีบริบท artwork): โหมดหน้าตาถูกปิดพร้อมบอกเหตุผล
-    expect(html).toContain('เร็ว ๆ นี้บน cloud')
+    // ไม่มีบริบท artwork (ยังไม่มีแบบในงาน): โหมดหน้าตาถูกปิดพร้อมบอกเหตุผล
+    expect(html).toContain('ต้องมีแบบในงานก่อน')
     expect(html).toContain('สร้างกล่อง')
     expect(html).not.toContain('Anthropic API key')
   })

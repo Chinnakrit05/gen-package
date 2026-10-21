@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { compileArtworkPlan, panelBoxes } from '../src/core/aiArtwork'
 import { getMaterial } from '../src/core/materials'
 import { TEMPLATES } from '../src/core/templates'
-import { buildArtworkUserContent, designArtwork, firstUserMessage, mockArtwork, parseArtworkRequest, type ArtworkRequest } from './aiArtwork'
+import { ArtworkDeadlineError, buildArtworkUserContent, designArtwork, firstUserMessage, mockArtwork, parseArtworkRequest, type ArtworkRequest } from './aiArtwork'
 
 const dieline = TEMPLATES.find((t) => t.id === 'tuck-end')!.generate({ W: 80, D: 50, H: 120, handle: false }, getMaterial('carton-300'))
 const panels = panelBoxes(dieline)
@@ -69,6 +69,21 @@ describe('designArtwork', () => {
       { type: 'shape', panel: 'front', x: 0, y: 100, shape: 'rect', w: 80, h: 20, fill: '#ffffff', stroke: 'none', strokeW: 0 },
     ],
   }
+
+  it('งบเวลาหมดก่อนรอบแก้ → คืนแบบจากรอบแรก (ok=false) แทนการล้มทั้งคำขอ', async () => {
+    let calls = 0
+    const r = await designArtwork(async () => {
+      calls++
+      if (calls === 1) return { raw: { ...goodPlan, elements: [{ ...goodPlan.elements[0], panel: 'lid-top' }] }, model: 'fake' }
+      throw new ArtworkDeadlineError()
+    }, base(), 2)
+    expect(calls).toBe(2)
+    expect(r.ok).toBe(false)
+    expect(r.plan?.name).toBe('ทดสอบ')
+    expect(r.rounds).toHaveLength(1)
+    // ยังไม่มีแบบเลยตอนหมดเวลา → โยนต่อให้ service คืนเครดิต
+    await expect(designArtwork(async () => { throw new ArtworkDeadlineError() }, base(), 2)).rejects.toBeInstanceOf(ArtworkDeadlineError)
+  })
 
   it('ผ่านรอบแรกเมื่อแผนถูกต้อง', async () => {
     const r = await designArtwork(async () => ({ raw: goodPlan, model: 'fake' }), base())

@@ -35,6 +35,7 @@ import {
   resolveClaudeBin,
   send,
   SERVER_FALLBACK_BETA,
+  type ClaudeUsage,
   type RefImage,
 } from './boxSpec'
 import { DEFAULT_AI_MODEL } from './config'
@@ -85,6 +86,31 @@ export interface ArtworkResult {
 }
 
 export type AskArtwork = (messages: Anthropic.MessageParam[]) => Promise<{ raw: unknown; model: string }>
+
+// โมเดลตอบกลับมาแต่ใช้ไม่ได้ (refusal / ถูกตัดที่ max_tokens / ไม่ใช่ JSON) — cloud แยก refusal ไว้บอกผู้ใช้ให้ปรับคำขอ และคืนเครดิต
+export class ArtworkResponseError extends Error {
+  constructor(readonly reason: 'refusal' | 'max_tokens' | 'invalid-json', message: string) {
+    super(message)
+    this.name = 'ArtworkResponseError'
+  }
+}
+
+// หมดงบเวลารวมทุกรอบ (cloud) ก่อนเริ่มรอบถัดไป — designArtwork คืนแบบล่าสุดที่มีแทนการล้มทั้งคำขอ
+export class ArtworkDeadlineError extends Error {
+  constructor() {
+    super('หมดเวลาออกแบบ')
+    this.name = 'ArtworkDeadlineError'
+  }
+}
+
+// รอบหนึ่งต้องมีเวลาอย่างน้อยเท่านี้ ไม่งั้นไม่เริ่ม (เริ่มแล้วโดน timeout = เสียเงินเปล่า)
+const MIN_ROUND_MS = 45_000
+
+export interface ApiAskLimits {
+  timeoutMs: number
+  maxRetries: number
+  deadlineMs?: number // epoch ms: งบเวลารวมทุกรอบ (cloud ต้องจบก่อน maxDuration ของ function)
+}
 
 export const ARTWORK_SYSTEM = `คุณคือนักออกแบบกราฟิกบรรจุภัณฑ์มืออาชีพ หน้าที่คือออกแบบ "หน้าตา" (ลาย ข้อความ โลโก้ ภาพประกอบ) ลงบนแผ่นคลี่ของบรรจุภัณฑ์
 ที่ลูกค้าเลือกไว้แล้ว โดยเขียนเป็น JSON ตาม schema ที่ระบบกำหนด (แผนงานศิลป์) — คุณไม่ต้องรู้ผังแผ่นคลี่ ระบบให้ "รายการแผง" พร้อมขนาดและบทบาท
@@ -168,7 +194,14 @@ export async function designArtwork(ask: AskArtwork, req: ArtworkRequest, maxRou
   let model = ''
   let last: { plan: ArtworkPlan; issues: ArtIssue[] } | null = null
   for (let attempt = 1; attempt <= maxRounds; attempt++) {
-    const answer = await ask(messages)
+    let answer: Awaited<ReturnType<AskArtwork>>
+    try {
+      answer = await ask(messages)
+    } catch (error) {
+      // งบเวลาหมดก่อนรอบแก้ แต่มีแบบจากรอบก่อนอยู่แล้ว → ส่งแบบนั้นไป (client ตัดชิ้นที่ผิดออกตอน compile) ดีกว่าล้มทั้งคำขอ
+      if (error instanceof ArtworkDeadlineError && last) break
+      throw error
+    }
     model = answer.model
     const parsed = parseArtworkPlan(answer.raw)
     let issues: ArtIssue[]
@@ -201,10 +234,22 @@ function artworkModelOptions(model: string) {
   return { effort: base.effort ? ('medium' as const) : undefined, serverFallback: base.serverFallback }
 }
 
-export function apiAsk(apiKey: string, model: string): AskArtwork {
-  const client = new Anthropic({ apiKey, timeout: 240_000, maxRetries: 1 })
+// ตัวเรียก Claude API ที่สะสม usage ทุกรอบ (cloud เก็บลง ai_requests) และเคารพงบเวลารวม: แต่ละรอบรอไม่เกินเวลาที่เหลือ
+export function apiAskWithUsage(
+  apiKey: string,
+  model: string,
+  limits: ApiAskLimits = { timeoutMs: 240_000, maxRetries: 1 },
+): { ask: AskArtwork; usage: () => ClaudeUsage | null } {
+  const client = new Anthropic({ apiKey, timeout: limits.timeoutMs, maxRetries: limits.maxRetries })
   const options = artworkModelOptions(model)
-  return async (messages) => {
+  let total: ClaudeUsage | null = null
+  const ask: AskArtwork = async (messages) => {
+    let timeout = limits.timeoutMs
+    if (limits.deadlineMs !== undefined) {
+      const remaining = limits.deadlineMs - Date.now()
+      if (remaining < MIN_ROUND_MS) throw new ArtworkDeadlineError()
+      timeout = Math.min(timeout, remaining)
+    }
     const params = {
       model,
       max_tokens: MAX_TOKENS,
@@ -216,18 +261,37 @@ export function apiAsk(apiKey: string, model: string): AskArtwork {
       },
     }
     const msg = options.serverFallback
-      ? await client.beta.messages.create({
-          ...params,
-          betas: [SERVER_FALLBACK_BETA],
-          // @ts-expect-error fallbacks: "default" ยังไม่อยู่ใน type ของ SDK 0.111 (ดู boxSpec.ts)
-          fallbacks: 'default',
-        })
-      : await client.messages.create(params)
-    if (msg.stop_reason === 'refusal') throw new Error('โมเดลปฏิเสธคำขอ ลองปรับคำอธิบายหรือรูปที่แนบ')
-    if (msg.stop_reason === 'max_tokens') throw new Error('แบบที่ออกแบบยาวเกินไป ถูกตัดก่อนจบ — ลองขอให้เรียบง่ายลง')
+      ? await client.beta.messages.create(
+          {
+            ...params,
+            betas: [SERVER_FALLBACK_BETA],
+            // @ts-expect-error fallbacks: "default" ยังไม่อยู่ใน type ของ SDK 0.111 (ดู boxSpec.ts)
+            fallbacks: 'default',
+          },
+          { timeout },
+        )
+      : await client.messages.create(params, { timeout })
+    const u = msg.usage
+    total = {
+      inputTokens: (total?.inputTokens ?? 0) + u.input_tokens,
+      outputTokens: (total?.outputTokens ?? 0) + u.output_tokens,
+      cacheReadTokens: (total?.cacheReadTokens ?? 0) + (u.cache_read_input_tokens ?? 0),
+      cacheCreationTokens: (total?.cacheCreationTokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
+    }
+    if (msg.stop_reason === 'refusal') throw new ArtworkResponseError('refusal', 'โมเดลปฏิเสธคำขอ ลองปรับคำอธิบายหรือรูปที่แนบ')
+    if (msg.stop_reason === 'max_tokens') throw new ArtworkResponseError('max_tokens', 'แบบที่ออกแบบยาวเกินไป ถูกตัดก่อนจบ — ลองขอให้เรียบง่ายลง')
     const text = msg.content.map((b) => (b.type === 'text' ? b.text : '')).join('')
-    return { raw: JSON.parse(text) as unknown, model: msg.model }
+    try {
+      return { raw: JSON.parse(text) as unknown, model: msg.model }
+    } catch {
+      throw new ArtworkResponseError('invalid-json', 'โมเดลตอบกลับมาไม่ใช่ JSON ลองใหม่อีกครั้ง')
+    }
   }
+  return { ask, usage: () => total }
+}
+
+export function apiAsk(apiKey: string, model: string): AskArtwork {
+  return apiAskWithUsage(apiKey, model).ask
 }
 
 const CLI_INSTRUCTION =

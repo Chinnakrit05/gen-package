@@ -82,6 +82,8 @@ const pendingOrder: Order = {
   paidAt: null,
 }
 const aiModel = 'claude-test-model'
+// เทสต์ box-spec ไม่แตะ artwork — เติมเมธอดที่ interface บังคับให้ครบด้วยตัวที่ห้ามถูกเรียก
+const noArtwork = { generateArtwork: async () => { throw new Error('must not be called') } }
 const aiUsage = { inputTokens: 1200, outputTokens: 340, cacheReadTokens: 0, cacheCreationTokens: 0 }
 // รูปอ้างอิงขั้นต่ำที่ parseImage ยอมรับ (base64 ≥ 100 ตัวอักษร)
 const refImage = { data: 'A'.repeat(120), mediaType: 'image/png' }
@@ -320,7 +322,7 @@ describe('API router', () => {
   it('refuses cloud AI requests when the server has no AI key', async () => {
     let providerCalled = false
     const configuredRouter = billingRouter(billingRepositoryStub(), {
-      aiService: {
+      aiService: { ...noArtwork,
         generateBoxSpec: async () => {
           providerCalled = true
           throw new Error('must not be called')
@@ -348,7 +350,7 @@ describe('API router', () => {
       },
     }), {
       ai: { anthropicApiKey: serverAiKey, model: 'm' },
-      aiService: {
+      aiService: { ...noArtwork,
         async generateBoxSpec(apiKey, input) {
           calls.push(['generate', apiKey, input])
           return { spec: boxSpec, model: aiModel, usage: aiUsage }
@@ -389,7 +391,7 @@ describe('API router', () => {
       },
     }), {
       ai: { anthropicApiKey: serverAiKey, model: 'm' },
-      aiService: {
+      aiService: { ...noArtwork,
         generateBoxSpec: async () => {
           // ข้อความต้นทางที่บังเอิญมีคีย์ติดมา ต้องไม่หลุดไปทั้ง response และ log
           throw new AiProviderError(kind, new Error(`upstream ${kind} for key ${serverAiKey}`))
@@ -432,7 +434,7 @@ describe('API router', () => {
       },
     }), {
       ai: { anthropicApiKey: serverAiKey, model: 'm' },
-      aiService: { generateBoxSpec: async () => ({ spec: boxSpec, model: aiModel, usage: null }) },
+      aiService: { ...noArtwork, generateBoxSpec: async () => ({ spec: boxSpec, model: aiModel, usage: null }) },
     })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const target = response()
@@ -463,7 +465,7 @@ describe('API router', () => {
       },
     }), {
       ai: { anthropicApiKey: serverAiKey, model: 'm' },
-      aiService: {
+      aiService: { ...noArtwork,
         generateBoxSpec: async () => {
           providerCalled = true
           throw new Error('must not be called')
@@ -492,7 +494,7 @@ describe('API router', () => {
       },
     }), {
       ai: { anthropicApiKey: serverAiKey, model: 'm' },
-      aiService: {
+      aiService: { ...noArtwork,
         generateBoxSpec: async () => {
           providerCalled = true
           throw new Error('must not be called')
@@ -519,7 +521,7 @@ describe('API router', () => {
       },
     }), {
       ai: { anthropicApiKey: serverAiKey, model: 'm' },
-      aiService: { generateBoxSpec: async () => { throw new Error('must not be called') } },
+      aiService: { ...noArtwork, generateBoxSpec: async () => { throw new Error('must not be called') } },
     })
 
     for (const body of [
@@ -847,7 +849,7 @@ describe('API router', () => {
     }), {
       appEnv: 'staging',
       ai: { anthropicApiKey: serverAiKey, model: 'm' },
-      aiService: {
+      aiService: { ...noArtwork,
         async generateBoxSpec() {
           calls.push(['generate'])
           return { spec: boxSpec, model: aiModel, usage: aiUsage }
@@ -1098,5 +1100,124 @@ describe('API router', () => {
       input: expect.objectContaining({ workspaceId, operationId, declaredSize: 100 }),
     })])
     expect(target.readBody()).toMatchObject({ data: { asset: { id: assetId, state: 'pending' } } })
+  })
+})
+
+// --- AI ออกแบบหน้าตาบน cloud (POST /api/v1/ai/artwork) — สิทธิ์/เครดิต/รหัสข้อผิดพลาดชุดเดียวกับ box-spec ---
+const artworkBody = {
+  workspaceId,
+  operationId,
+  prompt: 'ชาดอกอัญชัน โทนคราฟท์อบอุ่น ชื่อแบรนด์ Mae Fah',
+  kind: 'box',
+  template: 'tuck-end',
+  materialId: 'carton-300',
+  box: { W: 80, D: 50, H: 120 },
+  sheet: { w: 300, h: 250 },
+  panels: [{ id: 'front', x0: 0, y0: 0, x1: 80, y1: 120, role: 'หน้า', print: true }],
+  fillColor: '#123456',
+  existing: 0,
+  images: [{ data: 'A'.repeat(200), mediaType: 'image/jpeg', role: 'logo', assetId: 'logo' }],
+}
+const artworkResult = {
+  ok: true,
+  plan: { name: 'แบบทดสอบ', fillColor: '#123456', background: null, explanation: 'ok', elements: [] },
+  issues: [],
+  rounds: [{ attempt: 1, plan: null, issues: [], ok: true }],
+  model: aiModel,
+  mock: false,
+}
+const artworkUsage = { inputTokens: 1200, outputTokens: 6400, cacheReadTokens: 0, cacheCreationTokens: 0 }
+
+function artworkRequest(body: unknown, authorization: string | null = 'Bearer verified-token'): HttpRequest {
+  return {
+    method: 'POST',
+    url: '/api/v1/ai/artwork',
+    headers: { ...(authorization ? { authorization } : {}), 'content-type': 'application/json' },
+    body,
+  }
+}
+
+describe('API router — AI artwork', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('reserves a credit, passes the parsed artwork request to the provider with the server key, settles with usage and returns the plan with the balance', async () => {
+    const calls: unknown[] = []
+    const configuredRouter = billingRouter(billingRepositoryStub({
+      reserveAiCredit: async (resolvedActor, resolvedWorkspaceId, resolvedOperationId) => {
+        calls.push(['reserve', resolvedActor.userId, resolvedWorkspaceId, resolvedOperationId])
+        return { requestId: aiRequestId, credits: 4 }
+      },
+      settleAiRequest: async (_actor, requestId, outcome, usage) => {
+        calls.push(['settle', requestId, outcome, usage])
+        return { credits: 4 }
+      },
+    }), {
+      ai: { anthropicApiKey: serverAiKey, model: 'm' },
+      aiService: {
+        generateBoxSpec: async () => { throw new Error('must not be called') },
+        generateArtwork: async (apiKey, input) => {
+          calls.push(['provider', apiKey])
+          expect(input.prompt).toBe(artworkBody.prompt)
+          expect(input.panels).toEqual([{ id: 'front', x0: 0, y0: 0, x1: 80, y1: 120, w: 80, h: 120, role: 'หน้า', print: true }])
+          expect(input.images).toHaveLength(1)
+          expect(input.images[0]).toMatchObject({ role: 'logo', assetId: 'logo', mediaType: 'image/jpeg' })
+          return { result: artworkResult, model: aiModel, usage: artworkUsage }
+        },
+      },
+    })
+    const target = response()
+    await configuredRouter(artworkRequest(artworkBody), target.res)
+
+    expect(target.res.statusCode).toBe(200)
+    expect(target.readBody()).toMatchObject({ data: { ok: true, model: aiModel, mock: false, credits: 4, plan: { name: 'แบบทดสอบ' } } })
+    expect(calls).toEqual([
+      ['reserve', actor.userId, workspaceId, operationId],
+      ['provider', serverAiKey],
+      ['settle', aiRequestId, 'succeeded', { hasImage: true, model: aiModel, ...artworkUsage }],
+    ])
+  })
+
+  it('refunds the credit and answers 502 when the artwork provider fails', async () => {
+    const calls: unknown[] = []
+    const logSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const configuredRouter = billingRouter(billingRepositoryStub({
+      reserveAiCredit: async () => ({ requestId: aiRequestId, credits: 3 }),
+      settleAiRequest: async (_actor, requestId, outcome, usage) => {
+        calls.push(['settle', requestId, outcome, usage])
+        return { credits: 4 }
+      },
+    }), {
+      ai: { anthropicApiKey: serverAiKey, model: 'm' },
+      aiService: {
+        generateBoxSpec: async () => { throw new Error('must not be called') },
+        generateArtwork: async () => { throw new AiProviderError('provider', new Error('upstream exploded')) },
+      },
+    })
+    const target = response()
+    await configuredRouter(artworkRequest({ ...artworkBody, images: [] }), target.res)
+
+    expect(target.res.statusCode).toBe(502)
+    expect(target.readBody()).toMatchObject({ error: { code: 'AI_PROVIDER_UNAVAILABLE' } })
+    expect(calls).toEqual([['settle', aiRequestId, 'failed', { hasImage: false }]])
+    expect(logLines(logSpy)).toEqual([
+      expect.objectContaining({ event: 'ai_provider_error', route: 'POST /api/v1/ai/artwork', status: 502, kind: 'provider' }),
+    ])
+  })
+
+  it('rejects an invalid artwork payload with 422 before reserving a credit', async () => {
+    const configuredRouter = billingRouter(billingRepositoryStub(), {
+      ai: { anthropicApiKey: serverAiKey, model: 'm' },
+      aiService: {
+        generateBoxSpec: async () => { throw new Error('must not be called') },
+        generateArtwork: async () => { throw new Error('must not be called') },
+      },
+    })
+    const target = response()
+    await configuredRouter(artworkRequest({ ...artworkBody, panels: [] }), target.res)
+
+    expect(target.res.statusCode).toBe(422)
+    expect(target.readBody()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } })
   })
 })

@@ -144,6 +144,9 @@ function buildBridge(state: FakeState, flagsRef: { current: Flags }, bump: () =>
     resolveConflict: async (current) => current,
     retrySave: async () => {},
     subscribeRemoteProject: () => () => {},
+    requestAiArtwork: async () => {
+      throw new ApiClientError(503, 'CONFIGURATION_ERROR', 'หน้าทดสอบ paywall ไม่มี AI ออกแบบหน้าตา')
+    },
     requestAiSpec: async (_prompt, current) => {
       await delay(350)
       online()

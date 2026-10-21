@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiClientError } from './client'
-import { requestCloudBoxSpec } from './ai'
+import { requestCloudArtwork, requestCloudBoxSpec } from './ai'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -75,5 +75,37 @@ describe('cloud AI API client', () => {
     }).catch((error: unknown) => error)
     expect(failure).toBeInstanceOf(ApiClientError)
     expect(failure).toMatchObject({ status: 402, code: 'AI_CREDITS_EXHAUSTED', details: { credits: 0 } })
+  })
+
+  it('posts the artwork request with workspace/operation ids to /ai/artwork and forwards the abort signal', async () => {
+    const operationId = crypto.randomUUID()
+    const controller = new AbortController()
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      const headers = new Headers(init.headers)
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>
+      expect(url).toBe('/api/v1/ai/artwork')
+      expect(headers.get('authorization')).toBe('Bearer access-token')
+      expect(init.signal).toBe(controller.signal)
+      expect(body).toMatchObject({ workspaceId: 'space', operationId, prompt: 'ลายดอกไม้', panels: [{ id: 'front', w: 80 }], images: [] })
+      return new Response(JSON.stringify({
+        data: { ok: true, plan: { name: 'x', elements: [] }, issues: [], rounds: [], model: 'm', mock: false, credits: 3 },
+        requestId: crypto.randomUUID(),
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }))
+
+    await expect(requestCloudArtwork('/api/v1', 'access-token', {
+      workspaceId: 'space',
+      operationId,
+      prompt: 'ลายดอกไม้',
+      kind: 'box',
+      template: 'tuck-end',
+      materialId: 'carton-300',
+      box: { W: 80, D: 50, H: 120 },
+      sheet: { w: 300, h: 250 },
+      panels: [{ id: 'front', x0: 0, y0: 0, x1: 80, y1: 120, w: 80, h: 120, role: 'หน้า', print: true }],
+      fillColor: null,
+      existing: 0,
+      images: [],
+    }, controller.signal)).resolves.toMatchObject({ ok: true, credits: 3 })
   })
 })

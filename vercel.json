@@ -7,7 +7,7 @@
   ],
   "functions": {
     "api/backend.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   }
 }
