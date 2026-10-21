@@ -2997,6 +2997,52 @@ aside .art-actions .file-pick:only-child {
 .modal-actions button {
   flex: 1;
 }
+/* กล่องเตือนก่อนสลับประเภทงาน/รูปแบบ (SwitchGuardModal): กรอบ/หัวข้อสีอันตราย รายการที่จะหายเด่น ปุ่มยืนยันสีแดง */
+.modal.modal-danger {
+  width: min(440px, 92vw);
+  border-color: var(--danger);
+  box-shadow: 0 20px 50px rgba(214, 73, 79, 0.25);
+}
+.modal-danger h3 {
+  color: var(--danger);
+  font-size: 16px;
+}
+.switch-guard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.switch-guard-body p {
+  margin: 0;
+}
+.switch-guard-list {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 13px;
+}
+.switch-guard-q {
+  font-weight: 700;
+}
+.switch-guard-hint {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.modal-actions button.danger {
+  background: var(--danger);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 700;
+}
+.modal-actions button.danger:hover {
+  background: #b93a40;
+  border-color: transparent;
+  color: #fff;
+}
 .migration-modal {
   width: min(560px, 92vw);
   max-height: min(720px, 88vh);
