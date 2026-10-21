@@ -167,6 +167,7 @@ import { useStickerContour } from './components/useStickerContour'
 import { GOOD_DPI, LOW_DPI, imageDrawMm, pixelsNeeded } from './core/imageDpi'
 import { CMYK_PROOF_PROFILE } from './core/cmykProofLut'
 import { PromptBar } from './components/PromptBar'
+import { AiArtworkPanel, type AiArtworkResult } from './components/AiArtworkPanel'
 import { ColorField } from './components/ColorField'
 import { ProjectGallery } from './components/ProjectGallery'
 import {
@@ -1602,6 +1603,7 @@ export default function App({
     size: true,
     // หน้าตกแต่ง (bg เปิดไว้ — เป็นโมดูลลอยแล้ว)
     bg: true,
+    ai: true,
     add: true,
     lib: false,
     layers: true,
@@ -1612,6 +1614,13 @@ export default function App({
     backup: false,
   })
   const toggleGroup = (k: keyof typeof groups) => setGroups((g) => ({ ...g, [k]: !g[k] }))
+  // AI ออกแบบหน้าตา: ชิ้นงานที่แปลงแล้ววางลงงานในจังหวะเดียว (snapshot undo จับเป็นก้าวเดียว) — สีพื้น/รูปพื้นตั้งเมื่อแผนระบุ
+  const applyAiArtwork = (r: AiArtworkResult) => {
+    setDecos((ds) => (r.mode === 'replace' ? r.decos : [...ds, ...r.decos]))
+    if (r.fillColor) setFillColor(r.fillColor)
+    if (r.fillImage) setFillImage(r.fillImage)
+    else if (r.mode === 'replace' && r.fillColor) setFillImage(null)
+  }
   // แถบปรับแต่งชิ้นที่เลือก ย้ายไปอยู่ "ด้านบน blueprint" แบบ Canva ผ่าน portal (host อยู่ใน main)
   const [decoBar, setDecoBar] = useState<HTMLDivElement | null>(null)
   const [decoMore, setDecoMore] = useState(false) // กาง/ยุบเครื่องมือขั้นสูงในแถบบน (สร้างสำเนาตาราง ฯลฯ)
@@ -4634,6 +4643,24 @@ export default function App({
                 </p>
               </Group>,
                 bgFloatEl,
+              )}
+
+              {!cloud && dieline && (
+                <Group title={t('ออกแบบหน้าตาด้วย AI', 'Design artwork with AI')} open={groups.ai} onToggle={() => toggleGroup('ai')}>
+                  <AiArtworkPanel
+                    dieline={dieline}
+                    kind={kind}
+                    template={templateId}
+                    materialId={materialId}
+                    box={{ W, D, H }}
+                    fillColor={fillColor}
+                    existingCount={decos.length}
+                    disabled={aiBusy || projectBusy}
+                    allowApiKey
+                    onBusy={setAiBusy}
+                    onApply={applyAiArtwork}
+                  />
+                </Group>
               )}
 
               <Group title={t('เพิ่มองค์ประกอบ', 'Add element')} open={groups.add} onToggle={() => toggleGroup('add')}>

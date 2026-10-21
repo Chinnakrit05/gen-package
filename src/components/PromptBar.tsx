@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { requestBoxSpec, type AiBoxSpec, type CurrentSpec } from '../core/ai'
 import { useT } from '../i18n'
 import { ApiClientError } from '../services/api/client'
+import { toRefImage, type RefImage } from './refImage'
 
 // prompt ที่ส่ง AI เป็นไทยเสมอ (system prompt ฝั่ง server เป็นไทย) — แปลเฉพาะป้ายบนปุ่ม
 const QUICK_ADJUSTS = [
@@ -11,29 +12,6 @@ const QUICK_ADJUSTS = [
   { label: 'โชว์ของข้างใน', labelEn: 'Show the product', prompt: 'อยากให้มองเห็นสินค้าข้างในกล่อง' },
   { label: 'แข็งแรงส่งไปรษณีย์', labelEn: 'Sturdy for shipping', prompt: 'ต้องส่งไปรษณีย์ ให้ทนแรงกระแทก' },
 ]
-
-interface RefImage {
-  base64: string
-  preview: string
-  name: string
-}
-
-// ย่อรูปฝั่ง client ให้เหลือด้านยาวสุด 1024px เป็น JPEG — payload เล็กและตัด EXIF ทิ้ง
-async function toRefImage(file: File): Promise<RefImage> {
-  const bmp = await createImageBitmap(file)
-  const scale = Math.min(1, 1024 / Math.max(bmp.width, bmp.height))
-  const w = Math.max(1, Math.round(bmp.width * scale))
-  const h = Math.max(1, Math.round(bmp.height * scale))
-  const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('no canvas')
-  ctx.drawImage(bmp, 0, 0, w, h)
-  bmp.close()
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.82)
-  return { base64: dataUrl.split(',')[1], preview: dataUrl, name: file.name }
-}
 
 interface PromptBarProps {
   current: CurrentSpec

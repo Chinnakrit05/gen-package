@@ -100,6 +100,25 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `server/boxStructure.ts` — วงรอบ `designStructure` (AI → parse → compile → ส่ง error ภาษาไทยกลับให้แก้ทั้งฉบับ ≤ 3 รอบ) + `/api/box-structure` (เปิดเฉพาะ `isLegacyAiRouteEnabled`; backend api/cli/mock เหมือน legacy); หน้าทดลอง `/tests/browser/structure.html` บน dev server; เช็คสด `PACKIT_LIVE_STRUCTURE=1 npx vitest run server/boxStructure.live.test.ts` (ใช้ claude CLI ถ้าไม่มีคีย์)
 - ยังไม่ผูก Project/cloud/billing — ถ้าจะผูก ดูหัวข้อ "ขั้นถัดไป" ในเอกสาร
 
+## AI ออกแบบหน้าตาบน template ที่มี (แผนงานศิลป์ — local dev เท่านั้น)
+
+- หลักเดียวกับภาษาแผง: AI เขียน "เจตนา" เป็น JSON ตาม `ARTWORK_SCHEMA` (`src/core/aiArtwork.ts`) ไม่ได้วาดลงแผ่นคลี่เอง —
+  ทุกชิ้นอ้าง `panel` id + x,y มม. จากมุมซ้ายบนของกรอบแผง (`panelBoxes(dieline)` + บทบาทจาก `panelRole(id)` เดาจาก convention ชื่อแผง:
+  glue = ห้ามพิมพ์); `compileArtworkPlan(plan, panels, { measure, assets })` แปลงเป็น Deco จริง: วัดความกว้างข้อความ (client ส่ง `measureText`
+  จริง, server ใช้ `estimateTextWidth`), ตัดบรรทัดที่ขอบคำด้วย `Intl.Segmenter` แล้วค่อยลดขนาด (`fitText`, ไม่ต่ำกว่า `ART_MIN_TEXT_MM` 2.5),
+  ดันเข้ากรอบ/ย่อชิ้นที่ล้นแผง (เว้นขอบ `ART_SAFE_MM` 3 ยกเว้น shape/path ชนขอบได้), ตัดชิ้นบนปีกกาว, ตัด `curve` ออกจากข้อความไทย
+- รูปของ AI มี 3 ทาง: `preset:<id>:<#สี>` (ไลบรารี), `asset:<id>` (รูปที่ผู้ใช้อัปโหลด client แทนที่เป็น data URL จริงตอน compile),
+  `svg:<markup>` ที่ AI วาดเอง → `sanitizeSvg` (allowlist แท็ก/แอตทริบิวต์, ไม่มี script/style/image/use/ลิงก์ภายนอก, `url(#id)` เท่านั้น,
+  ≤ 60k ตัวอักษร/รูป) → data URL เหมือน preset; `background` = SVG รูปพื้นทั้งแผ่น → `FillImage`
+- `server/aiArtwork.ts` — route `/api/ai-artwork` (Vite middleware, เปิดเฉพาะ `isLegacyAiRouteEnabled`): คำขอจาก client มี prompt + panels
+  (client คำนวณ) + รูปแนบ ≤ 4 ({ role: reference|logo, assetId }) → วงรอบ `designArtwork` (parse → ตรวจแผงที่ไม่มี → feedback ≤ 2 รอบ;
+  ชิ้นที่ผิดถูกตัดตอน parse ถ้ายังเหลือ ≥ 4 ชิ้นไม่เสียรอบแก้) backend api/cli/mock เหมือน box-structure (cli เขียนรูปเป็นไฟล์ tmp ให้เปิดอ่าน);
+  `max_tokens` 24k, API timeout 240 วิ, CLI 420 วิ — คำตอบยาวกว่า box-spec มาก จึงยังไม่ขึ้น cloud (ต้องมีงานเบื้องหลัง + เครดิต > 1)
+- UI: `src/components/AiArtworkPanel.tsx` ในแท็บตกแต่ง (กลุ่ม "ออกแบบหน้าตาด้วย AI" ซ่อนเมื่อมี prop `cloud`): prompt + รูปอ้างอิงสไตล์ ≤ 3 +
+  โลโก้ 1 (ส่ง JPEG ย่อให้ AI ดู แต่วางรูปจริงจาก `loadImageFile` ผ่าน `asset:logo`) + แทนที่/เพิ่มต่อลายเดิม; ผลวางผ่าน `applyAiArtwork`
+  ใน App ครั้งเดียว (undo จับเป็นก้าวเดียว); `src/components/refImage.ts` = ตัวย่อรูปใช้ร่วมกับ PromptBar
+- เทสต์: `src/core/aiArtwork.test.ts` (schema keyword ban, parse, sanitizer, compile), `server/aiArtwork.test.ts` (วงรอบด้วย ask ปลอม, mock)
+
 ## Env / AI backend
 
 ลำดับอัตโนมัติ: มี `ANTHROPIC_API_KEY` → Claude API; ไม่มี → `claude` CLI ในเครื่อง (ใช้ login ของ Claude Code, ต้อง login แล้ว); ไม่มีทั้งคู่ → โหมดจำลอง. บังคับด้วย `BOX_SPEC_BACKEND=api|cli|mock`. `BOX_SPEC_MODEL`: backend api default claude-opus-5-5 (`DEFAULT_AI_MODEL` ใน server/config.ts; รองรับ claude-sonnet-5-5 / claude-haiku-5-5 / claude-opus-4-8 ด้วย — ดู docs/billing-freemium-pro.md §6; รุ่นตระกูล 5 ห้ามบังคับ tool_choice และปิด thinking ไม่ได้ จึงใช้ structured outputs), backend cli default โมเดลที่ตั้งใน Claude Code (ใส่ alias haiku/sonnet ได้เพื่อความเร็ว). ดู `.env.example`; เช็คสดทุกรุ่น (เสียเงินจริง): `PACKIT_LIVE_AI=1 ANTHROPIC_API_KEY=… npx vitest run server/boxSpec.live.test.ts`

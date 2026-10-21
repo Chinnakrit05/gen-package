@@ -5119,3 +5119,21 @@ aside .art-actions .file-pick:only-child {
     padding: 8px 10px;
   }
 }
+
+/* แผง "ออกแบบหน้าตาด้วย AI" (แท็บตกแต่ง) */
+.ai-art { display: flex; flex-direction: column; gap: 8px; }
+.ai-art-prompt { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; padding: 8px 10px; border: 1px solid var(--line, #cfd8dc); border-radius: 8px; }
+.ai-art-row { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 13px; }
+.ai-art-mode label { display: inline-flex; align-items: center; gap: 4px; }
+.ai-art-thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+.ai-art-thumb { position: relative; margin: 0; width: 64px; text-align: center; font-size: 11px; color: var(--muted, #607d8b); }
+.ai-art-thumb img { width: 64px; height: 64px; object-fit: contain; border-radius: 6px; border: 1px solid var(--line, #cfd8dc); background: #fff; }
+.ai-art-thumb button { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: none; background: #37474f; color: #fff; cursor: pointer; line-height: 1; }
+.ai-art-key { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; padding: 6px 8px; border: 1px solid var(--line, #cfd8dc); border-radius: 6px; }
+.ai-art-run { padding: 8px 12px; border: none; border-radius: 8px; background: var(--accent, #1b6ea8); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.ai-art-run:disabled { opacity: 0.55; cursor: default; }
+.ai-art-error { margin: 0; color: #b71c1c; font-size: 13px; }
+.ai-art-done { font-size: 13px; background: var(--panel-2, #f1f5f6); border-radius: 8px; padding: 8px 10px; }
+.ai-art-done p { margin: 0 0 4px; }
+.ai-art-done ul { margin: 4px 0 0; padding-left: 18px; }
+.ai-art-hint { color: var(--muted, #607d8b); }
