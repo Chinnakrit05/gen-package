@@ -94,6 +94,8 @@ import {
   type SheetLayout,
 } from './core/stickerSheet'
 import { isFreshWork, standardSizeFor, VESSEL_STANDARD, type StdSize } from './core/standardSize'
+import { hasDesignWork, summarizeDesignWork } from './core/designWork'
+import { SwitchGuardModal } from './components/SwitchGuardModal'
 import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, defaultCapColor, TUBE_CAP_STYLES, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
 import {
   generatePouch,
@@ -1619,6 +1621,10 @@ export default function App({
   const [stageOpen, setStageOpen] = useState(false)
   const [artSnapshots, setArtSnapshots] = useState<ArtworkSnapshot[]>([])
   const [artCurrentId, setArtCurrentId] = useState<string | null>(null)
+  // เตือนก่อนสลับประเภทงาน/รูปแบบเมื่อมีงานตกแต่งแล้ว (ยืนยัน = ลบงานเดิมทั้งหมดแล้วค่อยสลับ)
+  const [switchGuard, setSwitchGuard] = useState<{ what: string; fromName: string; toName: string; apply: () => void } | null>(null)
+  // หลังล้างงานใน handler เดียวกัน state decos/fillImage ใน closure ยังเป็นค่าเก่า — ref นี้บอก applyStdSize ว่าถือเป็นงานใหม่ได้แล้ว
+  const freshAfterClear = useRef(false)
   // AI ออกแบบหน้าตา: ชิ้นงานที่แปลงแล้ววางลงงานในจังหวะเดียว (snapshot undo จับเป็นก้าวเดียว) — สีพื้น/รูปพื้นตั้งเมื่อแผนระบุ
   const applyAiArtwork = (r: AiArtworkResult) => {
     const nextDecos = r.mode === 'replace' ? r.decos : [...decos, ...r.decos]
@@ -2535,7 +2541,7 @@ export default function App({
 
   // ตอนยังไม่เริ่มงาน → ตั้งขนาดมาตรฐาน + ล้างทรงขวด/ฉลากที่ตั้งเอง (มีลาย/รูปพื้นแล้วคงขนาดเดิม ลายจะได้ไม่หลุดตำแหน่ง)
   const applyStdSize = (sz: StdSize | null) => {
-    if (!sz || !isFreshWork(decos, fillImage)) return
+    if (!sz || !(freshAfterClear.current || isFreshWork(decos, fillImage))) return
     setW(sz.W)
     setD(sz.D)
     setH(sz.H)
@@ -2561,6 +2567,45 @@ export default function App({
     if (s !== pouchStyle) applyStdSize(standardSizeFor(materialId, s, 'pouch'))
     setPouchStyle(s)
   }
+
+  // สลับประเภทงาน/รูปแบบบรรจุภัณฑ์/รูปแบบถุง: ยังไม่มีงานตกแต่ง → สลับทันที; มีแล้ว (แม้ชิ้นเดียว/แค่สีพื้น) → เปิดกล่องเตือน
+  // ยืนยัน = ลบงานเดิมทั้งหมด (ลาย/รูปพื้น/สีพื้น/แบบจาก AI) แล้วค่อยสลับ — ทั้งชุดเป็น undo ก้าวเดียว (snapshot หน่วงรวมให้)
+  const guardedSwitch = (what: string, fromName: string, toName: string, apply: () => void) => {
+    if (!hasDesignWork(decos, fillImage, fillColor)) {
+      apply()
+      return
+    }
+    setSwitchGuard({ what, fromName, toName, apply })
+  }
+  const confirmSwitch = () => {
+    const g = switchGuard
+    if (!g) return
+    setSwitchGuard(null)
+    setSelectedIds([])
+    setDecos([])
+    setFillImage(null)
+    setFillColor(null)
+    setArtSnapshots([])
+    setArtCurrentId(null)
+    freshAfterClear.current = true
+    try {
+      g.apply()
+    } finally {
+      freshAfterClear.current = false
+    }
+  }
+  const kindName = isCard
+    ? t('นามบัตร', 'Business card')
+    : isSticker
+      ? t('สติกเกอร์', 'Sticker')
+      : isTube
+        ? t('หลอดครีม (tube)', 'Cosmetic tube')
+        : kind === 'vessel'
+          ? t('ภาชนะ + ฉลาก', 'Vessel + label')
+          : kind === 'pouch'
+            ? t('ถุงฟิล์ม', 'Film pouch')
+            : t('กล่องพับ', 'Folding box')
+  const whatKind = t('ประเภทงาน', 'job type')
 
   const saveFile = (data: BlobPart, mime: string, ext: string) => {
     const blob = new Blob([data], { type: mime })
@@ -3481,9 +3526,12 @@ export default function App({
                 disabled={aiBusy}
                 aria-pressed={kind === 'box' && !isCard && !isSticker}
                 onClick={() => {
-                  if (kind !== 'box' || isSticker) changeMaterial('carton-300')
-                  if (templateId === 'card' || templateId === 'sticker') changeTemplate('tuck-end')
-                  else if (kind !== 'box') resetKindSize('box')
+                  if (kind === 'box' && !isCard && !isSticker) return
+                  guardedSwitch(whatKind, kindName, t('กล่องพับ', 'Folding box'), () => {
+                    if (kind !== 'box' || isSticker) changeMaterial('carton-300')
+                    if (templateId === 'card' || templateId === 'sticker') changeTemplate('tuck-end')
+                    else if (kind !== 'box') resetKindSize('box')
+                  })
                 }}
               >
                 <span className="mode-ic">
@@ -3499,10 +3547,11 @@ export default function App({
                 disabled={aiBusy}
                 aria-pressed={kind === 'vessel' && !isTube}
                 onClick={() => {
-                  if (kind !== 'vessel' || isTube) {
+                  if (kind === 'vessel' && !isTube) return
+                  guardedSwitch(whatKind, kindName, t('ภาชนะ + ฉลาก', 'Vessel + label'), () => {
                     changeMaterial('pet-bottle')
                     resetKindSize('vessel', 'pet-bottle')
-                  }
+                  })
                 }}
               >
                 <span className="mode-ic">
@@ -3518,10 +3567,11 @@ export default function App({
                 disabled={aiBusy}
                 aria-pressed={kind === 'pouch'}
                 onClick={() => {
-                  if (kind !== 'pouch') {
+                  if (kind === 'pouch') return
+                  guardedSwitch(whatKind, kindName, t('ถุงฟิล์ม', 'Film pouch'), () => {
                     changeMaterial('pouch-foil')
                     resetKindSize('pouch')
-                  }
+                  })
                 }}
               >
                 <span className="mode-ic">
@@ -3537,14 +3587,15 @@ export default function App({
                 disabled={aiBusy}
                 aria-pressed={isTube}
                 onClick={() => {
-                  if (!isTube) {
+                  if (isTube) return
+                  guardedSwitch(whatKind, kindName, t('หลอดครีม (tube)', 'Cosmetic tube'), () => {
                     changeMaterial('tube-laminate')
                     // หลอดครีมทรงชะลูด — ตั้งสัดส่วนเริ่มต้นให้ดูเป็นหลอด ไม่ใช่กระปุก (ตั้งเสมอ แม้มีลายแล้ว)
                     const sz = VESSEL_STANDARD['tube-laminate']
                     setW(sz.W)
                     setD(sz.D)
                     setH(sz.H)
-                  }
+                  })
                 }}
               >
                 <span className="mode-ic">
@@ -3560,8 +3611,11 @@ export default function App({
                 disabled={aiBusy}
                 aria-pressed={isCard}
                 onClick={() => {
-                  if (kind !== 'box' || materialId.startsWith('sticker-')) changeMaterial('carton-300')
-                  changeTemplate('card')
+                  if (isCard) return
+                  guardedSwitch(whatKind, kindName, t('นามบัตร', 'Business card'), () => {
+                    if (kind !== 'box' || materialId.startsWith('sticker-')) changeMaterial('carton-300')
+                    changeTemplate('card')
+                  })
                 }}
               >
                 <span className="mode-ic">
@@ -3577,8 +3631,11 @@ export default function App({
                 disabled={aiBusy}
                 aria-pressed={isSticker}
                 onClick={() => {
-                  if (!materialId.startsWith('sticker-')) changeMaterial('sticker-vinyl')
-                  changeTemplate('sticker')
+                  if (isSticker) return
+                  guardedSwitch(whatKind, kindName, t('สติกเกอร์', 'Sticker'), () => {
+                    if (!materialId.startsWith('sticker-')) changeMaterial('sticker-vinyl')
+                    changeTemplate('sticker')
+                  })
                 }}
               >
                 <span className="mode-ic">
@@ -3601,7 +3658,10 @@ export default function App({
                     className={`pick-item${templateId === tp.id ? ' active' : ''}`}
                     disabled={aiBusy}
                     aria-pressed={templateId === tp.id}
-                    onClick={() => changeTemplate(tp.id)}
+                    onClick={() => {
+                      if (templateId === tp.id) return
+                      guardedSwitch(t('รูปแบบบรรจุภัณฑ์', 'package style'), getTemplate(templateId).nameTh, tp.nameTh, () => changeTemplate(tp.id))
+                    }}
                   >
                     <span className="pick-name">{tp.nameTh}</span>
                     <span className="pick-detail">{tp.detail}</span>
@@ -3620,7 +3680,10 @@ export default function App({
                     className={`pick-item${pouchStyle === s.id ? ' active' : ''}`}
                     disabled={aiBusy}
                     aria-pressed={pouchStyle === s.id}
-                    onClick={() => changePouchStyle(s.id)}
+                    onClick={() => {
+                      if (pouchStyle === s.id) return
+                      guardedSwitch(t('รูปแบบถุง', 'pouch style'), POUCH_STYLES.find((p) => p.id === pouchStyle)?.nameTh ?? pouchStyle, s.nameTh, () => changePouchStyle(s.id))
+                    }}
                   >
                     <span className="pick-name">{s.nameTh}</span>
                     <span className="pick-detail">{s.detail}</span>
@@ -6412,6 +6475,16 @@ export default function App({
                 setPricingOpen(true)
               }
             }}
+          />
+        )}
+        {switchGuard && (
+          <SwitchGuardModal
+            what={switchGuard.what}
+            fromName={switchGuard.fromName}
+            toName={switchGuard.toName}
+            summary={summarizeDesignWork(decos, fillImage, fillColor)}
+            onConfirm={confirmSwitch}
+            onCancel={() => setSwitchGuard(null)}
           />
         )}
         {stageOpen && (
