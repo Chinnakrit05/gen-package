@@ -125,8 +125,12 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - **cloud** = `POST /api/v1/ai/artwork` (router.ts: ซอง workspace/operation ตรวจด้วย `aiArtworkRequestSchema` แล้ว payload ด้วย `parseArtworkRequest`
   → `chargedAiCall` จอง/settle เครดิตชุดเดียวกับ box-spec 1 เครดิต/แบบ → `AnthropicAiService.generateArtwork` ใช้ `apiAskWithUsage` (สะสม usage ทุกรอบ)
   ภายใต้งบเวลารวม 270 วิ `CLOUD_ARTWORK_LIMITS` ใต้ `maxDuration` 300 ของ `api/backend.js` ใน vercel.json (Hobby + Fluid compute เปิดอยู่ —
-  ถ้าลดกลับเป็น 60 งานศิลป์จะถูกตัดทุกครั้ง); รอบแก้ที่เริ่มไม่ทันงบ (`ArtworkDeadlineError`) → คืนแบบรอบก่อน ok=false; refusal/ตัดที่ max_tokens/
-  ไม่ใช่ JSON = `ArtworkResponseError` และไม่มีแบบเลย → provider ล้ม คืนเครดิต (502); client เรียกผ่าน `cloud.requestAiArtwork`
+  ถ้าลดกลับเป็น 60 งานศิลป์จะถูกตัดทุกครั้ง); รอบแก้ที่เริ่มไม่ทันงบ (`ArtworkDeadlineError`) → คืนแบบรอบก่อน ok=false; refusal/ตัดที่ max_tokens
+  = `ArtworkResponseError` และไม่มีแบบเลย → provider ล้ม คืนเครดิต (502); คำตอบที่ไม่มี JSON → raw null + รอบแก้ (เล่นข้อความเดิมซ้ำ);
+  **schema งานศิลป์ส่งเป็นข้อความใน system prompt (`JSON_INSTRUCTION`, cache ได้) ไม่ใช่ `output_config.format`** — มีช่อง union ~75 ช่อง
+  เกินเพดาน structured outputs (union ≤ 16, optional ≤ 24 รวมทุก schema ในคำขอ; เกิน = 400 ทันที — พังบน staging วันแรกเพราะ local ใช้ CLI
+  ซึ่งส่ง schema เป็นข้อความอยู่แล้ว); schema ที่ยังส่งผ่าน structured outputs (box-spec, ภาษาแผง) ถูกนับใน `server/structuredOutputs.test.ts`;
+  client เรียกผ่าน `cloud.requestAiArtwork`
   (`src/services/api/ai.ts` `requestCloudArtwork` ส่ง AbortSignal ได้) — ยกเลิกฝั่ง client ไม่คืนเครดิตเพราะ server ยังทำต่อ
 - UI = **Copilot** (`src/components/CopilotDrawer.tsx`, แทน PromptBar popover เดิมที่ถูกลบ): ปุ่ม "สั่ง AI" บน header (`AiTrigger`,
   คง markup เครดิต/blocked เดิม) เปิดแผงด้านขวา 420px ใน `.body` (flex row ถัดจาก `main`) เป็นบทสนทนา 2 โหมดในช่องเดียว —
