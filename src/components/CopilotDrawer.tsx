@@ -40,6 +40,10 @@ export interface CopilotArtworkContext {
   ) => Promise<{ decos: Deco[]; fillImage: FillImage | null; dropped: number }>
 }
 
+// โหมด "โครงกล่องจากคำสั่ง" ปิดไว้พร้อมป้าย Coming soon (ตัดสินใจ 22 ต.ค. 2026) จนกว่า AI ประกอบโครงกล่องเอง (ภาษาแผง) จะพร้อม —
+// แผงเปิดมาที่โหมดออกแบบหน้าตาเสมอ; โค้ดโหมด spec ยังอยู่ครบ เปิดคืนได้ด้วยการตั้งค่านี้เป็น false
+export const SPEC_MODE_COMING_SOON = true
+
 // prompt ที่ส่ง AI เป็นไทยเสมอ (system prompt ฝั่ง server เป็นไทย) — แปลเฉพาะป้ายบนปุ่ม
 export const QUICK_ADJUSTS = [
   { label: 'หรูขึ้น', labelEn: 'More premium', prompt: 'ปรับให้ดูหรูพรีเมียมขึ้น' },
@@ -116,7 +120,7 @@ export function CopilotDrawer({
   onError,
 }: CopilotDrawerProps) {
   const t = useT()
-  const [mode, setMode] = useState<CopilotMode>(artwork && hasDesign ? 'artwork' : 'spec')
+  const [mode, setMode] = useState<CopilotMode>(SPEC_MODE_COMING_SOON || (artwork && hasDesign) ? 'artwork' : 'spec')
   const [text, setText] = useState('')
   const [refs, setRefs] = useState<RefImage[]>([])
   const [logo, setLogo] = useState<{ ref: RefImage; asset: { src: string; aspect: number } } | null>(null)
@@ -242,6 +246,7 @@ export function CopilotDrawer({
       return
     }
     const runMode: CopilotMode = mode === 'artwork' && artwork ? 'artwork' : 'spec'
+    if (runMode === 'spec' && SPEC_MODE_COMING_SOON) return
     push({ id: nextId(), role: 'user', text: p, mode: runMode, images: refs, logo: runMode === 'artwork' ? logo?.ref ?? null : null })
     setText('')
     const ac = new AbortController()
@@ -295,7 +300,8 @@ export function CopilotDrawer({
   const mm = String(Math.floor(elapsed / 60))
   const ss = String(elapsed % 60).padStart(2, '0')
   const artworkOn = mode === 'artwork' && !!artwork
-  const canSend = !busy && !!text.trim() && !blockedReason
+  const modeReady = mode === 'artwork' ? !!artwork : !SPEC_MODE_COMING_SOON
+  const canSend = !busy && !!text.trim() && !blockedReason && modeReady
 
   return (
     <section className="copilot" aria-label={t('แผง Copilot AI', 'AI Copilot panel')}>
@@ -323,8 +329,19 @@ export function CopilotDrawer({
           </div>
         </div>
         <div className="cp-modes" role="radiogroup" aria-label={t('โหมด AI', 'AI mode')}>
-          <button type="button" role="radio" aria-checked={mode === 'spec'} className={`cp-mode${mode === 'spec' ? ' on' : ''}`} onClick={() => setMode('spec')} disabled={!!busy}>
-            <strong>{t('โครงกล่องจากคำสั่ง', 'Box from a prompt')}</strong>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={mode === 'spec'}
+            className={`cp-mode${mode === 'spec' ? ' on' : ''}${SPEC_MODE_COMING_SOON ? ' soon' : ''}`}
+            onClick={() => !SPEC_MODE_COMING_SOON && setMode('spec')}
+            disabled={!!busy || SPEC_MODE_COMING_SOON}
+            title={SPEC_MODE_COMING_SOON ? t('เร็ว ๆ นี้ — ตอนนี้ใช้ "ออกแบบหน้าตาบนแบบนี้" ได้', 'Coming soon — use "Design artwork on this box" for now') : undefined}
+          >
+            <span className="cp-mode-head">
+              <strong>{t('โครงกล่องจากคำสั่ง', 'Box from a prompt')}</strong>
+              {SPEC_MODE_COMING_SOON && <em className="cp-soon">Coming soon</em>}
+            </span>
             <span>{t('เลือกแบบ วัสดุ ขนาด ให้ตรงสินค้า', 'Pick the template, material and size')}</span>
           </button>
           <button
