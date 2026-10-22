@@ -14,7 +14,8 @@ import type { ServerConfig } from '../config'
 import { errorMessageForLog, logServerEvent } from '../logging'
 import type { SessionService } from '../modules/identity/sessionService'
 import { AssetService } from '../modules/assets/assetService'
-import { AiProviderError, AnthropicAiService, type AiBoxSpecOutput, type AiService } from '../modules/ai/aiService'
+import { AiProviderError, AnthropicAiService, type AiService, type AiUsage } from '../modules/ai/aiService'
+import { parseArtworkRequest, type ArtworkRequest } from '../aiArtwork'
 import { parseCurrent, parseImage } from '../boxSpec'
 import {
   assetDownloadRequestSchema,
@@ -29,6 +30,7 @@ import {
   type BillingServiceOptions,
 } from '../modules/billing/billingService'
 import {
+  aiArtworkRequestSchema,
   aiBoxSpecRequestSchema,
   createOrderInputSchema,
   entitlementsQuerySchema,
@@ -189,6 +191,86 @@ function unexpectedError(requestId: string, route: string, error: unknown, fallb
 }
 
 const AI_ROUTE = 'POST /api/v1/ai/box-spec'
+const AI_ARTWORK_ROUTE = 'POST /api/v1/ai/artwork'
+
+// provider ล้ม/บั๊กใน AI route → HttpError + log ชนิดความล้มเหลว + ข้อความต้นทาง (redact แล้ว) — คีย์ของ server ไม่อยู่ในข้อความนี้
+function aiRouteError(error: unknown, requestId: string, route: string): HttpError {
+  if (error instanceof HttpError) return error
+  let httpError: HttpError
+  if (error instanceof AiProviderError && error.kind === 'authentication') {
+    httpError = new HttpError(503, 'CONFIGURATION_ERROR', 'คีย์ AI ของ server ไม่ถูกต้อง')
+  } else if (error instanceof AiProviderError && error.kind === 'rate-limit') {
+    httpError = new HttpError(429, 'AI_RATE_LIMITED', 'เรียก AI ถี่เกินไป รอสักครู่แล้วลองใหม่')
+  } else if (error instanceof AiProviderError && error.kind === 'refusal') {
+    // โมเดลปฏิเสธคำขอ (stop_reason refusal) — กดซ้ำแบบเดิมไม่ช่วย จึงบอกให้ปรับคำอธิบาย; รหัสเดิม ไม่แตะ contract
+    httpError = new HttpError(502, 'AI_PROVIDER_UNAVAILABLE', 'AI ไม่รับคำขอนี้ ลองปรับคำอธิบายแล้วส่งใหม่')
+  } else {
+    httpError = new HttpError(502, 'AI_PROVIDER_UNAVAILABLE', 'บริการ AI ขัดข้อง ลองใหม่อีกครั้ง')
+  }
+  logServerEvent('error', 'ai_provider_error', {
+    requestId,
+    route,
+    status: httpError.status,
+    code: httpError.code,
+    kind: error instanceof AiProviderError ? error.kind : 'unexpected',
+    error: error instanceof AiProviderError ? error.providerMessage : errorMessageForLog(error),
+  })
+  return httpError
+}
+
+// ลำดับคิดเงินของทุก AI route (ดู docs/billing-freemium-pro.md §1): จองเครดิตก่อนเรียก provider (402/409/429 จากการจอง
+// ส่งต่อตรง ๆ โดยไม่หักเครดิต) → provider ล้ม = คืนแบบ best-effort → ผลกลับมาแล้วหักขาด settle เป็นแค่ bookkeeping
+// (ล้มก็ไม่คืนเครดิต ไม่ทิ้งผลที่จ่าย provider ไปแล้ว; ยอดจาก reservation ถูกต้องอยู่แล้วเพราะหักตอนจอง)
+// model/usage เก็บลง ai_requests เพื่อดูต้นทุน — ไม่ส่งให้ client
+async function chargedAiCall<T>(
+  ctx: {
+    billingService: BillingService
+    actor: Parameters<BillingService['reserveAiCredit']>[0]
+    workspaceId: string
+    operationId: string
+    requestId: string
+    route: string
+    hasImage: boolean
+  },
+  call: () => Promise<{ value: T; model: string; usage: AiUsage | null }>,
+): Promise<{ value: T; credits: number }> {
+  const reservation = await ctx.billingService.reserveAiCredit(ctx.actor, ctx.workspaceId, ctx.operationId)
+  let generated: { value: T; model: string; usage: AiUsage | null }
+  try {
+    generated = await call()
+  } catch (providerError) {
+    try {
+      await ctx.billingService.settleAiRequest(ctx.actor, reservation.requestId, 'failed', { hasImage: ctx.hasImage })
+    } catch (refundError) {
+      // คืนเครดิตไม่สำเร็จ — รายงานข้อผิดพลาดต้นทางแทน; แถวค้าง reserved จะถูกคืนเองตอนจองครั้งถัดไป
+      // หลังพ้น 15 นาที (reserve_ai_credit)
+      logServerEvent('warn', 'ai_refund_failed', {
+        requestId: ctx.requestId,
+        route: ctx.route,
+        aiRequestId: reservation.requestId,
+        error: errorMessageForLog(refundError),
+      })
+    }
+    throw providerError
+  }
+  const usage: AiRequestUsage = {
+    hasImage: ctx.hasImage,
+    model: generated.model,
+    ...(generated.usage ?? {}),
+  }
+  let credits = reservation.credits
+  try {
+    credits = (await ctx.billingService.settleAiRequest(ctx.actor, reservation.requestId, 'succeeded', usage)).credits
+  } catch (settleError) {
+    logServerEvent('warn', 'ai_settle_failed', {
+      requestId: ctx.requestId,
+      route: ctx.route,
+      aiRequestId: reservation.requestId,
+      error: errorMessageForLog(settleError),
+    })
+  }
+  return { value: generated.value, credits }
+}
 
 function validationError(error: ZodError): HttpError {
   return new HttpError(422, 'VALIDATION_ERROR', 'ข้อมูลโปรเจกต์ไม่ถูกต้อง', {
@@ -285,6 +367,48 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
       return
     }
 
+    // AI ออกแบบหน้าตาบน template ที่เลือก (payload เดียวกับ legacy /api/ai-artwork + ซอง workspace/operation):
+    // สิทธิ์/เครดิต/รหัสข้อผิดพลาดชุดเดียวกับ box-spec (1 เครดิต/แบบ) — ใช้เวลาได้ถึงงบ CLOUD_ARTWORK_LIMITS ใต้ maxDuration 300
+    if (path === '/api/v1/ai/artwork') {
+      try {
+        if (req.method !== 'POST') {
+          res.setHeader('allow', 'POST')
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!sessionService || !aiService || !billingService) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า AI หรือ Supabase')
+        }
+        requireJsonContentType(req)
+        const actor = await sessionService.authenticate(bearerToken(req), requestId)
+
+        // รูป ≤ 4 รูป (JPEG ย่อ ≤ 1024px ฝั่ง client) — Vercel รับ body ได้ ~4.5 MB อยู่แล้ว
+        const input = parseOrThrow(aiArtworkRequestSchema.safeParse(await readJsonBody(req, 8 * 1024 * 1024)))
+        let request: ArtworkRequest
+        try {
+          request = parseArtworkRequest(input)
+        } catch (error) {
+          throw new HttpError(422, 'VALIDATION_ERROR', `คำขอออกแบบหน้าตาไม่ถูกต้อง (${error instanceof Error ? error.message : 'body'})`)
+        }
+        const serverAi = config.ai
+        if (!serverAi) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่าคีย์ AI')
+        }
+
+        const { value: result, credits } = await chargedAiCall(
+          { billingService, actor, workspaceId: input.workspaceId, operationId: input.operationId, requestId, route: AI_ARTWORK_ROUTE, hasImage: request.images.length > 0 },
+          async () => {
+            const generated = await aiService.generateArtwork(serverAi.anthropicApiKey, request)
+            return { value: generated.result, model: generated.model, usage: generated.usage }
+          },
+        )
+        sendJson(res, 200, { data: { ...result, credits }, requestId }, requestId)
+      } catch (error) {
+        const httpError = aiRouteError(error, requestId, AI_ARTWORK_ROUTE)
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
     if (path === '/api/v1/ai/box-spec') {
       try {
         if (req.method !== 'POST') {
@@ -313,77 +437,20 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
           throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่าคีย์ AI')
         }
 
-        // หักเครดิตก่อนเรียก provider (402/409 จากการจองส่งต่อตรง ๆ); provider ล้ม → คืนแบบ best-effort
-        // ผลลัพธ์กลับมาแล้วไม่คืน — ดู docs/billing-freemium-pro.md §1
-        // concurrency cap (AI_CONCURRENCY_LIMIT → 429 AI_RATE_LIMITED) ก็ถูกปฏิเสธที่นี่โดยไม่หักเครดิต
-        const reservation = await billingService.reserveAiCredit(actor, input.workspaceId, input.operationId)
-        const hasImage = image !== undefined
-        let generated: AiBoxSpecOutput
-        try {
-          generated = await aiService.generateBoxSpec(serverAi.anthropicApiKey, {
-            prompt: input.prompt.trim(),
-            ...(current ? { current } : {}),
-            ...(image ? { image } : {}),
-          })
-        } catch (providerError) {
-          try {
-            await billingService.settleAiRequest(actor, reservation.requestId, 'failed', { hasImage })
-          } catch (refundError) {
-            // คืนเครดิตไม่สำเร็จ — รายงานข้อผิดพลาดต้นทางแทน; แถวค้าง reserved จะถูกคืนเองตอนจองครั้งถัดไป
-            // หลังพ้น 15 นาที (reserve_ai_credit)
-            logServerEvent('warn', 'ai_refund_failed', {
-              requestId,
-              route: AI_ROUTE,
-              aiRequestId: reservation.requestId,
-              error: errorMessageForLog(refundError),
+        const { value: spec, credits } = await chargedAiCall(
+          { billingService, actor, workspaceId: input.workspaceId, operationId: input.operationId, requestId, route: AI_ROUTE, hasImage: image !== undefined },
+          async () => {
+            const generated = await aiService.generateBoxSpec(serverAi.anthropicApiKey, {
+              prompt: input.prompt.trim(),
+              ...(current ? { current } : {}),
+              ...(image ? { image } : {}),
             })
-          }
-          throw providerError
-        }
-        // ผลลัพธ์กลับมาแล้ว = เครดิตหักขาดตามสเปก §1; settle เป็นแค่ bookkeeping — ถ้าล้มต้องไม่คืนเครดิต
-        // และต้องไม่ทิ้งผลลัพธ์ที่จ่าย provider ไปแล้ว (ยอดจาก reservation ถูกต้องอยู่แล้วเพราะหักตอนจอง)
-        // model/usage เก็บลง ai_requests เพื่อดูต้นทุน — ไม่ส่งให้ client
-        const usage: AiRequestUsage = {
-          hasImage,
-          model: generated.model,
-          ...(generated.usage ?? {}),
-        }
-        let credits = reservation.credits
-        try {
-          credits = (await billingService.settleAiRequest(actor, reservation.requestId, 'succeeded', usage)).credits
-        } catch (settleError) {
-          logServerEvent('warn', 'ai_settle_failed', {
-            requestId,
-            route: AI_ROUTE,
-            aiRequestId: reservation.requestId,
-            error: errorMessageForLog(settleError),
-          })
-        }
-        sendJson(res, 200, { data: { ...generated.spec, credits }, requestId }, requestId)
+            return { value: generated.spec, model: generated.model, usage: generated.usage }
+          },
+        )
+        sendJson(res, 200, { data: { ...spec, credits }, requestId }, requestId)
       } catch (error) {
-        let httpError: HttpError
-        if (error instanceof HttpError) httpError = error
-        else {
-          if (error instanceof AiProviderError && error.kind === 'authentication') {
-            httpError = new HttpError(503, 'CONFIGURATION_ERROR', 'คีย์ AI ของ server ไม่ถูกต้อง')
-          } else if (error instanceof AiProviderError && error.kind === 'rate-limit') {
-            httpError = new HttpError(429, 'AI_RATE_LIMITED', 'เรียก AI ถี่เกินไป รอสักครู่แล้วลองใหม่')
-          } else if (error instanceof AiProviderError && error.kind === 'refusal') {
-            // โมเดลปฏิเสธคำขอ (stop_reason refusal) — กดซ้ำแบบเดิมไม่ช่วย จึงบอกให้ปรับคำอธิบาย; รหัสเดิม ไม่แตะ contract
-            httpError = new HttpError(502, 'AI_PROVIDER_UNAVAILABLE', 'AI ไม่รับคำขอนี้ ลองปรับคำอธิบายแล้วส่งใหม่')
-          } else {
-            httpError = new HttpError(502, 'AI_PROVIDER_UNAVAILABLE', 'บริการ AI ขัดข้อง ลองใหม่อีกครั้ง')
-          }
-          // provider ล้ม/บั๊ก: log ชนิดความล้มเหลว + ข้อความต้นทาง (redact แล้ว) — คีย์ของ server ไม่อยู่ในข้อความนี้
-          logServerEvent('error', 'ai_provider_error', {
-            requestId,
-            route: AI_ROUTE,
-            status: httpError.status,
-            code: httpError.code,
-            kind: error instanceof AiProviderError ? error.kind : 'unexpected',
-            error: error instanceof AiProviderError ? error.providerMessage : errorMessageForLog(error),
-          })
-        }
+        const httpError = aiRouteError(error, requestId, AI_ROUTE)
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
       }
       return

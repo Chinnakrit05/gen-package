@@ -1264,11 +1264,11 @@ var require_serializer = __commonJS({
         var _a4;
         return buffer instanceof ArrayBuffer || ((_a4 = buffer === null || buffer === void 0 ? void 0 : buffer.constructor) === null || _a4 === void 0 ? void 0 : _a4.name) === "ArrayBuffer";
       }
-      _pick(obj, keys) {
-        if (!obj || typeof obj !== "object") {
+      _pick(obj2, keys) {
+        if (!obj2 || typeof obj2 !== "object") {
           return {};
         }
-        return Object.fromEntries(Object.entries(obj).filter(([key]) => keys.includes(key)));
+        return Object.fromEntries(Object.entries(obj2).filter(([key]) => keys.includes(key)));
       }
     };
     exports.default = Serializer;
@@ -1420,14 +1420,14 @@ var require_transformers = __commonJS({
       const closeBrace = value[lastIdx];
       const openBrace = value[0];
       if (openBrace === "{" && closeBrace === "}") {
-        let arr;
+        let arr2;
         const valTrim = value.slice(1, lastIdx);
         try {
-          arr = JSON.parse("[" + valTrim + "]");
+          arr2 = JSON.parse("[" + valTrim + "]");
         } catch (_) {
-          arr = valTrim ? valTrim.split(",") : [];
+          arr2 = valTrim ? valTrim.split(",") : [];
         }
-        return arr.map((val) => (0, exports.convertCell)(type, val));
+        return arr2.map((val) => (0, exports.convertCell)(type, val));
       }
       return value;
     };
@@ -2084,14 +2084,14 @@ var require_phoenix_cjs = __commonJS({
           return null;
         }
       }
-      static serialize(obj, parentKey) {
+      static serialize(obj2, parentKey) {
         let queryStr = [];
-        for (var key in obj) {
-          if (!Object.prototype.hasOwnProperty.call(obj, key)) {
+        for (var key in obj2) {
+          if (!Object.prototype.hasOwnProperty.call(obj2, key)) {
             continue;
           }
           let paramKey = parentKey ? `${parentKey}[${key}]` : key;
-          let paramVal = obj[key];
+          let paramVal = obj2[key];
           if (typeof paramVal === "object") {
             queryStr.push(this.serialize(paramVal, paramKey));
           } else {
@@ -2467,8 +2467,8 @@ var require_phoenix_cjs = __commonJS({
       * @param {Record<string, PresenceState>} obj
       * @param {(key: string, obj: PresenceState) => T} func
       */
-      static map(obj, func) {
-        return Object.getOwnPropertyNames(obj).map((key) => func(key, obj[key]));
+      static map(obj2, func) {
+        return Object.getOwnPropertyNames(obj2).map((key) => func(key, obj2[key]));
       }
       // Presence keys are chosen on the server and may collide with
       // Object.prototype properties ("__proto__", "constructor", ...), so any
@@ -2476,13 +2476,13 @@ var require_phoenix_cjs = __commonJS({
       //
       // TODO: replace the null-prototype objects with Maps in Phoenix 2.0
       // (breaking change for the lower-level static API)
-      static toNullProtoObj(obj) {
-        if (Object.getPrototypeOf(obj) === null) {
-          return obj;
+      static toNullProtoObj(obj2) {
+        if (Object.getPrototypeOf(obj2) === null) {
+          return obj2;
         }
         let cleaned = /* @__PURE__ */ Object.create(null);
-        Object.getOwnPropertyNames(obj).forEach((key) => {
-          cleaned[key] = obj[key];
+        Object.getOwnPropertyNames(obj2).forEach((key) => {
+          cleaned[key] = obj2[key];
         });
         return cleaned;
       }
@@ -2491,8 +2491,8 @@ var require_phoenix_cjs = __commonJS({
       * @param {T} obj
       * @returns {T}
       */
-      static clone(obj) {
-        return JSON.parse(JSON.stringify(obj));
+      static clone(obj2) {
+        return JSON.parse(JSON.stringify(obj2));
       }
     };
     var serializer_default = {
@@ -3464,10 +3464,10 @@ var require_normalizeChannelError = __commonJS({
         return new Error(reason);
       }
       if (reason && typeof reason === "object") {
-        const obj = reason;
-        if (typeof obj.code === "number") {
-          const detail = typeof obj.reason === "string" && obj.reason ? ` (${obj.reason})` : "";
-          return new Error(`socket closed: ${obj.code}${detail}`, { cause: reason });
+        const obj2 = reason;
+        if (typeof obj2.code === "number") {
+          const detail = typeof obj2.reason === "string" && obj2.reason ? ` (${obj2.reason})` : "";
+          return new Error(`socket closed: ${obj2.code}${detail}`, { cause: reason });
         }
         return new Error("channel error: transport failure", { cause: reason });
       }
@@ -5564,19 +5564,19 @@ var require_base64url = __commonJS({
         throw new Error(`Invalid Base64-URL character "${String.fromCharCode(charCode)}"`);
       }
     }
-    function stringToBase64URL(str) {
+    function stringToBase64URL(str2) {
       const base643 = [];
       const emitter = (char) => {
         base643.push(char);
       };
       const state = { queue: 0, queuedBits: 0 };
-      stringToUTF8(str, (byte) => {
+      stringToUTF8(str2, (byte) => {
         byteToBase64URL(byte, state, emitter);
       });
       byteToBase64URL(null, state, emitter);
       return base643.join("");
     }
-    function stringFromBase64URL(str) {
+    function stringFromBase64URL(str2) {
       const conv = [];
       const utf8Emit = (codepoint) => {
         conv.push(String.fromCodePoint(codepoint));
@@ -5589,8 +5589,8 @@ var require_base64url = __commonJS({
       const byteEmit = (byte) => {
         stringFromUTF8(byte, utf8State, utf8Emit);
       };
-      for (let i = 0; i < str.length; i += 1) {
-        byteFromBase64URL(str.charCodeAt(i), b64State, byteEmit);
+      for (let i = 0; i < str2.length; i += 1) {
+        byteFromBase64URL(str2.charCodeAt(i), b64State, byteEmit);
       }
       return conv.join("");
     }
@@ -5616,12 +5616,12 @@ var require_base64url = __commonJS({
       }
       throw new Error(`Unrecognized Unicode codepoint: ${codepoint.toString(16)}`);
     }
-    function stringToUTF8(str, emit) {
-      for (let i = 0; i < str.length; i += 1) {
-        let codepoint = str.charCodeAt(i);
+    function stringToUTF8(str2, emit) {
+      for (let i = 0; i < str2.length; i += 1) {
+        let codepoint = str2.charCodeAt(i);
         if (codepoint > 55295 && codepoint <= 56319) {
           const highSurrogate2 = (codepoint - 55296) * 1024 & 65535;
-          const lowSurrogate = str.charCodeAt(i + 1) - 56320 & 65535;
+          const lowSurrogate = str2.charCodeAt(i + 1) - 56320 & 65535;
           codepoint = (lowSurrogate | highSurrogate2) + 65536;
           i += 1;
         }
@@ -5661,20 +5661,20 @@ var require_base64url = __commonJS({
         }
       }
     }
-    function base64UrlToUint8Array(str) {
+    function base64UrlToUint8Array(str2) {
       const result = [];
       const state = { queue: 0, queuedBits: 0 };
       const onByte = (byte) => {
         result.push(byte);
       };
-      for (let i = 0; i < str.length; i += 1) {
-        byteFromBase64URL(str.charCodeAt(i), state, onByte);
+      for (let i = 0; i < str2.length; i += 1) {
+        byteFromBase64URL(str2.charCodeAt(i), state, onByte);
       }
       return new Uint8Array(result);
     }
-    function stringToUint8Array(str) {
+    function stringToUint8Array(str2) {
       const result = [];
-      stringToUTF8(str, (byte) => result.push(byte));
+      stringToUTF8(str2, (byte) => result.push(byte));
       return new Uint8Array(result);
     }
     function bytesToBase64URL(bytes) {
@@ -6048,8 +6048,8 @@ var require_helpers = __commonJS({
       }
     }
     var UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    function validateUUID(str) {
-      if (!UUID_REGEX.test(str)) {
+    function validateUUID(str2) {
+      if (!UUID_REGEX.test(str2)) {
         throw new Error("@supabase/auth-js: Expected parameter to be UUID but is not");
       }
     }
@@ -6106,8 +6106,8 @@ var require_helpers = __commonJS({
         }
       });
     }
-    function deepClone(obj) {
-      return JSON.parse(JSON.stringify(obj));
+    function deepClone(obj2) {
+      return JSON.parse(JSON.stringify(obj2));
     }
   }
 });
@@ -14071,15 +14071,15 @@ function maybeObj(x) {
   }
   return x ?? {};
 }
-function isEmptyObj(obj) {
-  if (!obj)
+function isEmptyObj(obj2) {
+  if (!obj2)
     return true;
-  for (const _k in obj)
+  for (const _k in obj2)
     return false;
   return true;
 }
-function hasOwn(obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key);
+function hasOwn(obj2, key) {
+  return Object.prototype.hasOwnProperty.call(obj2, key);
 }
 var startsWithSchemeRegexp, isAbsoluteURL, isArray, isReadonlyArray, validatePositiveInteger, safeJSON;
 var init_values = __esm({
@@ -14383,11 +14383,11 @@ var init_formats = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/internal/qs/utils.mjs
-function is_buffer(obj) {
-  if (!obj || typeof obj !== "object") {
+function is_buffer(obj2) {
+  if (!obj2 || typeof obj2 !== "object") {
     return false;
   }
-  return !!(obj.constructor && obj.constructor.isBuffer && obj.constructor.isBuffer(obj));
+  return !!(obj2.constructor && obj2.constructor.isBuffer && obj2.constructor.isBuffer(obj2));
 }
 function maybe_map(val, fn) {
   if (isArray(val)) {
@@ -14404,7 +14404,7 @@ var init_utils = __esm({
   "node_modules/@anthropic-ai/sdk/internal/qs/utils.mjs"() {
     init_formats();
     init_values();
-    has = (obj, key) => (has = Object.hasOwn ?? Function.prototype.call.bind(Object.prototype.hasOwnProperty), has(obj, key));
+    has = (obj2, key) => (has = Object.hasOwn ?? Function.prototype.call.bind(Object.prototype.hasOwnProperty), has(obj2, key));
     hex_table = /* @__PURE__ */ (() => {
       const array2 = [];
       for (let i = 0; i < 256; ++i) {
@@ -14413,15 +14413,15 @@ var init_utils = __esm({
       return array2;
     })();
     limit = 1024;
-    encode3 = (str, _defaultEncoder, charset, _kind, format) => {
-      if (str.length === 0) {
-        return str;
+    encode3 = (str2, _defaultEncoder, charset, _kind, format) => {
+      if (str2.length === 0) {
+        return str2;
       }
-      let string4 = str;
-      if (typeof str === "symbol") {
-        string4 = Symbol.prototype.toString.call(str);
-      } else if (typeof str !== "string") {
-        string4 = String(str);
+      let string4 = str2;
+      if (typeof str2 === "symbol") {
+        string4 = Symbol.prototype.toString.call(str2);
+      } else if (typeof str2 !== "string") {
+        string4 = String(str2);
       }
       if (charset === "iso-8859-1") {
         return escape(string4).replace(/%u[0-9a-f]{4}/gi, function($0) {
@@ -14431,7 +14431,7 @@ var init_utils = __esm({
       let out = "";
       for (let j = 0; j < string4.length; j += limit) {
         const segment = string4.length >= limit ? string4.slice(j, j + limit) : string4;
-        const arr = [];
+        const arr2 = [];
         for (let i = 0; i < segment.length; ++i) {
           let c = segment.charCodeAt(i);
           if (c === 45 || // -
@@ -14442,26 +14442,26 @@ var init_utils = __esm({
           c >= 65 && c <= 90 || // a-z
           c >= 97 && c <= 122 || // A-Z
           format === RFC1738 && (c === 40 || c === 41)) {
-            arr[arr.length] = segment.charAt(i);
+            arr2[arr2.length] = segment.charAt(i);
             continue;
           }
           if (c < 128) {
-            arr[arr.length] = hex_table[c];
+            arr2[arr2.length] = hex_table[c];
             continue;
           }
           if (c < 2048) {
-            arr[arr.length] = hex_table[192 | c >> 6] + hex_table[128 | c & 63];
+            arr2[arr2.length] = hex_table[192 | c >> 6] + hex_table[128 | c & 63];
             continue;
           }
           if (c < 55296 || c >= 57344) {
-            arr[arr.length] = hex_table[224 | c >> 12] + hex_table[128 | c >> 6 & 63] + hex_table[128 | c & 63];
+            arr2[arr2.length] = hex_table[224 | c >> 12] + hex_table[128 | c >> 6 & 63] + hex_table[128 | c & 63];
             continue;
           }
           i += 1;
           c = 65536 + ((c & 1023) << 10 | segment.charCodeAt(i) & 1023);
-          arr[arr.length] = hex_table[240 | c >> 18] + hex_table[128 | c >> 12 & 63] + hex_table[128 | c >> 6 & 63] + hex_table[128 | c & 63];
+          arr2[arr2.length] = hex_table[240 | c >> 18] + hex_table[128 | c >> 12 & 63] + hex_table[128 | c >> 6 & 63] + hex_table[128 | c & 63];
         }
-        out += arr.join("");
+        out += arr2.join("");
       }
       return out;
     };
@@ -14473,7 +14473,7 @@ function is_non_nullish_primitive(v) {
   return typeof v === "string" || typeof v === "number" || typeof v === "boolean" || typeof v === "symbol" || typeof v === "bigint";
 }
 function inner_stringify(object2, prefix, generateArrayPrefix, commaRoundTrip, allowEmptyArrays, strictNullHandling, skipNulls, encodeDotInKeys, encoder2, filter, sort, allowDots, serializeDate, format, formatter, encodeValuesOnly, charset, sideChannel) {
-  let obj = object2;
+  let obj2 = object2;
   let tmp_sc = sideChannel;
   let step = 0;
   let find_flag = false;
@@ -14492,68 +14492,68 @@ function inner_stringify(object2, prefix, generateArrayPrefix, commaRoundTrip, a
     }
   }
   if (typeof filter === "function") {
-    obj = filter(prefix, obj);
-  } else if (obj instanceof Date) {
-    obj = serializeDate?.(obj);
-  } else if (generateArrayPrefix === "comma" && isArray(obj)) {
-    obj = maybe_map(obj, function(value) {
+    obj2 = filter(prefix, obj2);
+  } else if (obj2 instanceof Date) {
+    obj2 = serializeDate?.(obj2);
+  } else if (generateArrayPrefix === "comma" && isArray(obj2)) {
+    obj2 = maybe_map(obj2, function(value) {
       if (value instanceof Date) {
         return serializeDate?.(value);
       }
       return value;
     });
   }
-  if (obj === null) {
+  if (obj2 === null) {
     if (strictNullHandling) {
       return encoder2 && !encodeValuesOnly ? (
         // @ts-expect-error
         encoder2(prefix, defaults.encoder, charset, "key", format)
       ) : prefix;
     }
-    obj = "";
+    obj2 = "";
   }
-  if (is_non_nullish_primitive(obj) || is_buffer(obj)) {
+  if (is_non_nullish_primitive(obj2) || is_buffer(obj2)) {
     if (encoder2) {
       const key_value = encodeValuesOnly ? prefix : encoder2(prefix, defaults.encoder, charset, "key", format);
       return [
         formatter?.(key_value) + "=" + // @ts-expect-error
-        formatter?.(encoder2(obj, defaults.encoder, charset, "value", format))
+        formatter?.(encoder2(obj2, defaults.encoder, charset, "value", format))
       ];
     }
-    return [formatter?.(prefix) + "=" + formatter?.(String(obj))];
+    return [formatter?.(prefix) + "=" + formatter?.(String(obj2))];
   }
   const values = [];
-  if (typeof obj === "undefined") {
+  if (typeof obj2 === "undefined") {
     return values;
   }
   let obj_keys;
-  if (generateArrayPrefix === "comma" && isArray(obj)) {
+  if (generateArrayPrefix === "comma" && isArray(obj2)) {
     if (encodeValuesOnly && encoder2) {
-      obj = maybe_map(obj, encoder2);
+      obj2 = maybe_map(obj2, encoder2);
     }
-    obj_keys = [{ value: obj.length > 0 ? obj.join(",") || null : void 0 }];
+    obj_keys = [{ value: obj2.length > 0 ? obj2.join(",") || null : void 0 }];
   } else if (isArray(filter)) {
     obj_keys = filter;
   } else {
-    const keys = Object.keys(obj);
+    const keys = Object.keys(obj2);
     obj_keys = sort ? keys.sort(sort) : keys;
   }
   const encoded_prefix = encodeDotInKeys ? String(prefix).replace(/\./g, "%2E") : String(prefix);
-  const adjusted_prefix = commaRoundTrip && isArray(obj) && obj.length === 1 ? encoded_prefix + "[]" : encoded_prefix;
-  if (allowEmptyArrays && isArray(obj) && obj.length === 0) {
+  const adjusted_prefix = commaRoundTrip && isArray(obj2) && obj2.length === 1 ? encoded_prefix + "[]" : encoded_prefix;
+  if (allowEmptyArrays && isArray(obj2) && obj2.length === 0) {
     return adjusted_prefix + "[]";
   }
   for (let j = 0; j < obj_keys.length; ++j) {
     const key = obj_keys[j];
     const value = (
       // @ts-ignore
-      typeof key === "object" && typeof key.value !== "undefined" ? key.value : obj[key]
+      typeof key === "object" && typeof key.value !== "undefined" ? key.value : obj2[key]
     );
     if (skipNulls && value === null) {
       continue;
     }
     const encoded_key = allowDots && encodeDotInKeys ? key.replace(/\./g, "%2E") : key;
-    const key_prefix = isArray(obj) ? typeof generateArrayPrefix === "function" ? generateArrayPrefix(adjusted_prefix, encoded_key) : adjusted_prefix : adjusted_prefix + (allowDots ? "." + encoded_key : "[" + encoded_key + "]");
+    const key_prefix = isArray(obj2) ? typeof generateArrayPrefix === "function" ? generateArrayPrefix(adjusted_prefix, encoded_key) : adjusted_prefix : adjusted_prefix + (allowDots ? "." + encoded_key : "[" + encoded_key + "]");
     sideChannel.set(object2, step);
     const valueSideChannel = /* @__PURE__ */ new WeakMap();
     valueSideChannel.set(sentinel, sideChannel);
@@ -14567,7 +14567,7 @@ function inner_stringify(object2, prefix, generateArrayPrefix, commaRoundTrip, a
       skipNulls,
       encodeDotInKeys,
       // @ts-ignore
-      generateArrayPrefix === "comma" && encodeValuesOnly && isArray(obj) ? null : encoder2,
+      generateArrayPrefix === "comma" && encodeValuesOnly && isArray(obj2) ? null : encoder2,
       filter,
       sort,
       allowDots,
@@ -14644,25 +14644,25 @@ function normalize_stringify_options(opts = defaults) {
   };
 }
 function stringify(object2, opts = {}) {
-  let obj = object2;
+  let obj2 = object2;
   const options = normalize_stringify_options(opts);
   let obj_keys;
   let filter;
   if (typeof options.filter === "function") {
     filter = options.filter;
-    obj = filter("", obj);
+    obj2 = filter("", obj2);
   } else if (isArray(options.filter)) {
     filter = options.filter;
     obj_keys = filter;
   }
   const keys = [];
-  if (typeof obj !== "object" || obj === null) {
+  if (typeof obj2 !== "object" || obj2 === null) {
     return "";
   }
   const generateArrayPrefix = array_prefix_generators[options.arrayFormat];
   const commaRoundTrip = generateArrayPrefix === "comma" && options.commaRoundTrip;
   if (!obj_keys) {
-    obj_keys = Object.keys(obj);
+    obj_keys = Object.keys(obj2);
   }
   if (options.sort) {
     obj_keys.sort(options.sort);
@@ -14670,11 +14670,11 @@ function stringify(object2, opts = {}) {
   const sideChannel = /* @__PURE__ */ new WeakMap();
   for (let i = 0; i < obj_keys.length; ++i) {
     const key = obj_keys[i];
-    if (options.skipNulls && obj[key] === null) {
+    if (options.skipNulls && obj2[key] === null) {
       continue;
     }
     push_to_array(keys, inner_stringify(
-      obj[key],
+      obj2[key],
       key,
       // @ts-expect-error
       generateArrayPrefix,
@@ -14724,8 +14724,8 @@ var init_stringify = __esm({
         return String(prefix);
       }
     };
-    push_to_array = function(arr, value_or_array) {
-      Array.prototype.push.apply(arr, isArray(value_or_array) ? value_or_array : [value_or_array]);
+    push_to_array = function(arr2, value_or_array) {
+      Array.prototype.push.apply(arr2, isArray(value_or_array) ? value_or_array : [value_or_array]);
     };
     defaults = {
       addQueryPrefix: false,
@@ -15069,9 +15069,9 @@ function concatBytes(buffers) {
   }
   return output2;
 }
-function encodeUTF8(str) {
+function encodeUTF8(str2) {
   let encoder2;
-  return (encodeUTF8_ ?? (encoder2 = new globalThis.TextEncoder(), encodeUTF8_ = encoder2.encode.bind(encoder2)))(str);
+  return (encodeUTF8_ ?? (encoder2 = new globalThis.TextEncoder(), encodeUTF8_ = encoder2.encode.bind(encoder2)))(str2);
 }
 function decodeUTF8(bytes) {
   let decoder;
@@ -15827,12 +15827,12 @@ async function* iterSSEChunks(iterator) {
     yield data;
   }
 }
-function partition(str, delimiter2) {
-  const index = str.indexOf(delimiter2);
+function partition(str2, delimiter2) {
+  const index = str2.indexOf(delimiter2);
   if (index !== -1) {
-    return [str.substring(0, index), delimiter2, str.substring(index + delimiter2.length)];
+    return [str2.substring(0, index), delimiter2, str2.substring(index + delimiter2.length)];
   }
-  return [str, "", ""];
+  return [str2, "", ""];
 }
 var _Stream_client, Stream, SSEDecoder;
 var init_streaming = __esm({
@@ -16709,8 +16709,8 @@ var init_headers = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/internal/utils/path.mjs
-function encodeURIPath(str) {
-  return str.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
+function encodeURIPath(str2) {
+  return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
 var EMPTY, createPathTagFunction, path;
 var init_path = __esm({
@@ -18083,12 +18083,12 @@ var require_sha256 = __commonJS({
       }
       exports2.hmac = hmac;
       function fillBuffer(buffer, hmac2, info, counter) {
-        var num = counter[0];
-        if (num === 0) {
+        var num2 = counter[0];
+        if (num2 === 0) {
           throw new Error("hkdf: cannot expand more");
         }
         hmac2.reset();
-        if (num > 1) {
+        if (num2 > 1) {
           hmac2.update(buffer);
         }
         if (info) {
@@ -26822,8 +26822,8 @@ function defineLazy(object2, key, getter) {
     configurable: true
   });
 }
-function objectClone(obj) {
-  return Object.create(Object.getPrototypeOf(obj), Object.getOwnPropertyDescriptors(obj));
+function objectClone(obj2) {
+  return Object.create(Object.getPrototypeOf(obj2), Object.getOwnPropertyDescriptors(obj2));
 }
 function assignProp(target, prop, value) {
   Object.defineProperty(target, prop, {
@@ -26857,7 +26857,7 @@ function putProp(target, key, value) {
   else
     target[key] = value;
 }
-function mirrorShape(target, source, keys, wrap) {
+function mirrorShape(target, source, keys, wrap2) {
   const raw = sourceShape(source);
   for (const key of keys) {
     const desc = Object.getOwnPropertyDescriptor(raw, key);
@@ -26866,10 +26866,10 @@ function mirrorShape(target, source, keys, wrap) {
     if (desc.get) {
       deferProp(target, key, () => {
         const value = source._zod.def.shape[key];
-        return wrap ? wrap(value, key) : value;
+        return wrap2 ? wrap2(value, key) : value;
       });
     } else
-      putProp(target, key, wrap ? wrap(desc.value, key) : desc.value);
+      putProp(target, key, wrap2 ? wrap2(desc.value, key) : desc.value);
   }
 }
 function mirrorProps(target, source) {
@@ -26894,10 +26894,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path5) {
+function getElementAtPath(obj2, path5) {
   if (!path5)
-    return obj;
-  return path5.reduce((acc, key) => acc?.[key], obj);
+    return obj2;
+  return path5.reduce((acc, key) => acc?.[key], obj2);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -26912,14 +26912,14 @@ function promiseAllObject(promisesObj) {
 }
 function randomString(length = 10) {
   const chars = "abcdefghijklmnopqrstuvwxyz";
-  let str = "";
+  let str2 = "";
   for (let i = 0; i < length; i++) {
-    str += chars[Math.floor(Math.random() * chars.length)];
+    str2 += chars[Math.floor(Math.random() * chars.length)];
   }
-  return str;
+  return str2;
 }
-function esc(str) {
-  return JSON.stringify(str);
+function esc(str2) {
+  return JSON.stringify(str2);
 }
 function slugify(input2) {
   return input2.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -27033,8 +27033,8 @@ var primitiveTypes = /* @__PURE__ */ new Set([
   "symbol",
   "undefined"
 ]);
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegex(str2) {
+  return str2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function clone(inst, def, params) {
   const cl = new inst._zod.constr(def ?? inst._zod.def);
@@ -27288,13 +27288,13 @@ function getSizableOrigin(input2) {
   return "unknown";
 }
 var highSurrogate = /[\uD800-\uDBFF]/;
-function codePointLength(str) {
-  const units = str.length;
-  if (!highSurrogate.test(str))
+function codePointLength(str2) {
+  const units = str2.length;
+  if (!highSurrogate.test(str2))
     return units;
   let count = units;
   for (let i = 0; i < units - 1; i++) {
-    if ((str.charCodeAt(i) & 64512) === 55296 && (str.charCodeAt(i + 1) & 64512) === 56320) {
+    if ((str2.charCodeAt(i) & 64512) === 55296 && (str2.charCodeAt(i + 1) & 64512) === 56320) {
       count--;
       i++;
     }
@@ -27321,9 +27321,9 @@ function parsedType(data) {
       if (Array.isArray(data)) {
         return "array";
       }
-      const obj = data;
-      if (obj && Object.getPrototypeOf(obj) !== Object.prototype && "constructor" in obj && obj.constructor) {
-        return obj.constructor.name;
+      const obj2 = data;
+      if (obj2 && Object.getPrototypeOf(obj2) !== Object.prototype && "constructor" in obj2 && obj2.constructor) {
+        return obj2.constructor.name;
       }
     }
   }
@@ -27341,8 +27341,8 @@ function issue(...args) {
   }
   return { ...iss };
 }
-function cleanEnum(obj) {
-  return Object.entries(obj).filter(([k, _]) => {
+function cleanEnum(obj2) {
+  return Object.entries(obj2).filter(([k, _]) => {
     return Number.isNaN(Number.parseInt(k, 10));
   }).map((el) => el[1]);
 }
@@ -27667,15 +27667,15 @@ var $ZodError = $constructor("$ZodError", initializer);
 var $ZodRealError = $constructor("$ZodError", initializer, void 0, {
   Parent: Error
 });
-function node(obj, key, make) {
-  if (!Object.prototype.hasOwnProperty.call(obj, key)) {
+function node(obj2, key, make) {
+  if (!Object.prototype.hasOwnProperty.call(obj2, key)) {
     if (key === "__proto__") {
-      Object.defineProperty(obj, key, { value: make(), writable: true, enumerable: true, configurable: true });
+      Object.defineProperty(obj2, key, { value: make(), writable: true, enumerable: true, configurable: true });
     } else {
-      obj[key] = make();
+      obj2[key] = make();
     }
   }
-  return obj[key];
+  return obj2[key];
 }
 function flattenError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = {};
@@ -54449,6 +54449,10 @@ var aiBoxSpecRequestSchema = external_exports.object({
   current: external_exports.unknown().optional(),
   image: external_exports.unknown().optional()
 }).strict();
+var aiArtworkRequestSchema = external_exports.object({
+  workspaceId: external_exports.uuid(),
+  operationId: external_exports.uuid()
+}).passthrough();
 var catalogItemResultSchema = external_exports.object({
   kind: orderKindSchema,
   amountMinor: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -54911,6 +54915,11 @@ var MATERIALS = [
     note: "\u0E16\u0E38\u0E07\u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E0B\u0E35\u0E25\u0E02\u0E2D\u0E1A \u2014 blueprint \u0E17\u0E35\u0E48\u0E40\u0E2B\u0E47\u0E19\u0E04\u0E37\u0E2D\u0E41\u0E1C\u0E48\u0E19\u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E41\u0E1A\u0E19 (\u0E2B\u0E19\u0E49\u0E32+\u0E2B\u0E25\u0E31\u0E07+\u0E01\u0E49\u0E19) \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E2A\u0E48\u0E07\u0E1E\u0E34\u0E21\u0E1E\u0E4C"
   }
 ];
+function getMaterial(id) {
+  const m = MATERIALS.find((m2) => m2.id === id);
+  if (!m) throw new Error(`unknown material: ${id}`);
+  return m;
+}
 
 // src/core/templates/shared.ts
 var P = (x, y) => ({ x, y });
@@ -55521,9 +55530,9 @@ function placePath(d, pl) {
   const tok = d.match(/[MLQAZ]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? [];
   const out = [];
   let i = 0;
-  const num = () => Number(tok[i++]);
+  const num2 = () => Number(tok[i++]);
   const pt = () => {
-    const q = placePoint(pl, P(num(), num()));
+    const q = placePoint(pl, P(num2(), num2()));
     return `${fmt3(q.x)} ${fmt3(q.y)}`;
   };
   let cmd = "";
@@ -55544,11 +55553,11 @@ function placePath(d, pl) {
         out.push(pt(), pt());
         break;
       case "A": {
-        const rx = num();
-        const ry = num();
-        const rot = num() + (pl.rot ? 90 : 0);
-        const large = num();
-        const sweep = num();
+        const rx = num2();
+        const ry = num2();
+        const rot = num2() + (pl.rot ? 90 : 0);
+        const large = num2();
+        const sweep = num2();
         out.push(`${rx} ${ry} ${rot} ${large} ${sweep}`, pt());
         break;
       }
@@ -57974,6 +57983,7 @@ var TEMPLATES = [
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C\u0E1D\u0E32\u0E1E\u0E31\u0E1A (\u2248FEFCO 0426)",
     detail: "\u0E2A\u0E48\u0E07\u0E02\u0E2D\u0E07\u0E2D\u0E2D\u0E19\u0E44\u0E25\u0E19\u0E4C \xB7 \u0E01\u0E25\u0E48\u0E2D\u0E07 subscription \xB7 \u0E0A\u0E38\u0E14\u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E2B\u0E25\u0E32\u0E22\u0E0A\u0E34\u0E49\u0E19",
     defaults: { W: 200, D: 140, H: 60 },
+    // กล่องไปรษณีย์ไทยเบอร์ A (14×20×6 ซม.)
     tilt: -Math.PI / 2,
     supportsHandle: true,
     supportsVents: true,
@@ -57984,7 +57994,8 @@ var TEMPLATES = [
     id: "rollover-mailer",
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C\u0E02\u0E2D\u0E1A\u0E21\u0E49\u0E27\u0E19 (rollover mailer)",
     detail: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E41\u0E1A\u0E23\u0E19\u0E14\u0E4C\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \xB7 \u0E2A\u0E48\u0E07\u0E40\u0E2A\u0E37\u0E49\u0E2D\u0E1C\u0E49\u0E32/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07 \xB7 \u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D",
-    defaults: { W: 220, D: 150, H: 70 },
+    defaults: { W: 250, D: 170, H: 90 },
+    // กล่องไปรษณีย์ไทยเบอร์ B (17×25×9 ซม.)
     tilt: -Math.PI / 2,
     supportsHandle: false,
     foldDepth: (b, m) => b.H + m.thickness,
@@ -57995,6 +58006,7 @@ var TEMPLATES = [
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C\u0E1D\u0E32\u0E25\u0E47\u0E2D\u0E01 (FEFCO 0427)",
     detail: "\u0E2A\u0E48\u0E07\u0E2B\u0E19\u0E31\u0E07\u0E2A\u0E37\u0E2D/\u0E02\u0E2D\u0E07\u0E2B\u0E19\u0E31\u0E01 \xB7 \u0E2D\u0E35\u0E04\u0E2D\u0E21\u0E40\u0E21\u0E34\u0E23\u0E4C\u0E0B \xB7 \u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E01\u0E31\u0E19\u0E01\u0E23\u0E30\u0E41\u0E17\u0E01",
     defaults: { W: 200, D: 140, H: 60 },
+    // กล่องไปรษณีย์ไทยเบอร์ A (14×20×6 ซม.)
     tilt: -Math.PI / 2,
     spin: FEFCO0427_SPIN,
     supportsHandle: false,
@@ -58027,7 +58039,8 @@ var TEMPLATES = [
     id: "rsc",
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E25\u0E39\u0E01\u0E1F\u0E39\u0E01 RSC (FEFCO 0201)",
     detail: "\u0E25\u0E31\u0E07\u0E02\u0E19\u0E2A\u0E48\u0E07\u0E17\u0E31\u0E48\u0E27\u0E44\u0E1B \xB7 \u0E2A\u0E15\u0E47\u0E2D\u0E01/\u0E01\u0E23\u0E30\u0E08\u0E32\u0E22\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32 \xB7 \u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E08\u0E33\u0E19\u0E27\u0E19\u0E21\u0E32\u0E01",
-    defaults: { W: 250, D: 200, H: 150 },
+    defaults: { W: 300, D: 200, H: 110 },
+    // กล่องไปรษณีย์ไทยเบอร์ C (20×30×11 ซม.) — ฝาชน RSC
     tilt: 0,
     supportsHandle: false,
     supportsVents: true,
@@ -58131,7 +58144,8 @@ var TEMPLATES = [
     id: "card",
     nameTh: "\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23 (business card)",
     detail: "\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23 \xB7 \u0E01\u0E32\u0E23\u0E4C\u0E14\u0E2A\u0E30\u0E2A\u0E21 \xB7 \u0E04\u0E39\u0E1B\u0E2D\u0E07/\u0E01\u0E32\u0E23\u0E4C\u0E14\u0E40\u0E0A\u0E34\u0E0D",
-    defaults: { W: 90, D: 54, H: 54 },
+    defaults: { W: 90, D: 55, H: 55 },
+    // นามบัตรขนาดที่โรงพิมพ์ไทยใช้ 9×5.5 ซม.
     tilt: 0,
     supportsHandle: false,
     foldDepth: () => 0,
@@ -59139,6 +59153,1021 @@ var JSON_INSTRUCTION = `
 \u0E15\u0E2D\u0E1A\u0E40\u0E1B\u0E47\u0E19 JSON object \u0E40\u0E14\u0E35\u0E22\u0E27\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 \u0E2B\u0E49\u0E32\u0E21\u0E21\u0E35\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2D\u0E37\u0E48\u0E19\u0E2B\u0E23\u0E37\u0E2D markdown fence \u0E19\u0E33\u0E2B\u0E19\u0E49\u0E32/\u0E15\u0E32\u0E21\u0E2B\u0E25\u0E31\u0E07:
 {"template":"<${TEMPLATE_IDS.join("|")}>","materialId":"<id>","W":<number>,"D":<number>,"H":<number>,"handle":<true|false>,"assumptions":["..."],"layoutNote":"...","reasoning":"..."}`;
 
+// server/aiArtwork.ts
+import { execFile as execFile3 } from "node:child_process";
+init_sdk();
+import { promisify as promisify3 } from "node:util";
+
+// src/core/artwork.ts
+var FONTS = [
+  { id: "noto", nameTh: "Noto Sans Thai", css: "'Noto Sans Thai'" },
+  { id: "sarabun", nameTh: "Sarabun", css: "'Sarabun'" },
+  { id: "prompt", nameTh: "Prompt", css: "'Prompt'" },
+  { id: "kanit", nameTh: "Kanit", css: "'Kanit'" },
+  { id: "bai-jamjuree", nameTh: "Bai Jamjuree", css: "'Bai Jamjuree'" },
+  { id: "mitr", nameTh: "Mitr", css: "'Mitr'" },
+  { id: "chakra-petch", nameTh: "Chakra Petch", css: "'Chakra Petch'" },
+  { id: "mali", nameTh: "Mali", css: "'Mali'" },
+  { id: "pridi", nameTh: "Pridi", css: "'Pridi'" },
+  { id: "kodchasan", nameTh: "Kodchasan", css: "'Kodchasan'" }
+];
+var SegmenterCtor = Intl.Segmenter;
+var segmenter = SegmenterCtor ? new SegmenterCtor("th", { granularity: "grapheme" }) : null;
+var FRAMES = [
+  { id: "none", nameTh: "\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E23\u0E2D\u0E1A", nameEn: "No frame" },
+  { id: "circle", nameTh: "\u0E27\u0E07\u0E01\u0E25\u0E21", nameEn: "Circle" },
+  { id: "rounded", nameTh: "\u0E21\u0E38\u0E21\u0E21\u0E19", nameEn: "Rounded" },
+  { id: "squircle", nameTh: "\u0E21\u0E38\u0E21\u0E21\u0E19\u0E21\u0E32\u0E01", nameEn: "Squircle" },
+  { id: "triangle", nameTh: "\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21", nameEn: "Triangle" },
+  { id: "diamond", nameTh: "\u0E02\u0E49\u0E32\u0E27\u0E2B\u0E25\u0E32\u0E21\u0E15\u0E31\u0E14", nameEn: "Diamond" },
+  { id: "pentagon", nameTh: "\u0E2B\u0E49\u0E32\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21", nameEn: "Pentagon" },
+  { id: "hexagon", nameTh: "\u0E2B\u0E01\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21", nameEn: "Hexagon" },
+  { id: "star", nameTh: "\u0E14\u0E32\u0E27", nameEn: "Star" },
+  { id: "heart", nameTh: "\u0E2B\u0E31\u0E27\u0E43\u0E08", nameEn: "Heart" },
+  { id: "arch", nameTh: "\u0E0B\u0E38\u0E49\u0E21\u0E42\u0E04\u0E49\u0E07", nameEn: "Arch" }
+];
+var FRAME_IDS = FRAMES.map((f) => f.id);
+
+// src/core/presets.ts
+function shade(hex3, f) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex3);
+  const n = m ? parseInt(m[1], 16) : 1011286;
+  const r = Math.min(255, Math.round((n >> 16 & 255) * f));
+  const g = Math.min(255, Math.round((n >> 8 & 255) * f));
+  const b = Math.min(255, Math.round((n & 255) * f));
+  return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+function burst(points, outer, inner) {
+  const cx = 50;
+  const cy = 50;
+  const step = Math.PI / points;
+  let d = "";
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outer : inner;
+    const a = i * step - Math.PI / 2;
+    d += (i === 0 ? "M" : "L") + (cx + r * Math.cos(a)).toFixed(1) + " " + (cy + r * Math.sin(a)).toFixed(1);
+  }
+  return d + "Z";
+}
+function wrap(vw, vh, inner) {
+  const s = 512 / Math.max(vw, vh);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}" width="${Math.round(vw * s)}" height="${Math.round(vh * s)}">${inner}</svg>`;
+}
+var PRESETS = [
+  // --- ตรา / Badge ---
+  {
+    id: "badge-burst",
+    cat: "badge",
+    nameTh: "\u0E15\u0E23\u0E32\u0E41\u0E09\u0E01",
+    aspect: 1,
+    svg: (c) => wrap(
+      100,
+      100,
+      `<path d="${burst(16, 48, 39)}" fill="${c}"/><circle cx="50" cy="50" r="31" fill="none" stroke="#fff" stroke-width="2.5"/>`
+    )
+  },
+  {
+    id: "badge-seal",
+    cat: "badge",
+    nameTh: "\u0E15\u0E23\u0E32\u0E01\u0E25\u0E21",
+    aspect: 1,
+    svg: (c) => wrap(
+      100,
+      100,
+      `<circle cx="50" cy="50" r="48" fill="${c}"/><circle cx="50" cy="50" r="40" fill="none" stroke="#fff" stroke-width="2"/><circle cx="50" cy="50" r="43.5" fill="none" stroke="#fff" stroke-width="1" stroke-dasharray="1.5 3"/>`
+    )
+  },
+  {
+    id: "badge-shield",
+    cat: "badge",
+    nameTh: "\u0E42\u0E25\u0E48",
+    aspect: 100 / 112,
+    svg: (c) => wrap(
+      100,
+      112,
+      `<path d="M50 5 L92 19 V60 C92 86 72 102 50 108 C28 102 8 86 8 60 V19 Z" fill="${c}"/><path d="M50 13 L84 24 V59 C84 80 68 93 50 99 C32 93 16 80 16 59 V24 Z" fill="none" stroke="#fff" stroke-width="2"/>`
+    )
+  },
+  {
+    id: "badge-sale",
+    cat: "badge",
+    nameTh: "\u0E1B\u0E49\u0E32\u0E22\u0E40\u0E0B\u0E25",
+    aspect: 1,
+    svg: (c) => wrap(
+      100,
+      100,
+      `<path d="${burst(12, 49, 33)}" fill="${c}"/><circle cx="50" cy="50" r="26" fill="${shade(c, 0.82)}"/>`
+    )
+  },
+  // --- ริบบิ้น / Ribbon ---
+  {
+    id: "ribbon-banner",
+    cat: "ribbon",
+    nameTh: "\u0E41\u0E1A\u0E19\u0E40\u0E19\u0E2D\u0E23\u0E4C",
+    aspect: 200 / 62,
+    svg: (c) => wrap(
+      200,
+      62,
+      // หางพับด้านหลัง (เข้มกว่า)
+      `<path d="M8 16 H36 V52 L18 40 L8 46 Z" fill="${shade(c, 0.65)}"/><path d="M192 16 H164 V52 L182 40 L192 46 Z" fill="${shade(c, 0.65)}"/><path d="M28 6 H172 L156 25 L172 44 H28 L44 25 Z" fill="${c}"/>`
+    )
+  },
+  {
+    id: "ribbon-corner",
+    cat: "ribbon",
+    nameTh: "\u0E23\u0E34\u0E1A\u0E1A\u0E34\u0E49\u0E19\u0E21\u0E38\u0E21",
+    aspect: 1,
+    svg: (c) => wrap(
+      100,
+      100,
+      `<path d="M30 4 L96 70 L70 96 L4 30 Z" fill="${c}"/><path d="M22 12 L12 22 L4 30 L30 4 Z" fill="${shade(c, 0.65)}"/><path d="M88 78 L78 88 L70 96 L96 70 Z" fill="${shade(c, 0.65)}"/>`
+    )
+  },
+  {
+    id: "ribbon-tag",
+    cat: "ribbon",
+    nameTh: "\u0E1B\u0E49\u0E32\u0E22\u0E2B\u0E49\u0E2D\u0E22",
+    aspect: 120 / 68,
+    svg: (c) => wrap(
+      120,
+      68,
+      `<path d="M40 6 H112 a4 4 0 0 1 4 4 V58 a4 4 0 0 1 -4 4 H40 L6 34 Z" fill="${c}"/><circle cx="30" cy="34" r="6" fill="#fff"/>`
+    )
+  },
+  // --- ไอคอน / Icon ---
+  {
+    id: "icon-star",
+    cat: "icon",
+    nameTh: "\u0E14\u0E32\u0E27",
+    aspect: 1,
+    svg: (c) => wrap(100, 100, `<path d="${burst(5, 48, 20)}" fill="${c}"/>`)
+  },
+  {
+    id: "icon-leaf",
+    cat: "icon",
+    nameTh: "\u0E43\u0E1A\u0E44\u0E21\u0E49",
+    aspect: 1,
+    svg: (c) => wrap(
+      100,
+      100,
+      `<path d="M50 6 C20 28 18 68 50 94 C82 68 80 28 50 6 Z" fill="${c}"/><path d="M50 14 V86" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/>`
+    )
+  },
+  {
+    id: "icon-heart",
+    cat: "icon",
+    nameTh: "\u0E2B\u0E31\u0E27\u0E43\u0E08",
+    aspect: 100 / 90,
+    svg: (c) => wrap(100, 90, `<path d="M50 84 C6 52 10 18 34 18 C44 18 50 26 50 30 C50 26 56 18 66 18 C90 18 94 52 50 84 Z" fill="${c}"/>`)
+  }
+];
+var presetById = (id) => PRESETS.find((p) => p.id === id);
+
+// src/core/aiArtwork.ts
+var ART_SAFE_MM = 3;
+var ART_MIN_TEXT_MM = 2.5;
+var ART_MAX_ELEMENTS = 80;
+var ART_MAX_SVG_CHARS = 6e4;
+var ART_MAX_SVG_TOTAL = 4e5;
+var ART_MAX_TEXT_CHARS = 600;
+var HEX = /^#[0-9a-fA-F]{6}$/;
+var SHAPE_KINDS = ["rect", "ellipse", "line", "triangle", "polygon", "star"];
+var FONT_IDS = FONTS.map((f) => f.id);
+var FINISH_IDS = FINISHES.map((f) => f.id);
+var FX_KINDS = TEXT_FX_KINDS.map((k) => k.id);
+var PRESET_IDS = PRESETS.map((p) => p.id);
+var nullable2 = (schema) => ({ anyOf: [schema, { type: "null" }] });
+var str = (description) => ({ type: "string", ...description ? { description } : {} });
+var num = (description) => ({ type: "number", ...description ? { description } : {} });
+var bool = (description) => ({ type: "boolean", ...description ? { description } : {} });
+var en = (values, description) => ({ type: "string", enum: [...values], ...description ? { description } : {} });
+var obj = (properties, description) => ({
+  type: "object",
+  additionalProperties: false,
+  properties,
+  required: Object.keys(properties),
+  ...description ? { description } : {}
+});
+var arr = (items, description) => ({ type: "array", items, ...description ? { description } : {} });
+var gradSchema = obj({ from: str("#rrggbb"), to: str("#rrggbb"), angle: num("\u0E2D\u0E07\u0E28\u0E32 0 = \u0E0B\u0E49\u0E32\u0E22\u2192\u0E02\u0E27\u0E32, 90 = \u0E1A\u0E19\u2192\u0E25\u0E48\u0E32\u0E07"), radial: nullable2(bool()) });
+var fxSchema = obj({
+  kind: en(FX_KINDS, "drop \u0E40\u0E07\u0E32 \xB7 background \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E37\u0E49\u0E19\u0E2B\u0E25\u0E31\u0E07 \xB7 hollow \u0E01\u0E25\u0E27\u0E07 \xB7 splice \u0E0B\u0E49\u0E2D\u0E19\u0E40\u0E2B\u0E25\u0E37\u0E48\u0E2D\u0E21 \xB7 double \u0E02\u0E2D\u0E1A\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 \xB7 echo \xB7 glow \xB7 long \u0E40\u0E07\u0E32\u0E22\u0E32\u0E27"),
+  color: nullable2(str()),
+  color2: nullable2(str()),
+  dist: nullable2(num()),
+  angle: nullable2(num()),
+  blur: nullable2(num()),
+  alpha: nullable2(num("0-100")),
+  width: nullable2(num("% \u0E02\u0E19\u0E32\u0E14\u0E1F\u0E2D\u0E19\u0E15\u0E4C")),
+  width2: nullable2(num()),
+  pad: nullable2(num()),
+  round: nullable2(num())
+});
+var baseProps = {
+  id: nullable2(str("\u0E15\u0E31\u0E27\u0E23\u0E30\u0E1A\u0E38\u0E2A\u0E31\u0E49\u0E19 a-z0-9- (\u0E44\u0E21\u0E48\u0E0B\u0E49\u0E33) \u0E43\u0E0A\u0E49\u0E2D\u0E49\u0E32\u0E07\u0E15\u0E2D\u0E19\u0E41\u0E01\u0E49\u0E44\u0E02")),
+  name: nullable2(str("\u0E0A\u0E37\u0E48\u0E2D\u0E0A\u0E31\u0E49\u0E19\u0E43\u0E19\u0E41\u0E1C\u0E07\u0E40\u0E25\u0E40\u0E22\u0E2D\u0E23\u0E4C (\u0E44\u0E17\u0E22)")),
+  panel: str("id \u0E02\u0E2D\u0E07\u0E41\u0E1C\u0E07\u0E17\u0E35\u0E48\u0E27\u0E32\u0E07 (\u0E15\u0E49\u0E2D\u0E07\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E41\u0E1C\u0E07\u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E49)"),
+  x: num("\u0E21\u0E21. \u0E08\u0E32\u0E01\u0E02\u0E2D\u0E1A\u0E0B\u0E49\u0E32\u0E22\u0E02\u0E2D\u0E07\u0E41\u0E1C\u0E07"),
+  y: num("\u0E21\u0E21. \u0E08\u0E32\u0E01\u0E02\u0E2D\u0E1A\u0E1A\u0E19\u0E02\u0E2D\u0E07\u0E41\u0E1C\u0E07"),
+  rot: nullable2(num("\u0E2D\u0E07\u0E28\u0E32 \u0E15\u0E32\u0E21\u0E40\u0E02\u0E47\u0E21 (0 = \u0E44\u0E21\u0E48\u0E2B\u0E21\u0E38\u0E19)")),
+  opacity: nullable2(num("0-1")),
+  finish: nullable2(en(FINISH_IDS, "\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E1E\u0E34\u0E40\u0E28\u0E29 (\u0E1F\u0E2D\u0E22\u0E25\u0E4C/spot UV/\u0E1B\u0E31\u0E4A\u0E21\u0E19\u0E39\u0E19-\u0E08\u0E21) \u0E43\u0E0A\u0E49\u0E40\u0E09\u0E1E\u0E32\u0E30\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E14\u0E48\u0E19"))
+};
+var textSchema2 = obj({
+  type: en(["text"]),
+  ...baseProps,
+  text: str("\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21 \u0E2B\u0E25\u0E32\u0E22\u0E1A\u0E23\u0E23\u0E17\u0E31\u0E14\u0E14\u0E49\u0E27\u0E22 \\n"),
+  size: num(`\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 \u0E21\u0E21. (\u0E2D\u0E48\u0E32\u0E19\u0E2D\u0E2D\u0E01\u0E15\u0E31\u0E49\u0E07\u0E41\u0E15\u0E48 ${ART_MIN_TEXT_MM})`),
+  color: str("#rrggbb"),
+  anchor: nullable2(en(["left", "center", "right"], "x \u0E40\u0E1B\u0E47\u0E19\u0E02\u0E2D\u0E1A\u0E0B\u0E49\u0E32\u0E22/\u0E01\u0E36\u0E48\u0E07\u0E01\u0E25\u0E32\u0E07/\u0E02\u0E2D\u0E1A\u0E02\u0E27\u0E32\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21 (center \u0E2A\u0E30\u0E14\u0E27\u0E01\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E08\u0E31\u0E14\u0E01\u0E25\u0E32\u0E07\u0E41\u0E1C\u0E07)")),
+  font: nullable2(en(FONT_IDS)),
+  weight: nullable2(en(["400", "700"])),
+  lh: nullable2(num("\u0E15\u0E31\u0E27\u0E04\u0E39\u0E13\u0E23\u0E30\u0E22\u0E30\u0E1A\u0E23\u0E23\u0E17\u0E31\u0E14 (\u0E04\u0E48\u0E32\u0E40\u0E23\u0E34\u0E48\u0E21\u0E15\u0E49\u0E19 1.25)")),
+  strokeColor: nullable2(str()),
+  strokeW: nullable2(num("\u0E21\u0E21.")),
+  ls: nullable2(num("\u0E23\u0E30\u0E22\u0E30\u0E2B\u0E48\u0E32\u0E07\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 % \u0E02\u0E19\u0E32\u0E14\u0E1F\u0E2D\u0E19\u0E15\u0E4C (-20..100)")),
+  grad: nullable2(gradSchema),
+  fx: nullable2(fxSchema),
+  curve: nullable2(num("\u0E14\u0E31\u0E14\u0E42\u0E04\u0E49\u0E07 \u0E2D\u0E07\u0E28\u0E32 (+ \u0E42\u0E01\u0E48\u0E07\u0E02\u0E36\u0E49\u0E19) \u2014 \u0E2B\u0E49\u0E32\u0E21\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22"))
+});
+var shapeSchema2 = obj({
+  type: en(["shape"]),
+  ...baseProps,
+  shape: en(SHAPE_KINDS),
+  w: num("\u0E21\u0E21."),
+  h: num("\u0E21\u0E21. (line = \u0E04\u0E27\u0E32\u0E21\u0E2B\u0E19\u0E32\u0E40\u0E2A\u0E49\u0E19)"),
+  fill: str("#rrggbb \u0E2B\u0E23\u0E37\u0E2D none"),
+  stroke: str("#rrggbb \u0E2B\u0E23\u0E37\u0E2D none"),
+  strokeW: num("\u0E21\u0E21."),
+  grad: nullable2(gradSchema),
+  sides: nullable2(num("polygon/star: \u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E49\u0E32\u0E19/\u0E41\u0E09\u0E01 3-12")),
+  dash: nullable2(bool())
+});
+var imageSchema2 = obj({
+  type: en(["image"]),
+  ...baseProps,
+  src: str("preset:<id>:<#rrggbb> \u0E25\u0E32\u0E22\u0E08\u0E32\u0E01\u0E44\u0E25\u0E1A\u0E23\u0E32\u0E23\u0E35 \xB7 asset:<id> \u0E23\u0E39\u0E1B\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E31\u0E1B\u0E42\u0E2B\u0E25\u0E14 \xB7 svg:<markup> \u0E20\u0E32\u0E1E\u0E40\u0E27\u0E01\u0E40\u0E15\u0E2D\u0E23\u0E4C\u0E17\u0E35\u0E48\u0E04\u0E38\u0E13\u0E27\u0E32\u0E14\u0E40\u0E2D\u0E07 (\u0E21\u0E35 viewBox)"),
+  w: num("\u0E04\u0E27\u0E32\u0E21\u0E01\u0E27\u0E49\u0E32\u0E07 \u0E21\u0E21."),
+  h: nullable2(num("\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07 \u0E21\u0E21. (\u0E44\u0E21\u0E48\u0E43\u0E2A\u0E48 = \u0E15\u0E32\u0E21\u0E2A\u0E31\u0E14\u0E2A\u0E48\u0E27\u0E19\u0E23\u0E39\u0E1B)")),
+  fit: nullable2(en(["cover", "contain", "stretch"])),
+  radius: nullable2(num("\u0E21\u0E38\u0E21\u0E42\u0E04\u0E49\u0E07 \u0E21\u0E21.")),
+  circle: nullable2(bool())
+});
+var anchorSchema2 = obj({ nx: num("0-1"), ny: num("0-1"), ox: nullable2(num()), oy: nullable2(num()), ix: nullable2(num()), iy: nullable2(num()) });
+var pathSchema2 = obj({
+  type: en(["path"]),
+  ...baseProps,
+  anchors: arr(anchorSchema2, "\u0E08\u0E38\u0E14\u0E22\u0E2D\u0E14 normalized 0..1 \u0E43\u0E19\u0E01\u0E23\u0E2D\u0E1A w\xD7h, ox/oy \u0E41\u0E02\u0E19\u0E40\u0E1A\u0E0B\u0E34\u0E40\u0E22\u0E23\u0E4C\u0E2D\u0E2D\u0E01 ix/iy \u0E41\u0E02\u0E19\u0E40\u0E02\u0E49\u0E32"),
+  closed: bool(),
+  w: num(),
+  h: num(),
+  fill: str(),
+  stroke: str(),
+  strokeW: num(),
+  grad: nullable2(gradSchema),
+  dash: nullable2(bool())
+});
+var rowSchema = obj({ label: str(), value: str(), rdi: nullable2(str("% Thai RDI \u0E15\u0E31\u0E27\u0E40\u0E25\u0E02\u0E25\u0E49\u0E27\u0E19")), indent: nullable2(bool()), bold: nullable2(bool()) });
+var nutritionSchema2 = obj({
+  type: en(["nutrition"]),
+  ...baseProps,
+  w: num("\u0E04\u0E27\u0E32\u0E21\u0E01\u0E27\u0E49\u0E32\u0E07\u0E15\u0E32\u0E23\u0E32\u0E07 \u0E21\u0E21. (\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E04\u0E33\u0E19\u0E27\u0E13\u0E40\u0E2D\u0E07 ~1.2\xD7w)"),
+  serving: str("\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E2B\u0E19\u0E48\u0E27\u0E22\u0E1A\u0E23\u0E34\u0E42\u0E20\u0E04"),
+  servings: str("\u0E08\u0E33\u0E19\u0E27\u0E19\u0E2B\u0E19\u0E48\u0E27\u0E22\u0E1A\u0E23\u0E34\u0E42\u0E20\u0E04\u0E15\u0E48\u0E2D\u0E20\u0E32\u0E0A\u0E19\u0E30"),
+  energy: str("\u0E01\u0E34\u0E42\u0E25\u0E41\u0E04\u0E25\u0E2D\u0E23\u0E35"),
+  energyFat: nullable2(str()),
+  rows: arr(rowSchema),
+  vitamins: arr(rowSchema),
+  footnote: str(),
+  ink: nullable2(str()),
+  paper: nullable2(bool()),
+  scale: nullable2(num())
+});
+var ARTWORK_SCHEMA = obj({
+  name: nullable2(str("\u0E0A\u0E37\u0E48\u0E2D\u0E41\u0E19\u0E27\u0E04\u0E34\u0E14\u0E07\u0E32\u0E19\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A (\u0E44\u0E17\u0E22 \u0E2A\u0E31\u0E49\u0E19)")),
+  fillColor: nullable2(str("\u0E2A\u0E35\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E31\u0E49\u0E07\u0E41\u0E1E\u0E47\u0E01\u0E40\u0E01\u0E08 #rrggbb (null = \u0E44\u0E21\u0E48\u0E21\u0E35/\u0E02\u0E32\u0E27)")),
+  background: nullable2(str("SVG \u0E23\u0E39\u0E1B\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E31\u0E49\u0E07\u0E41\u0E1C\u0E48\u0E19 (\u0E22\u0E37\u0E14\u0E04\u0E25\u0E38\u0E21\u0E17\u0E38\u0E01\u0E41\u0E1C\u0E07) \u0E40\u0E0A\u0E48\u0E19 \u0E25\u0E32\u0E22\u0E1E\u0E37\u0E49\u0E19\u0E2B\u0E25\u0E31\u0E07/\u0E44\u0E25\u0E48\u0E2A\u0E35 \u2014 \u0E43\u0E2A\u0E48\u0E40\u0E09\u0E1E\u0E32\u0E30\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E08\u0E33\u0E40\u0E1B\u0E47\u0E19")),
+  elements: arr({ anyOf: [textSchema2, shapeSchema2, imageSchema2, pathSchema2, nutritionSchema2] }, `\u0E0A\u0E34\u0E49\u0E19\u0E07\u0E32\u0E19 1-${ART_MAX_ELEMENTS} \u0E0A\u0E34\u0E49\u0E19 \u0E40\u0E23\u0E35\u0E22\u0E07\u0E08\u0E32\u0E01\u0E0A\u0E31\u0E49\u0E19\u0E25\u0E48\u0E32\u0E07\u0E2A\u0E38\u0E14\u0E02\u0E36\u0E49\u0E19\u0E1A\u0E19`),
+  explanation: str("\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E41\u0E19\u0E27\u0E04\u0E34\u0E14\u0E43\u0E2B\u0E49\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32 1-3 \u0E1B\u0E23\u0E30\u0E42\u0E22\u0E04 (\u0E44\u0E17\u0E22) \u0E41\u0E25\u0E30\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E23\u0E2D\u0E01\u0E40\u0E2D\u0E07")
+});
+var isObj = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+var finite2 = (v) => typeof v === "number" && Number.isFinite(v) ? v : void 0;
+var clamp2 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var strOf = (v, max) => typeof v === "string" ? v.slice(0, max) : void 0;
+var color2 = (v) => typeof v === "string" && HEX.test(v) ? v.toLowerCase() : void 0;
+var paint2 = (v) => v === "none" ? "none" : color2(v);
+function parseGrad(v) {
+  if (!isObj(v)) return void 0;
+  const from = color2(v.from), to = color2(v.to);
+  if (!from || !to) return void 0;
+  return { from, to, angle: finite2(v.angle) ?? 90, ...v.radial === true ? { radial: true } : {} };
+}
+function parseFx(v) {
+  if (!isObj(v) || !FX_KINDS.includes(v.kind)) return void 0;
+  const fx = { kind: v.kind };
+  const c = color2(v.color), c2 = color2(v.color2);
+  if (c) fx.color = c;
+  if (c2) fx.color2 = c2;
+  for (const k of ["dist", "angle", "blur", "alpha", "width", "width2", "pad", "round"]) {
+    const n = finite2(v[k]);
+    if (n !== void 0) fx[k] = n;
+  }
+  return fx;
+}
+function parseRows(v) {
+  if (!Array.isArray(v)) return [];
+  return v.filter(isObj).slice(0, 30).map((r) => ({
+    label: strOf(r.label, 60) ?? "",
+    value: strOf(r.value, 30) ?? "",
+    ...strOf(r.rdi, 6) ? { rdi: strOf(r.rdi, 6) } : {},
+    ...r.indent === true ? { indent: true } : {},
+    ...r.bold === true ? { bold: true } : {}
+  }));
+}
+function parseBase(o, i, issues) {
+  const panel = strOf(o.panel, 40);
+  const x = finite2(o.x), y = finite2(o.y);
+  if (!panel || x === void 0 || y === void 0) {
+    issues.push({ severity: "error", code: "element-invalid", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1}: \u0E15\u0E49\u0E2D\u0E07\u0E21\u0E35 panel, x, y` });
+    return null;
+  }
+  const id = strOf(o.id, 40);
+  const name = strOf(o.name, 60);
+  const rot = finite2(o.rot);
+  const opacity = finite2(o.opacity);
+  return {
+    panel,
+    x,
+    y,
+    ...id ? { id: id.replace(/[^\w-]/g, "-") } : {},
+    ...name ? { name } : {},
+    ...rot ? { rot: (rot % 360 + 360) % 360 } : {},
+    ...opacity !== void 0 && opacity < 1 ? { opacity: clamp2(opacity, 0, 1) } : {},
+    ...FINISH_IDS.includes(o.finish) ? { finish: o.finish } : {}
+  };
+}
+function parseElement(v, i, issues, svgBudget) {
+  if (!isObj(v)) {
+    issues.push({ severity: "error", code: "element-invalid", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1} \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48 object` });
+    return null;
+  }
+  const base = parseBase(v, i, issues);
+  if (!base) return null;
+  const t = v.type;
+  if (t === "text") {
+    const text = strOf(v.text, ART_MAX_TEXT_CHARS)?.replace(/\r/g, "") ?? "";
+    const size = finite2(v.size);
+    if (!text.trim() || size === void 0 || size <= 0) {
+      issues.push({ severity: "error", code: "text-invalid", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1} (text): \u0E15\u0E49\u0E2D\u0E07\u0E21\u0E35 text \u0E41\u0E25\u0E30 size > 0` });
+      return null;
+    }
+    const e = { ...base, type: "text", text, size: clamp2(size, 1, 200), color: color2(v.color) ?? "#222222" };
+    if (v.anchor === "center" || v.anchor === "right") e.anchor = v.anchor;
+    if (FONT_IDS.includes(v.font)) e.font = v.font;
+    if (v.weight === 700 || v.weight === "700") e.weight = 700;
+    const lh = finite2(v.lh);
+    if (lh && lh > 0 && lh !== 1.25) e.lh = clamp2(lh, 0.8, 3);
+    const sc = color2(v.strokeColor), sw = finite2(v.strokeW);
+    if (sc && sw && sw > 0) {
+      e.strokeColor = sc;
+      e.strokeW = clamp2(sw, 0, 10);
+    }
+    const ls = finite2(v.ls);
+    if (ls) e.ls = clamp2(ls, -20, 100);
+    const grad = parseGrad(v.grad);
+    if (grad) e.grad = grad;
+    const fx = parseFx(v.fx);
+    if (fx) e.fx = fx;
+    const curve = finite2(v.curve);
+    if (curve && Math.abs(curve) >= 1) {
+      if (/[฀-๿]/.test(text)) issues.push({ severity: "warning", code: "curve-thai", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1}: \u0E15\u0E31\u0E14 curve \u0E2D\u0E2D\u0E01\u0E40\u0E1E\u0E23\u0E32\u0E30\u0E40\u0E1B\u0E47\u0E19\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E44\u0E17\u0E22` });
+      else e.curve = clamp2(curve, -300, 300);
+    }
+    return e;
+  }
+  if (t === "shape") {
+    const w = finite2(v.w), h = finite2(v.h);
+    if (!SHAPE_KINDS.includes(v.shape) || w === void 0 || h === void 0 || w <= 0 || h <= 0) {
+      issues.push({ severity: "error", code: "shape-invalid", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1} (shape): shape \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 ${SHAPE_KINDS.join("/")} \u0E41\u0E25\u0E30 w,h > 0` });
+      return null;
+    }
+    const e = { ...base, type: "shape", shape: v.shape, w, h, fill: paint2(v.fill) ?? "#2f8a99", stroke: paint2(v.stroke) ?? "none", strokeW: clamp2(finite2(v.strokeW) ?? 0, 0, 20) };
+    const grad = parseGrad(v.grad);
+    if (grad && e.shape !== "line") e.grad = grad;
+    const sides = finite2(v.sides);
+    if (sides && (e.shape === "polygon" || e.shape === "star")) e.sides = clamp2(Math.round(sides), 3, 12);
+    if (v.dash === true) e.dash = true;
+    return e;
+  }
+  if (t === "image") {
+    const src = typeof v.src === "string" ? v.src : "";
+    const w = finite2(v.w);
+    if (w === void 0 || w <= 0 || !/^(preset:|asset:|svg:)/.test(src)) {
+      issues.push({ severity: "error", code: "image-invalid", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1} (image): src \u0E15\u0E49\u0E2D\u0E07\u0E02\u0E36\u0E49\u0E19\u0E15\u0E49\u0E19 preset:/asset:/svg: \u0E41\u0E25\u0E30 w > 0` });
+      return null;
+    }
+    let cleanSrc = src;
+    if (src.startsWith("svg:")) {
+      const markup = src.slice(4);
+      if (markup.length > ART_MAX_SVG_CHARS || markup.length > svgBudget.left) {
+        issues.push({ severity: "error", code: "svg-too-large", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1}: SVG \u0E22\u0E32\u0E27\u0E40\u0E01\u0E34\u0E19 (\u0E08\u0E33\u0E01\u0E31\u0E14 ${ART_MAX_SVG_CHARS} \u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23\u0E15\u0E48\u0E2D\u0E23\u0E39\u0E1B) \u2014 \u0E27\u0E32\u0E14\u0E43\u0E2B\u0E49\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E07\u0E48\u0E32\u0E22\u0E25\u0E07` });
+        return null;
+      }
+      const clean = sanitizeSvg(markup);
+      if (!clean) {
+        issues.push({ severity: "error", code: "svg-invalid", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1}: SVG \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07 (\u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 <svg> \u0E21\u0E35 viewBox \u0E43\u0E0A\u0E49\u0E41\u0E17\u0E47\u0E01\u0E1E\u0E37\u0E49\u0E19\u0E10\u0E32\u0E19 path/rect/circle/text/gradient)` });
+        return null;
+      }
+      svgBudget.left -= clean.svg.length;
+      cleanSrc = "svg:" + clean.svg;
+    } else if (src.startsWith("preset:")) {
+      const [, id, c] = src.split(":");
+      if (!presetById(id)) {
+        issues.push({ severity: "error", code: "preset-unknown", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1}: \u0E44\u0E21\u0E48\u0E21\u0E35\u0E25\u0E32\u0E22 preset "${id}" (\u0E43\u0E0A\u0E49\u0E44\u0E14\u0E49: ${PRESET_IDS.join(", ")})` });
+        return null;
+      }
+      cleanSrc = `preset:${id}:${color2(c) ?? "#2f8a99"}`;
+    } else {
+      const id = src.slice(6).replace(/[^\w-]/g, "");
+      if (!id) {
+        issues.push({ severity: "error", code: "asset-invalid", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1}: asset id \u0E27\u0E48\u0E32\u0E07` });
+        return null;
+      }
+      cleanSrc = `asset:${id}`;
+    }
+    const e = { ...base, type: "image", src: cleanSrc, w };
+    const h = finite2(v.h);
+    if (h && h > 0) e.h = h;
+    if (v.fit === "contain" || v.fit === "stretch") e.fit = v.fit;
+    const radius = finite2(v.radius);
+    if (radius && radius > 0) e.radius = radius;
+    if (v.circle === true) e.circle = true;
+    return e;
+  }
+  if (t === "path") {
+    const w = finite2(v.w), h = finite2(v.h);
+    const anchors = [];
+    if (Array.isArray(v.anchors)) {
+      for (const a of v.anchors.slice(0, 200)) {
+        if (!isObj(a)) continue;
+        const nx = finite2(a.nx), ny = finite2(a.ny);
+        if (nx === void 0 || ny === void 0) continue;
+        const ox = finite2(a.ox), oy = finite2(a.oy), ix = finite2(a.ix), iy = finite2(a.iy);
+        anchors.push({ nx: clamp2(nx, -0.5, 1.5), ny: clamp2(ny, -0.5, 1.5), ...ox !== void 0 && oy !== void 0 ? { ox, oy } : {}, ...ix !== void 0 && iy !== void 0 ? { ix, iy } : {} });
+      }
+    }
+    if (w === void 0 || h === void 0 || w <= 0 || h <= 0 || anchors.length < 2) {
+      issues.push({ severity: "error", code: "path-invalid", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1} (path): \u0E15\u0E49\u0E2D\u0E07\u0E21\u0E35 anchors \u2265 2 \u0E08\u0E38\u0E14 \u0E41\u0E25\u0E30 w,h > 0` });
+      return null;
+    }
+    const e = { ...base, type: "path", anchors, closed: v.closed === true, w, h, fill: paint2(v.fill) ?? "none", stroke: paint2(v.stroke) ?? "#222222", strokeW: clamp2(finite2(v.strokeW) ?? 0.5, 0, 20) };
+    const grad = parseGrad(v.grad);
+    if (grad) e.grad = grad;
+    if (v.dash === true) e.dash = true;
+    return e;
+  }
+  if (t === "nutrition") {
+    const w = finite2(v.w);
+    if (w === void 0 || w <= 0) {
+      issues.push({ severity: "error", code: "nutrition-invalid", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1} (nutrition): \u0E15\u0E49\u0E2D\u0E07\u0E21\u0E35 w > 0` });
+      return null;
+    }
+    const e = {
+      ...base,
+      type: "nutrition",
+      w,
+      serving: strOf(v.serving, 60) ?? "",
+      servings: strOf(v.servings, 30) ?? "",
+      energy: strOf(v.energy, 20) ?? "",
+      rows: parseRows(v.rows),
+      vitamins: parseRows(v.vitamins),
+      footnote: strOf(v.footnote, 300) ?? ""
+    };
+    const ef = strOf(v.energyFat, 20);
+    if (ef) e.energyFat = ef;
+    const ink = color2(v.ink);
+    if (ink) e.ink = ink;
+    if (v.paper === false) e.paper = false;
+    const scale = finite2(v.scale);
+    if (scale && scale > 0 && scale !== 1) e.scale = clamp2(scale, 0.5, 3);
+    return e;
+  }
+  issues.push({ severity: "error", code: "type-unknown", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1}: type "${String(t)}" \u0E44\u0E21\u0E48\u0E23\u0E39\u0E49\u0E08\u0E31\u0E01 (text/shape/image/path/nutrition)` });
+  return null;
+}
+function parseArtworkPlan(raw) {
+  const issues = [];
+  if (!isObj(raw)) return { ok: false, issues: [{ severity: "error", code: "not-object", message: "\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48 JSON object" }] };
+  if (!Array.isArray(raw.elements) || raw.elements.length === 0) {
+    return { ok: false, issues: [{ severity: "error", code: "no-elements", message: "\u0E15\u0E49\u0E2D\u0E07\u0E21\u0E35 elements \u0E2D\u0E22\u0E48\u0E32\u0E07\u0E19\u0E49\u0E2D\u0E22 1 \u0E0A\u0E34\u0E49\u0E19" }] };
+  }
+  if (raw.elements.length > ART_MAX_ELEMENTS) {
+    issues.push({ severity: "warning", code: "too-many", message: `\u0E0A\u0E34\u0E49\u0E19\u0E07\u0E32\u0E19\u0E40\u0E01\u0E34\u0E19 ${ART_MAX_ELEMENTS} \u0E0A\u0E34\u0E49\u0E19 \u2014 \u0E43\u0E0A\u0E49 ${ART_MAX_ELEMENTS} \u0E0A\u0E34\u0E49\u0E19\u0E41\u0E23\u0E01` });
+  }
+  const svgBudget = { left: ART_MAX_SVG_TOTAL };
+  const elements = [];
+  const seen = /* @__PURE__ */ new Set();
+  raw.elements.slice(0, ART_MAX_ELEMENTS).forEach((v, i) => {
+    const e = parseElement(v, i, issues, svgBudget);
+    if (!e) return;
+    if (e.id && seen.has(e.id)) delete e.id;
+    if (e.id) seen.add(e.id);
+    elements.push(e);
+  });
+  if (!elements.length) return { ok: false, issues };
+  let background = null;
+  if (typeof raw.background === "string" && raw.background.trim()) {
+    const clean = raw.background.length <= ART_MAX_SVG_CHARS ? sanitizeSvg(raw.background) : null;
+    if (clean) background = clean.svg;
+    else issues.push({ severity: "warning", code: "background-invalid", message: "\u0E23\u0E39\u0E1B\u0E1E\u0E37\u0E49\u0E19 SVG \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E2B\u0E23\u0E37\u0E2D\u0E22\u0E32\u0E27\u0E40\u0E01\u0E34\u0E19 \u2014 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49" });
+  }
+  const plan = {
+    name: strOf(raw.name, 80) ?? null,
+    fillColor: color2(raw.fillColor) ?? null,
+    background,
+    elements,
+    explanation: strOf(raw.explanation, 1e3) ?? ""
+  };
+  return { ok: true, plan, issues };
+}
+function checkArtworkPlan(plan, panels) {
+  const issues = [];
+  const ids = new Set(panels.map((p) => p.id));
+  plan.elements.forEach((e, i) => {
+    if (!ids.has(e.panel)) {
+      issues.push({ severity: "error", code: "panel-unknown", index: i, message: `\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48 ${i + 1}: \u0E44\u0E21\u0E48\u0E21\u0E35\u0E41\u0E1C\u0E07 "${e.panel}" (\u0E43\u0E0A\u0E49\u0E44\u0E14\u0E49: ${[...ids].join(", ")})` });
+    }
+  });
+  return issues;
+}
+function describeArtIssues(issues) {
+  return issues.map((i) => `- [${i.severity}] ${i.message}`).join("\n");
+}
+var SVG_TAGS = /* @__PURE__ */ new Set([
+  "svg",
+  "g",
+  "path",
+  "rect",
+  "circle",
+  "ellipse",
+  "line",
+  "polyline",
+  "polygon",
+  "text",
+  "tspan",
+  "defs",
+  "lineargradient",
+  "radialgradient",
+  "stop",
+  "clippath",
+  "mask",
+  "pattern",
+  "title",
+  "desc",
+  "filter",
+  "fegaussianblur",
+  "feoffset",
+  "femerge",
+  "femergenode",
+  "feblend",
+  "fecolormatrix",
+  "feflood",
+  "fecomposite",
+  "fedropshadow"
+]);
+var SVG_TEXT_TAGS = /* @__PURE__ */ new Set(["text", "tspan", "title", "desc"]);
+var SVG_ATTRS = /* @__PURE__ */ new Set([
+  "id",
+  "x",
+  "y",
+  "x1",
+  "y1",
+  "x2",
+  "y2",
+  "cx",
+  "cy",
+  "r",
+  "rx",
+  "ry",
+  "fx",
+  "fy",
+  "width",
+  "height",
+  "d",
+  "points",
+  "transform",
+  "fill",
+  "fill-opacity",
+  "fill-rule",
+  "stroke",
+  "stroke-width",
+  "stroke-linecap",
+  "stroke-linejoin",
+  "stroke-dasharray",
+  "stroke-dashoffset",
+  "stroke-opacity",
+  "stroke-miterlimit",
+  "opacity",
+  "viewbox",
+  "xmlns",
+  "version",
+  "preserveaspectratio",
+  "clip-path",
+  "clip-rule",
+  "mask",
+  "filter",
+  "gradientunits",
+  "gradienttransform",
+  "spreadmethod",
+  "offset",
+  "stop-color",
+  "stop-opacity",
+  "patternunits",
+  "patterntransform",
+  "patterncontentunits",
+  "maskunits",
+  "maskcontentunits",
+  "clippathunits",
+  "font-family",
+  "font-size",
+  "font-weight",
+  "font-style",
+  "text-anchor",
+  "dominant-baseline",
+  "letter-spacing",
+  "dx",
+  "dy",
+  "rotate",
+  "textlength",
+  "lengthadjust",
+  "stddeviation",
+  "in",
+  "in2",
+  "result",
+  "mode",
+  "type",
+  "values",
+  "flood-color",
+  "flood-opacity",
+  "operator",
+  "k1",
+  "k2",
+  "k3",
+  "k4",
+  "color",
+  "display",
+  "visibility",
+  "overflow",
+  "vector-effect",
+  "paint-order",
+  "shape-rendering",
+  "text-rendering",
+  "filterunits",
+  "primitiveunits"
+]);
+var SVG_ATTR_CASE = {
+  viewbox: "viewBox",
+  preserveaspectratio: "preserveAspectRatio",
+  gradientunits: "gradientUnits",
+  gradienttransform: "gradientTransform",
+  spreadmethod: "spreadMethod",
+  patternunits: "patternUnits",
+  patterntransform: "patternTransform",
+  patterncontentunits: "patternContentUnits",
+  maskunits: "maskUnits",
+  maskcontentunits: "maskContentUnits",
+  clippathunits: "clipPathUnits",
+  textlength: "textLength",
+  lengthadjust: "lengthAdjust",
+  stddeviation: "stdDeviation",
+  filterunits: "filterUnits",
+  primitiveunits: "primitiveUnits"
+};
+var SVG_TAG_CASE = {
+  lineargradient: "linearGradient",
+  radialgradient: "radialGradient",
+  clippath: "clipPath",
+  fegaussianblur: "feGaussianBlur",
+  feoffset: "feOffset",
+  femerge: "feMerge",
+  femergenode: "feMergeNode",
+  feblend: "feBlend",
+  fecolormatrix: "feColorMatrix",
+  feflood: "feFlood",
+  fecomposite: "feComposite",
+  fedropshadow: "feDropShadow"
+};
+var TAG_RE = /<\/?([A-Za-z][\w:.-]*)([^<>]*?)(\/?)>/g;
+var ATTR_RE = /([A-Za-z_:][-\w:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
+function escapeText(s) {
+  return s.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function safeAttrValue(v) {
+  const s = v.replace(/[\u0000-\u001f]/g, "").trim();
+  if (/javascript:|data:|<|expression\(/i.test(s)) return null;
+  if (/url\(/i.test(s) && !/^url\(['"]?#[\w-]+['"]?\)$/i.test(s)) return null;
+  return s.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)/g, "&amp;").replace(/"/g, "&quot;");
+}
+function sanitizeSvg(markup) {
+  if (typeof markup !== "string" || markup.length > ART_MAX_SVG_CHARS) return null;
+  let src = markup.replace(/<!--[\s\S]*?-->/g, "").replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "").replace(/<\?[\s\S]*?\?>/g, "").replace(/<!DOCTYPE[^>]*>/gi, "").trim();
+  const start = src.indexOf("<svg");
+  if (start < 0) return null;
+  src = src.slice(start);
+  const out = [];
+  const stack = [];
+  let skipDepth = 0;
+  let pos = 0;
+  let rootSeen = false;
+  let viewBox = null;
+  let rootW = null;
+  let rootH = null;
+  TAG_RE.lastIndex = 0;
+  let m;
+  while (m = TAG_RE.exec(src)) {
+    const text = src.slice(pos, m.index);
+    pos = m.index + m[0].length;
+    if (text && skipDepth === 0 && stack.length && SVG_TEXT_TAGS.has(stack[stack.length - 1])) out.push(escapeText(text));
+    const closing = m[0].startsWith("</");
+    const name = m[1].toLowerCase();
+    const selfClose = m[3] === "/";
+    if (skipDepth > 0) {
+      if (closing) skipDepth--;
+      else if (!selfClose) skipDepth++;
+      continue;
+    }
+    if (closing) {
+      if (stack[stack.length - 1] !== name) return null;
+      stack.pop();
+      out.push(`</${SVG_TAG_CASE[name] ?? name}>`);
+      if (stack.length === 0) break;
+      continue;
+    }
+    if (!SVG_TAGS.has(name) || name === "svg" && rootSeen || !rootSeen && name !== "svg") {
+      if (!selfClose) skipDepth = 1;
+      continue;
+    }
+    const attrs = [];
+    ATTR_RE.lastIndex = 0;
+    let a;
+    while (a = ATTR_RE.exec(m[2])) {
+      const key = a[1].toLowerCase();
+      if (!SVG_ATTRS.has(key)) continue;
+      const val = safeAttrValue(a[2] ?? a[3] ?? a[4] ?? "");
+      if (val === null) continue;
+      if (name === "svg") {
+        if (key === "viewbox") viewBox = val;
+        if (key === "width") rootW = parseFloat(val);
+        if (key === "height") rootH = parseFloat(val);
+        if (key === "xmlns" || key === "width" || key === "height" || key === "viewbox") continue;
+      }
+      attrs.push(`${SVG_ATTR_CASE[key] ?? key}="${val}"`);
+    }
+    if (name === "svg") {
+      rootSeen = true;
+      let vb = viewBox && /^-?[\d.]+(\s+|,)-?[\d.]+(\s+|,)[\d.]+(\s+|,)[\d.]+$/.test(viewBox.trim()) ? viewBox.trim().replace(/,/g, " ") : null;
+      if (!vb && rootW && rootH && rootW > 0 && rootH > 0) vb = `0 0 ${rootW} ${rootH}`;
+      if (!vb) vb = "0 0 100 100";
+      const [, , vw2, vh2] = vb.split(/\s+/).map(Number);
+      if (!(vw2 > 0) || !(vh2 > 0)) return null;
+      const s = 512 / Math.max(vw2, vh2);
+      attrs.unshift(`xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" width="${Math.round(vw2 * s)}" height="${Math.round(vh2 * s)}"`);
+      viewBox = vb;
+    }
+    out.push(`<${SVG_TAG_CASE[name] ?? name}${attrs.length ? " " + attrs.join(" ") : ""}${selfClose ? "/" : ""}>`);
+    if (!selfClose) stack.push(name);
+  }
+  if (!rootSeen || stack.length) return null;
+  const svg = out.join("");
+  if (!/<(path|rect|circle|ellipse|line|polyline|polygon|text)\b/.test(svg)) return null;
+  const [, , vw, vh] = viewBox.split(/\s+/).map(Number);
+  return { svg, aspect: vw / vh };
+}
+
+// server/aiArtwork.ts
+var execFileP2 = promisify3(execFile3);
+var MAX_ROUNDS = 2;
+var MAX_TOKENS2 = 24e3;
+var MAX_IMAGES = 4;
+var MAX_PANELS = 80;
+var ArtworkResponseError = class extends Error {
+  constructor(reason, message) {
+    super(message);
+    this.reason = reason;
+    this.name = "ArtworkResponseError";
+  }
+};
+var ArtworkDeadlineError = class extends Error {
+  constructor() {
+    super("\u0E2B\u0E21\u0E14\u0E40\u0E27\u0E25\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A");
+    this.name = "ArtworkDeadlineError";
+  }
+};
+var MIN_ROUND_MS = 45e3;
+var ARTWORK_SYSTEM = `\u0E04\u0E38\u0E13\u0E04\u0E37\u0E2D\u0E19\u0E31\u0E01\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E01\u0E23\u0E32\u0E1F\u0E34\u0E01\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C\u0E21\u0E37\u0E2D\u0E2D\u0E32\u0E0A\u0E35\u0E1E \u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E04\u0E37\u0E2D\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A "\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E32" (\u0E25\u0E32\u0E22 \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21 \u0E42\u0E25\u0E42\u0E01\u0E49 \u0E20\u0E32\u0E1E\u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A) \u0E25\u0E07\u0E1A\u0E19\u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48\u0E02\u0E2D\u0E07\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C
+\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E44\u0E27\u0E49\u0E41\u0E25\u0E49\u0E27 \u0E42\u0E14\u0E22\u0E40\u0E02\u0E35\u0E22\u0E19\u0E40\u0E1B\u0E47\u0E19 JSON \u0E15\u0E32\u0E21 schema \u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E01\u0E33\u0E2B\u0E19\u0E14 (\u0E41\u0E1C\u0E19\u0E07\u0E32\u0E19\u0E28\u0E34\u0E25\u0E1B\u0E4C) \u2014 \u0E04\u0E38\u0E13\u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E23\u0E39\u0E49\u0E1C\u0E31\u0E07\u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48 \u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E49 "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E41\u0E1C\u0E07" \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E02\u0E19\u0E32\u0E14\u0E41\u0E25\u0E30\u0E1A\u0E17\u0E1A\u0E32\u0E17
+\u0E17\u0E38\u0E01\u0E0A\u0E34\u0E49\u0E19\u0E07\u0E32\u0E19\u0E2D\u0E49\u0E32\u0E07\u0E41\u0E1C\u0E07\u0E14\u0E49\u0E27\u0E22 panel id \u0E41\u0E25\u0E30\u0E1E\u0E34\u0E01\u0E31\u0E14 x,y \u0E40\u0E1B\u0E47\u0E19 \u0E21\u0E21. \u0E08\u0E32\u0E01\u0E21\u0E38\u0E21\u0E0B\u0E49\u0E32\u0E22\u0E1A\u0E19\u0E02\u0E2D\u0E07\u0E41\u0E1C\u0E07\u0E19\u0E31\u0E49\u0E19 \u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E30\u0E27\u0E32\u0E07\u0E25\u0E07\u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48 \u0E27\u0E31\u0E14\u0E04\u0E27\u0E32\u0E21\u0E01\u0E27\u0E49\u0E32\u0E07\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E14\u0E49\u0E27\u0E22\u0E1F\u0E2D\u0E19\u0E15\u0E4C\u0E08\u0E23\u0E34\u0E07
+\u0E15\u0E31\u0E14\u0E1A\u0E23\u0E23\u0E17\u0E31\u0E14/\u0E22\u0E48\u0E2D\u0E0A\u0E34\u0E49\u0E19\u0E17\u0E35\u0E48\u0E25\u0E49\u0E19\u0E41\u0E1C\u0E07 \u0E41\u0E25\u0E30\u0E01\u0E31\u0E19\u0E23\u0E30\u0E22\u0E30\u0E02\u0E2D\u0E1A ${ART_SAFE_MM} \u0E21\u0E21. \u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07
+
+## \u0E0A\u0E34\u0E49\u0E19\u0E07\u0E32\u0E19 (elements \u0E40\u0E23\u0E35\u0E22\u0E07\u0E08\u0E32\u0E01\u0E0A\u0E31\u0E49\u0E19\u0E25\u0E48\u0E32\u0E07\u0E2A\u0E38\u0E14\u0E02\u0E36\u0E49\u0E19\u0E1A\u0E19: \u0E41\u0E16\u0E1A\u0E2A\u0E35/\u0E1E\u0E37\u0E49\u0E19 \u0E01\u0E48\u0E2D\u0E19 \u0E41\u0E25\u0E49\u0E27\u0E04\u0E48\u0E2D\u0E22\u0E23\u0E39\u0E1B\u0E41\u0E25\u0E30\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21)
+- text: \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21 (\u0E2B\u0E25\u0E32\u0E22\u0E1A\u0E23\u0E23\u0E17\u0E31\u0E14\u0E14\u0E49\u0E27\u0E22 \\n) size = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 \u0E21\u0E21. (\u0E0A\u0E37\u0E48\u0E2D\u0E41\u0E1A\u0E23\u0E19\u0E14\u0E4C\u0E1A\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E01\u0E25\u0E48\u0E2D\u0E07 10-18, \u0E0A\u0E37\u0E48\u0E2D\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32 6-10, \u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 3-4, \u0E40\u0E25\u0E47\u0E01\u0E2A\u0E38\u0E14 ${ART_MIN_TEXT_MM})
+  anchor: "center" \u0E17\u0E33\u0E43\u0E2B\u0E49 x \u0E40\u0E1B\u0E47\u0E19\u0E08\u0E38\u0E14\u0E01\u0E36\u0E48\u0E07\u0E01\u0E25\u0E32\u0E07\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21 (\u0E08\u0E31\u0E14\u0E01\u0E25\u0E32\u0E07\u0E41\u0E1C\u0E07: x = \u0E01\u0E27\u0E49\u0E32\u0E07\u0E41\u0E1C\u0E07/2) \xB7 font: ${FONTS.map((f) => `${f.id} (${f.nameTh})`).join(", ")}
+  weight "700" = \u0E2B\u0E19\u0E32 \xB7 ls \u0E23\u0E30\u0E22\u0E30\u0E2B\u0E48\u0E32\u0E07\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 % \xB7 grad \u0E44\u0E25\u0E48\u0E2A\u0E35\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 \xB7 fx \u0E40\u0E2D\u0E1F\u0E40\u0E1F\u0E01\u0E15\u0E4C (drop/background/hollow/splice/double/echo/glow/long) \u0E43\u0E0A\u0E49\u0E1E\u0E2D\u0E1B\u0E23\u0E30\u0E21\u0E32\u0E13
+  curve \u0E43\u0E0A\u0E49\u0E44\u0E14\u0E49\u0E40\u0E09\u0E1E\u0E32\u0E30\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2D\u0E31\u0E07\u0E01\u0E24\u0E29/\u0E15\u0E31\u0E27\u0E40\u0E25\u0E02 (\u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22\u0E2B\u0E49\u0E32\u0E21 \u0E2A\u0E23\u0E30\u0E08\u0E30\u0E2B\u0E25\u0E38\u0E14)
+- shape: rect/ellipse/line/triangle/polygon/star \u2014 \u0E41\u0E16\u0E1A\u0E2A\u0E35 \u0E01\u0E23\u0E2D\u0E1A \u0E40\u0E2A\u0E49\u0E19\u0E04\u0E31\u0E48\u0E19 \u0E1E\u0E37\u0E49\u0E19\u0E2B\u0E25\u0E31\u0E07\u0E1B\u0E49\u0E32\u0E22 (fill/stroke \u0E40\u0E1B\u0E47\u0E19 #rrggbb \u0E2B\u0E23\u0E37\u0E2D none, grad \u0E44\u0E25\u0E48\u0E2A\u0E35\u0E44\u0E14\u0E49)
+- image: src \u0E40\u0E1B\u0E47\u0E19\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E43\u0E19
+  \xB7 "preset:<id>:<#\u0E2A\u0E35>" \u0E25\u0E32\u0E22\u0E08\u0E32\u0E01\u0E44\u0E25\u0E1A\u0E23\u0E32\u0E23\u0E35: ${PRESETS.map((p) => `${p.id} (${p.nameTh})`).join(", ")}
+  \xB7 "asset:<id>" \u0E23\u0E39\u0E1B\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E31\u0E1B\u0E42\u0E2B\u0E25\u0E14 (\u0E23\u0E30\u0E1A\u0E1A\u0E1A\u0E2D\u0E01 id \u0E43\u0E2B\u0E49\u0E43\u0E19\u0E04\u0E33\u0E02\u0E2D \u0E40\u0E0A\u0E48\u0E19 \u0E42\u0E25\u0E42\u0E01\u0E49) \u2014 \u0E15\u0E49\u0E2D\u0E07\u0E43\u0E0A\u0E49\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E41\u0E19\u0E1A\u0E42\u0E25\u0E42\u0E01\u0E49 \u0E27\u0E32\u0E07\u0E43\u0E2B\u0E49\u0E40\u0E14\u0E48\u0E19\u0E1A\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E01\u0E25\u0E48\u0E2D\u0E07
+  \xB7 "svg:<svg viewBox=\\"0 0 W H\\">\u2026</svg>" \u0E20\u0E32\u0E1E\u0E40\u0E27\u0E01\u0E40\u0E15\u0E2D\u0E23\u0E4C\u0E17\u0E35\u0E48\u0E04\u0E38\u0E13\u0E27\u0E32\u0E14\u0E40\u0E2D\u0E07 (\u0E20\u0E32\u0E1E\u0E2B\u0E25\u0E31\u0E01 \u0E44\u0E2D\u0E04\u0E2D\u0E19 \u0E25\u0E32\u0E22\u0E1B\u0E23\u0E30\u0E14\u0E31\u0E1A \u0E1A\u0E32\u0E23\u0E4C\u0E42\u0E04\u0E49\u0E14\u0E08\u0E33\u0E25\u0E2D\u0E07) \u0E43\u0E0A\u0E49 path/rect/circle/ellipse/polygon/
+    text/linearGradient \u0E44\u0E14\u0E49 \u0E2B\u0E49\u0E32\u0E21 script/style/image/use/\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E20\u0E32\u0E22\u0E19\u0E2D\u0E01 \u0E04\u0E27\u0E32\u0E21\u0E22\u0E32\u0E27\u0E15\u0E48\u0E2D\u0E23\u0E39\u0E1B\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19 60,000 \u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 \u2014 \u0E27\u0E32\u0E14\u0E43\u0E2B\u0E49\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E07\u0E48\u0E32\u0E22\u0E41\u0E15\u0E48\u0E2A\u0E27\u0E22 (flat/line art)
+  w = \u0E01\u0E27\u0E49\u0E32\u0E07 \u0E21\u0E21. (h \u0E44\u0E21\u0E48\u0E43\u0E2A\u0E48 = \u0E15\u0E32\u0E21\u0E2A\u0E31\u0E14\u0E2A\u0E48\u0E27\u0E19\u0E23\u0E39\u0E1B)
+- path: \u0E23\u0E39\u0E1B\u0E27\u0E32\u0E14\u0E40\u0E2D\u0E07\u0E08\u0E32\u0E01\u0E08\u0E38\u0E14 anchors (0..1 \u0E43\u0E19\u0E01\u0E23\u0E2D\u0E1A w\xD7h) \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E40\u0E2A\u0E49\u0E19\u0E42\u0E04\u0E49\u0E07/\u0E04\u0E25\u0E37\u0E48\u0E19/\u0E23\u0E39\u0E1B\u0E1B\u0E34\u0E14\u0E07\u0E48\u0E32\u0E22 \u0E46
+- nutrition: \u0E15\u0E32\u0E23\u0E32\u0E07\u0E42\u0E20\u0E0A\u0E19\u0E32\u0E01\u0E32\u0E23\u0E41\u0E1A\u0E1A \u0E2D\u0E22. (\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E2D\u0E32\u0E2B\u0E32\u0E23/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E14\u0E37\u0E48\u0E21) \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E23\u0E30\u0E1A\u0E1A\u0E04\u0E33\u0E19\u0E27\u0E13\u0E40\u0E2D\u0E07 (~1.2\xD7w)
+- \u0E17\u0E38\u0E01\u0E0A\u0E34\u0E49\u0E19\u0E21\u0E35 rot (\u0E2D\u0E07\u0E28\u0E32), opacity, finish (\u0E1F\u0E2D\u0E22\u0E25\u0E4C\u0E17\u0E2D\u0E07/\u0E40\u0E07\u0E34\u0E19/\u0E42\u0E23\u0E2A\u0E42\u0E01\u0E25\u0E14\u0E4C, spot UV, \u0E1B\u0E31\u0E4A\u0E21\u0E19\u0E39\u0E19/\u0E08\u0E21 \u2014 \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E0A\u0E37\u0E48\u0E2D\u0E41\u0E1A\u0E23\u0E19\u0E14\u0E4C\u0E2B\u0E23\u0E37\u0E2D\u0E15\u0E23\u0E32\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 \u0E16\u0E49\u0E32\u0E40\u0E2B\u0E21\u0E32\u0E30\u0E01\u0E31\u0E1A\u0E07\u0E32\u0E19\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21)
+- fillColor = \u0E2A\u0E35\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E31\u0E49\u0E07\u0E41\u0E1E\u0E47\u0E01\u0E40\u0E01\u0E08; background = SVG \u0E22\u0E37\u0E14\u0E04\u0E25\u0E38\u0E21\u0E17\u0E31\u0E49\u0E07\u0E41\u0E1C\u0E48\u0E19 (\u0E25\u0E32\u0E22\u0E1E\u0E37\u0E49\u0E19/\u0E44\u0E25\u0E48\u0E2A\u0E35) \u0E43\u0E2A\u0E48\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E35\u0E48\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48\u0E2A\u0E35\u0E40\u0E23\u0E35\u0E22\u0E1A
+
+## \u0E2B\u0E25\u0E31\u0E01\u0E01\u0E32\u0E23\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A
+- \u0E2D\u0E48\u0E32\u0E19\u0E1A\u0E17\u0E1A\u0E32\u0E17\u0E02\u0E2D\u0E07\u0E41\u0E1C\u0E07\u0E08\u0E32\u0E01\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E49: \u0E1C\u0E19\u0E31\u0E07\u0E2B\u0E19\u0E49\u0E32 = \u0E0A\u0E37\u0E48\u0E2D\u0E41\u0E1A\u0E23\u0E19\u0E14\u0E4C \u0E0A\u0E37\u0E48\u0E2D\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32 \u0E2A\u0E42\u0E25\u0E41\u0E01\u0E19 \u0E20\u0E32\u0E1E\u0E2B\u0E25\u0E31\u0E01 \u0E1B\u0E23\u0E34\u0E21\u0E32\u0E13\u0E2A\u0E38\u0E17\u0E18\u0E34 \xB7 \u0E1C\u0E19\u0E31\u0E07\u0E2B\u0E25\u0E31\u0E07 = \u0E2A\u0E48\u0E27\u0E19\u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A \u0E27\u0E34\u0E18\u0E35\u0E43\u0E0A\u0E49/\u0E40\u0E01\u0E47\u0E1A \u0E1C\u0E39\u0E49\u0E1C\u0E25\u0E34\u0E15
+  \u0E1A\u0E32\u0E23\u0E4C\u0E42\u0E04\u0E49\u0E14 \u0E40\u0E25\u0E02\u0E17\u0E30\u0E40\u0E1A\u0E35\u0E22\u0E19 \xB7 \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07 = \u0E08\u0E38\u0E14\u0E02\u0E32\u0E22/\u0E15\u0E32\u0E23\u0E32\u0E07\u0E42\u0E20\u0E0A\u0E19\u0E32\u0E01\u0E32\u0E23 \xB7 \u0E1D\u0E32 = \u0E41\u0E1A\u0E23\u0E19\u0E14\u0E4C\u0E0B\u0E49\u0E33\u0E40\u0E25\u0E47\u0E01 \u0E46 \xB7 \u0E1B\u0E35\u0E01\u0E17\u0E32\u0E01\u0E32\u0E27 \u0E2B\u0E49\u0E32\u0E21\u0E27\u0E32\u0E07 \xB7 \u0E25\u0E34\u0E49\u0E19\u0E01\u0E31\u0E19\u0E1D\u0E38\u0E48\u0E19/\u0E25\u0E34\u0E49\u0E19\u0E40\u0E2A\u0E35\u0E22\u0E1A \u0E27\u0E32\u0E07\u0E44\u0E14\u0E49\u0E41\u0E04\u0E48\u0E25\u0E32\u0E22\u0E1E\u0E37\u0E49\u0E19
+- \u0E09\u0E25\u0E32\u0E01\u0E02\u0E27\u0E14/\u0E2B\u0E25\u0E2D\u0E14 (\u0E41\u0E1C\u0E07 label): \u0E14\u0E49\u0E32\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E22\u0E39\u0E48\u0E01\u0E36\u0E48\u0E07\u0E01\u0E25\u0E32\u0E07\u0E04\u0E27\u0E32\u0E21\u0E01\u0E27\u0E49\u0E32\u0E07\u0E02\u0E2D\u0E07\u0E09\u0E25\u0E32\u0E01 \u0E14\u0E49\u0E32\u0E19\u0E2B\u0E25\u0E31\u0E07\u0E2D\u0E22\u0E39\u0E48\u0E2A\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E07 (\u0E0B\u0E49\u0E32\u0E22-\u0E02\u0E27\u0E32\u0E2A\u0E38\u0E14\u0E04\u0E37\u0E2D\u0E2B\u0E25\u0E31\u0E07\u0E02\u0E27\u0E14) \xB7 \u0E16\u0E38\u0E07: \u0E41\u0E1C\u0E07 front/back \u0E41\u0E22\u0E01 \u0E2B\u0E23\u0E37\u0E2D film \u0E1C\u0E37\u0E19\u0E40\u0E14\u0E35\u0E22\u0E27
+- \u0E43\u0E0A\u0E49\u0E2A\u0E35\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19 3-4 \u0E2A\u0E35 \u0E21\u0E35\u0E25\u0E33\u0E14\u0E31\u0E1A\u0E0A\u0E31\u0E49\u0E19\u0E0A\u0E31\u0E14 (\u0E43\u0E2B\u0E0D\u0E48-\u0E01\u0E25\u0E32\u0E07-\u0E40\u0E25\u0E47\u0E01) \u0E40\u0E27\u0E49\u0E19\u0E17\u0E35\u0E48\u0E27\u0E48\u0E32\u0E07 \u0E44\u0E21\u0E48\u0E22\u0E31\u0E14\u0E08\u0E19\u0E41\u0E19\u0E48\u0E19 \u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23\u0E2A\u0E35\u0E15\u0E31\u0E14\u0E01\u0E31\u0E1A\u0E1E\u0E37\u0E49\u0E19\u0E43\u0E2B\u0E49\u0E2D\u0E48\u0E32\u0E19\u0E2D\u0E2D\u0E01
+- \u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E15\u0E32\u0E21\u0E01\u0E0E\u0E2B\u0E21\u0E32\u0E22 (\u0E40\u0E25\u0E02 \u0E2D\u0E22., \u0E1A\u0E32\u0E23\u0E4C\u0E42\u0E04\u0E49\u0E14 GS1, \u0E2A\u0E48\u0E27\u0E19\u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E08\u0E23\u0E34\u0E07, \u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48\u0E1C\u0E39\u0E49\u0E1C\u0E25\u0E34\u0E15) \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E43\u0E2B\u0E49 \u0E43\u0E2B\u0E49\u0E43\u0E2A\u0E48\u0E40\u0E1B\u0E47\u0E19\u0E0A\u0E48\u0E2D\u0E07\u0E01\u0E23\u0E2D\u0E01 \u0E40\u0E0A\u0E48\u0E19 "\u0E40\u0E25\u0E02\u0E2A\u0E32\u0E23\u0E1A\u0E1A\u0E2D\u0E32\u0E2B\u0E32\u0E23: [\u0E01\u0E23\u0E2D\u0E01]"
+  \u0E2B\u0E49\u0E32\u0E21\u0E41\u0E15\u0E48\u0E07\u0E15\u0E31\u0E27\u0E40\u0E25\u0E02\u0E02\u0E36\u0E49\u0E19\u0E40\u0E2D\u0E07 \u0E1A\u0E32\u0E23\u0E4C\u0E42\u0E04\u0E49\u0E14\u0E27\u0E32\u0E14\u0E40\u0E1B\u0E47\u0E19\u0E20\u0E32\u0E1E\u0E08\u0E33\u0E25\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27\u0E40\u0E02\u0E35\u0E22\u0E19\u0E01\u0E33\u0E01\u0E31\u0E1A\u0E27\u0E48\u0E32 "\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E1A\u0E32\u0E23\u0E4C\u0E42\u0E04\u0E49\u0E14"
+- \u0E23\u0E39\u0E1B\u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E41\u0E19\u0E1A = \u0E41\u0E23\u0E07\u0E1A\u0E31\u0E19\u0E14\u0E32\u0E25\u0E43\u0E08\u0E40\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E42\u0E17\u0E19\u0E2A\u0E35 \u0E2D\u0E32\u0E23\u0E21\u0E13\u0E4C \u0E2A\u0E44\u0E15\u0E25\u0E4C\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 (\u0E2B\u0E49\u0E32\u0E21\u0E25\u0E2D\u0E01\u0E22\u0E01\u0E21\u0E32) \xB7 \u0E42\u0E25\u0E42\u0E01\u0E49\u0E17\u0E35\u0E48\u0E41\u0E19\u0E1A = \u0E15\u0E49\u0E2D\u0E07\u0E27\u0E32\u0E07\u0E08\u0E23\u0E34\u0E07\u0E14\u0E49\u0E27\u0E22 asset id
+- \u0E08\u0E33\u0E19\u0E27\u0E19\u0E0A\u0E34\u0E49\u0E19 8-${Math.min(60, ART_MAX_ELEMENTS)} \u0E0A\u0E34\u0E49\u0E19\u0E01\u0E33\u0E25\u0E31\u0E07\u0E14\u0E35 \u0E15\u0E31\u0E49\u0E07 id \u0E2A\u0E37\u0E48\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2B\u0E21\u0E32\u0E22 (brand, product-name, slogan, hero, ingredients \u2026)
+
+## \u0E27\u0E34\u0E18\u0E35\u0E15\u0E2D\u0E1A
+- \u0E15\u0E2D\u0E1A JSON \u0E15\u0E32\u0E21 schema \u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 \u0E16\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E02\u0E49\u0E2D\u0E1C\u0E34\u0E14\u0E1E\u0E25\u0E32\u0E14\u0E01\u0E25\u0E31\u0E1A\u0E21\u0E32 \u0E43\u0E2B\u0E49\u0E2A\u0E48\u0E07 JSON \u0E09\u0E1A\u0E31\u0E1A\u0E41\u0E01\u0E49\u0E41\u0E25\u0E49\u0E27 "\u0E17\u0E31\u0E49\u0E07\u0E09\u0E1A\u0E31\u0E1A"
+- explanation: \u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E41\u0E19\u0E27\u0E04\u0E34\u0E14 1-3 \u0E1B\u0E23\u0E30\u0E42\u0E22\u0E04\u0E40\u0E1B\u0E47\u0E19\u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22 \u0E41\u0E25\u0E30\u0E1A\u0E2D\u0E01\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E23\u0E2D\u0E01\u0E40\u0E2D\u0E07`;
+var KIND_TH = { box: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E31\u0E1A", vessel: "\u0E09\u0E25\u0E32\u0E01\u0E20\u0E32\u0E0A\u0E19\u0E30 (\u0E02\u0E27\u0E14/\u0E42\u0E2B\u0E25/\u0E2B\u0E25\u0E2D\u0E14)", pouch: "\u0E16\u0E38\u0E07\u0E1F\u0E34\u0E25\u0E4C\u0E21" };
+function buildArtworkUserContent(req) {
+  const mat = MATERIALS.find((m) => m.id === req.materialId);
+  const lines = [
+    `\u0E0A\u0E19\u0E34\u0E14\u0E07\u0E32\u0E19: ${KIND_TH[req.kind]} (template ${req.template}) \u0E27\u0E31\u0E2A\u0E14\u0E38 ${mat ? `${mat.nameTh} (${mat.id})` : req.materialId} \u0E02\u0E19\u0E32\u0E14 W\xD7D\xD7H = ${req.box.W}\xD7${req.box.D}\xD7${req.box.H} \u0E21\u0E21.`,
+    `\u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48 ${req.sheet.w.toFixed(1)}\xD7${req.sheet.h.toFixed(1)} \u0E21\u0E21. \u2014 \u0E41\u0E1C\u0E07\u0E17\u0E35\u0E48\u0E27\u0E32\u0E07\u0E0A\u0E34\u0E49\u0E19\u0E07\u0E32\u0E19\u0E44\u0E14\u0E49 (id: \u0E01\u0E27\u0E49\u0E32\u0E07\xD7\u0E2A\u0E39\u0E07 \u0E21\u0E21. \u2014 \u0E1A\u0E17\u0E1A\u0E32\u0E17):`,
+    ...req.panels.map((p) => `- ${p.id}: ${p.w.toFixed(1)}\xD7${p.h.toFixed(1)} \u2014 ${p.role}`),
+    req.fillColor ? `\u0E2A\u0E35\u0E1E\u0E37\u0E49\u0E19\u0E1B\u0E31\u0E08\u0E08\u0E38\u0E1A\u0E31\u0E19 ${req.fillColor} (\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E44\u0E14\u0E49)` : "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E2A\u0E35\u0E1E\u0E37\u0E49\u0E19",
+    req.existing > 0 ? `\u0E07\u0E32\u0E19\u0E19\u0E35\u0E49\u0E21\u0E35\u0E0A\u0E34\u0E49\u0E19\u0E07\u0E32\u0E19\u0E40\u0E14\u0E34\u0E21 ${req.existing} \u0E0A\u0E34\u0E49\u0E19 \u2014 \u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48\u0E02\u0E2D\u0E07\u0E04\u0E38\u0E13\u0E08\u0E30\u0E43\u0E0A\u0E49\u0E41\u0E17\u0E19\u0E2B\u0E23\u0E37\u0E2D\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E15\u0E48\u0E2D\u0E15\u0E32\u0E21\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01 \u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E49\u0E04\u0E23\u0E1A\u0E43\u0E19\u0E15\u0E31\u0E27` : "\u0E07\u0E32\u0E19\u0E27\u0E48\u0E32\u0E07 \u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14"
+  ];
+  if (req.images.length) {
+    lines.push("\u0E23\u0E39\u0E1B\u0E17\u0E35\u0E48\u0E41\u0E19\u0E1A\u0E21\u0E32 (\u0E15\u0E32\u0E21\u0E25\u0E33\u0E14\u0E31\u0E1A):");
+    req.images.forEach((im, i) => {
+      lines.push(
+        im.role === "logo" ? `[${i + 1}] \u0E42\u0E25\u0E42\u0E01\u0E49\u0E02\u0E2D\u0E07\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32 \u2014 \u0E27\u0E32\u0E07\u0E14\u0E49\u0E27\u0E22 src "asset:${im.assetId ?? "logo"}"${im.note ? ` (${im.note})` : ""}` : `[${i + 1}] \u0E23\u0E39\u0E1B\u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07\u0E2A\u0E44\u0E15\u0E25\u0E4C${im.note ? ` (${im.note})` : ""}`
+      );
+    });
+  }
+  lines.push(`\u0E04\u0E33\u0E02\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32: ${req.prompt}`);
+  return lines.join("\n");
+}
+function feedback(issues) {
+  return `\u0E23\u0E30\u0E1A\u0E1A\u0E15\u0E23\u0E27\u0E08\u0E41\u0E1C\u0E19\u0E41\u0E25\u0E49\u0E27\u0E1E\u0E1A\u0E1B\u0E31\u0E0D\u0E2B\u0E32:
+${describeArtIssues(issues)}
+
+\u0E41\u0E01\u0E49\u0E41\u0E25\u0E49\u0E27\u0E2A\u0E48\u0E07 JSON \u0E43\u0E2B\u0E21\u0E48\u0E17\u0E31\u0E49\u0E07\u0E09\u0E1A\u0E31\u0E1A (\u0E04\u0E07 id \u0E40\u0E14\u0E34\u0E21\u0E40\u0E17\u0E48\u0E32\u0E17\u0E35\u0E48\u0E17\u0E33\u0E44\u0E14\u0E49)`;
+}
+function firstUserMessage(req) {
+  const content = [];
+  req.images.forEach((im, i) => {
+    content.push({ type: "text", text: `[${i + 1}] ${im.role === "logo" ? "\u0E42\u0E25\u0E42\u0E01\u0E49\u0E02\u0E2D\u0E07\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32" : "\u0E23\u0E39\u0E1B\u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07\u0E2A\u0E44\u0E15\u0E25\u0E4C"}` });
+    content.push({ type: "image", source: { type: "base64", media_type: im.mediaType, data: im.data } });
+  });
+  content.push({ type: "text", text: buildArtworkUserContent(req) });
+  return { role: "user", content };
+}
+async function designArtwork(ask, req, maxRounds = MAX_ROUNDS) {
+  const messages = [firstUserMessage(req)];
+  const rounds = [];
+  let model = "";
+  let last = null;
+  for (let attempt = 1; attempt <= maxRounds; attempt++) {
+    let answer;
+    try {
+      answer = await ask(messages);
+    } catch (error62) {
+      if (error62 instanceof ArtworkDeadlineError && last) break;
+      throw error62;
+    }
+    model = answer.model;
+    const parsed = parseArtworkPlan(answer.raw);
+    let issues;
+    let plan = null;
+    if (!parsed.ok) issues = parsed.issues;
+    else {
+      plan = parsed.plan;
+      issues = [...parsed.issues, ...checkArtworkPlan(plan, req.panels)];
+      last = { plan, issues };
+    }
+    const ok = plan !== null && !issues.some((i) => i.severity === "error");
+    rounds.push({ attempt, plan, issues, ok });
+    if (ok && plan) return { ok: true, plan, issues, rounds, model, mock: false };
+    if (plan && plan.elements.length >= 4 && !issues.some((i) => i.code === "panel-unknown")) {
+      return { ok: true, plan, issues, rounds, model, mock: false };
+    }
+    messages.push(
+      { role: "assistant", content: JSON.stringify(answer.raw) },
+      { role: "user", content: feedback(issues.filter((i) => i.severity === "error")) }
+    );
+  }
+  return { ok: false, plan: last?.plan ?? null, issues: last?.issues ?? rounds[rounds.length - 1].issues, rounds, model, mock: false };
+}
+function artworkModelOptions(model) {
+  const base = boxSpecModelOptions(model);
+  return { effort: base.effort ? "medium" : void 0, serverFallback: base.serverFallback };
+}
+function apiAskWithUsage(apiKey, model, limits = { timeoutMs: 24e4, maxRetries: 1 }) {
+  const client = new Anthropic({ apiKey, timeout: limits.timeoutMs, maxRetries: limits.maxRetries });
+  const options = artworkModelOptions(model);
+  let total = null;
+  const ask = async (messages) => {
+    let timeout = limits.timeoutMs;
+    if (limits.deadlineMs !== void 0) {
+      const remaining = limits.deadlineMs - Date.now();
+      if (remaining < MIN_ROUND_MS) throw new ArtworkDeadlineError();
+      timeout = Math.min(timeout, remaining);
+    }
+    const params = {
+      model,
+      max_tokens: MAX_TOKENS2,
+      system: ARTWORK_SYSTEM,
+      messages,
+      output_config: {
+        format: { type: "json_schema", schema: ARTWORK_SCHEMA },
+        ...options.effort ? { effort: options.effort } : {}
+      }
+    };
+    const msg = options.serverFallback ? await client.beta.messages.create(
+      {
+        ...params,
+        betas: [SERVER_FALLBACK_BETA],
+        // @ts-expect-error fallbacks: "default" ยังไม่อยู่ใน type ของ SDK 0.111 (ดู boxSpec.ts)
+        fallbacks: "default"
+      },
+      { timeout }
+    ) : await client.messages.create(params, { timeout });
+    const u = msg.usage;
+    total = {
+      inputTokens: (total?.inputTokens ?? 0) + u.input_tokens,
+      outputTokens: (total?.outputTokens ?? 0) + u.output_tokens,
+      cacheReadTokens: (total?.cacheReadTokens ?? 0) + (u.cache_read_input_tokens ?? 0),
+      cacheCreationTokens: (total?.cacheCreationTokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
+    };
+    if (msg.stop_reason === "refusal") throw new ArtworkResponseError("refusal", "\u0E42\u0E21\u0E40\u0E14\u0E25\u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18\u0E04\u0E33\u0E02\u0E2D \u0E25\u0E2D\u0E07\u0E1B\u0E23\u0E31\u0E1A\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E2B\u0E23\u0E37\u0E2D\u0E23\u0E39\u0E1B\u0E17\u0E35\u0E48\u0E41\u0E19\u0E1A");
+    if (msg.stop_reason === "max_tokens") throw new ArtworkResponseError("max_tokens", "\u0E41\u0E1A\u0E1A\u0E17\u0E35\u0E48\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E22\u0E32\u0E27\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E16\u0E39\u0E01\u0E15\u0E31\u0E14\u0E01\u0E48\u0E2D\u0E19\u0E08\u0E1A \u2014 \u0E25\u0E2D\u0E07\u0E02\u0E2D\u0E43\u0E2B\u0E49\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E07\u0E48\u0E32\u0E22\u0E25\u0E07");
+    const text = msg.content.map((b) => b.type === "text" ? b.text : "").join("");
+    try {
+      return { raw: JSON.parse(text), model: msg.model };
+    } catch {
+      throw new ArtworkResponseError("invalid-json", "\u0E42\u0E21\u0E40\u0E14\u0E25\u0E15\u0E2D\u0E1A\u0E01\u0E25\u0E31\u0E1A\u0E21\u0E32\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48 JSON \u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07");
+    }
+  };
+  return { ask, usage: () => total };
+}
+var CLI_INSTRUCTION = `
+
+## \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E04\u0E33\u0E15\u0E2D\u0E1A (\u0E2A\u0E33\u0E04\u0E31\u0E0D\u0E21\u0E32\u0E01)
+\u0E15\u0E2D\u0E1A\u0E40\u0E1B\u0E47\u0E19 JSON object \u0E40\u0E14\u0E35\u0E22\u0E27\u0E15\u0E32\u0E21 schema \u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 \u0E2B\u0E49\u0E32\u0E21\u0E21\u0E35\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2D\u0E37\u0E48\u0E19\u0E2B\u0E23\u0E37\u0E2D markdown fence:
+` + JSON.stringify(ARTWORK_SCHEMA);
+var HEX2 = /^#[0-9a-fA-F]{6}$/;
+function parseArtworkRequest(body) {
+  const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+  if (!prompt || prompt.length > 2e3) throw new Error("prompt");
+  const kind = body.kind === "vessel" || body.kind === "pouch" ? body.kind : "box";
+  const template = typeof body.template === "string" ? body.template.slice(0, 40) : "tuck-end";
+  const materialId = typeof body.materialId === "string" && MATERIALS.some((m) => m.id === body.materialId) ? body.materialId : getMaterial("carton-300").id;
+  const num2 = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi ? v : null;
+  const b = body.box ?? {};
+  const W = num2(b.W, 1, 2e3), D = num2(b.D, 1, 2e3), H = num2(b.H, 1, 2e3);
+  if (W === null || D === null || H === null) throw new Error("box");
+  const s = body.sheet ?? {};
+  const sw = num2(s.w, 1, 5e3), sh = num2(s.h, 1, 5e3);
+  if (sw === null || sh === null) throw new Error("sheet");
+  if (!Array.isArray(body.panels) || !body.panels.length || body.panels.length > MAX_PANELS) throw new Error("panels");
+  const panels = body.panels.map((p) => {
+    const o = p ?? {};
+    const id = typeof o.id === "string" ? o.id.slice(0, 40) : "";
+    const x0 = num2(o.x0, -5e3, 5e3), y0 = num2(o.y0, -5e3, 5e3), x1 = num2(o.x1, -5e3, 5e3), y1 = num2(o.y1, -5e3, 5e3);
+    if (!id || x0 === null || y0 === null || x1 === null || y1 === null || x1 <= x0 || y1 <= y0) throw new Error("panel");
+    return { id, x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, role: typeof o.role === "string" ? o.role.slice(0, 160) : `\u0E41\u0E1C\u0E07 ${id}`, print: o.print !== false };
+  });
+  const fillColor = typeof body.fillColor === "string" && HEX2.test(body.fillColor) ? body.fillColor : null;
+  const existing = num2(body.existing, 0, 1e4) ?? 0;
+  const images = [];
+  if (Array.isArray(body.images)) {
+    if (body.images.length > MAX_IMAGES) throw new Error("images");
+    for (const raw of body.images) {
+      const im = parseImage(raw);
+      if (!im) throw new Error("image");
+      const o = raw;
+      const role = o.role === "logo" ? "logo" : "reference";
+      const assetId = typeof o.assetId === "string" ? o.assetId.replace(/[^\w-]/g, "").slice(0, 40) : void 0;
+      const note = typeof o.note === "string" ? o.note.slice(0, 120) : void 0;
+      images.push({ ...im, role, ...assetId ? { assetId } : {}, ...note ? { note } : {} });
+    }
+  }
+  return { prompt, kind, template, materialId, box: { W, D, H }, sheet: { w: sw, h: sh }, panels, fillColor, existing, images };
+}
+
 // server/modules/ai/aiService.ts
 var AiProviderError = class extends Error {
   constructor(kind, source) {
@@ -59151,10 +60180,12 @@ var AiProviderError = class extends Error {
   providerMessage;
 };
 var CLOUD_AI_LIMITS = { timeoutMs: 5e4, maxRetries: 0 };
+var CLOUD_ARTWORK_LIMITS = { timeoutMs: 24e4, maxRetries: 0, budgetMs: 27e4 };
 var AnthropicAiService = class {
-  constructor(model = DEFAULT_AI_MODEL, limits = CLOUD_AI_LIMITS) {
+  constructor(model = DEFAULT_AI_MODEL, limits = CLOUD_AI_LIMITS, artworkLimits = CLOUD_ARTWORK_LIMITS) {
     this.model = model;
     this.limits = limits;
+    this.artworkLimits = artworkLimits;
   }
   async generateBoxSpec(apiKey, input2) {
     try {
@@ -59163,6 +60194,27 @@ var AnthropicAiService = class {
       if (error62 instanceof BoxSpecResponseError) {
         throw new AiProviderError(error62.reason === "refusal" ? "refusal" : "provider", error62);
       }
+      if (error62 instanceof Anthropic.AuthenticationError) throw new AiProviderError("authentication", error62);
+      if (error62 instanceof Anthropic.RateLimitError) throw new AiProviderError("rate-limit", error62);
+      if (error62 instanceof Anthropic.APIError) throw new AiProviderError("provider", error62);
+      throw new AiProviderError("internal", error62);
+    }
+  }
+  // ออกแบบหน้าตาบน template ที่เลือก: วงรอบ designArtwork เดิม (parse → ตรวจแผง → รอบแก้ ≤ 1) ใต้งบเวลารวม + สะสม usage ทุกรอบ
+  async generateArtwork(apiKey, input2) {
+    const { ask, usage } = apiAskWithUsage(apiKey, this.model, {
+      timeoutMs: this.artworkLimits.timeoutMs,
+      maxRetries: this.artworkLimits.maxRetries,
+      deadlineMs: Date.now() + this.artworkLimits.budgetMs
+    });
+    try {
+      const result = await designArtwork(ask, input2);
+      if (!result.plan) throw new AiProviderError("provider", new Error(result.issues[0]?.message ?? "no usable plan"));
+      return { result, model: result.model || this.model, usage: usage() };
+    } catch (error62) {
+      if (error62 instanceof AiProviderError) throw error62;
+      if (error62 instanceof ArtworkResponseError) throw new AiProviderError(error62.reason === "refusal" ? "refusal" : "provider", error62);
+      if (error62 instanceof ArtworkDeadlineError) throw new AiProviderError("provider", error62);
       if (error62 instanceof Anthropic.AuthenticationError) throw new AiProviderError("authentication", error62);
       if (error62 instanceof Anthropic.RateLimitError) throw new AiProviderError("rate-limit", error62);
       if (error62 instanceof Anthropic.APIError) throw new AiProviderError("provider", error62);
@@ -59430,6 +60482,65 @@ function unexpectedError(requestId, route, error62, fallback) {
   return fallback;
 }
 var AI_ROUTE = "POST /api/v1/ai/box-spec";
+var AI_ARTWORK_ROUTE = "POST /api/v1/ai/artwork";
+function aiRouteError(error62, requestId, route) {
+  if (error62 instanceof HttpError) return error62;
+  let httpError;
+  if (error62 instanceof AiProviderError && error62.kind === "authentication") {
+    httpError = new HttpError(503, "CONFIGURATION_ERROR", "\u0E04\u0E35\u0E22\u0E4C AI \u0E02\u0E2D\u0E07 server \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+  } else if (error62 instanceof AiProviderError && error62.kind === "rate-limit") {
+    httpError = new HttpError(429, "AI_RATE_LIMITED", "\u0E40\u0E23\u0E35\u0E22\u0E01 AI \u0E16\u0E35\u0E48\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48");
+  } else if (error62 instanceof AiProviderError && error62.kind === "refusal") {
+    httpError = new HttpError(502, "AI_PROVIDER_UNAVAILABLE", "AI \u0E44\u0E21\u0E48\u0E23\u0E31\u0E1A\u0E04\u0E33\u0E02\u0E2D\u0E19\u0E35\u0E49 \u0E25\u0E2D\u0E07\u0E1B\u0E23\u0E31\u0E1A\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E41\u0E25\u0E49\u0E27\u0E2A\u0E48\u0E07\u0E43\u0E2B\u0E21\u0E48");
+  } else {
+    httpError = new HttpError(502, "AI_PROVIDER_UNAVAILABLE", "\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23 AI \u0E02\u0E31\u0E14\u0E02\u0E49\u0E2D\u0E07 \u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07");
+  }
+  logServerEvent("error", "ai_provider_error", {
+    requestId,
+    route,
+    status: httpError.status,
+    code: httpError.code,
+    kind: error62 instanceof AiProviderError ? error62.kind : "unexpected",
+    error: error62 instanceof AiProviderError ? error62.providerMessage : errorMessageForLog(error62)
+  });
+  return httpError;
+}
+async function chargedAiCall(ctx, call) {
+  const reservation = await ctx.billingService.reserveAiCredit(ctx.actor, ctx.workspaceId, ctx.operationId);
+  let generated;
+  try {
+    generated = await call();
+  } catch (providerError) {
+    try {
+      await ctx.billingService.settleAiRequest(ctx.actor, reservation.requestId, "failed", { hasImage: ctx.hasImage });
+    } catch (refundError) {
+      logServerEvent("warn", "ai_refund_failed", {
+        requestId: ctx.requestId,
+        route: ctx.route,
+        aiRequestId: reservation.requestId,
+        error: errorMessageForLog(refundError)
+      });
+    }
+    throw providerError;
+  }
+  const usage = {
+    hasImage: ctx.hasImage,
+    model: generated.model,
+    ...generated.usage ?? {}
+  };
+  let credits = reservation.credits;
+  try {
+    credits = (await ctx.billingService.settleAiRequest(ctx.actor, reservation.requestId, "succeeded", usage)).credits;
+  } catch (settleError) {
+    logServerEvent("warn", "ai_settle_failed", {
+      requestId: ctx.requestId,
+      route: ctx.route,
+      aiRequestId: reservation.requestId,
+      error: errorMessageForLog(settleError)
+    });
+  }
+  return { value: generated.value, credits };
+}
 function validationError(error62) {
   return new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07", {
     issues: error62.issues.slice(0, 20).map((issue2) => ({
@@ -59502,6 +60613,42 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
+    if (path5 === "/api/v1/ai/artwork") {
+      try {
+        if (req.method !== "POST") {
+          res.setHeader("allow", "POST");
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!sessionService || !aiService || !billingService) {
+          throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 AI \u0E2B\u0E23\u0E37\u0E2D Supabase");
+        }
+        requireJsonContentType(req);
+        const actor = await sessionService.authenticate(bearerToken(req), requestId);
+        const input2 = parseOrThrow(aiArtworkRequestSchema.safeParse(await readJsonBody(req, 8 * 1024 * 1024)));
+        let request;
+        try {
+          request = parseArtworkRequest(input2);
+        } catch (error63) {
+          throw new HttpError(422, "VALIDATION_ERROR", `\u0E04\u0E33\u0E02\u0E2D\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E32\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07 (${error63 instanceof Error ? error63.message : "body"})`);
+        }
+        const serverAi = config2.ai;
+        if (!serverAi) {
+          throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E04\u0E35\u0E22\u0E4C AI");
+        }
+        const { value: result, credits } = await chargedAiCall(
+          { billingService, actor, workspaceId: input2.workspaceId, operationId: input2.operationId, requestId, route: AI_ARTWORK_ROUTE, hasImage: request.images.length > 0 },
+          async () => {
+            const generated = await aiService.generateArtwork(serverAi.anthropicApiKey, request);
+            return { value: generated.result, model: generated.model, usage: generated.usage };
+          }
+        );
+        sendJson(res, 200, { data: { ...result, credits }, requestId }, requestId);
+      } catch (error63) {
+        const httpError = aiRouteError(error63, requestId, AI_ARTWORK_ROUTE);
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
     if (path5 === "/api/v1/ai/box-spec") {
       try {
         if (req.method !== "POST") {
@@ -59526,67 +60673,20 @@ function createApiRouter(config2, dependencies = {}) {
         if (!serverAi) {
           throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E04\u0E35\u0E22\u0E4C AI");
         }
-        const reservation = await billingService.reserveAiCredit(actor, input2.workspaceId, input2.operationId);
-        const hasImage = image !== void 0;
-        let generated;
-        try {
-          generated = await aiService.generateBoxSpec(serverAi.anthropicApiKey, {
-            prompt: input2.prompt.trim(),
-            ...current ? { current } : {},
-            ...image ? { image } : {}
-          });
-        } catch (providerError) {
-          try {
-            await billingService.settleAiRequest(actor, reservation.requestId, "failed", { hasImage });
-          } catch (refundError) {
-            logServerEvent("warn", "ai_refund_failed", {
-              requestId,
-              route: AI_ROUTE,
-              aiRequestId: reservation.requestId,
-              error: errorMessageForLog(refundError)
+        const { value: spec, credits } = await chargedAiCall(
+          { billingService, actor, workspaceId: input2.workspaceId, operationId: input2.operationId, requestId, route: AI_ROUTE, hasImage: image !== void 0 },
+          async () => {
+            const generated = await aiService.generateBoxSpec(serverAi.anthropicApiKey, {
+              prompt: input2.prompt.trim(),
+              ...current ? { current } : {},
+              ...image ? { image } : {}
             });
+            return { value: generated.spec, model: generated.model, usage: generated.usage };
           }
-          throw providerError;
-        }
-        const usage = {
-          hasImage,
-          model: generated.model,
-          ...generated.usage ?? {}
-        };
-        let credits = reservation.credits;
-        try {
-          credits = (await billingService.settleAiRequest(actor, reservation.requestId, "succeeded", usage)).credits;
-        } catch (settleError) {
-          logServerEvent("warn", "ai_settle_failed", {
-            requestId,
-            route: AI_ROUTE,
-            aiRequestId: reservation.requestId,
-            error: errorMessageForLog(settleError)
-          });
-        }
-        sendJson(res, 200, { data: { ...generated.spec, credits }, requestId }, requestId);
+        );
+        sendJson(res, 200, { data: { ...spec, credits }, requestId }, requestId);
       } catch (error63) {
-        let httpError;
-        if (error63 instanceof HttpError) httpError = error63;
-        else {
-          if (error63 instanceof AiProviderError && error63.kind === "authentication") {
-            httpError = new HttpError(503, "CONFIGURATION_ERROR", "\u0E04\u0E35\u0E22\u0E4C AI \u0E02\u0E2D\u0E07 server \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
-          } else if (error63 instanceof AiProviderError && error63.kind === "rate-limit") {
-            httpError = new HttpError(429, "AI_RATE_LIMITED", "\u0E40\u0E23\u0E35\u0E22\u0E01 AI \u0E16\u0E35\u0E48\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48");
-          } else if (error63 instanceof AiProviderError && error63.kind === "refusal") {
-            httpError = new HttpError(502, "AI_PROVIDER_UNAVAILABLE", "AI \u0E44\u0E21\u0E48\u0E23\u0E31\u0E1A\u0E04\u0E33\u0E02\u0E2D\u0E19\u0E35\u0E49 \u0E25\u0E2D\u0E07\u0E1B\u0E23\u0E31\u0E1A\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E41\u0E25\u0E49\u0E27\u0E2A\u0E48\u0E07\u0E43\u0E2B\u0E21\u0E48");
-          } else {
-            httpError = new HttpError(502, "AI_PROVIDER_UNAVAILABLE", "\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23 AI \u0E02\u0E31\u0E14\u0E02\u0E49\u0E2D\u0E07 \u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07");
-          }
-          logServerEvent("error", "ai_provider_error", {
-            requestId,
-            route: AI_ROUTE,
-            status: httpError.status,
-            code: httpError.code,
-            kind: error63 instanceof AiProviderError ? error63.kind : "unexpected",
-            error: error63 instanceof AiProviderError ? error63.providerMessage : errorMessageForLog(error63)
-          });
-        }
+        const httpError = aiRouteError(error63, requestId, AI_ROUTE);
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
       }
       return;

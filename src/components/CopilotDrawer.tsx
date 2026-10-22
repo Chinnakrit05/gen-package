@@ -181,7 +181,7 @@ export function CopilotDrawer({
   }
 
   const runArtwork = async (prompt: string, signal: AbortSignal) => {
-    if (!artwork) throw new Error(t('การออกแบบหน้าตาด้วย AI ยังไม่เปิดบน cloud', 'AI artwork is not available on cloud yet'))
+    if (!artwork) throw new Error(t('ยังไม่มีแบบให้ออกแบบหน้าตา', 'There is no design to decorate yet'))
     const panels = panelBoxes(artwork.dieline)
     const images: ArtworkImageInput[] = [
       ...refs.map((r) => ({ data: r.base64, mediaType: 'image/jpeg', role: 'reference' as const, note: r.name })),
@@ -318,7 +318,7 @@ export function CopilotDrawer({
             title={artwork ? undefined : t('ยังไม่เปิดบน cloud ในเวอร์ชันนี้', 'Not available on cloud yet')}
           >
             <strong>{t('ออกแบบหน้าตาบนแบบนี้', 'Design artwork on this box')}</strong>
-            <span>{artwork ? t('ลาย ข้อความ โลโก้ ครบทุกแผง', 'Art, text and logo on every panel') : t('เร็ว ๆ นี้บน cloud', 'Coming to cloud')}</span>
+            <span>{artwork ? t('ลาย ข้อความ โลโก้ ครบทุกแผง', 'Art, text and logo on every panel') : t('ต้องมีแบบในงานก่อน', 'Needs a design in the job first')}</span>
           </button>
         </div>
 

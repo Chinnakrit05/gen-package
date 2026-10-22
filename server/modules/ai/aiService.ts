@@ -7,6 +7,14 @@ import {
   type CurrentSpec,
   type RefImage,
 } from '../../boxSpec'
+import {
+  apiAskWithUsage,
+  ArtworkDeadlineError,
+  ArtworkResponseError,
+  designArtwork,
+  type ArtworkRequest,
+  type ArtworkResult,
+} from '../../aiArtwork'
 import { DEFAULT_AI_MODEL } from '../../config'
 import { errorMessageForLog } from '../../logging'
 
@@ -25,8 +33,17 @@ export interface AiBoxSpecOutput {
   usage: AiUsage | null
 }
 
+// งานออกแบบหน้าตา (artwork) บน cloud: payload เดียวกับ legacy /api/ai-artwork; ผลส่งถึงผู้ใช้ทั้งก้อน (plan + issues + rounds)
+export type AiArtworkInput = ArtworkRequest
+export interface AiArtworkOutput {
+  result: ArtworkResult
+  model: string
+  usage: AiUsage | null // รวมทุกรอบ (รอบแรก + รอบแก้)
+}
+
 export interface AiService {
   generateBoxSpec(apiKey: string, input: AiBoxSpecInput): Promise<AiBoxSpecOutput>
+  generateArtwork(apiKey: string, input: AiArtworkInput): Promise<AiArtworkOutput>
 }
 
 // refusal = โมเดลตอบ stop_reason "refusal" (ส่งซ้ำแบบเดิมก็ไม่ผ่าน ต้องปรับคำขอ) — คืนเครดิตเหมือน provider ล้ม
@@ -43,14 +60,18 @@ export class AiProviderError extends Error {
   }
 }
 
-// เวลารอ provider บน cloud: ต้องสั้นกว่า maxDuration ของ api/backend.js ใน vercel.json (60 วินาที)
-// ไม่ retry เพราะ retry ทำให้เกินเวลา function — ผู้ใช้กดใหม่ได้และเครดิตถูกคืนแล้ว
+// เวลารอ provider บน cloud (box-spec): ตอบสั้น จึงคงไว้ 50 วินาที; ไม่ retry เพราะ retry ทำให้เกินเวลา function —
+// ผู้ใช้กดใหม่ได้และเครดิตถูกคืนแล้ว
 export const CLOUD_AI_LIMITS = { timeoutMs: 50_000, maxRetries: 0 } as const
+// artwork ตอบยาวกว่ามาก (max_tokens 24k + อาจมีรอบแก้) — งบเวลารวมทุกรอบ 270 วินาที ต้องจบก่อน maxDuration 300 ของ
+// api/backend.js ใน vercel.json (Hobby + Fluid compute) ให้เหลือเวลา settle/ตอบกลับ; รอบแก้ที่ไม่ทันงบ → คืนแบบรอบก่อน
+export const CLOUD_ARTWORK_LIMITS = { timeoutMs: 240_000, maxRetries: 0, budgetMs: 270_000 } as const
 
 export class AnthropicAiService implements AiService {
   constructor(
     private readonly model = DEFAULT_AI_MODEL,
     private readonly limits: { timeoutMs?: number; maxRetries?: number } = CLOUD_AI_LIMITS,
+    private readonly artworkLimits: { timeoutMs: number; maxRetries: number; budgetMs: number } = CLOUD_ARTWORK_LIMITS,
   ) {}
 
   async generateBoxSpec(apiKey: string, input: AiBoxSpecInput): Promise<AiBoxSpecOutput> {
@@ -61,6 +82,29 @@ export class AnthropicAiService implements AiService {
       if (error instanceof BoxSpecResponseError) {
         throw new AiProviderError(error.reason === 'refusal' ? 'refusal' : 'provider', error)
       }
+      if (error instanceof Anthropic.AuthenticationError) throw new AiProviderError('authentication', error)
+      if (error instanceof Anthropic.RateLimitError) throw new AiProviderError('rate-limit', error)
+      if (error instanceof Anthropic.APIError) throw new AiProviderError('provider', error)
+      throw new AiProviderError('internal', error)
+    }
+  }
+
+  // ออกแบบหน้าตาบน template ที่เลือก: วงรอบ designArtwork เดิม (parse → ตรวจแผง → รอบแก้ ≤ 1) ใต้งบเวลารวม + สะสม usage ทุกรอบ
+  async generateArtwork(apiKey: string, input: AiArtworkInput): Promise<AiArtworkOutput> {
+    const { ask, usage } = apiAskWithUsage(apiKey, this.model, {
+      timeoutMs: this.artworkLimits.timeoutMs,
+      maxRetries: this.artworkLimits.maxRetries,
+      deadlineMs: Date.now() + this.artworkLimits.budgetMs,
+    })
+    try {
+      const result = await designArtwork(ask, input)
+      // ตอบกลับมาแต่ไม่มีแบบให้ใช้เลย (ผิด schema ทุกรอบ) — นับเป็น provider ล้ม (คืนเครดิต) เหมือน box-spec ที่ไม่มีสเปก
+      if (!result.plan) throw new AiProviderError('provider', new Error(result.issues[0]?.message ?? 'no usable plan'))
+      return { result, model: result.model || this.model, usage: usage() }
+    } catch (error) {
+      if (error instanceof AiProviderError) throw error
+      if (error instanceof ArtworkResponseError) throw new AiProviderError(error.reason === 'refusal' ? 'refusal' : 'provider', error)
+      if (error instanceof ArtworkDeadlineError) throw new AiProviderError('provider', error)
       if (error instanceof Anthropic.AuthenticationError) throw new AiProviderError('authentication', error)
       if (error instanceof Anthropic.RateLimitError) throw new AiProviderError('rate-limit', error)
       if (error instanceof Anthropic.APIError) throw new AiProviderError('provider', error)

@@ -15450,6 +15450,7 @@ var TEMPLATES = [
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C\u0E1D\u0E32\u0E1E\u0E31\u0E1A (\u2248FEFCO 0426)",
     detail: "\u0E2A\u0E48\u0E07\u0E02\u0E2D\u0E07\u0E2D\u0E2D\u0E19\u0E44\u0E25\u0E19\u0E4C \xB7 \u0E01\u0E25\u0E48\u0E2D\u0E07 subscription \xB7 \u0E0A\u0E38\u0E14\u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E2B\u0E25\u0E32\u0E22\u0E0A\u0E34\u0E49\u0E19",
     defaults: { W: 200, D: 140, H: 60 },
+    // กล่องไปรษณีย์ไทยเบอร์ A (14×20×6 ซม.)
     tilt: -Math.PI / 2,
     supportsHandle: true,
     supportsVents: true,
@@ -15460,7 +15461,8 @@ var TEMPLATES = [
     id: "rollover-mailer",
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C\u0E02\u0E2D\u0E1A\u0E21\u0E49\u0E27\u0E19 (rollover mailer)",
     detail: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E41\u0E1A\u0E23\u0E19\u0E14\u0E4C\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \xB7 \u0E2A\u0E48\u0E07\u0E40\u0E2A\u0E37\u0E49\u0E2D\u0E1C\u0E49\u0E32/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07 \xB7 \u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D",
-    defaults: { W: 220, D: 150, H: 70 },
+    defaults: { W: 250, D: 170, H: 90 },
+    // กล่องไปรษณีย์ไทยเบอร์ B (17×25×9 ซม.)
     tilt: -Math.PI / 2,
     supportsHandle: false,
     foldDepth: (b, m) => b.H + m.thickness,
@@ -15471,6 +15473,7 @@ var TEMPLATES = [
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C\u0E1D\u0E32\u0E25\u0E47\u0E2D\u0E01 (FEFCO 0427)",
     detail: "\u0E2A\u0E48\u0E07\u0E2B\u0E19\u0E31\u0E07\u0E2A\u0E37\u0E2D/\u0E02\u0E2D\u0E07\u0E2B\u0E19\u0E31\u0E01 \xB7 \u0E2D\u0E35\u0E04\u0E2D\u0E21\u0E40\u0E21\u0E34\u0E23\u0E4C\u0E0B \xB7 \u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E01\u0E31\u0E19\u0E01\u0E23\u0E30\u0E41\u0E17\u0E01",
     defaults: { W: 200, D: 140, H: 60 },
+    // กล่องไปรษณีย์ไทยเบอร์ A (14×20×6 ซม.)
     tilt: -Math.PI / 2,
     spin: FEFCO0427_SPIN,
     supportsHandle: false,
@@ -15503,7 +15506,8 @@ var TEMPLATES = [
     id: "rsc",
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E25\u0E39\u0E01\u0E1F\u0E39\u0E01 RSC (FEFCO 0201)",
     detail: "\u0E25\u0E31\u0E07\u0E02\u0E19\u0E2A\u0E48\u0E07\u0E17\u0E31\u0E48\u0E27\u0E44\u0E1B \xB7 \u0E2A\u0E15\u0E47\u0E2D\u0E01/\u0E01\u0E23\u0E30\u0E08\u0E32\u0E22\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32 \xB7 \u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E08\u0E33\u0E19\u0E27\u0E19\u0E21\u0E32\u0E01",
-    defaults: { W: 250, D: 200, H: 150 },
+    defaults: { W: 300, D: 200, H: 110 },
+    // กล่องไปรษณีย์ไทยเบอร์ C (20×30×11 ซม.) — ฝาชน RSC
     tilt: 0,
     supportsHandle: false,
     supportsVents: true,
@@ -15607,7 +15611,8 @@ var TEMPLATES = [
     id: "card",
     nameTh: "\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23 (business card)",
     detail: "\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23 \xB7 \u0E01\u0E32\u0E23\u0E4C\u0E14\u0E2A\u0E30\u0E2A\u0E21 \xB7 \u0E04\u0E39\u0E1B\u0E2D\u0E07/\u0E01\u0E32\u0E23\u0E4C\u0E14\u0E40\u0E0A\u0E34\u0E0D",
-    defaults: { W: 90, D: 54, H: 54 },
+    defaults: { W: 90, D: 55, H: 55 },
+    // นามบัตรขนาดที่โรงพิมพ์ไทยใช้ 9×5.5 ซม.
     tilt: 0,
     supportsHandle: false,
     foldDepth: () => 0,

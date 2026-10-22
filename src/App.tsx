@@ -8,7 +8,7 @@ import { LangCtx, loadLang, LANG_KEY, useT, type Lang } from './i18n'
 import { MATERIALS, getMaterial, packKind } from './core/materials'
 import { TEMPLATES, getTemplate } from './core/templates'
 import type { Dieline, Vec2 } from './core/types'
-import type { AiBoxSpec, CurrentSpec } from './core/ai'
+import type { AiBoxSpec, ArtworkRequestInput, ArtworkResponse, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
 import { dimTextSize } from './core/templates/shared'
 import { dielinePDFBytes, type PdfSpotPlate } from './core/pdf'
@@ -1211,6 +1211,9 @@ export interface CloudProjectBridge {
     current?: CurrentSpec,
     imageBase64?: string,
   ) => Promise<AiBoxSpec>
+  // AI ออกแบบหน้าตาบน cloud: payload เดียวกับ legacy /api/ai-artwork (bridge เติม workspace/operation เอง) หัก 1 เครดิต/แบบ;
+  // ลายเซ็นเดียวกับ requestArtworkPlan ให้ CopilotDrawer สลับได้ — อาร์กิวเมนต์คีย์ถูกละบน cloud
+  requestAiArtwork: (input: ArtworkRequestInput, anthropicApiKey?: string, signal?: AbortSignal) => Promise<ArtworkResponse>
   // --- billing/entitlement (ดู docs/billing-freemium-pro.md §4) — null = โหลดไม่ได้ ปฏิบัติเหมือน Freemium ---
   entitlements: Entitlements | null
   entitlementsStatus: EntitlementsStatus
@@ -6460,7 +6463,7 @@ export default function App({
             hasDesign={history.length > 0}
             onApplySpec={applySpec}
             requestSpec={cloud?.requestAiSpec}
-            artwork={!cloud && dieline ? { dieline, kind, template: templateId, materialId, box: { W, D, H }, fillColor, existingCount: decos.length, onApply: applyAiArtwork } : null}
+            artwork={dieline ? { dieline, kind, template: templateId, materialId, box: { W, D, H }, fillColor, existingCount: decos.length, onApply: applyAiArtwork, request: cloud?.requestAiArtwork } : null}
             lastSnapshotId={artCurrentId}
             onOpenStage={() => setStageOpen(true)}
             onLoadingChange={setAiBusy}
