@@ -7,7 +7,7 @@ import { finishDef } from '../core/finish'
 //  orm: G = ความด้าน (roughness), B = ความเป็นโลหะ (metalness) ตามที่ three อ่าน roughnessMap/metalnessMap —
 //       พื้นทั้งแผ่น = ค่าของวัสดุ, ฟอยล์ = โลหะมันวาว, Spot UV = มันวาวไม่เป็นโลหะ; material ต้องตั้ง roughness/metalness = 1
 //       (three คูณค่าคงที่กับค่าในแผนที่)
-//  bump: แผนที่ความสูง (เทากลาง = เรียบ, ปั๊มนูน = ขาว, ปั๊มจม = ดำ เบลอขอบให้ไล่ระดับ) แล้วแปลงเป็น normal map บน CPU
+//  bump: แผนที่ความสูง (เทากลาง = เรียบ, ปั๊มนูน = ขาว เบลอขอบ, ปั๊มจม = ดำ ลาดเฉพาะด้านในรูป) แล้วแปลงเป็น normal map บน CPU
 //       (`heightToNormal`) — bumpMap ของ three คำนวณความชันจากพิกเซลจอ เส้นนูนบาง ๆ (ซิป) มองเฉียงแตกเป็นขั้นบันได
 // ไม่มีชิ้นงานพิเศษ = คืน null ทั้งคู่ (material ใช้ค่าคงที่เดิม ไม่เสีย texture เพิ่ม)
 const PX_PER_MM = 8 // แผนที่ผิวไม่ต้องคมเท่าลาย (แต่สันนูนบาง ๆ อย่างซิปต้องพอให้ไม่เป็นขั้นบันได)
@@ -41,6 +41,13 @@ export function heightToNormal(src: Uint8ClampedArray, w: number, h: number, s: 
     }
   }
   return out
+}
+
+// ปั๊มจม: แอ่งอยู่ในเส้นรอบรูปเท่านั้น (ผนังแอ่งลาดลงจากขอบเข้าไปด้านใน กระดาษรอบตัวอักษรเรียบ — เงา/ไฮไลต์
+// ไม่ล้นออกนอกตัว) — ความลึก 0..1 จาก alpha คม a และ alpha ที่เบลอแล้ว b: ขอบรูป (b≈0.5) = 0 ไล่ถึงลึกสุดเมื่อ b=1
+// (เส้นบางกว่าระยะเบลอได้แอ่งตื้นลง เหมือนแม่พิมพ์จริงกดเส้นบางได้ไม่ลึก); คืนค่าเป็นระดับเทาที่ต้องลบออก
+export function debossDepth(a: number, b: number): number {
+  return (a / 255) * Math.max(0, Math.min(1, (b / 255 - 0.5) * 2)) * 127
 }
 
 export function useFinishMaps(opts: {
@@ -118,11 +125,11 @@ export function useFinishMaps(opts: {
         bump = document.createElement('canvas')
         bump.width = w
         bump.height = h
-        const bc = bump.getContext('2d')
+        const bc = bump.getContext('2d', { willReadFrequently: true })
         const tmp = document.createElement('canvas')
         tmp.width = w
         tmp.height = h
-        const tc = tmp.getContext('2d')
+        const tc = tmp.getContext('2d', { willReadFrequently: true })
         if (bc && tc) {
           bc.fillStyle = 'rgb(128,128,128)'
           bc.fillRect(0, 0, w, h)
@@ -138,12 +145,38 @@ export function useFinishMaps(opts: {
             for (const d of items) drawSilhouette(tc, d, s, imgOf, '#000000')
             // เบลอผ่านเงาของ canvas (ใช้ได้ทุกเบราว์เซอร์): วาดต้นแบบนอกภาพ แล้วให้เงาตกกลับมาที่เดิม
             const far = w + h + 1000
-            bc.save()
-            bc.shadowColor = sign > 0 ? '#ffffff' : '#000000'
-            bc.shadowBlur = Math.max(2, s * 0.8)
-            bc.shadowOffsetX = far
-            bc.drawImage(tmp, -far, 0)
-            bc.restore()
+            const blurInto = (c: CanvasRenderingContext2D, color: string) => {
+              c.save()
+              c.shadowColor = color
+              c.shadowBlur = Math.max(2, s * 0.8)
+              c.shadowOffsetX = far
+              c.drawImage(tmp, -far, 0)
+              c.restore()
+            }
+            if (sign > 0) {
+              // ปั๊มนูน: กระดาษโป่งขึ้นลาดทั้งในและนอกขอบ
+              blurInto(bc, '#ffffff')
+              continue
+            }
+            // ปั๊มจม: แอ่งลาดลงจากขอบเข้าด้านใน (`debossDepth`) — ไม่ลาดออกนอกเส้นรอบรูป
+            const blur = document.createElement('canvas')
+            blur.width = w
+            blur.height = h
+            const lc = blur.getContext('2d', { willReadFrequently: true })
+            if (!lc) continue
+            blurInto(lc, '#000000')
+            const A = tc.getImageData(0, 0, w, h).data
+            const B = lc.getImageData(0, 0, w, h).data
+            const img = bc.getImageData(0, 0, w, h)
+            const H = img.data
+            for (let i = 3; i < H.length; i += 4) {
+              if (!A[i]) continue
+              const dv = debossDepth(A[i], B[i])
+              H[i - 3] -= dv
+              H[i - 2] -= dv
+              H[i - 1] -= dv
+            }
+            bc.putImageData(img, 0, 0)
           }
         }
       }

@@ -45,7 +45,8 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ของชิ้น (`renderArtworkAlpha` → `traceWhiteInk(m, 0)`, `finishPlatesForExport` ใน App, แผ่นสติกเกอร์วางซ้ำผ่าน `placePoint`);
   **ฟอยล์ไม่พิมพ์ CMYK** (`printsCmyk`) → `renderArtworkCanvas(..., 'print')` และเลเยอร์ artwork ของ SVG ข้ามชิ้นฟอยล์;
   พรีวิว: blueprint `FinishLook` (DielineSVG: ฟอยล์ = mask alpha + ไล่แสงโลหะ, UV = แถบเงา, ปั๊ม = ฟิลเตอร์ไฮไลต์/เงา —
-  สี่เหลี่ยมที่มี mask ต้อง pointerEvents none เพราะ mask ไม่ตัดพื้นที่คลิก), canvas `drawDecoPreview`/`drawSilhouette`
+  สี่เหลี่ยมที่มี mask ต้อง pointerEvents none เพราะ mask ไม่ตัดพื้นที่คลิก; ปั๊มจม = เงาใน (inner shadow) อยู่ในเส้นรอบรูปเท่านั้น
+  ไม่ล้นออกนอกตัว — 3D ใช้ `debossDepth` แอ่งลาดจากขอบเข้าด้านใน, ปั๊มนูนยังลาดทั้งในและนอกขอบ), canvas `drawDecoPreview`/`drawSilhouette`
   (ฟอยล์ = รูปทรงสีโลหะ; ใบสเปก/ภาพย่อ/texture 3D), 3D `useFinishMaps` → roughness/metalness map (G/B) + แผนที่ความสูง
   ที่แปลงเป็น normal map บน CPU (`heightToNormal` — bumpMap ของ three คำนวณความชันจากพิกเซลจอ เส้นนูนบางมองเฉียงเป็นขั้นบันได/จุด)
   พิกัดเดียวกับ texture ลาย (configure flipY/repeat ต้องตรงกัน; flipY กลับเครื่องหมายแกน v) ใช้ใน Viewer3D/VesselViewer3D/PouchViewer3D

@@ -187,7 +187,8 @@ function DecoBody({ e }: { e: Deco }) {
 
 // หน้าตางานพิมพ์พิเศษบน blueprint (พรีวิวเท่านั้น — ไฟล์ส่งออกใช้เพลต spot แยก):
 // ฟอยล์ = รูปทรงชิ้นเติมไล่แสงโลหะ (ไม่มีหมึกเดิมให้เห็น), Spot UV = ลายเดิม + แถบเงาสะท้อน,
-// ปั๊มนูน/จม = ลายเดิม + ขอบไฮไลต์/เงาจาก alpha ที่เบลอแล้วเลื่อน (นูน: สว่างซ้ายบน, จม: กลับด้าน)
+// ปั๊มนูน = ลายเดิม + ขอบไฮไลต์/เงาจาก alpha ที่เบลอแล้วเลื่อน (สว่างซ้ายบน ลาดทั้งในและนอกขอบ),
+// ปั๊มจม = เงาใน (inner shadow): ผนังแอ่งซ้ายบนเป็นเงา ขวาล่างรับแสง — อยู่ในเส้นรอบรูปเท่านั้น ไม่ล้นออกนอกตัว
 function FinishLook({ e, children }: { e: Deco; children: React.ReactNode }) {
   const def = finishDef(e.finish)
   if (!def) return <>{children}</>
@@ -245,7 +246,32 @@ function FinishLook({ e, children }: { e: Deco; children: React.ReactNode }) {
   // ปั๊มนูน/จม: ระยะเบลอ/เลื่อนตามขนาดชิ้น
   const sd = Math.max(0.3, Math.min(1.2, Math.min(w, h) * 0.02))
   const o = sd * 0.8
-  const lightFirst = def.relief > 0
+  if (def.relief < 0) {
+    // แสงจากซ้ายบน: alpha ที่เลื่อนไปขวาล่างไม่คลุมขอบซ้ายบนด้านใน → แถบเงา; เลื่อนกลับด้าน → แถบไฮไลต์ขวาล่าง
+    return (
+      <>
+        <defs>
+          <filter id={gid} x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation={sd * 0.7} result="b" />
+            <feOffset in="b" dx={o} dy={o} result="dn" />
+            <feOffset in="b" dx={-o} dy={-o} result="up" />
+            <feComposite in="SourceAlpha" in2="dn" operator="out" result="loA" />
+            <feComposite in="SourceAlpha" in2="up" operator="out" result="hiA" />
+            <feFlood floodColor="#000000" floodOpacity="0.55" />
+            <feComposite in2="loA" operator="in" result="lo" />
+            <feFlood floodColor="#ffffff" floodOpacity="0.85" />
+            <feComposite in2="hiA" operator="in" result="hi" />
+            <feMerge>
+              <feMergeNode in="SourceGraphic" />
+              <feMergeNode in="lo" />
+              <feMergeNode in="hi" />
+            </feMerge>
+          </filter>
+        </defs>
+        <g filter={`url(#${gid})`}>{children}</g>
+      </>
+    )
+  }
   return (
     <>
       <defs>
@@ -253,8 +279,8 @@ function FinishLook({ e, children }: { e: Deco; children: React.ReactNode }) {
           <feGaussianBlur in="SourceAlpha" stdDeviation={sd} result="b" />
           <feOffset in="b" dx={-o} dy={-o} result="u" />
           <feOffset in="b" dx={o} dy={o} result="v" />
-          <feComposite in={lightFirst ? 'u' : 'v'} in2={lightFirst ? 'v' : 'u'} operator="arithmetic" k2="1" k3="-1" result="hiA" />
-          <feComposite in={lightFirst ? 'v' : 'u'} in2={lightFirst ? 'u' : 'v'} operator="arithmetic" k2="1" k3="-1" result="loA" />
+          <feComposite in="u" in2="v" operator="arithmetic" k2="1" k3="-1" result="hiA" />
+          <feComposite in="v" in2="u" operator="arithmetic" k2="1" k3="-1" result="loA" />
           <feFlood floodColor="#ffffff" floodOpacity="0.9" />
           <feComposite in2="hiA" operator="in" result="hi" />
           <feFlood floodColor="#000000" floodOpacity="0.5" />
