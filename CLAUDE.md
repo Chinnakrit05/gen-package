@@ -46,8 +46,10 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   **ฟอยล์ไม่พิมพ์ CMYK** (`printsCmyk`) → `renderArtworkCanvas(..., 'print')` และเลเยอร์ artwork ของ SVG ข้ามชิ้นฟอยล์;
   พรีวิว: blueprint `FinishLook` (DielineSVG: ฟอยล์ = mask alpha + ไล่แสงโลหะ, UV = แถบเงา, ปั๊ม = ฟิลเตอร์ไฮไลต์/เงา —
   สี่เหลี่ยมที่มี mask ต้อง pointerEvents none เพราะ mask ไม่ตัดพื้นที่คลิก), canvas `drawDecoPreview`/`drawSilhouette`
-  (ฟอยล์ = รูปทรงสีโลหะ; ใบสเปก/ภาพย่อ/texture 3D), 3D `useFinishMaps` → roughness/metalness map (G/B) + bump map
-  พิกัดเดียวกับ texture ลาย (configure flipY/repeat ต้องตรงกัน) ใช้ใน Viewer3D/VesselViewer3D/PouchViewer3D ผ่าน `finishMaterialProps`;
+  (ฟอยล์ = รูปทรงสีโลหะ; ใบสเปก/ภาพย่อ/texture 3D), 3D `useFinishMaps` → roughness/metalness map (G/B) + แผนที่ความสูง
+  ที่แปลงเป็น normal map บน CPU (`heightToNormal` — bumpMap ของ three คำนวณความชันจากพิกเซลจอ เส้นนูนบางมองเฉียงเป็นขั้นบันได/จุด)
+  พิกัดเดียวกับ texture ลาย (configure flipY/repeat ต้องตรงกัน; flipY กลับเครื่องหมายแกน v) ใช้ใน Viewer3D/VesselViewer3D/PouchViewer3D
+  ผ่าน `finishMaterialProps`; option `relief` วาดรอยนูนของตัวบรรจุภัณฑ์เองลงแผนที่เดียวกัน (ซิปล็อกถุง `zipRelief`);
   PROJECT_FILE_VERSION 19
 - `src/core/guides.ts` — `computeGuides(dieline)`: safe = inset ต่อแผง; bleed = polyline ต่อเนื่องจาก "เส้นตัดขอบนอก" จริง (segments kind cut → ทดสอบฝั่งเนื้อวัสดุด้วย outline แผง, ร่องผ่าที่มีเนื้อสองฝั่งตกไป) ไม่ใช่ offset ทีละแผง (แบบเดิมได้เส้นซ้อนกลางแผ่น/หยุดที่รอยต่อกาว)
 - `src/core/softProof.ts` + `src/components/useSoftProof.ts` — soft-proof CMYK บน blueprint (ปุ่ม "ดูสีแบบพิมพ์" ท้ายแถบเครื่องมือซ้ายบน ผ่าน prop `toolsExtra`, state ไม่จำข้ามรอบโดยเจตนา): ส่ง "สำเนา" ลาย/สีพื้น/รูปที่แปลงสีแล้วเข้า DielineSVG เท่านั้น — callback ของ blueprint อ้าง id/ค่าตัวเลข จึงแก้ไขระหว่างพรีวิวได้โดยสีจำลองไม่หลุดลงงาน/ไฟล์ส่งออก; รูปแปลงผ่าน canvas แบบ async + แคช. ใช้ 3D LUT 17³ ใน `src/core/cmykProofLut.ts` = **ไฟล์ที่ถูก generate** โดย `scripts/build-cmyk-lut.py` (Pillow/LittleCMS: sRGB→CMYK→sRGB relative+BPC แล้วแก้ gray balance ให้เทา/ขาว/ดำคงเดิม) — อย่าแก้ตรง ๆ; เปลี่ยน profile โรงพิมพ์ได้ด้วย `python scripts/build-cmyk-lut.py path.icc` (ค่าเริ่มต้น RSWOP.icm ของ Windows). สูตร RGB→CMYK ตรง ๆ ใน pdf.ts ใช้จำลองไม่ได้เพราะแปลงกลับได้ค่าเดิมเป๊ะ
@@ -258,6 +260,8 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ออปชันเสริม `PouchAddons` = { hangHole (รูแขวน euro-hole, ตัดจริง), valve (วาล์วกาแฟ marker+จาน 3D),
   tinTie (ที่รัดปาก แถบ 3D) } — ตำแหน่งใช้ค่าคงที่ร่วม dieline/3D (`VALVE_V`/`TINTIE_INSET`/`valveR`)
   ตำแหน่งซิป/รอยบาก: `pouchAddons.zipAt`/`tearAt` (มม. จากขอบบน, ไม่ใส่ = ซิป 18 มม. ใต้ซีล + รอยบากอัตโนมัติเหนือซิป `TEAR_GAP`)
+  ซิปใน 3D = รอยปั๊มนูนบนฟิล์มเอง (`zipReliefProfile` แถบนูน+สันคู่ ข้ามทั้งแผ่นที่แนว zipY ผ่าน `useFinishMaps` relief) ไม่ใช่แถบสีแยก
+  → สี/ลาย/texture ตามถุงเสมอ; สันซิปต้องกว้างพอ (σ ≥ ~0.75 มม.) ไม่งั้นมองเฉียงเป็นจุดหยัก
   ผ่าน `pouchZipLayout` ชุดเดียวทั้ง dieline/3D; หลักผลิตตรวจใน `pouchPreflight.ts` (รอยบากพ้นซีล → เหนือซิป → ซิปไม่ทับวาล์ว/จุก/ก้นจีบ)
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด

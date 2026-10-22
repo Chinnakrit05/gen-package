@@ -7,14 +7,40 @@ import { finishDef } from '../core/finish'
 //  orm: G = ความด้าน (roughness), B = ความเป็นโลหะ (metalness) ตามที่ three อ่าน roughnessMap/metalnessMap —
 //       พื้นทั้งแผ่น = ค่าของวัสดุ, ฟอยล์ = โลหะมันวาว, Spot UV = มันวาวไม่เป็นโลหะ; material ต้องตั้ง roughness/metalness = 1
 //       (three คูณค่าคงที่กับค่าในแผนที่)
-//  bump: เทากลาง = เรียบ, ปั๊มนูน = ขาว, ปั๊มจม = ดำ — เบลอขอบให้ไล่ระดับ (bump อ่านความชัน ขอบแข็งได้แค่เส้นบาง)
+//  bump: แผนที่ความสูง (เทากลาง = เรียบ, ปั๊มนูน = ขาว, ปั๊มจม = ดำ เบลอขอบให้ไล่ระดับ) แล้วแปลงเป็น normal map บน CPU
+//       (`heightToNormal`) — bumpMap ของ three คำนวณความชันจากพิกเซลจอ เส้นนูนบาง ๆ (ซิป) มองเฉียงแตกเป็นขั้นบันได
 // ไม่มีชิ้นงานพิเศษ = คืน null ทั้งคู่ (material ใช้ค่าคงที่เดิม ไม่เสีย texture เพิ่ม)
-const PX_PER_MM = 6 // แผนที่ผิวไม่ต้องคมเท่าลาย
+const PX_PER_MM = 8 // แผนที่ผิวไม่ต้องคมเท่าลาย (แต่สันนูนบาง ๆ อย่างซิปต้องพอให้ไม่เป็นขั้นบันได)
 const MAX_PX = 4096
 
 export interface FinishMaps {
   orm: THREE.CanvasTexture | null
-  bump: THREE.CanvasTexture | null
+  bump: THREE.CanvasTexture | null // normal map (tangent space) จากแผนที่ความสูง
+}
+
+// ความสูงเต็มช่วง (ค่า 0/255 ห่างจากเทากลาง 127 ระดับ) = กี่มม. — กำหนดความชันของผิวนูน
+const RELIEF_MM = 0.5
+
+// แผนที่ความสูง (เทา) → normal map: ความชันจากผลต่างกลาง แปลงหน่วยเป็นมม. ตามความละเอียด s px/มม.
+// แกน v ของ texture: flipY = แถวบนของภาพคือ v สูงสุด → ความชันตาม v กลับเครื่องหมายกับแถวภาพ
+export function heightToNormal(src: Uint8ClampedArray, w: number, h: number, s: number, flipY: boolean): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(w * h * 4)
+  const k = (RELIEF_MM / 127) * (s / 2) // (ระดับเทา → มม.) ÷ ระยะผลต่างกลาง 2 px (มม.)
+  const H = (x: number, y: number) => src[(Math.min(h - 1, Math.max(0, y)) * w + Math.min(w - 1, Math.max(0, x))) * 4]
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const gx = (H(x + 1, y) - H(x - 1, y)) * k
+      const gRow = (H(x, y + 1) - H(x, y - 1)) * k
+      const gy = flipY ? -gRow : gRow
+      const inv = 1 / Math.hypot(gx, gy, 1)
+      const i = (y * w + x) * 4
+      out[i] = Math.round((-gx * inv * 0.5 + 0.5) * 255)
+      out[i + 1] = Math.round((-gy * inv * 0.5 + 0.5) * 255)
+      out[i + 2] = Math.round((inv * 0.5 + 0.5) * 255)
+      out[i + 3] = 255
+    }
+  }
+  return out
 }
 
 export function useFinishMaps(opts: {
@@ -25,14 +51,17 @@ export function useFinishMaps(opts: {
   baseMetal: number
   configure?: (t: THREE.CanvasTexture) => void // ต้องตรงกับ texture ลาย (flipY/repeat)
   deps?: unknown[] // ค่าที่ configure ใช้ (เช่นช่วงฉลากที่มองเห็น) — เปลี่ยนแล้วสร้างแผนที่ใหม่
+  // รอยนูนของตัวบรรจุภัณฑ์เอง (เช่นแนวซิปล็อกของถุง) วาดลงแผนที่ bump พิกัดแผ่นคลี่ — ผิวยังเป็นฟิล์มเดิม สี/ลายจึงกลืนกับถุง
+  // key = ค่าที่มีผลต่อภาพ (เปลี่ยนแล้ววาดใหม่)
+  relief?: { key: string; draw: (ctx: CanvasRenderingContext2D, s: number, w: number) => void } | null
 }): FinishMaps {
-  const { sheetW, sheetH, decos, baseRough, baseMetal, configure, deps = [] } = opts
+  const { sheetW, sheetH, decos, baseRough, baseMetal, configure, deps = [], relief: extra = null } = opts
   const [maps, setMaps] = useState<FinishMaps>({ orm: null, bump: null })
   const imgCache = useRef(new Map<string, HTMLImageElement>())
   const [imgTick, setImgTick] = useState(0)
   const fin = decos.filter((d) => !d.hidden && d.finish)
   // คีย์เฉพาะสิ่งที่มีผลต่อแผนที่ (ชิ้นงานพิเศษ + ขนาดแผ่น) — แก้ชิ้นอื่นไม่ต้องวาดใหม่
-  const key = JSON.stringify([sheetW, sheetH, baseRough, baseMetal, deps, fin.map((d) => (d.type === 'image' ? { ...d, src: d.src.length + d.src.slice(-32) } : d))])
+  const key = JSON.stringify([sheetW, sheetH, baseRough, baseMetal, deps, extra?.key ?? null, fin.map((d) => (d.type === 'image' ? { ...d, src: d.src.length + d.src.slice(-32) } : d))])
 
   useEffect(() => {
     let dead = false
@@ -53,7 +82,7 @@ export function useFinishMaps(opts: {
   }, [key])
 
   useEffect(() => {
-    if (!fin.length) {
+    if (!fin.length && !extra) {
       setMaps((m) => (m.orm || m.bump ? { orm: null, bump: null } : m))
       return
     }
@@ -66,10 +95,14 @@ export function useFinishMaps(opts: {
       const imgOf = (src: string) => imgCache.current.get(src)
       const to255 = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 255)
 
-      const orm = document.createElement('canvas')
-      orm.width = w
-      orm.height = h
-      const oc = orm.getContext('2d')
+      // แผนที่ความด้าน/โลหะ: เฉพาะเมื่อมีฟอยล์/Spot UV (รอยนูนอย่างเดียวไม่ต้องใช้)
+      const needOrm = fin.some((d) => !finishDef(d.finish)?.relief)
+      const orm = needOrm ? document.createElement('canvas') : null
+      if (orm) {
+        orm.width = w
+        orm.height = h
+      }
+      const oc = orm?.getContext('2d') ?? null
       const relief = fin.filter((d) => finishDef(d.finish)?.relief)
       let bump: HTMLCanvasElement | null = null
       if (oc) {
@@ -81,7 +114,7 @@ export function useFinishMaps(opts: {
           drawSilhouette(oc, d, s, imgOf, `rgb(0,${to255(def.rough)},${to255(def.metal)})`)
         }
       }
-      if (relief.length) {
+      if (relief.length || extra) {
         bump = document.createElement('canvas')
         bump.width = w
         bump.height = h
@@ -93,6 +126,11 @@ export function useFinishMaps(opts: {
         if (bc && tc) {
           bc.fillStyle = 'rgb(128,128,128)'
           bc.fillRect(0, 0, w, h)
+          if (extra) {
+            bc.save()
+            extra.draw(bc, s, w)
+            bc.restore()
+          }
           for (const sign of [1, -1] as const) {
             const items = relief.filter((d) => finishDef(d.finish)?.relief === sign)
             if (!items.length) continue
@@ -110,10 +148,22 @@ export function useFinishMaps(opts: {
         }
       }
       if (dead) return
+      // ความสูง → normal map (ทิศแกน v ตาม flipY ของ texture ลาย)
+      if (bump) {
+        const bc = bump.getContext('2d')
+        if (bc) {
+          const probe = new THREE.CanvasTexture(document.createElement('canvas'))
+          configure?.(probe)
+          const img = bc.getImageData(0, 0, w, h)
+          img.data.set(heightToNormal(img.data, w, h, s, probe.flipY))
+          bc.putImageData(img, 0, 0)
+        }
+      }
       const mk = (c: HTMLCanvasElement | null) => {
         if (!c) return null
         const t = new THREE.CanvasTexture(c)
         t.colorSpace = THREE.NoColorSpace // ข้อมูลผิว ไม่ใช่สี — ห้ามแปลง sRGB
+        t.anisotropy = 8 // มองผิวเฉียง (ไหล่/ข้างถุง) เส้นนูนไม่แตกเป็นหยัก
         configure?.(t)
         return t
       }
@@ -144,7 +194,6 @@ export function finishMaterialProps(maps: FinishMaps, baseRough: number, baseMet
     metalnessMap: maps.orm,
     roughness: maps.orm ? 1 : baseRough,
     metalness: maps.orm ? 1 : baseMetal,
-    bumpMap: maps.bump,
-    bumpScale: maps.bump ? 3 : 1,
+    normalMap: maps.bump,
   }
 }

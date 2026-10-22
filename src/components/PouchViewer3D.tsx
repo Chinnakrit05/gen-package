@@ -70,6 +70,32 @@ function boxSectionPt(fX: number, W: number, g: number, a: number, b: number, d:
 // ก้นแบนตั้งได้ พุงกลางป่อง ปากบนซีลแบน — ลาย (หน้า/หลัง) map ลงผิวถุงตรงกับ dieline
 // texture วาดจาก dieline ฟิล์มทั้งแผ่น แล้วใช้ UV ของ frontRect/backRect เลือกเฉพาะพื้นที่พิมพ์
 
+// โปรไฟล์ซิปล็อกที่ปั๊มนูนบนฟิล์ม (ตามภาพถุงจริง): แถบนูนต่ำกว้าง ~5 มม. ขอบนุ่ม + สันคู่ (ร่องลิ้นซิป) ใกล้สองขอบแถบ
+// ค่า 0..1 ตามระยะจากแนวซิป (มม.) — ใช้วาดแผนที่ bump ข้ามแผ่นทั้งแผ่นที่ระดับแนวซิป
+export const ZIP_RELIEF_HALF = 3
+export function zipReliefProfile(dy: number): number {
+  const a = Math.abs(dy)
+  const smooth = (e0: number, e1: number, x: number) => {
+    const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)))
+    return t * t * (3 - 2 * t)
+  }
+  const plateau = 0.4 * (1 - smooth(1.9, 2.9, a))
+  const ridge = 0.5 * Math.exp(-(((a - 1.3) / 0.75) ** 2))
+  return Math.min(1, plateau + ridge)
+}
+const zipRelief = (zipY: number) => ({
+  key: `zip:${zipY}`,
+  draw: (ctx: CanvasRenderingContext2D, s: number, w: number) => {
+    const y0 = Math.floor((zipY - ZIP_RELIEF_HALF) * s)
+    const y1 = Math.ceil((zipY + ZIP_RELIEF_HALF) * s)
+    for (let py = y0; py <= y1; py++) {
+      const v = Math.round(128 + 120 * zipReliefProfile((py + 0.5) / s - zipY))
+      ctx.fillStyle = `rgb(${v},${v},${v})`
+      ctx.fillRect(0, py, w, 1)
+    }
+  },
+})
+
 function usePouchTexture(
   pouch: Pouch,
   decos: Deco[],
@@ -728,6 +754,8 @@ function PouchModel({
     configure: (t) => {
       t.flipY = false // ต้องตรงกับ texture ลายของถุง
     },
+    // ซิปล็อก = รอยนูนบนฟิล์มเองตามแนวซิปบน dieline (ไม่ใช่แถบสีแยก) → สี/ลาย/texture เดียวกับถุงเสมอ
+    relief: pouch.zipper && pouch.zipY !== undefined ? zipRelief(pouch.zipY) : null,
   })
   const geo = usePouchGeometry(pouch)
   useEffect(() => () => geo.dispose(), [geo])
@@ -757,108 +785,6 @@ function PouchModel({
         : isFlat
           ? pouch.label.height
           : pouch.H
-  const zipBand = useMemo(() => {
-    if (doy && pouch.zipper && pouch.zipY !== undefined) {
-      // แถบซิปพาดรอบถุง (หน้า → ขอบ → หลัง) ดันออกจากผิว ~0.6 มม. ตามแนวซิปบน dieline
-      const NU = 96
-      const pos: number[] = []
-      const idx: number[] = []
-      const NR = 4
-      for (let i = 0; i <= NR; i++) {
-        const r = doypackAt(doy, pouch.zipY - 2.5 + (5 * i) / NR)
-        for (let iu = 0; iu <= NU; iu++) {
-          const t = iu / NU
-          const side = t <= 0.5 ? 1 : -1
-          const f = t <= 0.5 ? t / 0.5 : (t - 0.5) / 0.5
-          const x = side * (-(r.a + 0.4) + 2 * (r.a + 0.4) * f)
-          pos.push(x, r.y, side * (doypackZ(r, x) + 0.6))
-        }
-      }
-      for (let i = 0; i < NR; i++) {
-        for (let iu = 0; iu < NU; iu++) {
-          const p = i * (NU + 1) + iu
-          idx.push(p, p + NU + 1, p + 1, p + 1, p + NU + 1, p + NU + 2)
-        }
-      }
-      const geo = new THREE.BufferGeometry()
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
-      geo.setIndex(idx)
-      geo.computeVertexNormals()
-      return geo
-    }
-    if (pouch.style === 'flat' && pouch.zipper && pouch.zipY !== undefined) {
-      // ซองแบน: แถบซิปบนผิวหน้าและหลังระหว่างซีลข้าง ดันออกจากผิว 0.5 มม.
-      const pos: number[] = []
-      const idx: number[] = []
-      const NU = 48
-      const W = pouch.W
-      const PH = pouch.label.height
-      for (const side of [1, -1]) {
-        const start = pos.length / 3
-        for (let i = 0; i <= 2; i++) {
-          const v = pouch.zipY - 2.5 + 2.5 * i
-          for (let k = 0; k <= NU; k++) {
-            const u = FLAT_SEAL + ((W - 2 * FLAT_SEAL) * k) / NU
-            pos.push(side * (u - W / 2), PH - v, side * (flatZ(pouch, u, v) + 0.5))
-          }
-        }
-        for (let i = 0; i < 2; i++) {
-          for (let k = 0; k < NU; k++) {
-            const q = start + i * (NU + 1) + k
-            idx.push(q, q + NU + 1, q + 1, q + 1, q + NU + 1, q + NU + 2)
-          }
-        }
-      }
-      const geo = new THREE.BufferGeometry()
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
-      geo.setIndex(idx)
-      geo.computeVertexNormals()
-      return geo
-    }
-    if (!brick || !pouch.zipper || pouch.zipY === undefined) return null
-    // แถบซิป = loft บาง ๆ ตามหน้าตัดจริง (โค้งตามไหล่) ดันออกจากผิว 0.6 มม.
-    const dl0 = pouch.zipY - pouch.frontRect.y
-    const g = pouch.backRect.x - pouch.W
-    const wp = 2 * pouch.W + 2 * g
-    const NU = 96
-    const pos: number[] = []
-    const idx: number[] = []
-    const NR = 4
-    for (let i = 0; i <= NR; i++) {
-      const r = brickAt(brick, dl0 - 2.5 + (5 * i) / NR)
-      for (let iu = 0; iu <= NU; iu++) {
-        const [x, z] = boxSectionPt((iu / NU) * wp, pouch.W, g, brick.a + 0.6, r.b + 0.6, r.d)
-        pos.push(x, r.y, z)
-      }
-    }
-    for (let i = 0; i < NR; i++) {
-      for (let iu = 0; iu < NU; iu++) {
-        const p = i * (NU + 1) + iu
-        idx.push(p, p + NU + 1, p + 1, p + 1, p + NU + 1, p + NU + 2)
-      }
-    }
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
-    geo.setIndex(idx)
-    geo.computeVertexNormals()
-    return geo
-  }, [brick, doy, pouch])
-  useEffect(() => () => zipBand?.dispose(), [zipBand])
-
-  // แถบซิปล็อก: วงรีบาง ๆ พาดรอบใกล้ปาก ที่ระดับความสูงเดียวกับแนวซิปบน dieline
-  let zip: { y: number; ax: number; bz: number } | null = null
-  if (pil && pouch.zipper && pouch.zipY !== undefined) {
-    const r = doypackAt(pil, pouch.zipY)
-    zip = { y: r.y, ax: r.a * 1.03, bz: r.b * 1.03 }
-  } else if (!brick && !doy && !isFlat && pouch.zipper && pouch.zipY !== undefined) {
-    const vzip = Math.min(0.98, Math.max(0.02, 1 - (pouch.zipY - pouch.frontRect.y) / pouch.H))
-    zip = {
-      y: vzip * pouch.H,
-      ax: (pouch.W / 2) * pouchWidthFactor(vzip, pouch.style) * 1.03,
-      bz: pouch.depth3D * pouchDepthFactor(vzip, pouch.style) * 1.03,
-    }
-  }
-
   // จุก + ฝาเกลียว ที่ปากบน (spout pouch): คอสั้นมีเกลียว → ปีกรอง (flange) → ฝาหยักกันลื่น — ขนาดตาม marker บน dieline
   const spoutR = spoutMarker(pouch.W, pouch.frontRect.y).r
   const neckH = spoutR * 0.9
@@ -918,17 +844,6 @@ function PouchModel({
           side={THREE.DoubleSide}
         />
       </mesh>
-      {zip && (
-        <mesh position={[0, zip.y, 0]} scale={[zip.ax, 1, zip.bz]}>
-          <cylinderGeometry args={[1, 1, 5, 48, 1, true]} />
-          <meshStandardMaterial color="#6f685c" roughness={0.5} metalness={0} side={THREE.DoubleSide} />
-        </mesh>
-      )}
-      {zipBand && (
-        <mesh geometry={zipBand}>
-          <meshStandardMaterial color="#6f685c" roughness={0.5} metalness={0} side={THREE.DoubleSide} />
-        </mesh>
-      )}
       {pouch.spout && (
         <group position={[0, topY, 0]}>
           {/* คอจุก + เกลียว 2 เส้น */}
