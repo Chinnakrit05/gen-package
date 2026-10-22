@@ -154,7 +154,8 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   (`src/services/api/ai.ts` `requestCloudArtwork` ส่ง AbortSignal ได้) — ยกเลิกฝั่ง client ไม่คืนเครดิตเพราะ server ยังทำต่อ
 - UI = **Copilot** (`src/components/CopilotDrawer.tsx`, แทน PromptBar popover เดิมที่ถูกลบ): ปุ่ม "สั่ง AI" บน header (`AiTrigger`,
   คง markup เครดิต/blocked เดิม) เปิดแผงด้านขวา 420px ใน `.body` (flex row ถัดจาก `main`) เป็นบทสนทนา 2 โหมดในช่องเดียว —
-  `spec` (box-spec เดิม/cloud `requestAiSpec`) และ `artwork` (local ผ่าน `/api/ai-artwork` + BYOK, cloud ผ่าน `cloud.requestAiArtwork`) — prompt + รูปอ้างอิง ≤ 3 +
+  `spec` (box-spec เดิม/cloud `requestAiSpec` — **ปิดอยู่ พร้อมป้าย Coming soon** ด้วย `SPEC_MODE_COMING_SOON` (22 ต.ค. 2026) จนกว่าภาษาแผงจะพร้อม;
+  แผงเปิดที่ artwork เสมอ โค้ด spec ยังอยู่ครบ) และ `artwork` (local ผ่าน `/api/ai-artwork` + BYOK, cloud ผ่าน `cloud.requestAiArtwork`) — prompt + รูปอ้างอิง ≤ 3 +
   โลโก้ 1 (ส่ง JPEG ย่อให้ AI ดู แต่วางรูปจริงจาก `loadImageFile` ผ่าน `asset:logo`) + แทนที่/เพิ่มต่อลายเดิม + ชิปสไตล์ + ปรับเร็ว;
   ผลทุกแบบ "วางลงงานทันที" (undo ก้าวเดียว) แล้วเป็นการ์ดในบทสนทนา (ช่อง `[กรอก…]` ดึงมาเตือนด้วย `placeholderFields`); ระหว่างรอ artwork
   โชว์ลำดับงานตามเวลา (โดยประมาณ — server ไม่สตรีม) + ยกเลิกด้วย AbortController; ผล artwork แต่ละรอบเก็บเป็น `ArtworkSnapshot` ใน App

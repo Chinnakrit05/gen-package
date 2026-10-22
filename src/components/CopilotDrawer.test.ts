@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { LangCtx } from '../i18n'
-import { AiTrigger, CopilotDrawer, placeholderFields } from './CopilotDrawer'
+import { AiTrigger, CopilotDrawer, placeholderFields, SPEC_MODE_COMING_SOON, type CopilotArtworkContext } from './CopilotDrawer'
 import type { Deco } from '../core/artwork'
 
 const current = { template: 'rsc', materialId: 'kraft-350', W: 200, D: 120, H: 80, handle: false }
@@ -55,8 +55,19 @@ describe('CopilotDrawer', () => {
     expect(html).toContain('ออกแบบหน้าตาบนแบบนี้')
     // ไม่มีบริบท artwork (ยังไม่มีแบบในงาน): โหมดหน้าตาถูกปิดพร้อมบอกเหตุผล
     expect(html).toContain('ต้องมีแบบในงานก่อน')
-    expect(html).toContain('สร้างกล่อง')
     expect(html).not.toContain('Anthropic API key')
+  })
+
+  it('tags "Box from a prompt" as Coming soon, disables it, and opens straight in artwork mode', () => {
+    expect(SPEC_MODE_COMING_SOON).toBe(true)
+    const artwork = { dieline: { width: 100, height: 100 }, kind: 'box', template: 'tuck-end', materialId: 'carton-300', box: { W: 70, D: 25, H: 96 }, fillColor: null, existingCount: 0, onApply: vi.fn() } as unknown as CopilotArtworkContext
+    const html = renderToStaticMarkup(createElement(CopilotDrawer, { ...base, artwork }))
+    expect(html).toMatch(/<button type="button" role="radio" aria-checked="false" class="cp-mode soon" disabled="" title="[^"]*">[\s\S]*?โครงกล่องจากคำสั่ง[\s\S]*?<em class="cp-soon">Coming soon<\/em>/)
+    expect(html).toMatch(/aria-checked="true" class="cp-mode on"[^>]*>[\s\S]*?ออกแบบหน้าตาบนแบบนี้/)
+    expect(html).toMatch(/class="primary cp-send"[^>]*>ออกแบบ<\/button>/) // ปุ่มส่งเป็นของโหมดหน้าตา (ไม่ใช่ "สร้างกล่อง")
+    // ไม่มีบริบท artwork ด้วย = ไม่มีโหมดที่ใช้ได้ → ปุ่มส่งปิด
+    const none = renderToStaticMarkup(createElement(CopilotDrawer, { ...base, artwork: null }))
+    expect(none).toMatch(/class="primary cp-send" disabled=""/)
   })
 
   it('offers the API key row only when allowApiKey (local-demo) is on, and shows the paywall banner when blocked', () => {

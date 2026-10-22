@@ -5214,6 +5214,11 @@ aside .art-actions .file-pick:only-child {
 .cp-mode span { font-size: 11px; color: var(--text-3); line-height: 1.35; }
 .cp-mode.on { border: 2px solid var(--accent); padding: 9px 11px; }
 .cp-mode:disabled { opacity: .55; cursor: default; }
+/* การ์ดโหมดที่ยังไม่เปิด (SPEC_MODE_COMING_SOON): ป้ายคมชัดเต็มสี ตัวการ์ดจาง */
+.cp-mode .cp-mode-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; font-size: inherit; color: inherit; line-height: inherit; }
+.cp-soon { font-style: normal; font-size: 9.5px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: var(--accent-weak); color: var(--accent-ink); white-space: nowrap; }
+.cp-mode.soon:disabled { opacity: 1; cursor: not-allowed; }
+.cp-mode.soon strong, .cp-mode.soon > span:last-child { opacity: .5; }
 .cp-card { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 4px 14px 14px 14px; background: var(--surface-2, var(--surface)); border: 1px solid var(--border); font-size: 13px; }
 .cp-card-head { display: flex; flex-direction: column; gap: 2px; }
 .cp-card-head strong { font-size: 14px; }
