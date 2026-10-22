@@ -4,10 +4,10 @@ import { drawSilhouette, type Deco } from '../core/artwork'
 import { finishDef } from '../core/finish'
 
 // แผนที่ผิวของงานพิมพ์พิเศษสำหรับ 3D — วางพิกัดเดียวกับ texture ลาย (แผ่นคลี่/ฉลาก/ฟิล์มถุง ที่ s px/มม.)
-//  orm: G = ความด้าน (roughness), B = ความเป็นโลหะ (metalness) ตามที่ three อ่าน roughnessMap/metalnessMap —
+//  orm: G = ความด้าน (roughness), B = ความเป็นโลหะ (metalness) ตามที่ three อ่าน roughnessMap/metalnessMap (พื้นแอ่งปั๊มจมด้านน้อยกว่ากระดาษ) —
 //       พื้นทั้งแผ่น = ค่าของวัสดุ, ฟอยล์ = โลหะมันวาว, Spot UV = มันวาวไม่เป็นโลหะ; material ต้องตั้ง roughness/metalness = 1
 //       (three คูณค่าคงที่กับค่าในแผนที่)
-//  bump: แผนที่ความสูง (เทากลาง = เรียบ, ปั๊มนูน = ขาว เบลอขอบ, ปั๊มจม = ดำ ลาดเฉพาะด้านในรูป) แล้วแปลงเป็น normal map บน CPU
+//  bump: แผนที่ความสูง (เทากลาง = เรียบ, ปั๊มนูน = ขาว, ปั๊มจม = ดำ — ลาดเฉพาะด้านในรูป) แล้วแปลงเป็น normal map บน CPU
 //       (`heightToNormal`) — bumpMap ของ three คำนวณความชันจากพิกเซลจอ เส้นนูนบาง ๆ (ซิป) มองเฉียงแตกเป็นขั้นบันได
 // ไม่มีชิ้นงานพิเศษ = คืน null ทั้งคู่ (material ใช้ค่าคงที่เดิม ไม่เสีย texture เพิ่ม)
 const PX_PER_MM = 8 // แผนที่ผิวไม่ต้องคมเท่าลาย (แต่สันนูนบาง ๆ อย่างซิปต้องพอให้ไม่เป็นขั้นบันได)
@@ -43,10 +43,10 @@ export function heightToNormal(src: Uint8ClampedArray, w: number, h: number, s: 
   return out
 }
 
-// ปั๊มจม: แอ่งอยู่ในเส้นรอบรูปเท่านั้น (ผนังแอ่งลาดลงจากขอบเข้าไปด้านใน กระดาษรอบตัวอักษรเรียบ — เงา/ไฮไลต์
-// ไม่ล้นออกนอกตัว) — ความลึก 0..1 จาก alpha คม a และ alpha ที่เบลอแล้ว b: ขอบรูป (b≈0.5) = 0 ไล่ถึงลึกสุดเมื่อ b=1
-// (เส้นบางกว่าระยะเบลอได้แอ่งตื้นลง เหมือนแม่พิมพ์จริงกดเส้นบางได้ไม่ลึก); คืนค่าเป็นระดับเทาที่ต้องลบออก
-export function debossDepth(a: number, b: number): number {
+// ปั๊มนูน/จม: ผิวยก/แอ่งอยู่ในเส้นรอบรูปเท่านั้น (ไหล่/ผนังลาดจากขอบเข้าไปด้านใน กระดาษรอบตัวอักษรเรียบ — เงา/ไฮไลต์
+// ชิดขอบ ไม่ล้นออกนอกตัว) — ระดับ 0..1 จาก alpha คม a และ alpha ที่เบลอแล้ว b: ขอบรูป (b≈0.5) = 0 ไล่ถึงเต็มเมื่อ b=1
+// (เส้นบางกว่าระยะเบลอได้ตื้นลง); คืนค่าเป็นระดับเทาที่บวก (นูน) / ลบ (จม) จากเทากลาง
+export function reliefDepth(a: number, b: number): number {
   return (a / 255) * Math.max(0, Math.min(1, (b / 255 - 0.5) * 2)) * 127
 }
 
@@ -102,8 +102,9 @@ export function useFinishMaps(opts: {
       const imgOf = (src: string) => imgCache.current.get(src)
       const to255 = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 255)
 
-      // แผนที่ความด้าน/โลหะ: เฉพาะเมื่อมีฟอยล์/Spot UV (รอยนูนอย่างเดียวไม่ต้องใช้)
-      const needOrm = fin.some((d) => !finishDef(d.finish)?.relief)
+      // แผนที่ความด้าน/โลหะ: เมื่อมีฟอยล์/Spot UV หรือปั๊มจม (พื้นแอ่งถูกอัดจนเนียนกว่ากระดาษ — ด้านน้อยลง); ปั๊มนูนไม่ต้องใช้
+      const FLOOR_ROUGH = 0.65 // ความด้านของพื้นแอ่งปั๊มจม เทียบกับกระดาษ
+      const needOrm = fin.some((d) => (finishDef(d.finish)?.relief ?? 0) <= 0)
       const orm = needOrm ? document.createElement('canvas') : null
       if (orm) {
         orm.width = w
@@ -117,8 +118,9 @@ export function useFinishMaps(opts: {
         oc.fillRect(0, 0, w, h)
         for (const d of fin) {
           const def = finishDef(d.finish)
-          if (!def || def.relief) continue
-          drawSilhouette(oc, d, s, imgOf, `rgb(0,${to255(def.rough)},${to255(def.metal)})`)
+          if (!def || def.relief > 0) continue
+          const fill = def.relief < 0 ? `rgb(0,${to255(baseRough * FLOOR_ROUGH)},${to255(baseMetal)})` : `rgb(0,${to255(def.rough)},${to255(def.metal)})`
+          drawSilhouette(oc, d, s, imgOf, fill)
         }
       }
       if (relief.length || extra) {
@@ -145,22 +147,17 @@ export function useFinishMaps(opts: {
             for (const d of items) drawSilhouette(tc, d, s, imgOf, '#000000')
             // เบลอผ่านเงาของ canvas (ใช้ได้ทุกเบราว์เซอร์): วาดต้นแบบนอกภาพ แล้วให้เงาตกกลับมาที่เดิม
             const far = w + h + 1000
-            // ปั๊มนูนไหล่ลาดเล็กน้อย (~0.2 มม. ขอบยังคม), ปั๊มจมผนังชันแคบ (~0.15 มม.) → เงา/ไฮไลต์เป็นเส้นบางที่ขอบ
-            // และเส้นบางของตัวอักษรลึกเต็มเท่าเส้นหนา (แม่พิมพ์หน้าเรียบกดระดับเดียวกันทั้งชิ้น)
+            // ไหล่ปั๊มนูน ~0.2 มม., ผนังปั๊มจม ~0.15 มม. → เงา/ไฮไลต์เป็นเส้นบางที่ขอบ
+            // และเส้นบางของตัวอักษรสูง/ลึกเต็มเท่าเส้นหนา (แม่พิมพ์หน้าเรียบกดระดับเดียวกันทั้งชิ้น)
             const blurInto = (c: CanvasRenderingContext2D, color: string) => {
               c.save()
               c.shadowColor = color
-              c.shadowBlur = sign > 0 ? Math.max(1.5, s * 0.45) : Math.max(1.2, s * 0.3)
+              c.shadowBlur = sign > 0 ? Math.max(1.5, s * 0.4) : Math.max(1.2, s * 0.3)
               c.shadowOffsetX = far
               c.drawImage(tmp, -far, 0)
               c.restore()
             }
-            if (sign > 0) {
-              // ปั๊มนูน: กระดาษโป่งขึ้นลาดทั้งในและนอกขอบ
-              blurInto(bc, '#ffffff')
-              continue
-            }
-            // ปั๊มจม: แอ่งลาดลงจากขอบเข้าด้านใน (`debossDepth`) — ไม่ลาดออกนอกเส้นรอบรูป
+            // ไหล่/ผนังลาดเข้าด้านในรูป (`reliefDepth`) — นูน = บวก, จม = ลบจากเทากลาง
             const blur = document.createElement('canvas')
             blur.width = w
             blur.height = h
@@ -173,10 +170,10 @@ export function useFinishMaps(opts: {
             const H = img.data
             for (let i = 3; i < H.length; i += 4) {
               if (!A[i]) continue
-              const dv = debossDepth(A[i], B[i])
-              H[i - 3] -= dv
-              H[i - 2] -= dv
-              H[i - 1] -= dv
+              const dv = sign * reliefDepth(A[i], B[i])
+              H[i - 3] += dv
+              H[i - 2] += dv
+              H[i - 1] += dv
             }
             bc.putImageData(img, 0, 0)
           }

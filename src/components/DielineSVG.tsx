@@ -243,59 +243,54 @@ function FinishLook({ e, children }: { e: Deco; children: React.ReactNode }) {
       </>
     )
   }
-  // ปั๊มนูน: ไหล่นูนแคบ (≈ครึ่ง มม.) → ขอบไฮไลต์/เงาคม ไม่ฟุ้งเป็นแถบกว้างตามขนาดชิ้น
-  const sd = Math.max(0.12, Math.min(0.3, Math.min(w, h) * 0.008))
-  const o = sd * 1.4
-  if (def.relief < 0) {
-    // แสงจากซ้ายบน: alpha ที่เลื่อนไปขวาล่างไม่คลุมขอบซ้ายบนด้านใน → เส้นเงา; เลื่อนกลับด้าน → เส้นไฮไลต์ขวาล่าง
-    // ผนังแอ่งของแม่พิมพ์จริงชันและแคบ (ไม่กี่สิบ มม.) → เงา/ไฮไลต์เป็นเส้นบางคมที่ขอบ ไม่ใช่แถบกว้างตามขนาดชิ้น
-    const wall = Math.max(0.18, Math.min(0.35, Math.min(w, h) * 0.012))
-    const wo = wall * 0.7
-    return (
-      <>
-        <defs>
-          <filter id={gid} x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation={wall * 0.25} result="b" />
-            <feOffset in="b" dx={wo} dy={wo} result="dn" />
-            <feOffset in="b" dx={-wo} dy={-wo} result="up" />
-            <feComposite in="SourceAlpha" in2="dn" operator="out" result="loA" />
-            <feComposite in="SourceAlpha" in2="up" operator="out" result="hiA" />
-            <feFlood floodColor="#000000" floodOpacity="0.7" />
-            <feComposite in2="loA" operator="in" result="lo" />
-            <feFlood floodColor="#ffffff" floodOpacity="1" />
-            <feComposite in2="hiA" operator="in" result="hi" />
-            <feMerge>
-              <feMergeNode in="SourceGraphic" />
-              <feMergeNode in="lo" />
-              <feMergeNode in="hi" />
-            </feMerge>
-          </filter>
-        </defs>
-        <g filter={`url(#${gid})`}>{children}</g>
-      </>
-    )
-  }
+  // ปั๊มนูน/จม: เงา/ไฮไลต์เป็นเส้นบางชิดขอบ "ด้านใน" เส้นรอบรูป (bevel ใน) ไม่ลอยห่างจากตัวเป็นเงาตกกระทบ
+  // แสงจากซ้ายบน: alpha ที่เลื่อนไปขวาล่างไม่คลุมขอบซ้ายบนด้านใน (`tl`), เลื่อนกลับด้าน → ขอบขวาล่างด้านใน (`br`)
+  //  นูน: ขอบซ้ายบนรับแสง (สว่าง) ขวาล่างเป็นเงา + เงาแคบชิดขอบนอกขวาล่าง (ตัวยกจากกระดาษ)
+  //  จม: ผนังแอ่งซ้ายบนเป็นเงา ขวาล่างรับแสง + พื้นแอ่งเนียนกว่ากระดาษ (กระดาษถูกอัด) = เงาสะท้อนจาง ๆ
+  // ผนังแม่พิมพ์จริงชันและแคบ → ความกว้างเส้นจำกัดเป็นมม. ไม่ขยายตามขนาดชิ้น
+  const emboss = def.relief > 0
+  const wall = emboss ? Math.max(0.2, Math.min(0.45, Math.min(w, h) * 0.015)) : Math.max(0.18, Math.min(0.35, Math.min(w, h) * 0.012))
+  const wo = wall * 0.7
   return (
     <>
       <defs>
         <filter id={gid} x="-10%" y="-10%" width="120%" height="120%">
-          <feGaussianBlur in="SourceAlpha" stdDeviation={sd} result="b" />
-          <feOffset in="b" dx={-o} dy={-o} result="u" />
-          <feOffset in="b" dx={o} dy={o} result="v" />
-          <feComposite in="u" in2="v" operator="arithmetic" k2="1" k3="-1" result="hiA" />
-          <feComposite in="v" in2="u" operator="arithmetic" k2="1" k3="-1" result="loA" />
-          <feFlood floodColor="#ffffff" floodOpacity="0.9" />
-          <feComposite in2="hiA" operator="in" result="hi" />
-          <feFlood floodColor="#000000" floodOpacity="0.5" />
-          <feComposite in2="loA" operator="in" result="lo" />
+          <feGaussianBlur in="SourceAlpha" stdDeviation={wall * 0.25} result="b" />
+          <feOffset in="b" dx={wo} dy={wo} result="dn" />
+          <feOffset in="b" dx={-wo} dy={-wo} result="up" />
+          <feComposite in="SourceAlpha" in2="dn" operator="out" result="tl" />
+          <feComposite in="SourceAlpha" in2="up" operator="out" result="br" />
+          <feFlood floodColor="#ffffff" floodOpacity={emboss ? 0.95 : 1} />
+          <feComposite in2={emboss ? 'tl' : 'br'} operator="in" result="hi" />
+          <feFlood floodColor="#000000" floodOpacity={emboss ? 0.55 : 0.7} />
+          <feComposite in2={emboss ? 'br' : 'tl'} operator="in" result="lo" />
+          {emboss && (
+            <>
+              <feComposite in="dn" in2="SourceAlpha" operator="out" result="castA" />
+              <feFlood floodColor="#000000" floodOpacity="0.22" />
+              <feComposite in2="castA" operator="in" result="cast" />
+            </>
+          )}
           <feMerge>
+            {emboss && <feMergeNode in="cast" />}
             <feMergeNode in="SourceGraphic" />
-            <feMergeNode in="hi" />
             <feMergeNode in="lo" />
+            <feMergeNode in="hi" />
           </feMerge>
         </filter>
+        {!emboss && (
+          <>
+            {mask}
+            <linearGradient id={`${gid}-floor`} gradientUnits="userSpaceOnUse" x1={e.x} y1={e.y} x2={e.x + w} y2={e.y + h}>
+              <stop offset="0.15" stopColor="#ffffff" stopOpacity="0" />
+              <stop offset="0.45" stopColor="#ffffff" stopOpacity="0.1" />
+              <stop offset="0.75" stopColor="#ffffff" stopOpacity="0.03" />
+            </linearGradient>
+          </>
+        )}
       </defs>
       <g filter={`url(#${gid})`}>{children}</g>
+      {!emboss && <rect {...area} fill={`url(#${gid}-floor)`} mask={`url(#${mid})`} pointerEvents="none" />}
     </>
   )
 }

@@ -45,9 +45,9 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ของชิ้น (`renderArtworkAlpha` → `traceWhiteInk(m, 0)`, `finishPlatesForExport` ใน App, แผ่นสติกเกอร์วางซ้ำผ่าน `placePoint`);
   **ฟอยล์ไม่พิมพ์ CMYK** (`printsCmyk`) → `renderArtworkCanvas(..., 'print')` และเลเยอร์ artwork ของ SVG ข้ามชิ้นฟอยล์;
   พรีวิว: blueprint `FinishLook` (DielineSVG: ฟอยล์ = mask alpha + ไล่แสงโลหะ, UV = แถบเงา, ปั๊ม = ฟิลเตอร์ไฮไลต์/เงา —
-  สี่เหลี่ยมที่มี mask ต้อง pointerEvents none เพราะ mask ไม่ตัดพื้นที่คลิก; ปั๊มจม = เงาใน (inner shadow) อยู่ในเส้นรอบรูปเท่านั้น
-  ไม่ล้นออกนอกตัว — ผนังแอ่งแคบคงที่ (blueprint ≤0.35 มม., 3D เบลอ ~0.15 มม.) เงา/ไฮไลต์จึงเป็นเส้นบางที่ขอบ
-  และเส้นบางลึกเต็ม; 3D ใช้ `debossDepth` แอ่งลาดจากขอบเข้าด้านใน, ปั๊มนูนลาดทั้งในและนอกขอบแต่ไหล่แคบ (blueprint เบลอ ≤0.3 มม., 3D ~0.2 มม.) ขอบจึงคม), canvas `drawDecoPreview`/`drawSilhouette`
+  สี่เหลี่ยมที่มี mask ต้อง pointerEvents none เพราะ mask ไม่ตัดพื้นที่คลิก; ปั๊มนูน/จม = bevel ด้านในเส้นรอบรูป (เส้นเงา/ไฮไลต์บางชิดขอบ
+  ไม่ลอยห่างตัว; นูนมีเงาแคบชิดขอบนอกขวาล่าง, จมมีเงาสะท้อนจางบนพื้นแอ่ง) ความกว้างจำกัดเป็นมม. ไม่ขยายตามขนาดชิ้น;
+  3D `reliefDepth` ไหล่/ผนังลาดจากขอบเข้าด้านในทั้งนูนและจม (นูน ~0.2, จม ~0.15 มม.) + พื้นแอ่งปั๊มจมด้านน้อยลงผ่าน ORM), canvas `drawDecoPreview`/`drawSilhouette`
   (ฟอยล์ = รูปทรงสีโลหะ; ใบสเปก/ภาพย่อ/texture 3D), 3D `useFinishMaps` → roughness/metalness map (G/B) + แผนที่ความสูง
   ที่แปลงเป็น normal map บน CPU (`heightToNormal` — bumpMap ของ three คำนวณความชันจากพิกเซลจอ เส้นนูนบางมองเฉียงเป็นขั้นบันได/จุด)
   พิกัดเดียวกับ texture ลาย (configure flipY/repeat ต้องตรงกัน; flipY กลับเครื่องหมายแกน v) ใช้ใน Viewer3D/VesselViewer3D/PouchViewer3D

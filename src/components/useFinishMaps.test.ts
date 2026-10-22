@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { debossDepth, heightToNormal } from './useFinishMaps'
+import { reliefDepth, heightToNormal } from './useFinishMaps'
 import { zipReliefProfile, ZIP_RELIEF_HALF } from './PouchViewer3D'
 
 // แผนที่ความสูงเทา (RGBA) ขนาด w×h จากฟังก์ชันระดับ 0..255
@@ -43,11 +43,11 @@ describe('zipReliefProfile: ซิปปั๊มนูนบนฟิล์ม'
   })
 })
 
-describe('debossDepth: ปั๊มจมลาดเฉพาะด้านในเส้นรอบรูป', () => {
+describe('reliefDepth: ปั๊มนูน/จมลาดเฉพาะด้านในเส้นรอบรูป', () => {
   it('นอกรูปไม่ลึกแม้ alpha เบลอจะล้นออกมา, ขอบรูป (เบลอ ≈ ครึ่ง) = 0, ด้านในลึกเต็ม', () => {
-    expect(debossDepth(0, 120)).toBe(0)
-    expect(debossDepth(255, 128)).toBeLessThan(1)
-    expect(debossDepth(255, 191)).toBeGreaterThan(40)
-    expect(debossDepth(255, 255)).toBeCloseTo(127, 5)
+    expect(reliefDepth(0, 120)).toBe(0)
+    expect(reliefDepth(255, 128)).toBeLessThan(1)
+    expect(reliefDepth(255, 191)).toBeGreaterThan(40)
+    expect(reliefDepth(255, 255)).toBeCloseTo(127, 5)
   })
 })
