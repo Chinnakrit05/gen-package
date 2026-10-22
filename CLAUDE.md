@@ -47,7 +47,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   พรีวิว: blueprint `FinishLook` (DielineSVG: ฟอยล์ = mask alpha + ไล่แสงโลหะ, UV = แถบเงา, ปั๊ม = ฟิลเตอร์ไฮไลต์/เงา —
   สี่เหลี่ยมที่มี mask ต้อง pointerEvents none เพราะ mask ไม่ตัดพื้นที่คลิก; ปั๊มจม = เงาใน (inner shadow) อยู่ในเส้นรอบรูปเท่านั้น
   ไม่ล้นออกนอกตัว — ผนังแอ่งแคบคงที่ (blueprint ≤0.35 มม., 3D เบลอ ~0.15 มม.) เงา/ไฮไลต์จึงเป็นเส้นบางที่ขอบ
-  และเส้นบางลึกเต็ม; 3D ใช้ `debossDepth` แอ่งลาดจากขอบเข้าด้านใน, ปั๊มนูนยังลาดทั้งในและนอกขอบ), canvas `drawDecoPreview`/`drawSilhouette`
+  และเส้นบางลึกเต็ม; 3D ใช้ `debossDepth` แอ่งลาดจากขอบเข้าด้านใน, ปั๊มนูนลาดทั้งในและนอกขอบแต่ไหล่แคบ (blueprint เบลอ ≤0.3 มม., 3D ~0.2 มม.) ขอบจึงคม), canvas `drawDecoPreview`/`drawSilhouette`
   (ฟอยล์ = รูปทรงสีโลหะ; ใบสเปก/ภาพย่อ/texture 3D), 3D `useFinishMaps` → roughness/metalness map (G/B) + แผนที่ความสูง
   ที่แปลงเป็น normal map บน CPU (`heightToNormal` — bumpMap ของ three คำนวณความชันจากพิกเซลจอ เส้นนูนบางมองเฉียงเป็นขั้นบันได/จุด)
   พิกัดเดียวกับ texture ลาย (configure flipY/repeat ต้องตรงกัน; flipY กลับเครื่องหมายแกน v) ใช้ใน Viewer3D/VesselViewer3D/PouchViewer3D
