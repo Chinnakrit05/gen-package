@@ -59152,6 +59152,16 @@ var JSON_INSTRUCTION = `
 ## \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E04\u0E33\u0E15\u0E2D\u0E1A (\u0E2A\u0E33\u0E04\u0E31\u0E0D\u0E21\u0E32\u0E01)
 \u0E15\u0E2D\u0E1A\u0E40\u0E1B\u0E47\u0E19 JSON object \u0E40\u0E14\u0E35\u0E22\u0E27\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 \u0E2B\u0E49\u0E32\u0E21\u0E21\u0E35\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2D\u0E37\u0E48\u0E19\u0E2B\u0E23\u0E37\u0E2D markdown fence \u0E19\u0E33\u0E2B\u0E19\u0E49\u0E32/\u0E15\u0E32\u0E21\u0E2B\u0E25\u0E31\u0E07:
 {"template":"<${TEMPLATE_IDS.join("|")}>","materialId":"<id>","W":<number>,"D":<number>,"H":<number>,"handle":<true|false>,"assumptions":["..."],"layoutNote":"...","reasoning":"..."}`;
+function extractJson(text) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end <= start) return null;
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
 
 // server/aiArtwork.ts
 import { execFile as execFile3 } from "node:child_process";
@@ -60065,7 +60075,7 @@ async function designArtwork(ask, req, maxRounds = MAX_ROUNDS) {
       return { ok: true, plan, issues, rounds, model, mock: false };
     }
     messages.push(
-      { role: "assistant", content: JSON.stringify(answer.raw) },
+      { role: "assistant", content: answer.text || JSON.stringify(answer.raw) },
       { role: "user", content: feedback(issues.filter((i) => i.severity === "error")) }
     );
   }
@@ -60089,12 +60099,10 @@ function apiAskWithUsage(apiKey, model, limits = { timeoutMs: 24e4, maxRetries: 
     const params = {
       model,
       max_tokens: MAX_TOKENS2,
-      system: ARTWORK_SYSTEM,
+      // system + schema คงที่ทุกคำขอ → cache ไว้ (รอบแก้/คำขอซ้ำภายใน 5 นาทีอ่านจาก cache)
+      system: [{ type: "text", text: ARTWORK_SYSTEM + JSON_INSTRUCTION2, cache_control: { type: "ephemeral" } }],
       messages,
-      output_config: {
-        format: { type: "json_schema", schema: ARTWORK_SCHEMA },
-        ...options.effort ? { effort: options.effort } : {}
-      }
+      ...options.effort ? { output_config: { effort: options.effort } } : {}
     };
     const msg = options.serverFallback ? await client.beta.messages.create(
       {
@@ -60115,15 +60123,11 @@ function apiAskWithUsage(apiKey, model, limits = { timeoutMs: 24e4, maxRetries: 
     if (msg.stop_reason === "refusal") throw new ArtworkResponseError("refusal", "\u0E42\u0E21\u0E40\u0E14\u0E25\u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18\u0E04\u0E33\u0E02\u0E2D \u0E25\u0E2D\u0E07\u0E1B\u0E23\u0E31\u0E1A\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E2B\u0E23\u0E37\u0E2D\u0E23\u0E39\u0E1B\u0E17\u0E35\u0E48\u0E41\u0E19\u0E1A");
     if (msg.stop_reason === "max_tokens") throw new ArtworkResponseError("max_tokens", "\u0E41\u0E1A\u0E1A\u0E17\u0E35\u0E48\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E22\u0E32\u0E27\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E16\u0E39\u0E01\u0E15\u0E31\u0E14\u0E01\u0E48\u0E2D\u0E19\u0E08\u0E1A \u2014 \u0E25\u0E2D\u0E07\u0E02\u0E2D\u0E43\u0E2B\u0E49\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E07\u0E48\u0E32\u0E22\u0E25\u0E07");
     const text = msg.content.map((b) => b.type === "text" ? b.text : "").join("");
-    try {
-      return { raw: JSON.parse(text), model: msg.model };
-    } catch {
-      throw new ArtworkResponseError("invalid-json", "\u0E42\u0E21\u0E40\u0E14\u0E25\u0E15\u0E2D\u0E1A\u0E01\u0E25\u0E31\u0E1A\u0E21\u0E32\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48 JSON \u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07");
-    }
+    return { raw: extractJson(text), model: msg.model, text };
   };
   return { ask, usage: () => total };
 }
-var CLI_INSTRUCTION = `
+var JSON_INSTRUCTION2 = `
 
 ## \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E04\u0E33\u0E15\u0E2D\u0E1A (\u0E2A\u0E33\u0E04\u0E31\u0E0D\u0E21\u0E32\u0E01)
 \u0E15\u0E2D\u0E1A\u0E40\u0E1B\u0E47\u0E19 JSON object \u0E40\u0E14\u0E35\u0E22\u0E27\u0E15\u0E32\u0E21 schema \u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 \u0E2B\u0E49\u0E32\u0E21\u0E21\u0E35\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2D\u0E37\u0E48\u0E19\u0E2B\u0E23\u0E37\u0E2D markdown fence:

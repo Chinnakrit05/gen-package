@@ -141,7 +141,7 @@ const API_SYSTEM = systemPrompt('โดยตอบเป็น JSON ตาม s
 // สเปกที่โมเดลต้องตอบ (output_config.format) — ใช้ชื่อ explanation แทน reasoning เพราะช่อง JSON ชื่อ
 // reasoning/thinking เป็นตัวกระตุ้น refusal หมวด reasoning_extraction ที่พบบ่อย (Opus/Sonnet 5.5: คิดเงินแม้ไม่มี output
 // และไม่มีรุ่น fallback) — parse แล้วแปลงกลับเป็น BoxSpecResult.reasoning
-const BOX_SPEC_SCHEMA: Record<string, unknown> = {
+export const BOX_SPEC_SCHEMA: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
   properties: {

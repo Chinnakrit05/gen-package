@@ -1,5 +1,6 @@
-// ตัวเรียก Claude API ของงานศิลป์ (apiAskWithUsage) กับ SDK ปลอม: timeout ต่อคำขอตามงบที่เหลือ, สะสม usage ทุกรอบ,
-// เส้นทาง beta fallback ของรุ่นที่รองรับ, และการแยก refusal / max_tokens / ไม่ใช่ JSON เป็น ArtworkResponseError
+// ตัวเรียก Claude API ของงานศิลป์ (apiAskWithUsage) กับ SDK ปลอม: schema ไปทาง system prompt (ไม่ใช่ output_config.format —
+// เกินเพดาน union ของ structured outputs), timeout ต่อคำขอตามงบที่เหลือ, สะสม usage ทุกรอบ, เส้นทาง beta fallback,
+// refusal / max_tokens เป็น ArtworkResponseError และคำตอบที่ไม่มี JSON คืน raw null ให้วงรอบส่งไปแก้
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const sdk = vi.hoisted(() => ({ create: vi.fn(), betaCreate: vi.fn() }))
@@ -16,7 +17,7 @@ vi.mock('@anthropic-ai/sdk', () => {
   return { default: MockAnthropic }
 })
 
-import { apiAskWithUsage, ArtworkDeadlineError, ArtworkResponseError } from './aiArtwork'
+import { apiAskWithUsage, ArtworkDeadlineError, JSON_INSTRUCTION } from './aiArtwork'
 
 const reply = (
   text: string,
@@ -38,9 +39,12 @@ describe('apiAskWithUsage', () => {
     expect(usage()).toBeNull()
 
     const first = await ask([{ role: 'user', content: 'x' }])
-    expect(first).toEqual({ raw: { a: 1 }, model: 'm-resolved' })
+    expect(first).toEqual({ raw: { a: 1 }, model: 'm-resolved', text: '{"a":1}' })
     const [params, options] = sdk.betaCreate.mock.calls[0] as [Record<string, unknown>, { timeout: number }]
     expect(params).toMatchObject({ model: 'claude-opus-5-5', max_tokens: 24_000, fallbacks: 'default' })
+    // schema อยู่ใน system (cache ได้) — ห้ามส่ง output_config.format: schema นี้มีช่อง union เกินเพดาน API (16)
+    expect(params.output_config).toEqual({ effort: 'medium' })
+    expect(params.system).toEqual([{ type: 'text', text: expect.stringContaining(JSON_INSTRUCTION), cache_control: { type: 'ephemeral' } }])
     expect(options.timeout).toBeLessThanOrEqual(100_000)
     expect(options.timeout).toBeGreaterThan(90_000)
 
@@ -49,7 +53,7 @@ describe('apiAskWithUsage', () => {
     expect(sdk.create).not.toHaveBeenCalled()
   })
 
-  it('ไม่เริ่มรอบใหม่เมื่อเวลาที่เหลือน้อยกว่าขั้นต่ำ และแยก refusal / max_tokens / ไม่ใช่ JSON เป็น ArtworkResponseError', async () => {
+  it('ไม่เริ่มรอบใหม่เมื่อเวลาที่เหลือน้อยกว่าขั้นต่ำ, แยก refusal / max_tokens เป็น error และคืน raw null เมื่อไม่มี JSON', async () => {
     const tight = apiAskWithUsage('sk-test', 'claude-test', { timeoutMs: 240_000, maxRetries: 0, deadlineMs: Date.now() + 10_000 })
     await expect(tight.ask([])).rejects.toBeInstanceOf(ArtworkDeadlineError)
     expect(sdk.create).not.toHaveBeenCalled()
@@ -59,14 +63,17 @@ describe('apiAskWithUsage', () => {
     await expect(open.ask([])).rejects.toMatchObject({ reason: 'refusal' })
     sdk.create.mockResolvedValueOnce(reply('{"cut', undefined, 'max_tokens'))
     await expect(open.ask([])).rejects.toMatchObject({ reason: 'max_tokens' })
+    // ไม่มี JSON → ไม่ throw: วงรอบส่งกลับไปแก้ด้วยข้อความเดิม; มีข้อความ/fence ล้อมก็ยังแกะ JSON ได้
     sdk.create.mockResolvedValueOnce(reply('not json'))
-    const error = await open.ask([]).catch((e: unknown) => e)
-    expect(error).toBeInstanceOf(ArtworkResponseError)
-    expect((error as ArtworkResponseError).reason).toBe('invalid-json')
+    await expect(open.ask([])).resolves.toEqual({ raw: null, model: 'm-resolved', text: 'not json' })
+    sdk.create.mockResolvedValueOnce(reply('นี่คือแบบ:\n```json\n{"name":"x"}\n```'))
+    await expect(open.ask([])).resolves.toMatchObject({ raw: { name: 'x' } })
     // ไม่มี deadline → timeout = ค่าตั้งต้นของ limits; รุ่นที่ไม่อยู่ในชุด fallback ใช้ messages.create ปกติ
     expect(sdk.create.mock.calls[0][1]).toEqual({ timeout: 240_000 })
     expect(sdk.betaCreate).not.toHaveBeenCalled()
     // usage ยังสะสมแม้คำตอบใช้ไม่ได้ (จ่าย provider ไปแล้ว)
-    expect(open.usage()).toEqual({ inputTokens: 300, outputTokens: 150, cacheReadTokens: 0, cacheCreationTokens: 0 })
+    expect(open.usage()).toEqual({ inputTokens: 400, outputTokens: 200, cacheReadTokens: 0, cacheCreationTokens: 0 })
+    // รุ่นที่ไม่มี effort (ไม่ใช่ตระกูล 5) ไม่ส่ง output_config เลย
+    expect(sdk.create.mock.calls[0][0]).not.toHaveProperty('output_config')
   })
 })

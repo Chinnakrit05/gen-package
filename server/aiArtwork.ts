@@ -85,11 +85,13 @@ export interface ArtworkResult {
   mock: boolean
 }
 
-export type AskArtwork = (messages: Anthropic.MessageParam[]) => Promise<{ raw: unknown; model: string }>
+// raw = JSON ที่แกะได้ (null = คำตอบไม่มี JSON object → designArtwork ส่งกลับให้แก้เป็นรอบถัดไป), text = คำตอบดิบไว้เล่นซ้ำในรอบแก้
+export type AskArtwork = (messages: Anthropic.MessageParam[]) => Promise<{ raw: unknown; model: string; text?: string }>
 
-// โมเดลตอบกลับมาแต่ใช้ไม่ได้ (refusal / ถูกตัดที่ max_tokens / ไม่ใช่ JSON) — cloud แยก refusal ไว้บอกผู้ใช้ให้ปรับคำขอ และคืนเครดิต
+// โมเดลตอบกลับมาแต่ใช้ไม่ได้ (refusal / ถูกตัดที่ max_tokens) — cloud แยก refusal ไว้บอกผู้ใช้ให้ปรับคำขอ และคืนเครดิต
+// (คำตอบที่ไม่มี JSON ไม่ใช่ error: คืน raw null ให้วงรอบส่งกลับไปแก้)
 export class ArtworkResponseError extends Error {
-  constructor(readonly reason: 'refusal' | 'max_tokens' | 'invalid-json', message: string) {
+  constructor(readonly reason: 'refusal' | 'max_tokens', message: string) {
     super(message)
     this.name = 'ArtworkResponseError'
   }
@@ -220,7 +222,7 @@ export async function designArtwork(ask: AskArtwork, req: ArtworkRequest, maxRou
       return { ok: true, plan, issues, rounds, model, mock: false }
     }
     messages.push(
-      { role: 'assistant', content: JSON.stringify(answer.raw) },
+      { role: 'assistant', content: answer.text || JSON.stringify(answer.raw) },
       { role: 'user', content: feedback(issues.filter((i) => i.severity === 'error')) },
     )
   }
@@ -253,12 +255,10 @@ export function apiAskWithUsage(
     const params = {
       model,
       max_tokens: MAX_TOKENS,
-      system: ARTWORK_SYSTEM,
+      // system + schema คงที่ทุกคำขอ → cache ไว้ (รอบแก้/คำขอซ้ำภายใน 5 นาทีอ่านจาก cache)
+      system: [{ type: 'text' as const, text: ARTWORK_SYSTEM + JSON_INSTRUCTION, cache_control: { type: 'ephemeral' as const } }],
       messages,
-      output_config: {
-        format: { type: 'json_schema' as const, schema: ARTWORK_SCHEMA },
-        ...(options.effort ? { effort: options.effort } : {}),
-      },
+      ...(options.effort ? { output_config: { effort: options.effort } } : {}),
     }
     const msg = options.serverFallback
       ? await client.beta.messages.create(
@@ -281,11 +281,7 @@ export function apiAskWithUsage(
     if (msg.stop_reason === 'refusal') throw new ArtworkResponseError('refusal', 'โมเดลปฏิเสธคำขอ ลองปรับคำอธิบายหรือรูปที่แนบ')
     if (msg.stop_reason === 'max_tokens') throw new ArtworkResponseError('max_tokens', 'แบบที่ออกแบบยาวเกินไป ถูกตัดก่อนจบ — ลองขอให้เรียบง่ายลง')
     const text = msg.content.map((b) => (b.type === 'text' ? b.text : '')).join('')
-    try {
-      return { raw: JSON.parse(text) as unknown, model: msg.model }
-    } catch {
-      throw new ArtworkResponseError('invalid-json', 'โมเดลตอบกลับมาไม่ใช่ JSON ลองใหม่อีกครั้ง')
-    }
+    return { raw: extractJson(text), model: msg.model, text }
   }
   return { ask, usage: () => total }
 }
@@ -294,7 +290,10 @@ export function apiAsk(apiKey: string, model: string): AskArtwork {
   return apiAskWithUsage(apiKey, model).ask
 }
 
-const CLI_INSTRUCTION =
+// schema ของงานศิลป์ส่งเป็น "ข้อความใน prompt" ทั้ง API และ CLI — ส่งเป็น structured outputs (output_config.format) ไม่ได้:
+// มีช่อง nullable/anyOf ~75 ช่อง เกินเพดาน API 16 ช่องต่อคำขอ (400 "too many parameters with union types") และบีบให้ต่ำกว่านั้น
+// ต้องใส่ค่าหลอกทุกช่องทุกชิ้น (คำตอบยาวขึ้นหลายพันโทเคน) — ตัว parse ใจกว้างอยู่แล้ว + คำตอบที่ไม่มี JSON ได้รอบแก้
+export const JSON_INSTRUCTION =
   `\n\n## รูปแบบคำตอบ (สำคัญมาก)\nตอบเป็น JSON object เดียวตาม schema นี้เท่านั้น ห้ามมีข้อความอื่นหรือ markdown fence:\n` +
   JSON.stringify(ARTWORK_SCHEMA)
 
@@ -318,16 +317,14 @@ export function cliAsk(model: string | undefined, oauthToken: string | undefined
           return `## ${m.role === 'user' ? 'ลูกค้า/ระบบ' : 'คำตอบก่อนหน้าของคุณ'}\n${body}`
         })
         .join('\n\n')
-      const args = ['-p', `${ARTWORK_SYSTEM}${CLI_INSTRUCTION}\n\n${imgNote}${transcript}`, '--output-format', 'json']
+      const args = ['-p', `${ARTWORK_SYSTEM}${JSON_INSTRUCTION}\n\n${imgNote}${transcript}`, '--output-format', 'json']
       if (model) args.push('--model', model)
       const pending = execFileP(resolveClaudeBin(), args, { timeout: 420_000, maxBuffer: 8 * 1024 * 1024, cwd: os.tmpdir(), env: cliEnv(oauthToken) })
       pending.child.stdin?.end()
       const { stdout } = await pending
       const envelope = JSON.parse(stdout) as { is_error?: boolean; result?: string }
       if (envelope.is_error || typeof envelope.result !== 'string') throw new Error('Claude CLI ตอบกลับผิดรูปแบบ')
-      const obj = extractJson(envelope.result)
-      if (!obj) throw new Error('แปลงคำตอบจาก Claude CLI เป็น JSON ไม่ได้')
-      return { raw: obj, model: model ?? 'claude-cli' }
+      return { raw: extractJson(envelope.result), model: model ?? 'claude-cli', text: envelope.result }
     } finally {
       for (const f of files) void unlink(f).catch(() => {})
     }

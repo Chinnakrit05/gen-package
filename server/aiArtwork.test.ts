@@ -85,6 +85,20 @@ describe('designArtwork', () => {
     await expect(designArtwork(async () => { throw new ArtworkDeadlineError() }, base(), 2)).rejects.toBeInstanceOf(ArtworkDeadlineError)
   })
 
+  it('คำตอบรอบแรกไม่มี JSON → รอบแก้ได้คำตอบเดิมเป็นข้อความ assistant แล้วผ่านรอบสอง', async () => {
+    const seen: unknown[] = []
+    const r = await designArtwork(async (messages) => {
+      seen.push(messages.length)
+      if (messages.length === 1) return { raw: null, model: 'fake', text: 'ขอโทษครับ ลืมใส่ JSON' }
+      expect(messages[1]).toEqual({ role: 'assistant', content: 'ขอโทษครับ ลืมใส่ JSON' })
+      expect(String(messages[2].content)).toContain('คำตอบไม่ใช่ JSON object')
+      return { raw: goodPlan, model: 'fake' }
+    }, base(), 2)
+    expect(seen).toEqual([1, 3])
+    expect(r.ok).toBe(true)
+    expect(r.rounds.map((x) => x.ok)).toEqual([false, true])
+  })
+
   it('ผ่านรอบแรกเมื่อแผนถูกต้อง', async () => {
     const r = await designArtwork(async () => ({ raw: goodPlan, model: 'fake' }), base())
     expect(r.ok).toBe(true)
