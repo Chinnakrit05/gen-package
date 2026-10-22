@@ -240,6 +240,7 @@ export const cloudProjectDocumentSchema = z.object({
     sheetW: finite.min(0).max(5000).optional(),
     sheetH: finite.min(0).max(5000).optional(),
     sheetMargin: finite.min(0).max(100).optional(),
+    sheetGap: finite.min(0).max(100).optional(),
   }).strict().optional(),
   decos: z.array(decoSchema).max(500),
   history: z.array(historySchema).max(30),

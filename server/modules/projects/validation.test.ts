@@ -40,7 +40,7 @@ describe('cloud project validation', () => {
     const sticker = {
       ...validDocument(),
       live: { ...validDocument().live, template: 'sticker', materialId: 'sticker-pp', W: 12, H: 12 },
-      stickerCut: { shape: 'contour', border: 'white', offset: 2, sheet: 'custom', perSheet: 24, sheetW: 320, sheetH: 450, sheetMargin: 3 },
+      stickerCut: { shape: 'contour', border: 'white', offset: 2, sheet: 'custom', perSheet: 24, sheetW: 320, sheetH: 450, sheetMargin: 3, sheetGap: 4 },
     }
     expect(cloudProjectDocumentSchema.safeParse(sticker).success).toBe(true)
     expect(cloudProjectDocumentSchema.safeParse({

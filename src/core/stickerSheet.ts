@@ -91,7 +91,7 @@ export function layoutStickerSheet(
   box: Box,
   sheet: StickerSheet,
   margin = SHEET_MARGIN,
-  gap = SHEET_GAP,
+  gap: number = SHEET_GAP,
   limit?: number, // กำหนดจำนวนต่อแผ่น: วางไม่เกินเท่านี้ (แถวสุดท้ายอาจไม่เต็ม)
 ): SheetLayout {
   const pw = box.x1 - box.x0
@@ -136,7 +136,7 @@ export function fitScaleForCount(
   edge: number,
   sheet: StickerSheet,
   margin = SHEET_MARGIN,
-  gap = SHEET_GAP,
+  gap: number = SHEET_GAP,
   slack = 0, // มม. เผื่อต่อดวง — ไดคัทตามรูปคำนวณเส้นตัดใหม่หลังย่อ/ขยาย คลาดได้ ±0.2 มม.
 ): number | null {
   if (n < 1 || art.w <= 0 || art.h <= 0) return null

@@ -62,6 +62,7 @@ import {
   NO_BORDER_INSET,
   STICKER_OFFSET_MAX,
   STICKER_OFFSET_MIN,
+  SHEET_GAP_MAX,
   STICKER_RULES,
   sameStickerCut,
   storedStickerCut,
@@ -1919,12 +1920,13 @@ export default function App({
     [isSticker, stickerCut.sheet, stickerCut.sheetW, stickerCut.sheetH],
   )
   const sheetMargin = stickerCut.sheetMargin ?? SHEET_MARGIN
+  const sheetGap = stickerCut.sheetGap ?? SHEET_GAP
   const sheetLayout = useMemo(
     () =>
       stickerSheet && dieline
-        ? layoutStickerSheet(cutBox(dieline), stickerSheet, sheetMargin, SHEET_GAP, stickerCut.perSheet)
+        ? layoutStickerSheet(cutBox(dieline), stickerSheet, sheetMargin, sheetGap, stickerCut.perSheet)
         : null,
-    [stickerSheet, dieline, sheetMargin, stickerCut.perSheet],
+    [stickerSheet, dieline, sheetMargin, sheetGap, stickerCut.perSheet],
   )
   const sheetOut = useMemo(
     () => (sheetLayout && sheetLayout.count > 0 && dieline ? { piece: dieline, layout: sheetLayout } : null),
@@ -1985,7 +1987,7 @@ export default function App({
     const edge = stickerLoops ? (stickerCut.border === 'white' ? stickerCut.offset : -NO_BORDER_INSET) : 0
     const art = { w: box.x1 - box.x0 - 2 * edge, h: box.y1 - box.y0 - 2 * edge }
     // ไดคัทตามรูป: เส้นตัดถูก trace ใหม่หลังย่อลาย (raster/เกลี่ยเส้น คลาด ~0.2 มม.) → เผื่อ 0.6 มม. ต่อดวง
-    const k0 = fitScaleForCount(n, art, edge, sh, cut.sheetMargin ?? SHEET_MARGIN, SHEET_GAP, stickerLoops ? 0.6 : 0)
+    const k0 = fitScaleForCount(n, art, edge, sh, cut.sheetMargin ?? SHEET_MARGIN, cut.sheetGap ?? SHEET_GAP, stickerLoops ? 0.6 : 0)
     if (!k0) return false
     const k = Math.min(k0, 250 / W, 300 / H)
     const nW = Math.floor(W * k * 10) / 10 // ปัดลง 0.1 มม. — ไม่เกินช่องที่คำนวณไว้
@@ -4120,6 +4122,17 @@ export default function App({
                   onChange={(v) => updateSheet({ sheetMargin: v === SHEET_MARGIN ? undefined : v })}
                 />
               )}
+              {stickerCut.sheet && (
+                <DimField
+                  imperial={imperial}
+                  label={t('ระยะห่างระหว่างดวง', 'Gap between stickers')}
+                  value={sheetGap}
+                  min={SHEET_GAP}
+                  max={SHEET_GAP_MAX}
+                  disabled={aiBusy}
+                  onChange={(v) => updateSheet({ sheetGap: v === SHEET_GAP ? undefined : v })}
+                />
+              )}
               {sheetLayout && (
                 <>
                   <div className="unit-toggle sticker-seg" role="group" aria-label={t('วิธีกำหนด', 'Sizing')}>
@@ -4229,8 +4242,8 @@ export default function App({
                   </div>
                   <p className="hint">
                     {t(
-                      `เส้นตัดแต่ละดวงห่างกัน ${SHEET_GAP} มม. · ห่างขอบแผ่น ${sheetMargin} มม. · ไฟล์ PDF/SVG/DXF ที่ดาวน์โหลดเป็นทั้งแผ่น`,
-                      `Cut lines ${SHEET_GAP} mm apart · ${sheetMargin} mm from the sheet edge · PDF/SVG/DXF downloads contain the whole sheet`,
+                      `เส้นตัดแต่ละดวงห่างกัน ${sheetGap} มม. (ขั้นต่ำ ${SHEET_GAP} มม. ตามโรงพิมพ์) · ห่างขอบแผ่น ${sheetMargin} มม. · ไฟล์ PDF/SVG/DXF ที่ดาวน์โหลดเป็นทั้งแผ่น`,
+                      `Cut lines ${sheetGap} mm apart (printer minimum ${SHEET_GAP} mm) · ${sheetMargin} mm from the sheet edge · PDF/SVG/DXF downloads contain the whole sheet`,
                     )}
                   </p>
                 </>

@@ -68,9 +68,10 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   คำนวณใน Web Worker (`stickerContour.worker.ts` ผ่าน `useStickerContour`) เพราะ distance transform หนักหลายร้อย ms;
   ตั้งค่า `Project.stickerCut` เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (`storedStickerCut`; thread แบบเดียวกับ `vents`, PROJECT_FILE_VERSION 9)
 - `src/core/stickerSheet.ts` (pure) — แผ่นสติกเกอร์หลายดวง A6/A5/A4/A3/กำหนดเอง (`stickerCut.sheet` + `sheetW/sheetH`, ขอบแผ่น `sheetMargin` ค่าเริ่มต้น 5; `resolveStickerSheet` — memo ใน App เพราะแผ่นกำหนดเองสร้าง object ใหม่ทุกครั้ง): ออกแบบดวงเดียว แล้ว
-  `layoutStickerSheet` เรียงซ้ำจากกรอบเส้นตัด (`cutBox`, ไม่ใช่แผ่นออกแบบ) เว้น 2 มม./ขอบ 5 มม. หมุน 90° ถ้าได้มากกว่า;
+  `layoutStickerSheet` เรียงซ้ำจากกรอบเส้นตัด (`cutBox`, ไม่ใช่แผ่นออกแบบ) เว้นระยะห่างระหว่างดวง `stickerCut.sheetGap` (ค่าเริ่มต้นและขั้นต่ำ
+  `SHEET_GAP` 2 มม. ตามโรงพิมพ์ ถึง `SHEET_GAP_MAX`; PROJECT_FILE_VERSION 20)/ขอบ 5 มม. หมุน 90° ถ้าได้มากกว่า;
   `placePoint`/`placePath`/`placementSVG` = transform ชุดเดียวกันทุกที่ (พรีวิว/SVG/PDF/DXF) → `sheetDieline` ใช้ส่งออก;
-  ลายต่อดวงคลิป `artClipBox` (กรอบเส้นตัด + ครึ่งระยะห่าง = เผื่อสี 1 มม.); blueprint ยังแก้ไขดวงเดียว
+  ลายต่อดวงคลิป `artClipBox` (กรอบเส้นตัด + ครึ่งของ SHEET_GAP = เผื่อสี 1 มม. คงที่ ไม่ขยายตามระยะห่างที่ตั้ง); blueprint ยังแก้ไขดวงเดียว
   โหมดกำหนดจำนวน (`stickerCut.perSheet`): `fitScaleForCount` binary search ตัวคูณขนาดใหญ่สุดที่ได้ ≥ n ดวง
   (ลาย×k + 2·ขอบขาว — ขอบขาวไม่ย่อตาม; ตามรูปเผื่อ 0.6 มม. เพราะ trace เส้นใหม่คลาดได้) แล้ว `scaleDecos` + ตั้ง W/H
   (ล็อกช่อง W/H); แก้ลายทีหลังไม่ย่อเองอัตโนมัติ — โชว์ "ได้ X จาก N" + ปุ่มจัดขนาดใหม่. สติกเกอร์เล็กสุด 10 มม.
@@ -277,7 +278,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
-  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 19); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 20); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° ได้สันโค้งจาก `rollBeads` ใน fold.ts (ทรงกระบอกบาง รัศมี = ครึ่งระยะสองชั้น) — ตอนนี้ไม่มี template ใช้แล้ว
 - FEFCO 0427 ตามผัง dieline มาตรฐาน: ผนังข้างทบเป็นรอยพับคู่ (ผนัง → สัน กว้าง sp = 3t+0.2 = ผนัง+หู+ชั้นทบ → ชั้นทบ)
   ลิ้นปลายชั้นทบลงช่องบนฐานที่ sp − t/2; ฝาแคบกว่ากล่องข้างละ sp มีปีกข้างคางหมูพับลงด้านในชั้นทบ (stage 4 ก่อนฝาปิด 5),

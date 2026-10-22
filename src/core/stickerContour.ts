@@ -31,8 +31,10 @@ export interface StickerCut {
   sheetW?: number // แผ่นกำหนดเอง (sheet='custom') — มม.
   sheetH?: number
   sheetMargin?: number // ระยะขอบแผ่นตามโรงพิมพ์ (ไม่ใส่ = 5 มม.)
+  sheetGap?: number // ระยะห่างระหว่างเส้นตัดของดวงที่ติดกัน (ไม่ใส่ = SHEET_GAP 2 มม. = ขั้นต่ำของโรงพิมพ์)
 }
 export const PER_SHEET_MAX = 200
+export const SHEET_GAP_MAX = 30 // มม. — ระยะห่างระหว่างดวงสูงสุดที่ตั้งได้
 export const DEFAULT_STICKER_CUT: StickerCut = { shape: 'rect', border: 'white', offset: 2 }
 export const STICKER_OFFSET_MIN = STICKER_RULES.minBorder
 export const STICKER_OFFSET_MAX = 8
@@ -49,7 +51,8 @@ export const sameStickerCut = (a?: StickerCut, b?: StickerCut) =>
   (a ?? DEFAULT_STICKER_CUT).perSheet === (b ?? DEFAULT_STICKER_CUT).perSheet &&
   (a ?? DEFAULT_STICKER_CUT).sheetW === (b ?? DEFAULT_STICKER_CUT).sheetW &&
   (a ?? DEFAULT_STICKER_CUT).sheetH === (b ?? DEFAULT_STICKER_CUT).sheetH &&
-  (a ?? DEFAULT_STICKER_CUT).sheetMargin === (b ?? DEFAULT_STICKER_CUT).sheetMargin
+  (a ?? DEFAULT_STICKER_CUT).sheetMargin === (b ?? DEFAULT_STICKER_CUT).sheetMargin &&
+  (a ?? DEFAULT_STICKER_CUT).sheetGap === (b ?? DEFAULT_STICKER_CUT).sheetGap
 
 // ค่าที่ต้องเก็บลงงาน (ค่าเริ่มต้น = ไม่เก็บ)
 export const storedStickerCut = (c: StickerCut) => (sameStickerCut(c, DEFAULT_STICKER_CUT) ? undefined : c)
@@ -66,6 +69,8 @@ export function parseStickerCut(raw: unknown): StickerCut | undefined {
   const sheetW = sheet === 'custom' ? num(o.sheetW, 50, 1000) : undefined
   const sheetH = sheet === 'custom' ? num(o.sheetH, 50, 1000) : undefined
   const sheetMargin = sheet && o.sheetMargin !== undefined ? num(o.sheetMargin, 0, 30) : undefined
+  // ต่ำกว่าระยะขั้นต่ำระหว่างเส้นตัดของโรงพิมพ์ไม่ได้ (ใบมีดสองเส้นชิดกันเกินไปตัดไม่ขาด/ลอกยาก)
+  const sheetGap = sheet && o.sheetGap !== undefined ? num(o.sheetGap, STICKER_RULES.minGap, SHEET_GAP_MAX) : undefined
   const shape: StickerShape =
     o.shape === 'contour' || STICKER_BASIC_IDS.includes(o.shape as StickerBasicShape) ? (o.shape as StickerShape) : 'rect'
   if (shape === 'rect' && !sheet) return undefined // ค่าเริ่มต้น (สี่เหลี่ยมมุมมน ดวงเดียว) ไม่ต้องเก็บ
@@ -83,6 +88,7 @@ export function parseStickerCut(raw: unknown): StickerCut | undefined {
     ...(sheetW !== undefined ? { sheetW } : {}),
     ...(sheetH !== undefined ? { sheetH } : {}),
     ...(sheetMargin !== undefined ? { sheetMargin } : {}),
+    ...(sheetGap !== undefined ? { sheetGap } : {}),
   }
 }
 

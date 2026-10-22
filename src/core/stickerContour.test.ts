@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   CORNER_ROUND,
+  DEFAULT_STICKER_CUT,
+  SHEET_GAP_MAX,
+  STICKER_RULES,
+  sameStickerCut,
   contourFromAlpha,
   distanceTo,
   fillHoles,
@@ -163,5 +167,11 @@ describe('parseStickerCut', () => {
     expect(parseStickerCut({ shape: 'rect', sheet: 'a3', sheetW: 100, sheetMargin: -4 })).toEqual({
       shape: 'rect', border: 'white', offset: 2, sheet: 'a3', sheetMargin: 0,
     })
+    // ระยะห่างระหว่างดวง: ไม่ต่ำกว่าขั้นต่ำของโรงพิมพ์ ไม่เกินเพดาน ปัดทีละ 0.5 มม. และเก็บเฉพาะเมื่อมีแผ่น
+    expect(parseStickerCut({ shape: 'rect', sheet: 'a4', sheetGap: 4.3 })?.sheetGap).toBe(4.5)
+    expect(parseStickerCut({ shape: 'rect', sheet: 'a4', sheetGap: 0 })?.sheetGap).toBe(STICKER_RULES.minGap)
+    expect(parseStickerCut({ shape: 'rect', sheet: 'a4', sheetGap: 99 })?.sheetGap).toBe(SHEET_GAP_MAX)
+    expect(parseStickerCut({ shape: 'contour', sheetGap: 5 })?.sheetGap).toBeUndefined()
+    expect(sameStickerCut({ ...DEFAULT_STICKER_CUT, sheet: 'a4', sheetGap: 5 }, { ...DEFAULT_STICKER_CUT, sheet: 'a4' })).toBe(false)
   })
 })

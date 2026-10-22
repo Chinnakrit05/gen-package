@@ -32,6 +32,18 @@ describe('ขนาดแผ่น', () => {
 })
 
 describe('layoutStickerSheet', () => {
+  it('ระยะห่างระหว่างดวงกำหนดเองได้: ดวงติดกันห่างเท่าที่ตั้ง และจำนวนลดลงเมื่อห่างขึ้น', () => {
+    const box = { x0: 0, y0: 0, x1: 40, y1: 40 }
+    const L = layoutStickerSheet(box, a6, SHEET_MARGIN, 6)
+    const xs = [...new Set(L.placements.map((pl) => placePoint(pl, { x: 0, y: 0 }).x))].sort((a, b) => a - b)
+    const ys = [...new Set(L.placements.map((pl) => placePoint(pl, { x: 0, y: 0 }).y))].sort((a, b) => a - b)
+    expect(xs[1] - xs[0] - 40).toBeCloseTo(6, 6)
+    expect(ys[1] - ys[0] - 40).toBeCloseTo(6, 6)
+    // A6 105×148 ขอบ 5: ห่าง 2 ได้ 2×3, ห่าง 20 ได้ 1×2
+    expect(layoutStickerSheet(box, a6, SHEET_MARGIN, SHEET_GAP).count).toBe(6)
+    expect(layoutStickerSheet(box, a6, SHEET_MARGIN, 20).count).toBe(2)
+  })
+
   it('ดวง 40×40 บน A6: 2×3 = 6 ดวง (ขอบ 5 มม. ระยะห่าง 2 มม.)', () => {
     const L = layoutStickerSheet({ x0: 0, y0: 0, x1: 40, y1: 40 }, a6)
     expect([L.cols, L.rows, L.count, L.rotated]).toEqual([2, 3, 6, false])
