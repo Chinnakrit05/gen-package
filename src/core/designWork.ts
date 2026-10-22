@@ -1,5 +1,5 @@
 // งานตกแต่งที่ผู้ใช้ทำไว้บนรูปแบบปัจจุบัน (ลาย/รูปพื้น/สีพื้น) — ใช้ตัดสินว่าการสลับประเภทงาน/รูปแบบบรรจุภัณฑ์/รูปแบบถุง
-// ต้องเตือน "งานเดิมจะถูกลบ" ก่อนไหม (pure ไม่ผูก React) ต่างจาก `isFreshWork` ตรงที่นับสีพื้นด้วย เพราะเลือกสีก็คือตกแต่งแล้ว
+// ต้องถามก่อนไหม (มีงาน = บันทึกงานนี้แล้วเริ่มชิ้นงานใหม่แทนการสลับในงานเดิม) (pure ไม่ผูก React) ต่างจาก `isFreshWork` ตรงที่นับสีพื้นด้วย เพราะเลือกสีก็คือตกแต่งแล้ว
 import type { Deco, FillImage } from './artwork'
 
 export interface DesignWorkSummary {
@@ -26,17 +26,3 @@ export function summarizeDesignWork(decos: Deco[], fillImage: FillImage | null |
 
 export const hasDesignWork = (decos: Deco[], fillImage: FillImage | null | undefined, fillColor: string | null | undefined): boolean =>
   summarizeDesignWork(decos, fillImage, fillColor).total > 0
-
-type T = (th: string, en: string) => string
-
-// รายการสิ่งที่จะหายไปแบบอ่านง่าย เช่น "ข้อความ 3 · รูปภาพ 2 · รูปทรง/เส้น 1 · สีพื้น"
-export function describeDesignWork(s: DesignWorkSummary, t: T): string {
-  const parts: string[] = []
-  if (s.text) parts.push(`${t('ข้อความ', 'Text')} ${s.text}`)
-  if (s.image) parts.push(`${t('รูปภาพ', 'Images')} ${s.image}`)
-  if (s.shape) parts.push(`${t('รูปทรง/เส้น', 'Shapes/lines')} ${s.shape}`)
-  if (s.nutrition) parts.push(`${t('ตารางโภชนาการ', 'Nutrition tables')} ${s.nutrition}`)
-  if (s.fillImage) parts.push(t('รูปพื้น', 'Background image'))
-  if (s.fillColor) parts.push(t('สีพื้น', 'Background colour'))
-  return parts.join(' · ')
-}

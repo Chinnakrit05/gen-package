@@ -94,7 +94,8 @@ import {
   type SheetLayout,
 } from './core/stickerSheet'
 import { isFreshWork, standardSizeFor, VESSEL_STANDARD, type StdSize } from './core/standardSize'
-import { hasDesignWork, summarizeDesignWork } from './core/designWork'
+import { hasDesignWork } from './core/designWork'
+import { freshProjectFor, type NewWorkTarget } from './core/newWork'
 import { SwitchGuardModal } from './components/SwitchGuardModal'
 import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, defaultCapColor, TUBE_CAP_STYLES, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
 import {
@@ -1199,7 +1200,8 @@ export interface CloudProjectBridge {
   saveState: ProjectSaveState
   onProjectChange(project: Project): Promise<void>
   switchProject(current: Project, targetId: string): Promise<Project>
-  createProject(current: Project, name: string): Promise<Project>
+  // seed = งานตั้งต้นที่ App เตรียมไว้ (เช่นชิ้นงานใหม่จากการเปลี่ยนประเภทงาน) — ไม่ส่ง = งานเปล่าค่าเริ่มต้น
+  createProject(current: Project, name: string, seed?: Project): Promise<Project>
   deleteProject(current: Project, targetId: string): Promise<Project>
   importProject(current: Project, imported: Project): Promise<Project>
   beforeLogout(current: Project): Promise<void>
@@ -1625,10 +1627,8 @@ export default function App({
   const [stageOpen, setStageOpen] = useState(false)
   const [artSnapshots, setArtSnapshots] = useState<ArtworkSnapshot[]>([])
   const [artCurrentId, setArtCurrentId] = useState<string | null>(null)
-  // เตือนก่อนสลับประเภทงาน/รูปแบบเมื่อมีงานตกแต่งแล้ว (ยืนยัน = ลบงานเดิมทั้งหมดแล้วค่อยสลับ)
-  const [switchGuard, setSwitchGuard] = useState<{ what: string; fromName: string; toName: string; apply: () => void } | null>(null)
-  // หลังล้างงานใน handler เดียวกัน state decos/fillImage ใน closure ยังเป็นค่าเก่า — ref นี้บอก applyStdSize ว่าถือเป็นงานใหม่ได้แล้ว
-  const freshAfterClear = useRef(false)
+  // ถามก่อนสลับประเภทงาน/รูปแบบเมื่อมีงานตกแต่งแล้ว (ยืนยัน = บันทึกงานนี้แล้วเปิดชิ้นงานใหม่ตามเป้าหมายนี้)
+  const [switchGuard, setSwitchGuard] = useState<NewWorkTarget | null>(null)
   // AI ออกแบบหน้าตา: ชิ้นงานที่แปลงแล้ววางลงงานในจังหวะเดียว (snapshot undo จับเป็นก้าวเดียว) — สีพื้น/รูปพื้นตั้งเมื่อแผนระบุ
   const applyAiArtwork = (r: AiArtworkResult) => {
     const nextDecos = r.mode === 'replace' ? r.decos : [...decos, ...r.decos]
@@ -2547,7 +2547,7 @@ export default function App({
 
   // ตอนยังไม่เริ่มงาน → ตั้งขนาดมาตรฐาน + ล้างทรงขวด/ฉลากที่ตั้งเอง (มีลาย/รูปพื้นแล้วคงขนาดเดิม ลายจะได้ไม่หลุดตำแหน่ง)
   const applyStdSize = (sz: StdSize | null) => {
-    if (!sz || !(freshAfterClear.current || isFreshWork(decos, fillImage))) return
+    if (!sz || !isFreshWork(decos, fillImage)) return
     setW(sz.W)
     setD(sz.D)
     setH(sz.H)
@@ -2574,44 +2574,43 @@ export default function App({
     setPouchStyle(s)
   }
 
-  // สลับประเภทงาน/รูปแบบบรรจุภัณฑ์/รูปแบบถุง: ยังไม่มีงานตกแต่ง → สลับทันที; มีแล้ว (แม้ชิ้นเดียว/แค่สีพื้น) → เปิดกล่องเตือน
-  // ยืนยัน = ลบงานเดิมทั้งหมด (ลาย/รูปพื้น/สีพื้น/แบบจาก AI) แล้วค่อยสลับ — ทั้งชุดเป็น undo ก้าวเดียว (snapshot หน่วงรวมให้)
-  const guardedSwitch = (what: string, fromName: string, toName: string, apply: () => void) => {
+  // สลับประเภทงาน/รูปแบบบรรจุภัณฑ์/รูปแบบถุง: ยังไม่มีงานตกแต่ง → สลับในงานนี้ทันที (`apply`); มีแล้ว (แม้ชิ้นเดียว/แค่สีพื้น)
+  // → ถามก่อน: ยืนยัน = บันทึกงานนี้ไว้ตามเดิมแล้วเปิดชิ้นงานใหม่ตาม `target` ที่ไม่มีการตั้งค่า/การตกแต่งของงานเก่าเลย
+  const guardedSwitch = (target: NewWorkTarget, apply: () => void) => {
     if (!hasDesignWork(decos, fillImage, fillColor)) {
       apply()
       return
     }
-    setSwitchGuard({ what, fromName, toName, apply })
+    setSwitchGuard(target)
   }
-  const confirmSwitch = () => {
-    const g = switchGuard
-    if (!g) return
+  const startNewWork = (target: NewWorkTarget) => {
     setSwitchGuard(null)
-    setSelectedIds([])
-    setDecos([])
-    setFillImage(null)
-    setFillColor(null)
+    if (aiBusy || projectBusy) return
+    if (cloud && !cloud.online) {
+      window.alert(t('ต้องออนไลน์ก่อนเริ่มชิ้นงานใหม่', 'You need to be online to start a new piece'))
+      return
+    }
+    // งานใหม่เริ่มมุมมอง 3D แบบเบาเหมือน "สร้างงาน" + แบบจาก AI ของงานเก่าไม่ตามมา
+    setShowDims3d(false)
+    setVivid3d(false)
     setArtSnapshots([])
     setArtCurrentId(null)
-    freshAfterClear.current = true
-    try {
-      g.apply()
-    } finally {
-      freshAfterClear.current = false
+    const seed = freshProjectFor((cloud?.items.length ?? projects.length) + 1, target)
+    if (cloud) {
+      const current = flushInto(projects).find((project) => project.id === activeId)
+      if (!current) return
+      startProjectOperation('create')
+      void cloud.createProject(current, seed.name, seed).then((created) => {
+        setProjects([created])
+        openProject(created)
+      }).catch((error: unknown) => {
+        window.alert(error instanceof Error ? error.message : 'สร้างงานไม่สำเร็จ')
+      }).finally(() => setProjectOperation(null))
+      return
     }
+    setProjects((prev) => [...flushInto(prev), seed])
+    openProject(seed)
   }
-  const kindName = isCard
-    ? t('นามบัตร', 'Business card')
-    : isSticker
-      ? t('สติกเกอร์', 'Sticker')
-      : isTube
-        ? t('หลอดครีม (tube)', 'Cosmetic tube')
-        : kind === 'vessel'
-          ? t('ภาชนะ + ฉลาก', 'Vessel + label')
-          : kind === 'pouch'
-            ? t('ถุงฟิล์ม', 'Film pouch')
-            : t('กล่องพับ', 'Folding box')
-  const whatKind = t('ประเภทงาน', 'job type')
 
   const saveFile = (data: BlobPart, mime: string, ext: string) => {
     const blob = new Blob([data], { type: mime })
@@ -3533,7 +3532,7 @@ export default function App({
                 aria-pressed={kind === 'box' && !isCard && !isSticker}
                 onClick={() => {
                   if (kind === 'box' && !isCard && !isSticker) return
-                  guardedSwitch(whatKind, kindName, t('กล่องพับ', 'Folding box'), () => {
+                  guardedSwitch({ template: 'tuck-end', materialId: 'carton-300' }, () => {
                     if (kind !== 'box' || isSticker || materialId.startsWith('card-')) changeMaterial('carton-300')
                     if (templateId === 'card' || templateId === 'sticker') changeTemplate('tuck-end')
                     else if (kind !== 'box') resetKindSize('box')
@@ -3554,7 +3553,7 @@ export default function App({
                 aria-pressed={kind === 'vessel' && !isTube}
                 onClick={() => {
                   if (kind === 'vessel' && !isTube) return
-                  guardedSwitch(whatKind, kindName, t('ภาชนะ + ฉลาก', 'Vessel + label'), () => {
+                  guardedSwitch({ template: 'tuck-end', materialId: 'pet-bottle' }, () => {
                     changeMaterial('pet-bottle')
                     resetKindSize('vessel', 'pet-bottle')
                   })
@@ -3574,7 +3573,7 @@ export default function App({
                 aria-pressed={kind === 'pouch'}
                 onClick={() => {
                   if (kind === 'pouch') return
-                  guardedSwitch(whatKind, kindName, t('ถุงฟิล์ม', 'Film pouch'), () => {
+                  guardedSwitch({ template: 'tuck-end', materialId: 'pouch-foil' }, () => {
                     changeMaterial('pouch-foil')
                     resetKindSize('pouch')
                   })
@@ -3594,7 +3593,7 @@ export default function App({
                 aria-pressed={isTube}
                 onClick={() => {
                   if (isTube) return
-                  guardedSwitch(whatKind, kindName, t('หลอดครีม (tube)', 'Cosmetic tube'), () => {
+                  guardedSwitch({ template: 'tuck-end', materialId: 'tube-laminate' }, () => {
                     changeMaterial('tube-laminate')
                     // หลอดครีมทรงชะลูด — ตั้งสัดส่วนเริ่มต้นให้ดูเป็นหลอด ไม่ใช่กระปุก (ตั้งเสมอ แม้มีลายแล้ว)
                     const sz = VESSEL_STANDARD['tube-laminate']
@@ -3618,7 +3617,7 @@ export default function App({
                 aria-pressed={isCard}
                 onClick={() => {
                   if (isCard) return
-                  guardedSwitch(whatKind, kindName, t('นามบัตร', 'Business card'), () => {
+                  guardedSwitch({ template: 'card', materialId: DEFAULT_CARD_MAT }, () => {
                     // กระดาษนามบัตรโดยเฉพาะ (card-*) เป็นค่าเริ่มต้น — ไม่ใช้กระดาษกล่องที่ค้างจากงานก่อน
                     if (!materialId.startsWith('card-')) changeMaterial(DEFAULT_CARD_MAT)
                     changeTemplate('card')
@@ -3639,7 +3638,7 @@ export default function App({
                 aria-pressed={isSticker}
                 onClick={() => {
                   if (isSticker) return
-                  guardedSwitch(whatKind, kindName, t('สติกเกอร์', 'Sticker'), () => {
+                  guardedSwitch({ template: 'sticker', materialId: 'sticker-vinyl' }, () => {
                     if (!materialId.startsWith('sticker-')) changeMaterial('sticker-vinyl')
                     changeTemplate('sticker')
                   })
@@ -3667,7 +3666,7 @@ export default function App({
                     aria-pressed={templateId === tp.id}
                     onClick={() => {
                       if (templateId === tp.id) return
-                      guardedSwitch(t('รูปแบบบรรจุภัณฑ์', 'package style'), getTemplate(templateId).nameTh, tp.nameTh, () => changeTemplate(tp.id))
+                      guardedSwitch({ template: tp.id, materialId: 'carton-300' }, () => changeTemplate(tp.id))
                     }}
                   >
                     <span className="pick-name">{tp.nameTh}</span>
@@ -3689,7 +3688,7 @@ export default function App({
                     aria-pressed={pouchStyle === s.id}
                     onClick={() => {
                       if (pouchStyle === s.id) return
-                      guardedSwitch(t('รูปแบบถุง', 'pouch style'), POUCH_STYLES.find((p) => p.id === pouchStyle)?.nameTh ?? pouchStyle, s.nameTh, () => changePouchStyle(s.id))
+                      guardedSwitch({ template: 'tuck-end', materialId: 'pouch-foil', pouchStyle: s.id }, () => changePouchStyle(s.id))
                     }}
                   >
                     <span className="pick-name">{s.nameTh}</span>
@@ -6488,16 +6487,7 @@ export default function App({
             }}
           />
         )}
-        {switchGuard && (
-          <SwitchGuardModal
-            what={switchGuard.what}
-            fromName={switchGuard.fromName}
-            toName={switchGuard.toName}
-            summary={summarizeDesignWork(decos, fillImage, fillColor)}
-            onConfirm={confirmSwitch}
-            onCancel={() => setSwitchGuard(null)}
-          />
-        )}
+        {switchGuard && <SwitchGuardModal onConfirm={() => startNewWork(switchGuard)} onCancel={() => setSwitchGuard(null)} />}
         {stageOpen && (
           <CopilotStage onClose={() => setStageOpen(false)} viewer={viewer3D} snapshots={artSnapshots} currentId={artCurrentId} onPick={pickArtSnapshot} />
         )}

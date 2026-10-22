@@ -97,10 +97,12 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   (`changeMaterial`) หรือสลับรูปแบบถุง (`changePouchStyle`) + ล้าง neckH/shoulderH/labelBox (`applyStdSize`); มีลายแล้วคงขนาดเดิม
   (หลอดตั้งค่ามาตรฐานเสมอ); กล่องใช้ defaults ของ template (กล่องไปรษณีย์ไทย: mailer/0427 = เบอร์ A 20×14×6, rollover = B 25×17×9,
   RSC = C 30×20×11 ซม.; นามบัตร 90×55)
-- เตือนก่อนสลับประเภทงาน/รูปแบบบรรจุภัณฑ์/รูปแบบถุงเมื่อมีงานตกแต่งแล้ว (`hasDesignWork` ใน `src/core/designWork.ts` = มีลาย/รูปพื้น/สีพื้น
-  แม้อย่างเดียว): `guardedSwitch` ใน App เปิด `SwitchGuardModal` (alertdialog สีอันตราย บอกรายการที่จะหาย โฟกัสเริ่มที่ยกเลิก) ยืนยัน =
-  ล้าง decos/รูปพื้น/สีพื้น/แบบจาก AI แล้วค่อยสลับ — ตั้ง `freshAfterClear` ให้ `applyStdSize` ตั้งขนาดมาตรฐานได้ใน handler เดียวกัน
-  (state ใน closure ยังเป็นค่าเก่า); ทั้งชุดเป็น undo ก้าวเดียว; กดรายการที่เลือกอยู่แล้ว/สลับวัสดุในประเภทเดิม/สเปกจาก AI ไม่ผ่านด่านนี้
+- สลับประเภทงาน/รูปแบบบรรจุภัณฑ์/รูปแบบถุงเมื่อมีงานตกแต่งแล้ว (`hasDesignWork` ใน `src/core/designWork.ts` = มีลาย/รูปพื้น/สีพื้น
+  แม้อย่างเดียว): `guardedSwitch(target, apply)` ใน App เปิด `SwitchGuardModal` "เริ่มชิ้นงานใหม่" (โฟกัสเริ่มที่ยกเลิก) — ไม่ลบงานเดิม:
+  ยืนยัน = `startNewWork` บันทึกงานนี้ไว้ตามเดิม (flushInto / cloud capture) แล้วเปิดงานใหม่จาก `freshProjectFor(n, target)`
+  (`src/core/newWork.ts` pure: freshProject + template/วัสดุ/รูปแบบถุงที่เลือก + ขนาดมาตรฐาน — ไม่มีการตั้งค่า/การตกแต่งของงานเก่า);
+  cloud ส่งเป็น `seed` ของ `createProject(current, name, seed)`; ยังไม่มีงานตกแต่ง → `apply` สลับในงานนี้ทันทีตามเดิม;
+  กดรายการที่เลือกอยู่แล้ว/สลับวัสดุในประเภทเดิม/สเปกจาก AI ไม่ผ่านด่านนี้
 - `src/core/imposition.ts` — คำนวณ yield ต่อแผ่น (pure): `computeImposition` วางกริด step&repeat เทียบชิ้นตั้ง/หมุน 90° เลือกจำนวนมากสุด + `sheetsNeeded` (ปัดขึ้น) + `SHEET_PRESETS` แผ่นมาตรฐานไทย; UI อยู่แท็บ "ส่งออก" ผูกกับช่องจำนวน (state ephemeral ไม่เก็บลง project)
 - `src/core/snap.ts` — logic ดูด artwork เข้าแนวขณะลาก (pure): `snapTargets` สร้างเส้นเป้าหมายจากกึ่งกลางแผ่น/ขอบ-กึ่งกลางแผง/ขอบ-กึ่งกลางชิ้นอื่น, `applySnap` ดูดขอบ-กึ่งกลางชิ้นเข้าเส้นใกล้สุดในระยะ threshold (แปลงจาก 6px ตามซูม); กด Alt ค้างระหว่างลาก = ปิด snap
 - `src/components/PromptBar.tsx` + `src/core/ai.ts` — AI layer ฝั่ง client; แนบรูปอ้างอิงได้ (ย่อเป็น JPEG ≤1024px ฝั่ง client → base64; backend api ส่งเป็น image block, backend cli เขียนไฟล์ tmp ให้ Claude เปิดอ่านเองแล้วลบทิ้ง)

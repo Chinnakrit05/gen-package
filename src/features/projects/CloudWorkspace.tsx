@@ -475,9 +475,9 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       const cloud = await getProject(props.apiBaseUrl, tokenRef.current, targetId)
       return controller.switchProject(current, cloud)
     },
-    createProject: async (current, name) => {
+    createProject: async (current, name, seed) => {
       await controller.capture(current)
-      const fresh = freshProject(items.length + 1)
+      const fresh = seed ? { ...seed } : freshProject(items.length + 1)
       fresh.name = name.slice(0, 60) || fresh.name
       const cloud = await createFromEditor(fresh)
       const opened = await controller.open(cloud)

@@ -121,8 +121,8 @@ function buildBridge(state: FakeState, flagsRef: { current: Flags }, bump: () =>
       if (!target) throw new Error('ไม่พบงาน')
       return structuredClone(target)
     },
-    createProject: async (_current, name) => {
-      const project = freshProject(state.projects.length + 1)
+    createProject: async (_current, name, seed) => {
+      const project = seed ? structuredClone(seed) : freshProject(state.projects.length + 1)
       project.name = name.slice(0, 60) || project.name
       state.projects.push(project)
       bump()
