@@ -606,11 +606,74 @@ export interface ArtAsset {
   src: string // data URL
   aspect: number
 }
+// ด้านหน้าที่อ่านได้ตรงของฉลากบนภาชนะทรงกระบอก (พิกัด x มม. จากขอบซ้ายของแผง) — ข้อความ/รูปที่กว้างกว่านี้อ้อมขอบโค้งจนอ่านไม่ออกใน 3D
+export interface ArtFrontZone {
+  panel: string
+  x0: number
+  x1: number
+}
+// 1/3 รอบ = ±60° จากหน้า (ตรงนั้นผิวเอียง 60° ตัวอักษรยังอ่านได้) ด้านหน้าภาพ 3D ของหลอด ⌀30 มม. จึงกว้าง ~31 มม.
+export const LABEL_FRONT_FRACTION = 1 / 3
+// ข้อความหน้าภาชนะย่อทั้งบล็อก (คงบรรทัดเดิม) ได้ถึง 60% ของขนาดเดิม — เล็กกว่านั้นค่อยลองตัดบรรทัดในที่ว่างใต้ข้อความ
+export const FRONT_SHRINK_MIN = 0.6
+// ระยะเว้นจากชิ้นถัดลงไปเมื่อข้อความหน้าภาชนะตัดบรรทัดเพิ่ม
+export const FRONT_GAP_MM = 1
+
+// ฉลากพันรอบ (มีแผง glue): หน้า = กึ่งกลางเส้นรอบวง (UV เริ่มกลางหลัง); ฉลากแผ่นหน้า (ไม่มี glue) = กึ่งกลางแผ่นเอง
+// diameter = ⌀ตัวภาชนะ/ท่อ (W ของงาน) — คืน null ถ้าไม่มีแผง label (ไม่ใช่ภาชนะ)
+export function labelFrontZone(panels: PanelBox[], diameter: number): ArtFrontZone | null {
+  const label = panels.find((p) => p.id === 'label')
+  if (!label || !(diameter > 0)) return null
+  const circ = Math.PI * diameter
+  const wrap = panels.some((p) => p.id === 'glue')
+  const center = (wrap ? Math.min(label.w, circ) : label.w) / 2
+  const w = Math.min(label.w, circ * LABEL_FRONT_FRACTION)
+  return { panel: label.id, x0: center - w / 2, x1: center + w / 2 }
+}
+
+// ข้อความหน้าภาชนะที่กว้างเกินด้านหน้า (zoneW): ย่อทั้งบล็อกคงบรรทัดเดิมก่อน — ชื่อแบรนด์ไม่ถูกหั่นกลางคำ (Intl.Segmenter ตัด
+// "ลมหาย" เป็น "ลม|หาย"); ต้องย่อเกิน FRONT_SHRINK_MIN ค่อยตัดบรรทัด โดยสูงได้ไม่เกิน room (ที่ว่างถึงชิ้นถัดลงไป) เพราะตัดบรรทัด
+// ที่ขนาดเดิมทำให้บล็อกสูงขึ้นจนทับชิ้นด้านล่าง; ไม่มีทางไหนได้ตัวอักษร ≥ ART_MIN_TEXT_MM → null (ผู้เรียกคงความกว้างเดิม)
+export function fitFrontText(
+  e: Pick<ArtText, 'text' | 'size' | 'font' | 'weight' | 'lh' | 'ls'>,
+  zoneW: number,
+  room: number,
+  measure: MeasureText,
+): { text: string; size: number; w: number; h: number } | null {
+  const size0 = Math.max(ART_MIN_TEXT_MM, e.size)
+  const block = textBlockSize({ ...e, size: size0 }, measure)
+  if (block.w <= zoneW + 1e-6) return { text: e.text, size: size0, ...block }
+  let keep: { text: string; size: number; w: number; h: number } | null = null
+  let size = (size0 * zoneW) / block.w
+  for (let n = 0; n < 4 && !keep; n++) {
+    const dim = textBlockSize({ ...e, size }, measure)
+    if (dim.w <= zoneW + 1e-6) keep = { text: e.text, size, ...dim }
+    else size *= (zoneW / dim.w) * 0.999 // measure จริงไม่เป็นเชิงเส้นตามขนาดเป๊ะ (hinting)
+  }
+  if (keep && keep.size >= Math.max(ART_MIN_TEXT_MM, size0 * FRONT_SHRINK_MIN)) return keep
+  const maxH = Math.max(room, block.h)
+  const wrapped = fitText({ ...e, size: size0 }, zoneW, maxH, measure)
+  if (wrapped.w <= zoneW + 1e-6 && wrapped.h <= maxH + 1e-6 && (!keep || wrapped.size > keep.size)) return wrapped
+  return keep && keep.size >= ART_MIN_TEXT_MM ? keep : null
+}
+
+// ช่วงแนวนอน (มม. จากขอบซ้ายแผง) ของชิ้นตามที่ AI วางก่อน compile — ข้อความใช้ความกว้างที่วัดได้ตาม anchor
+function planSpan(o: ArtElement, maxW: number, measure: MeasureText): [number, number] {
+  if (o.type !== 'text') return [o.x, o.x + o.w]
+  const w = Math.min(maxW, textBlockSize({ ...o, size: Math.max(ART_MIN_TEXT_MM, o.size) }, measure).w)
+  const a = o.anchor ?? 'left'
+  const x = a === 'center' ? o.x - w / 2 : a === 'right' ? o.x - w : o.x
+  return [x, x + w]
+}
+
 export interface CompileArtworkOptions {
   measure?: MeasureText // client ส่ง measureText จริง (canvas); ไม่ส่ง = ประมาณ
   assets?: Record<string, ArtAsset> // asset id → รูปที่ผู้ใช้อัปโหลด
   idPrefix?: string
   safe?: number
+  // ภาชนะทรงกระบอก: ข้อความ/รูปที่กึ่งกลางอยู่ในช่วงนี้ถูกจำกัดความกว้างไม่เกินช่วง (ข้อความ: fitFrontText, รูป: ย่อเท่าช่วง)
+  // รูปทรง/เส้นไม่ถูกจำกัด (แถบสี/ลายพื้นพันรอบได้)
+  front?: ArtFrontZone | null
 }
 export interface CompiledArtwork {
   decos: Deco[]
@@ -626,6 +689,8 @@ export function compileArtworkPlan(plan: ArtworkPlan, panels: PanelBox[], opts: 
   const byId = new Map(panels.map((p) => [p.id, p]))
   const decos: Deco[] = []
   const used = new Set<string>()
+  const front = opts.front && opts.front.x1 > opts.front.x0 ? opts.front : null
+  const frontZoneOf = (panelId: string): ArtFrontZone | null => (front && front.panel === panelId ? front : null)
 
   plan.elements.forEach((e, i) => {
     const panel = byId.get(e.panel)
@@ -653,7 +718,8 @@ export function compileArtworkPlan(plan: ArtworkPlan, panels: PanelBox[], opts: 
         shrink(k)
         w *= k
         h *= k
-        warnings.push({ severity: 'warning', code: 'shrunk', index: i, message: `ชิ้นที่ ${i + 1}: ใหญ่เกินแผง "${panel.id}" — ย่อเหลือ ${Math.round(k * 100)}%` })
+        // ย่อไม่ถึง 1% (ปัดแล้วเป็น 100%) ไม่ต้องเตือน — เดิมขึ้น "ย่อเหลือ 100%" ชวนงง
+        if (k < 0.99) warnings.push({ severity: 'warning', code: 'shrunk', index: i, message: `ชิ้นที่ ${i + 1}: ใหญ่เกินแผง "${panel.id}" — ย่อเหลือ ${Math.floor(k * 100)}%` })
       }
       const x = clamp(left, box.x0, Math.max(box.x0, box.x1 - w))
       const y = clamp(top, box.y0, Math.max(box.y0, box.y1 - h))
@@ -666,15 +732,40 @@ export function compileArtworkPlan(plan: ArtworkPlan, panels: PanelBox[], opts: 
 
     if (e.type === 'text') {
       if (e.size < ART_MIN_TEXT_MM) warnings.push({ severity: 'warning', code: 'text-min', index: i, message: `ชิ้นที่ ${i + 1}: ตัวอักษรเล็กกว่า ${ART_MIN_TEXT_MM} มม. — ขยายให้อ่านออก` })
+      const anchor = e.anchor ?? 'left'
+      // ด้านหน้าภาชนะทรงกระบอก: ข้อความที่กึ่งกลางอยู่หน้าฉลากต้องกว้างไม่เกินช่วงที่อ่านได้ตรง (fitFrontText)
+      const zone = frontZoneOf(panel.id)
+      const zoneW = zone ? Math.min(boxW, zone.x1 - zone.x0) : 0
+      let frontFit: ReturnType<typeof fitFrontText> | undefined // undefined = ไม่ได้อยู่หน้า/ไม่เกิน
+      if (zone) {
+        const natural = textBlockSize({ ...e, size: Math.max(ART_MIN_TEXT_MM, e.size) }, measure).w
+        const span = Math.min(boxW, natural)
+        const center = anchor === 'center' ? e.x : anchor === 'right' ? e.x - span / 2 : e.x + span / 2
+        if (natural > zoneW && center >= zone.x0 && center <= zone.x1) {
+          // ที่ว่างใต้ข้อความ = ถึงชิ้นเนื้อหาถัดลงไปที่อยู่ในช่วงด้านหน้า (รูปทรง/เส้นเป็นพื้นหลัง ทับได้)
+          const below = plan.elements.reduce((y, o, j) => {
+            if (j === i || o.panel !== e.panel || o.type === 'shape' || o.type === 'path' || o.y <= e.y + 1e-6) return y
+            const [a, b] = planSpan(o, boxW, measure)
+            return a < zone.x1 && b > zone.x0 ? Math.min(y, o.y) : y
+          }, box.y1 - panel.y0)
+          frontFit = fitFrontText(e, zoneW, below - e.y - FRONT_GAP_MM, measure)
+          if (!frontFit) warnings.push({ severity: 'warning', code: 'front-fit', index: i, message: `ชิ้นที่ ${i + 1}: ข้อความยาวเกินด้านหน้าที่อ่านได้ของภาชนะ (${zoneW.toFixed(0)} มม.) และย่อ/ตัดบรรทัดในที่ว่างไม่ได้ — คงไว้ บางส่วนอ้อมไปด้านข้าง ลองให้ข้อความสั้นลง` })
+        }
+      }
       // ข้อความกว้าง/สูงเกินแผง → ตัดบรรทัดที่ขอบคำก่อน แล้วค่อยลดขนาด (ไม่ต่ำกว่าขั้นต่ำ)
-      const fitted = fitText(e, boxW, boxH, measure)
+      const fitted = frontFit ?? fitText(e, boxW, boxH, measure)
       const size = fitted.size
       const dim = { w: fitted.w, h: fitted.h }
       if (fitted.text !== e.text || size < Math.max(ART_MIN_TEXT_MM, e.size) - 1e-9) {
-        warnings.push({ severity: 'warning', code: 'text-shrunk', index: i, message: `ชิ้นที่ ${i + 1}: ข้อความเกินแผง "${panel.id}" — ${fitted.text !== e.text ? 'ตัดบรรทัดใหม่' : ''}${fitted.text !== e.text && size < e.size ? 'และ' : ''}${size < e.size ? `ลดขนาดเป็น ${size.toFixed(1)} มม.` : ''}` })
+        const how = `${fitted.text !== e.text ? 'ตัดบรรทัดใหม่' : ''}${fitted.text !== e.text && size < e.size ? 'และ' : ''}${size < e.size ? `ลดขนาดเป็น ${size.toFixed(1)} มม.` : ''}`
+        warnings.push(
+          frontFit
+            ? { severity: 'warning', code: 'front-fit', index: i, message: `ชิ้นที่ ${i + 1}: ข้อความกว้างเกินด้านหน้าที่อ่านได้ของภาชนะ (${zoneW.toFixed(0)} มม.) — ${how}` }
+            : { severity: 'warning', code: 'text-shrunk', index: i, message: `ชิ้นที่ ${i + 1}: ข้อความเกินแผง "${panel.id}" — ${how}` },
+        )
       }
-      const anchor = e.anchor ?? 'left'
-      const left = panel.x0 + e.x - (anchor === 'center' ? dim.w / 2 : anchor === 'right' ? dim.w : 0)
+      let left = panel.x0 + e.x - (anchor === 'center' ? dim.w / 2 : anchor === 'right' ? dim.w : 0)
+      if (frontFit && zone) left = clamp(left, panel.x0 + zone.x0, Math.max(panel.x0 + zone.x0, panel.x0 + zone.x1 - dim.w))
       const pos = fit(dim.w, dim.h, left, panel.y0 + e.y, () => {})
       const text: TextEl = {
         ...base, type: 'text', text: fitted.text, size, color: e.color, w: dim.w, x: pos.x, y: pos.y,
@@ -713,8 +804,18 @@ export function compileArtworkPlan(plan: ArtworkPlan, panels: PanelBox[], opts: 
       warnings.push({ severity: 'warning', code: 'image-unresolved', index: i, message: `ชิ้นที่ ${i + 1}: หารูป "${e.src.slice(0, 40)}" ไม่พบ — ตัดทิ้ง` })
       return
     }
-    const h = e.h ?? e.w / resolved.aspect
-    const pos = fit(e.w, h, panel.x0 + e.x, panel.y0 + e.y, () => {})
+    let w = e.w
+    let h = e.h ?? e.w / resolved.aspect
+    let left = panel.x0 + e.x
+    const zone = frontZoneOf(panel.id)
+    if (zone && e.x + w / 2 >= zone.x0 && e.x + w / 2 <= zone.x1 && w > zone.x1 - zone.x0) {
+      const k = (zone.x1 - zone.x0) / w
+      w *= k
+      h *= k
+      left = panel.x0 + zone.x0
+      warnings.push({ severity: 'warning', code: 'front-fit', index: i, message: `ชิ้นที่ ${i + 1}: รูปกว้างเกินด้านหน้าที่อ่านได้ของภาชนะ — ย่อเหลือ ${Math.floor(k * 100)}%` })
+    }
+    const pos = fit(w, h, left, panel.y0 + e.y, () => {})
     decos.push({
       ...base, type: 'image', src: resolved.src, aspect: resolved.aspect, x: pos.x, y: pos.y, w: pos.w, h: pos.h,
       ...(e.fit ? { fit: e.fit } : {}),

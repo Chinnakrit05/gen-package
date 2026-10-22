@@ -53,6 +53,7 @@ export interface ArtworkRequestInput {
   fillColor: string | null
   existing: number
   images: ArtworkImageInput[]
+  front?: { panel: string; x0: number; x1: number } | null // ภาชนะทรงกระบอก: ด้านหน้าที่อ่านได้ตรง (labelFrontZone)
 }
 
 export interface ArtworkIssue {

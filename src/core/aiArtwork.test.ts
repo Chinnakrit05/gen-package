@@ -4,11 +4,12 @@ import {
   ARTWORK_SCHEMA,
   checkArtworkPlan,
   compileArtworkPlan,
+  labelFrontZone,
   estimateTextWidth,
+  FRONT_GAP_MM,
   panelBoxes,
   parseArtworkPlan,
   sanitizeSvg,
-
 } from './aiArtwork'
 import { parseDecos } from './artwork'
 import { getMaterial } from './materials'
@@ -232,3 +233,94 @@ describe('compileArtworkPlan', () => {
     expect(estimateTextWidth('ABCD', 10, undefined, 700)).toBeGreaterThan(estimateTextWidth('ABCD', 10))
   })
 })
+
+// ภาชนะทรงกระบอก: ชื่อแบรนด์ที่กว้างเกินด้านหน้าอ้อมขอบโค้งจนอ่านไม่ออกใน 3D (ลมหาย 44 มม. บนหลอด ⌀30)
+describe('labelFrontZone + compile front zone (ภาชนะทรงกระบอก)', () => {
+  const C = Math.PI * 30
+  const panels = [
+    { id: 'label', x0: 0, y0: 0, x1: C, y1: 107.5, w: C, h: 107.5, role: 'ฉลาก', print: true },
+    { id: 'glue', x0: C, y0: 0, x1: C + 8, y1: 107.5, w: 8, h: 107.5, role: 'ปีกทากาว', print: false },
+  ]
+  const measure = (t: string, size: number) => t.length * size * 0.6
+
+  it('ฉลากพันรอบ: ด้านหน้ากว้าง 1/3 รอบ กึ่งกลางที่ครึ่งเส้นรอบวง; ฉลากแผ่นหน้า: กึ่งกลางแผ่น; ไม่ใช่ภาชนะ = null', () => {
+    const z = labelFrontZone(panels, 30)!
+    expect(z.panel).toBe('label')
+    expect((z.x0 + z.x1) / 2).toBeCloseTo(C / 2, 6)
+    expect(z.x1 - z.x0).toBeCloseTo(C / 3, 6)
+    const frontLabel = labelFrontZone([{ ...panels[0], x1: 40, w: 40 }], 30)!
+    expect((frontLabel.x0 + frontLabel.x1) / 2).toBeCloseTo(20, 6)
+    expect(frontLabel.x1 - frontLabel.x0).toBeCloseTo(C / 3, 6)
+    expect(labelFrontZone([{ ...panels[0], x1: 20, w: 20 }], 30)).toEqual({ panel: 'label', x0: 0, x1: 20 })
+    expect(labelFrontZone([{ id: 'front', x0: 0, y0: 0, x1: 80, y1: 120, w: 80, h: 120, role: 'x', print: true }], 30)).toBeNull()
+  })
+
+  it('หัวข้อหน้าภาชนะย่อเป็นบรรทัดเดียวให้อยู่ในด้านหน้า; ข้อความยาวตัดบรรทัด; ข้อความข้าง/แถบสีไม่ถูกจำกัด; รูปกว้างย่อตาม', () => {
+    const front = labelFrontZone(panels, 30)!
+    const zw = front.x1 - front.x0
+    const p = parseArtworkPlan(plan([
+      { type: 'text', panel: 'label', x: C / 2, y: 40, anchor: 'center', text: 'ลมหาย', size: 15, color: '#1a8fc4', font: 'kanit', weight: 700 },
+      { type: 'text', panel: 'label', x: C / 2, y: 90, anchor: 'center', text: 'หอมสดชื่น ดั่งลมพัดผ่านทุ่งดอกไม้', size: 2.8, color: '#333333' },
+      { type: 'text', panel: 'label', x: 4, y: 10, text: 'ส่วนประกอบ', size: 3, color: '#333333' },
+      { type: 'image', panel: 'label', x: 12, y: 60, src: 'preset:badge-burst:#ffcc00', w: 70 },
+      { type: 'shape', panel: 'label', x: 0, y: 70, shape: 'rect', w: C, h: 10, fill: '#5cc0cf', stroke: 'none', strokeW: 0 },
+    ]))
+    if (!p.ok) throw new Error('parse')
+    const out = compileArtworkPlan(p.plan, panels, { measure, front, idPrefix: 't' })
+    const [brand, body, side, img, band] = out.decos as Array<{ type: string; text?: string; size?: number; w: number; x: number }>
+    expect(brand.text).toBe('ลมหาย') // ไม่ถูกตัดเป็น "ลม\nหาย"
+    expect(brand.size!).toBeLessThan(15)
+    expect(brand.size!).toBeGreaterThan(15 * 0.6)
+    expect(brand.w).toBeLessThanOrEqual(zw + 1e-6)
+    expect(brand.x).toBeGreaterThanOrEqual(front.x0 - 1e-6)
+    expect(brand.x + brand.w).toBeLessThanOrEqual(front.x1 + 1e-6)
+    expect(body.text).toContain('\n') // ย่อแล้วจะเล็กกว่าขั้นต่ำ → ตัดบรรทัดแทน
+    expect(body.w).toBeLessThanOrEqual(zw + 1e-6)
+    expect(side.size).toBe(3)
+    expect(img.w).toBeCloseTo(zw, 6)
+    expect(img.x).toBeCloseTo(front.x0, 6)
+    expect(band.w).toBeCloseTo(C, 6)
+    expect(out.warnings.filter((w) => w.code === 'front-fit').map((w) => w.index)).toEqual([0, 1, 3])
+    // ไม่ส่ง front (กล่อง/ถุง) = พฤติกรรมเดิม
+    const plain = compileArtworkPlan(p.plan, panels, { measure, idPrefix: 't' })
+    expect((plain.decos[0] as { size: number }).size).toBe(15)
+  })
+
+  it('ตัดบรรทัดหน้าภาชนะได้แค่ในที่ว่าง — ไม่ทับข้อความถัดลงไป (เคสแบบจำลอง: แบรนด์ 13 มม. บนหลอด ⌀30)', () => {
+    const front = labelFrontZone(panels, 30)!
+    const zw = front.x1 - front.x0
+    const p = parseArtworkPlan(plan([
+      { type: 'text', panel: 'label', x: C / 2, y: 12.9, anchor: 'center', text: 'ลมหาย ครีม', size: 13.46, color: '#ffffff', font: 'prompt', weight: 700 },
+      { type: 'text', panel: 'label', x: C / 2, y: 32.25, anchor: 'center', text: 'บำรุงผิว', size: 6, color: '#ffffff' },
+    ]))
+    if (!p.ok) throw new Error('parse')
+    const [brand, product] = compileArtworkPlan(p.plan, panels, { measure, front, idPrefix: 't' }).decos as Array<{ text: string; size: number; w: number; y: number }>
+    expect(brand.text).toBe('ลมหาย\nครีม') // ตัดที่ช่องว่าง ไม่หั่นกลางชื่อ
+    expect(brand.w).toBeLessThanOrEqual(zw + 1e-6)
+    expect(brand.y + 2 * brand.size * 1.25).toBeLessThanOrEqual(product.y - FRONT_GAP_MM + 1e-6)
+    expect(product.y).toBeCloseTo(32.25, 6)
+  })
+
+  it('ย่อ/ตัดบรรทัดในที่ว่างไม่ได้ → คงข้อความเดิมพร้อมคำเตือน (ไม่ทับชิ้นด้านล่าง ไม่เล็กกว่าขั้นต่ำ)', () => {
+    const front = labelFrontZone(panels, 30)!
+    const p = parseArtworkPlan(plan([
+      { type: 'text', panel: 'label', x: C / 2, y: 50, anchor: 'center', text: 'หอมสดชื่น ดั่งลมพัดผ่านทุ่งดอกไม้', size: 3, color: '#333333' },
+      { type: 'image', panel: 'label', x: C / 2 - 10, y: 54, src: 'preset:badge-burst:#ffcc00', w: 20 },
+    ]))
+    if (!p.ok) throw new Error('parse')
+    const out = compileArtworkPlan(p.plan, panels, { measure, front, idPrefix: 't' })
+    const tagline = out.decos[0] as { text: string; size: number }
+    expect(tagline.text).toBe('หอมสดชื่น ดั่งลมพัดผ่านทุ่งดอกไม้')
+    expect(tagline.size).toBe(3)
+    expect(out.warnings.find((w) => w.code === 'front-fit' && w.index === 0)?.message).toContain('คงไว้')
+  })
+
+  it('ย่อไม่ถึง 1% ไม่เตือน "ย่อเหลือ 100%" อีก', () => {
+    const tiny = parseArtworkPlan(plan([{ type: 'shape', panel: 'label', x: 0, y: 0, shape: 'rect', w: C * 1.005, h: 10, fill: '#000000', stroke: 'none', strokeW: 0 }]))
+    const big = parseArtworkPlan(plan([{ type: 'shape', panel: 'label', x: 0, y: 0, shape: 'rect', w: C * 1.25, h: 10, fill: '#000000', stroke: 'none', strokeW: 0 }]))
+    if (!tiny.ok || !big.ok) throw new Error('parse')
+    expect(compileArtworkPlan(tiny.plan, panels, { measure }).warnings.filter((w) => w.code === 'shrunk')).toEqual([])
+    expect(compileArtworkPlan(big.plan, panels, { measure }).warnings.find((w) => w.code === 'shrunk')?.message).toContain('ย่อเหลือ 80%')
+  })
+})
+

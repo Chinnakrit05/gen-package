@@ -18,6 +18,7 @@ import {
   checkArtworkPlan,
   describeArtIssues,
   parseArtworkPlan,
+  type ArtFrontZone,
   type ArtIssue,
   type ArtworkPlan,
   type PanelBox,
@@ -67,6 +68,7 @@ export interface ArtworkRequest {
   fillColor: string | null
   existing: number // จำนวนชิ้นงานเดิม (0 = งานว่าง)
   images: ArtworkImage[]
+  front?: ArtFrontZone | null // ภาชนะทรงกระบอก: ช่วงด้านหน้าที่อ่านได้ตรง (client คำนวณจาก labelFrontZone)
 }
 
 export interface ArtworkRound {
@@ -161,6 +163,14 @@ export function buildArtworkUserContent(req: ArtworkRequest): string {
     req.fillColor ? `สีพื้นปัจจุบัน ${req.fillColor} (เปลี่ยนได้)` : 'ยังไม่มีสีพื้น',
     req.existing > 0 ? `งานนี้มีชิ้นงานเดิม ${req.existing} ชิ้น — แบบใหม่ของคุณจะใช้แทนหรือเพิ่มต่อตามที่ลูกค้าเลือก ออกแบบให้ครบในตัว` : 'งานว่าง ออกแบบใหม่ทั้งหมด',
   ]
+  if (req.front) {
+    const fw = req.front.x1 - req.front.x0
+    lines.push(
+      `ด้านหน้าที่อ่านได้ตรงของภาชนะทรงกระบอก: แผง ${req.front.panel} ช่วง x = ${req.front.x0.toFixed(1)}–${req.front.x1.toFixed(1)} มม. (กว้าง ${fw.toFixed(1)} มม.) — ` +
+        `ชื่อแบรนด์ ข้อความหลัก และโลโก้ต้องอยู่ในช่วงนี้และกว้างไม่เกิน ${fw.toFixed(0)} มม. (ส่วนที่เลยจะอ้อมขอบโค้งจนอ่านไม่ออก ระบบจะตัดบรรทัด/ย่อให้เอง); ` +
+        `ด้านข้าง/ด้านหลังใช้วางข้อมูลรอง แถบสีหรือลายพื้นพันรอบได้`,
+    )
+  }
   if (req.images.length) {
     lines.push('รูปที่แนบมา (ตามลำดับ):')
     req.images.forEach((im, i) => {
@@ -338,7 +348,8 @@ export function mockArtwork(req: ArtworkRequest): ArtworkPlan {
   const main = byId('front') ?? byId('label') ?? byId('film') ?? byId('card') ?? byId('sticker') ?? [...printable].sort((a, b) => b.w * b.h - a.w * a.h)[0]
   if (!main) return { name: 'จำลอง', fillColor: null, background: null, elements: [], explanation: '(จำลอง) ไม่พบแผงที่พิมพ์ได้' }
   const back = byId('back')
-  const words = req.prompt.replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean)
+  // \p{M}: สระ/วรรณยุกต์ไทยเป็นเครื่องหมายกำกับ ไม่ใช่ \p{L} — ไม่ใส่จะได้ "คร" แทน "ครีม"
+  const words = req.prompt.replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean)
   const brand = words.slice(0, 2).join(' ') || 'แบรนด์ของคุณ'
   const palettes = [['#1d4e5c', '#f4c27a', '#ffffff'], ['#5b2a86', '#ffd166', '#ffffff'], ['#2f5d3a', '#e9c46a', '#ffffff'], ['#8a2d3b', '#f2d7a7', '#ffffff']]
   const pal = palettes[[...req.prompt].reduce((h, c) => (h + c.charCodeAt(0)) % palettes.length, 0)]
@@ -401,7 +412,15 @@ export function parseArtworkRequest(body: Record<string, unknown>): ArtworkReque
       images.push({ ...im, role, ...(assetId ? { assetId } : {}), ...(note ? { note } : {}) })
     }
   }
-  return { prompt, kind, template, materialId, box: { W, D, H }, sheet: { w: sw, h: sh }, panels, fillColor, existing, images }
+  // ช่วงด้านหน้า (ไม่บังคับ): ต้องอ้างแผงที่มีและอยู่ในความกว้างแผง ไม่งั้นเมิน (เป็นแค่คำแนะนำให้ AI)
+  let front: ArtFrontZone | null = null
+  const f = (body.front ?? null) as Record<string, unknown> | null
+  if (f && typeof f === 'object' && typeof f.panel === 'string') {
+    const target = panels.find((p) => p.id === f.panel)
+    const x0 = num(f.x0, 0, 5000), x1 = num(f.x1, 0, 5000)
+    if (target && x0 !== null && x1 !== null && x1 > x0 && x1 <= target.w + 0.5) front = { panel: target.id, x0, x1 }
+  }
+  return { prompt, kind, template, materialId, box: { W, D, H }, sheet: { w: sw, h: sh }, panels, fillColor, existing, images, ...(front ? { front } : {}) }
 }
 
 export async function handleAiArtwork(req: IncomingMessage, res: ServerResponse, env: Record<string, string | undefined>): Promise<void> {

@@ -3,6 +3,8 @@ import * as THREE from 'three'
 import { useArtTexture } from './useArtTexture'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import { FitViewerCamera } from './FitViewerCamera'
+import { cameraPosition, pouchCameraFit } from './viewerCamera'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
 import {
@@ -939,11 +941,12 @@ export function PouchViewer3D({
   lightMode?: LightMode
   watermark?: string | null
 }) {
-  const dist = Math.max(pouch.H, pouch.W) * 2.6
+  // ตำแหน่งแรกจาก Canvas; สลับรูปแบบถุง/ขนาดต่างมากโดยไม่ถอดหน้า 3D → FitViewerCamera จัดกล้องใหม่
+  const fit = pouchCameraFit(pouch, pouch.style)
   return (
     <Canvas
       events={safeCanvasEvents}
-      camera={{ position: [dist * 0.35, dist * 0.25, dist], fov: 36, near: 1, far: 8000 }}
+      camera={{ position: cameraPosition(fit), fov: 36, near: 1, far: 8000 }}
       role="img"
       aria-label="มุมมอง 3 มิติของถุงพร้อมลาย"
     >
@@ -951,6 +954,7 @@ export function PouchViewer3D({
       <SceneLighting mode={lightMode ?? 'soft'} />
       <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} dimVariant={dimVariant} watermark={watermark} />
       <OrbitControls makeDefault enableDamping />
+      <FitViewerCamera fit={fit} />
     </Canvas>
   )
 }

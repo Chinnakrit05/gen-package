@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useThree } from '@react-three/fiber'
-import type { Deco, FillImage } from '../core/artwork'
+import { ensureThaiFont, fontsReady, textFontsKey, type Deco, type FillImage } from '../core/artwork'
 import { textureScale } from '../core/textureRes'
 import { drawWatermark } from '../core/watermark'
 
@@ -36,6 +36,10 @@ export function useArtTexture(opts: {
   const canvases = useRef<{ draft?: HTMLCanvasElement; full?: HTMLCanvasElement }>({})
   const imgCache = useRef(new Map<string, HTMLImageElement>())
   const [imgReady, setImgReady] = useState(0) // เพิ่มค่าเมื่อมีรูปโหลดเสร็จ เพื่อสั่งวาดใหม่
+  // ฟอนต์เว็บ (fontsource) โหลดแบบ lazy — ข้อความที่วาดลง canvas ก่อนฟอนต์มาถึงจะเป็นฟอนต์สำรองค้างอยู่บน 3D
+  // (blueprint เป็น DOM จึงวาดใหม่เองได้ แต่ texture ไม่) → โหลดฟอนต์ที่งานใช้แล้วสั่งวาดใหม่เมื่อเสร็จ
+  const [fontTick, setFontTick] = useState(0)
+  const fontKey = textFontsKey(decos)
   const lastRun = useRef(0)
   const settleTimer = useRef<number | undefined>(undefined)
 
@@ -62,6 +66,19 @@ export function useArtTexture(opts: {
     // srcKey ครอบคลุมการเปลี่ยนชุด src แล้ว
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [srcKey])
+
+  useEffect(() => {
+    if (fontsReady(decos)) return
+    let dead = false
+    void ensureThaiFont(decos).then(() => {
+      if (!dead) setFontTick((n) => n + 1)
+    })
+    return () => {
+      dead = true
+    }
+    // fontKey เปลี่ยนเมื่อมีฟอนต์/น้ำหนักใหม่ — ไม่ผูกกับเนื้อความทุกตัวอักษร
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fontKey])
 
   useEffect(() => {
     window.clearTimeout(settleTimer.current)
@@ -122,7 +139,7 @@ export function useArtTexture(opts: {
     }
     // draw/configure เป็นฟังก์ชันใหม่ทุก render — ค่าที่มีผลต่อภาพอยู่ใน deps แล้ว
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decos, imgReady, enabled, sheetW, sheetH, watermark, ...deps])
+  }, [decos, imgReady, fontTick, enabled, sheetW, sheetH, watermark, ...deps])
 
   useEffect(() => () => window.clearTimeout(settleTimer.current), [])
   // คืนหน่วยความจำเมื่อเปลี่ยน texture หรือ viewer ถูกถอด

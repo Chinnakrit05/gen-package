@@ -161,9 +161,35 @@ describe('mockArtwork', () => {
     expect(out.fillColor).toMatch(/^#/)
   })
 
+  it('ชื่อแบรนด์คงสระ/วรรณยุกต์ไทย (เดิมตัดเครื่องหมายกำกับทิ้ง "ชาดอกอัญชัน" กลายเป็น "ชาดอกอ ญช")', () => {
+    const brand = mockArtwork(base()).elements.find((e) => e.id === 'brand')
+    expect(brand?.type === 'text' && brand.text).toBe('ชาดอกอัญชัน 20')
+  })
+
   it('ฉลากขวด (แผง label) ก็ใช้ได้', () => {
     const req: ArtworkRequest = { ...base(), kind: 'vessel', panels: [{ id: 'label', x0: 0, y0: 0, x1: 240, y1: 90, w: 240, h: 90, role: 'ฉลาก', print: true }] }
     const plan = mockArtwork(req)
     expect(plan.elements.every((e) => e.panel === 'label')).toBe(true)
   })
 })
+
+describe('ด้านหน้าที่อ่านได้ของภาชนะทรงกระบอก (front)', () => {
+  const vesselPanels = [{ id: 'label', x0: 0, y0: 0, x1: 94.2, y1: 100, w: 94.2, h: 100, role: 'ฉลาก', print: true }]
+  const req = (front: unknown) => ({ ...base(), kind: 'vessel', panels: vesselPanels, front }) as unknown as Record<string, unknown>
+
+  it('รับช่วงที่อ้างแผงจริงและอยู่ในความกว้างแผง ที่ผิดถูกเมิน (เป็นแค่คำแนะนำ ไม่ทำให้คำขอล้ม)', () => {
+    expect(parseArtworkRequest(req({ panel: 'label', x0: 31.4, x1: 62.8 })).front).toEqual({ panel: 'label', x0: 31.4, x1: 62.8 })
+    expect(parseArtworkRequest(req({ panel: 'nope', x0: 31.4, x1: 62.8 })).front).toBeUndefined()
+    expect(parseArtworkRequest(req({ panel: 'label', x0: 50, x1: 40 })).front).toBeUndefined()
+    expect(parseArtworkRequest(req({ panel: 'label', x0: 10, x1: 200 })).front).toBeUndefined()
+    expect(parseArtworkRequest(req(undefined)).front).toBeUndefined()
+  })
+
+  it('บอก AI ช่วงด้านหน้าและความกว้างสูงสุดของชื่อแบรนด์/โลโก้', () => {
+    const text = buildArtworkUserContent(parseArtworkRequest(req({ panel: 'label', x0: 31.4, x1: 62.8 })))
+    expect(text).toContain('ด้านหน้าที่อ่านได้ตรงของภาชนะทรงกระบอก: แผง label ช่วง x = 31.4–62.8 มม. (กว้าง 31.4 มม.)')
+    expect(text).toContain('กว้างไม่เกิน 31 มม.')
+    expect(buildArtworkUserContent(base())).not.toContain('ด้านหน้าที่อ่านได้ตรง')
+  })
+})
+

@@ -56,8 +56,7 @@ import {
   type Deco,
   type ShapeEl,
   type TextEl,
-  type PathEl,
-} from './artwork'
+  type PathEl, fontsReady, textFontsKey } from './artwork'
 import { TEMPLATES } from './templates'
 import { getMaterial } from './materials'
 
@@ -989,3 +988,19 @@ describe('Pen tool (path)', () => {
     expect(svg).toContain('<path d="M 100 100')
   })
 })
+
+describe('ฟอนต์ที่ texture 3D ต้องรอ (textFontsKey / fontsReady)', () => {
+  const t = (text: string, font?: string, weight?: 700) => ({ id: text, type: 'text', text, color: '#000000', size: 5, w: 10, x: 0, y: 0, rot: 0, ...(font ? { font } : {}), ...(weight ? { weight } : {}) }) as Deco
+
+  it('key เปลี่ยนเมื่อมีฟอนต์/น้ำหนักใหม่เท่านั้น ไม่เปลี่ยนตามเนื้อความ', () => {
+    const a = textFontsKey([t('ลมหาย', 'kanit', 700)])
+    expect(textFontsKey([t('โคตรหอม', 'kanit', 700)])).toBe(a)
+    expect(textFontsKey([t('ลมหาย', 'kanit', 700), t('x', 'prompt')])).not.toBe(a)
+    expect(textFontsKey([{ ...t('ซ่อน', 'kanit', 700), hidden: true } as Deco])).toBe(textFontsKey([]))
+  })
+
+  it('นอก browser (ไม่มี document.fonts) ถือว่าพร้อม — ไม่ค้างการวาด', () => {
+    expect(fontsReady([t('ลมหาย', 'kanit', 700)])).toBe(true)
+  })
+})
+

@@ -3,6 +3,8 @@ import * as THREE from 'three'
 import { useArtTexture } from './useArtTexture'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import { FitViewerCamera } from './FitViewerCamera'
+import { cameraPosition, vesselCameraFit } from './viewerCamera'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
 import { capShape, CORK_COLOR, defaultCapColor, tubeSection, type CapStyle, type Vessel } from '../core/vessel'
@@ -381,11 +383,13 @@ export function VesselViewer3D({
   capStyle?: CapStyle
   capColor?: string | null
 }) {
-  const dist = Math.max(vessel.H, vessel.labelR * 4) * 2.2
+  // ตำแหน่งแรกจาก Canvas; สลับขวด↔หลอด/ขนาดต่างมากโดยไม่ถอดหน้า 3D → FitViewerCamera จัดกล้องใหม่
+  // (เดิมค้างระยะ/มุมของภาชนะเดิมจนกดไปแท็บอื่นแล้วกลับมา)
+  const fit = vesselCameraFit(vessel)
   return (
     <Canvas
       events={safeCanvasEvents}
-      camera={{ position: [dist * 0.45, dist * 0.3, dist], fov: 36, near: 1, far: 8000 }}
+      camera={{ position: cameraPosition(fit), fov: 36, near: 1, far: 8000 }}
       role="img"
       aria-label="มุมมอง 3 มิติของภาชนะพร้อมฉลาก"
     >
@@ -393,6 +397,7 @@ export function VesselViewer3D({
       <SceneLighting mode={lightMode ?? 'soft'} />
       <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} watermark={watermark} capStyle={capStyle} capColor={capColor} />
       <OrbitControls makeDefault enableDamping />
+      <FitViewerCamera fit={fit} />
     </Canvas>
   )
 }
