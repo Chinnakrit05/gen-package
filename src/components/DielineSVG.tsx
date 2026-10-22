@@ -247,19 +247,22 @@ function FinishLook({ e, children }: { e: Deco; children: React.ReactNode }) {
   const sd = Math.max(0.3, Math.min(1.2, Math.min(w, h) * 0.02))
   const o = sd * 0.8
   if (def.relief < 0) {
-    // แสงจากซ้ายบน: alpha ที่เลื่อนไปขวาล่างไม่คลุมขอบซ้ายบนด้านใน → แถบเงา; เลื่อนกลับด้าน → แถบไฮไลต์ขวาล่าง
+    // แสงจากซ้ายบน: alpha ที่เลื่อนไปขวาล่างไม่คลุมขอบซ้ายบนด้านใน → เส้นเงา; เลื่อนกลับด้าน → เส้นไฮไลต์ขวาล่าง
+    // ผนังแอ่งของแม่พิมพ์จริงชันและแคบ (ไม่กี่สิบ มม.) → เงา/ไฮไลต์เป็นเส้นบางคมที่ขอบ ไม่ใช่แถบกว้างตามขนาดชิ้น
+    const wall = Math.max(0.18, Math.min(0.35, Math.min(w, h) * 0.012))
+    const wo = wall * 0.7
     return (
       <>
         <defs>
           <filter id={gid} x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation={sd * 0.7} result="b" />
-            <feOffset in="b" dx={o} dy={o} result="dn" />
-            <feOffset in="b" dx={-o} dy={-o} result="up" />
+            <feGaussianBlur in="SourceAlpha" stdDeviation={wall * 0.25} result="b" />
+            <feOffset in="b" dx={wo} dy={wo} result="dn" />
+            <feOffset in="b" dx={-wo} dy={-wo} result="up" />
             <feComposite in="SourceAlpha" in2="dn" operator="out" result="loA" />
             <feComposite in="SourceAlpha" in2="up" operator="out" result="hiA" />
-            <feFlood floodColor="#000000" floodOpacity="0.55" />
+            <feFlood floodColor="#000000" floodOpacity="0.7" />
             <feComposite in2="loA" operator="in" result="lo" />
-            <feFlood floodColor="#ffffff" floodOpacity="0.85" />
+            <feFlood floodColor="#ffffff" floodOpacity="1" />
             <feComposite in2="hiA" operator="in" result="hi" />
             <feMerge>
               <feMergeNode in="SourceGraphic" />

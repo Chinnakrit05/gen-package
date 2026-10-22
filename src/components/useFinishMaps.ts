@@ -145,10 +145,12 @@ export function useFinishMaps(opts: {
             for (const d of items) drawSilhouette(tc, d, s, imgOf, '#000000')
             // เบลอผ่านเงาของ canvas (ใช้ได้ทุกเบราว์เซอร์): วาดต้นแบบนอกภาพ แล้วให้เงาตกกลับมาที่เดิม
             const far = w + h + 1000
+            // ปั๊มนูนลาดกว้าง (กระดาษโป่ง ~0.4 มม.), ปั๊มจมผนังชันแคบ (~0.15 มม.) → เงา/ไฮไลต์เป็นเส้นบางที่ขอบ
+            // และเส้นบางของตัวอักษรลึกเต็มเท่าเส้นหนา (แม่พิมพ์หน้าเรียบกดระดับเดียวกันทั้งชิ้น)
             const blurInto = (c: CanvasRenderingContext2D, color: string) => {
               c.save()
               c.shadowColor = color
-              c.shadowBlur = Math.max(2, s * 0.8)
+              c.shadowBlur = sign > 0 ? Math.max(2, s * 0.8) : Math.max(1.2, s * 0.3)
               c.shadowOffsetX = far
               c.drawImage(tmp, -far, 0)
               c.restore()
