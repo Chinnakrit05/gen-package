@@ -131,6 +131,12 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   เกินเพดาน structured outputs (union ≤ 16, optional ≤ 24 รวมทุก schema ในคำขอ; เกิน = 400 ทันที — พังบน staging วันแรกเพราะ local ใช้ CLI
   ซึ่งส่ง schema เป็นข้อความอยู่แล้ว); schema ที่ยังส่งผ่าน structured outputs (box-spec, ภาษาแผง) ถูกนับใน `server/structuredOutputs.test.ts`;
   client เรียกผ่าน `cloud.requestAiArtwork`
+  **รูปของ AI บน cloud ต้องเป็น PNG/JPEG**: cloud เก็บรูปเป็น asset และ `cloudProjectCodec` ปฏิเสธ SVG (ทั้งงานบันทึกไม่ได้ — ขึ้น "บันทึกไม่สำเร็จ")
+  แต่ทุกรูปจาก `compileArtworkPlan` เป็น SVG data URL → `CopilotArtworkContext.prepareImages` = `rasterizeArtworkImages`
+  (`src/services/projects/artworkRasterizer.ts`) แปลงตอนวางลงงาน: preset สร้างใหม่ด้วย `rasterizeTrustedPreset` (คง preset/presetColor),
+  SVG ที่ AI วาด/รูปพื้น → `sanitizeSvg` ซ้ำ + ตั้ง width/height พิกเซลที่ราก → `svgToRasterDataUrl` (svgRaster.ts ใช้ร่วมกับ preset) 12 px/มม.
+  (ชิ้น ≤ 2048, รูปพื้น ≤ 3072 รองสีพื้นเป็น JPEG); ชิ้นที่แปลงไม่ได้ถูกตัดพร้อมคำเตือน; โลโก้ SVG ใน Copilot ถูกปฏิเสธบน cloud
+  (ไม่แปลงตอนบันทึก — ตัวบันทึกตั้งใจไม่เรนเดอร์ SVG ที่มาจาก draft)
   (`src/services/api/ai.ts` `requestCloudArtwork` ส่ง AbortSignal ได้) — ยกเลิกฝั่ง client ไม่คืนเครดิตเพราะ server ยังทำต่อ
 - UI = **Copilot** (`src/components/CopilotDrawer.tsx`, แทน PromptBar popover เดิมที่ถูกลบ): ปุ่ม "สั่ง AI" บน header (`AiTrigger`,
   คง markup เครดิต/blocked เดิม) เปิดแผงด้านขวา 420px ใน `.body` (flex row ถัดจาก `main`) เป็นบทสนทนา 2 โหมดในช่องเดียว —

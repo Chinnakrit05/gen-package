@@ -1,6 +1,7 @@
 import type { ImageEl } from '../../core/artwork'
 import type { Project } from '../../core/project'
 import { presetById } from '../../core/presets'
+import { svgToRasterDataUrl } from './svgRaster'
 
 const DEFAULT_LONG_EDGE = 2048
 const COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/
@@ -60,46 +61,6 @@ export async function rasterizeTrustedPreset(
   }
 
   const { width, height } = trustedPresetRasterSize(aspect)
-  const blob = new Blob([preset.svg(color)], { type: 'image/svg+xml' })
-  const url = URL.createObjectURL(blob)
-  try {
-    const image = await loadImage(url)
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-    const context = canvas.getContext('2d')
-    if (!context) throw new Error('browser นี้ไม่รองรับ canvas 2D')
-    context.drawImage(image, 0, 0, width, height)
-    const png = await canvasBlob(canvas)
-    return blobToDataUrl(png)
-  } finally {
-    URL.revokeObjectURL(url)
-  }
+  return svgToRasterDataUrl(preset.svg(color), width, height)
 }
 
-function loadImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image()
-    image.onload = () => resolve(image)
-    image.onerror = () => reject(new Error('แปลง preset เป็นภาพไม่สำเร็จ'))
-    image.src = url
-  })
-}
-
-function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob)
-      else reject(new Error('เข้ารหัส preset เป็น PNG ไม่สำเร็จ'))
-    }, 'image/png')
-  })
-}
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('อ่าน PNG ที่แปลงแล้วไม่สำเร็จ'))
-    reader.readAsDataURL(blob)
-  })
-}

@@ -142,6 +142,7 @@ import { PricingPage } from './components/PricingPage'
 import { WATERMARK_ALPHA, WATERMARK_TEXT, previewWatermarked, watermarkTiles } from './core/watermark'
 import { deleteProjectConfirmText, designLicenseKnowledge, saveAsCopyConfirmText } from './core/designLicense'
 import { rasterizeTrustedPreset } from './services/projects/trustedPresetRasterizer'
+import { rasterizeArtworkImages } from './services/projects/artworkRasterizer'
 import { PRESETS, PRESET_CATS, presetById, presetDataUrl, type Preset } from './core/presets'
 import {
   SHEET_PRESETS,
@@ -6463,7 +6464,7 @@ export default function App({
             hasDesign={history.length > 0}
             onApplySpec={applySpec}
             requestSpec={cloud?.requestAiSpec}
-            artwork={dieline ? { dieline, kind, template: templateId, materialId, box: { W, D, H }, fillColor, existingCount: decos.length, onApply: applyAiArtwork, request: cloud?.requestAiArtwork } : null}
+            artwork={dieline ? { dieline, kind, template: templateId, materialId, box: { W, D, H }, fillColor, existingCount: decos.length, onApply: applyAiArtwork, request: cloud?.requestAiArtwork, prepareImages: cloud ? rasterizeArtworkImages : undefined } : null}
             lastSnapshotId={artCurrentId}
             onOpenStage={() => setStageOpen(true)}
             onLoadingChange={setAiBusy}

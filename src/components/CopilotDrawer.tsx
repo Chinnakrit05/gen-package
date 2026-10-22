@@ -33,6 +33,11 @@ export interface CopilotArtworkContext {
   existingCount: number
   onApply: (result: AiArtworkResult) => void
   request?: typeof requestArtworkPlan
+  // cloud: รูปต้องเป็น PNG/JPEG (asset) — แปลงรูป SVG ของ AI ก่อนวางลงงาน (rasterizeArtworkImages) และไม่รับโลโก้ SVG
+  prepareImages?: (
+    images: { decos: Deco[]; fillImage: FillImage | null; fillColor: string | null },
+    sheet: { w: number; h: number },
+  ) => Promise<{ decos: Deco[]; fillImage: FillImage | null; dropped: number }>
 }
 
 // prompt ที่ส่ง AI เป็นไทยเสมอ (system prompt ฝั่ง server เป็นไทย) — แปลเฉพาะป้ายบนปุ่ม
@@ -164,6 +169,11 @@ export function CopilotDrawer({
 
   const pickLogo = async (file: File | undefined) => {
     if (!file) return
+    if (artwork?.prepareImages && (file.type === 'image/svg+xml' || /\.svg$/i.test(file.name))) {
+      push({ id: nextId(), role: 'ai', kind: 'error', text: t('Cloud ยังไม่รองรับ SVG ที่นำเข้า กรุณาแปลงเป็น PNG หรือ JPG ก่อน', 'Cloud does not take imported SVG yet — convert it to PNG or JPG first') })
+      if (logoInput.current) logoInput.current.value = ''
+      return
+    }
     try {
       const [ref, asset] = await Promise.all([toRefImage(file), loadImageFile(file)])
       setLogo({ ref, asset })
@@ -208,10 +218,19 @@ export function CopilotDrawer({
       assets: logo ? { logo: logo.asset } : undefined,
     })
     if (!compiled.decos.length) throw new Error(t('AI ไม่ได้วางชิ้นงานบนแผงที่พิมพ์ได้เลย ลองใหม่', 'The AI placed nothing on a printable panel, please retry'))
-    artwork.onApply({ decos: compiled.decos, fillColor: compiled.fillColor, fillImage: compiled.fillImage, mode: artMode, explanation: parsed.plan.explanation, warnings: compiled.warnings })
+    let { decos, fillImage } = compiled
+    let warnings = compiled.warnings
+    if (artwork.prepareImages) {
+      const prepared = await artwork.prepareImages({ decos, fillImage, fillColor: compiled.fillColor }, { w: artwork.dieline.width, h: artwork.dieline.height })
+      ;({ decos, fillImage } = prepared)
+      if (prepared.dropped) {
+        warnings = [...warnings, { severity: 'warning', code: 'raster-failed', message: t(`แปลงรูป ${prepared.dropped} ชิ้นเป็นภาพสำหรับ cloud ไม่สำเร็จ จึงตัดออก`, `${prepared.dropped} image(s) could not be converted for cloud and were removed`) }]
+      }
+    }
+    artwork.onApply({ decos, fillColor: compiled.fillColor, fillImage, mode: artMode, explanation: parsed.plan.explanation, warnings })
     push({
-      id: nextId(), role: 'ai', kind: 'artwork', snapshotId: '', explanation: parsed.plan.explanation, count: compiled.decos.length,
-      warnings: compiled.warnings, placeholders: placeholderFields(compiled.decos), model: res.model, mock: res.mock,
+      id: nextId(), role: 'ai', kind: 'artwork', snapshotId: '', explanation: parsed.plan.explanation, count: decos.length,
+      warnings, placeholders: placeholderFields(decos), model: res.model, mock: res.mock,
     })
   }
 
@@ -526,7 +545,7 @@ export function CopilotDrawer({
           <button type="button" className="cp-tool" disabled={!!busy || refs.length >= (artworkOn ? MAX_REFS : 1)} title={t('แนบรูปอ้างอิง', 'Attach reference images')} aria-label={t('แนบรูปอ้างอิง', 'Attach reference images')} onClick={() => refInput.current?.click()}>📎</button>
           {artworkOn && (
             <>
-              <input ref={logoInput} type="file" accept="image/png,image/jpeg,image/svg+xml,.svg" hidden aria-label={t('แนบโลโก้', 'Attach logo')} onChange={(e) => void pickLogo(e.target.files?.[0])} />
+              <input ref={logoInput} type="file" accept={artwork?.prepareImages ? 'image/png,image/jpeg' : 'image/png,image/jpeg,image/svg+xml,.svg'} hidden aria-label={t('แนบโลโก้', 'Attach logo')} onChange={(e) => void pickLogo(e.target.files?.[0])} />
               <button type="button" className="cp-tool" disabled={!!busy} onClick={() => logoInput.current?.click()}>{logo ? t('เปลี่ยนโลโก้', 'Change logo') : t('+ โลโก้', '+ Logo')}</button>
             </>
           )}
