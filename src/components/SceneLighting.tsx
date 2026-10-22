@@ -107,6 +107,10 @@ const StudioEnv = memo(function StudioEnv() {
       {/* แผงข้างซ้าย-ขวา = ขอบสว่างสองด้าน */}
       <Lightformer form="rect" intensity={1.6} position={[-6, 1, 3]} scale={[4, 8, 1]} color="#f4f7fb" />
       <Lightformer form="rect" intensity={1.6} position={[6, 1, 3]} scale={[4, 8, 1]} color="#f4f7fb" />
+      {/* แผงสะท้อนหน้า-ล่าง-ซ้าย = ทิศที่สายตาจากกล้องมุมเริ่มต้น (0.5, 0.42, 1) สะท้อนออกจากแผ่นแบนที่หันหน้าเข้ากล้อง
+          (นามบัตร/สติกเกอร์เงิน/ฟอยล์บนหน้าการ์ด) — ไม่มีแผงนี้ ผิวโลหะหน้าตรงสะท้อนความมืดจนดำ
+          (environment หมุนตามกล้อง ทิศนี้จึงคงที่เทียบกับสายตาทุกมุม) */}
+      <Lightformer form="rect" intensity={2.2} position={[-3.2, -2.7, 6]} scale={[12, 8, 1]} color="#ffffff" />
       {/* วงแหวนด้านหลัง = ประกายโค้งบนทรงกระบอก */}
       <Lightformer form="ring" intensity={1.2} position={[0, 3, -6]} scale={5} color="#eef2f6" />
     </Environment>

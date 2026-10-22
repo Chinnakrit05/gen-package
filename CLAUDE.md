@@ -82,6 +82,13 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   SVG เป็นเลเยอร์ White fill-rule evenodd; ตรวจไฟล์เตือนลายสีอ่อนบนใสไม่รองขาว (`clear-light`, `lightRatio` จาก `renderArtworkAlpha`)
   หมายเหตุ: ข้อความ SVG (`dominant-baseline=central`) กับ canvas (`textBaseline=middle`) ต่างกัน ~0.03em —
   ชั้น White ใน SVG จึงเหลื่อมข้อความเล็กน้อย; PDF ตรงเป๊ะเพราะลายกับขาว raster จาก canvas เดียวกัน
+- กระดาษนามบัตร `card-*` (อาร์ตการ์ดด้าน/เงา, คอตตอน 600, ลินิน, มุก, ดำ — `isCardMat`, `CARD_STOCK_IDS` = card-* + กระดาษกล่องเดิม,
+  ค่าเริ่มต้น `DEFAULT_CARD_MAT`; โชว์เฉพาะงานนามบัตร ไม่ปนวัสดุกล่อง; boxSpec sanitize บังคับคู่ card↔card-*) + สติกเกอร์อาร์ตมัน/คราฟท์/
+  เท็กซ์เจอร์/เมทัลลิกเงิน/โฮโลแกรม: `Material.surface` (felt/linen/kraft/holo/pearl, `src/core/paperSurface.ts` pure) → 3D
+  `paperGrain` นูนต่ำบนแผนที่เดียวกับปั๊ม (`useFinishMaps` option `grain`; ปั๊มจมอัดเนื้อในแอ่งให้เรียบ), holo/pearl = `paintHolo` เป็นพื้น
+  texture; `Material.inkMultiply` (ดำ/คราฟท์ ไม่มีหมึกขาว) วาดหมึกแบบ multiply ยกเว้นฟอยล์; blueprint `StockUnderlay` (prop `stock`)
+  สีกระดาษ + ลาย pattern ใต้แผง (พรีวิวเท่านั้น); SceneLighting มีแผงสะท้อนหน้า-ล่าง-ซ้ายให้แผ่นแบนหันหน้ากล้อง (ฟอยล์/เงิน) ไม่ดำ
+  (environment มีแค่แผงไฟ — เอียงแผ่นจนสะท้อนพ้นแผง ผิวโลหะยังมืดลงได้)
 - แผ่นแบนไม่มีรอยพับ (สติกเกอร์) ใน Viewer3D หมุน 180° รอบแกนตั้ง ให้ด้านพิมพ์หันหากล้อง (ก่อนหน้าเห็นด้านหลังเปล่า)
 - `src/core/standardSize.ts` — ขนาดมาตรฐานตามตลาด: `VESSEL_STANDARD` ต่อวัสดุ (PET 500 มล. 65×205 คอ 28 / แก้ว 750 มล. 76×300 /
   กระป๋อง 330 มล. 66×115 ฝา ⌀53 / หลอด 50 มล. 30×130) และ `POUCH_STANDARD` ต่อรูปแบบถุง (doypack 250 ก. 140×215+80, ซองแบน 100×150,

@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react'
-import type { Dieline, DimMark } from '../core/types'
+import type { Dieline, DimMark, PaperSurface } from '../core/types'
 import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imageMaskSVG, imageDrawAttrs, imageCoverRect, maskId, panelsBBox, fillImageRect, shapeVertices, isPolyShape, dashArray, textInnerSVG, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type ImageEl, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
@@ -7,6 +7,7 @@ import { dimTextSize } from '../core/templates/shared'
 import { WATERMARK_ALPHA, watermarkTiles } from '../core/watermark'
 import { useT } from '../i18n'
 import { finishDef } from '../core/finish'
+import { holoColor } from '../core/paperSurface'
 
 const DIM_COLOR = '#1b6ea8'
 const SEL_COLOR = '#1b6ea8'
@@ -295,6 +296,65 @@ function FinishLook({ e, children }: { e: Deco; children: React.ReactNode }) {
   )
 }
 
+// เนื้อกระดาษของงานพิมพ์แบน (นามบัตร/สติกเกอร์) ใต้แผง — สีกระดาษจริง + ลายผิวจาง ๆ (พรีวิวเท่านั้น ไม่ไปไฟล์ส่งออก)
+// ใช้ pattern ขนาดเล็กแทนฟิลเตอร์ noise เพราะ blueprint วาดใหม่ตอนลากชิ้น — pattern ถูก raster ครั้งเดียวราคาถูก
+// จุด/เส้นใยในแผ่นกระเบื้องสุ่มแบบคงที่ (LCG) ให้ลายเดิมทุกครั้ง
+function StockUnderlay({ dieline, color, surface }: { dieline: Dieline; color: string; surface?: PaperSurface }) {
+  let seed = 7
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648)
+  const polys = dieline.panels.map((p) => p.outline.map((q) => `${q.x},${q.y}`).join(' '))
+  const box = panelsBBox(dieline)
+  let pattern: React.ReactNode = null
+  if (surface === 'felt') {
+    // กระเบื้องใหญ่ + จุดละเอียดจาง ๆ จำนวนมาก — มองไม่ออกว่าซ้ำเป็นลาย
+    const T = 12
+    pattern = (
+      <pattern id="bp-stock" width={T} height={T} patternUnits="userSpaceOnUse">
+        {Array.from({ length: 520 }, (_, i) => (
+          <circle key={i} cx={rnd() * T} cy={rnd() * T} r={0.05 + rnd() * 0.16} fill={rnd() > 0.5 ? '#000000' : '#ffffff'} opacity={0.025 + rnd() * 0.05} />
+        ))}
+      </pattern>
+    )
+  } else if (surface === 'linen') {
+    const p = 0.6
+    pattern = (
+      <pattern id="bp-stock" width={p} height={p} patternUnits="userSpaceOnUse">
+        <path d={`M 0 ${p / 2} H ${p} M ${p / 2} 0 V ${p}`} stroke="#000000" strokeOpacity={0.07} strokeWidth={0.12} />
+        <path d={`M 0 0.1 H ${p} M 0.1 0 V ${p}`} stroke="#ffffff" strokeOpacity={0.35} strokeWidth={0.08} />
+      </pattern>
+    )
+  } else if (surface === 'kraft') {
+    const T = 8
+    pattern = (
+      <pattern id="bp-stock" width={T} height={T} patternUnits="userSpaceOnUse">
+        {Array.from({ length: 45 }, (_, i) => {
+          const x = rnd() * T
+          const y = rnd() * T
+          const l = 0.8 + rnd() * 2.4
+          return <path key={i} d={`M ${x} ${y} l ${l} ${(rnd() - 0.5) * 0.3}`} stroke={rnd() > 0.4 ? '#5a3a1a' : '#e8cfa8'} strokeOpacity={0.12 + rnd() * 0.12} strokeWidth={0.06 + rnd() * 0.1} strokeLinecap="round" />
+        })}
+      </pattern>
+    )
+  } else if (surface === 'holo' || surface === 'pearl') {
+    pattern = (
+      <linearGradient id="bp-stock" gradientUnits="userSpaceOnUse" x1={box.x0} y1={box.y0} x2={box.x1} y2={box.y1}>
+        {Array.from({ length: 25 }, (_, i) => (
+          <stop key={i} offset={i / 24} stopColor={holoColor(i / 24)} />
+        ))}
+      </linearGradient>
+    )
+  }
+  return (
+    <g className="stock" pointerEvents="none">
+      {pattern && <defs>{pattern}</defs>}
+      {polys.map((pts, i) => (
+        <polygon key={i} points={pts} fill={color} />
+      ))}
+      {pattern && polys.map((pts, i) => <polygon key={`p${i}`} points={pts} fill="url(#bp-stock)" opacity={surface === 'holo' ? 0.85 : surface === 'pearl' ? 0.16 : 1} />)}
+    </g>
+  )
+}
+
 type Corner = 'nw' | 'ne' | 'sw' | 'se'
 // เครื่องหมายทิศของแต่ละมุมเทียบจุดกึ่งกลาง (sx, sy)
 const CORNER_SIGN: Record<Corner, [number, number]> = {
@@ -366,6 +426,7 @@ export const DielineSVG = memo(function DielineSVG({
   lowResDpi,
   fillLowDpi,
   clearFilm = false,
+  stock,
   watermark = null,
 }: {
   dieline: Dieline
@@ -396,6 +457,7 @@ export const DielineSVG = memo(function DielineSVG({
   lowResDpi?: Map<string, number> // id รูปที่ความละเอียดต่ำ → dpi (ป้ายเตือนบนรูป; ไม่ติดไปไฟล์ส่งออก)
   fillLowDpi?: number | null // รูปพื้นความละเอียดต่ำ → dpi
   clearFilm?: boolean // วัสดุฟิล์มใส: ลายตารางหมากรุกใต้แผง = ส่วนที่ไม่มีลายจะใส (พรีวิวเท่านั้น)
+  stock?: { color: string; surface?: PaperSurface } // กระดาษนามบัตร/สติกเกอร์: สีและผิวกระดาษใต้แผง (พรีวิวเท่านั้น)
   // ลายน้ำพรีวิว (Freemium): ข้อความซ้ำเฉียงทับหลังสุดใน rotor — ไม่ใช่ Deco จึงไม่เข้า snap/เลือก/ลาก
   // และไม่ไปถึงไฟล์ส่งออก (ไฟล์ใช้ dielineSVGString คนละทาง)
   watermark?: string | null
@@ -1222,6 +1284,7 @@ export const DielineSVG = memo(function DielineSVG({
     >
       {/* rotor: หมุนเนื้อหาทั้งหมดรอบจุดกึ่งกลางแผ่น (พิกัดแผ่นคลี่ไม่เปลี่ยน — toSheet ถอดหมุนให้) */}
       <g transform={rot ? `rotate(${rot} ${dieline.width / 2} ${dieline.height / 2})` : undefined}>
+      {stock && !clearFilm && <StockUnderlay dieline={dieline} color={stock.color} surface={stock.surface} />}
       {clearFilm && (
         <g className="clear-film" pointerEvents="none">
           <defs>

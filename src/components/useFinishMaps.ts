@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { drawSilhouette, type Deco } from '../core/artwork'
 import { finishDef } from '../core/finish'
+import { hasGrain, paperGrain } from '../core/paperSurface'
+import type { PaperSurface } from '../core/types'
 
 // แผนที่ผิวของงานพิมพ์พิเศษสำหรับ 3D — วางพิกัดเดียวกับ texture ลาย (แผ่นคลี่/ฉลาก/ฟิล์มถุง ที่ s px/มม.)
 //  orm: G = ความด้าน (roughness), B = ความเป็นโลหะ (metalness) ตามที่ three อ่าน roughnessMap/metalnessMap (พื้นแอ่งปั๊มจมด้านน้อยกว่ากระดาษ) —
@@ -61,14 +63,17 @@ export function useFinishMaps(opts: {
   // รอยนูนของตัวบรรจุภัณฑ์เอง (เช่นแนวซิปล็อกของถุง) วาดลงแผนที่ bump พิกัดแผ่นคลี่ — ผิวยังเป็นฟิล์มเดิม สี/ลายจึงกลืนกับถุง
   // key = ค่าที่มีผลต่อภาพ (เปลี่ยนแล้ววาดใหม่)
   relief?: { key: string; draw: (ctx: CanvasRenderingContext2D, s: number, w: number) => void } | null
+  // เนื้อกระดาษพิเศษของวัสดุ (คอตตอน/ลินิน/คราฟท์) → นูนต่ำทั้งแผ่นบนแผนที่เดียวกับปั๊ม (`paperGrain`)
+  grain?: PaperSurface
 }): FinishMaps {
   const { sheetW, sheetH, decos, baseRough, baseMetal, configure, deps = [], relief: extra = null } = opts
+  const grain = hasGrain(opts.grain) ? opts.grain : null
   const [maps, setMaps] = useState<FinishMaps>({ orm: null, bump: null })
   const imgCache = useRef(new Map<string, HTMLImageElement>())
   const [imgTick, setImgTick] = useState(0)
   const fin = decos.filter((d) => !d.hidden && d.finish)
   // คีย์เฉพาะสิ่งที่มีผลต่อแผนที่ (ชิ้นงานพิเศษ + ขนาดแผ่น) — แก้ชิ้นอื่นไม่ต้องวาดใหม่
-  const key = JSON.stringify([sheetW, sheetH, baseRough, baseMetal, deps, extra?.key ?? null, fin.map((d) => (d.type === 'image' ? { ...d, src: d.src.length + d.src.slice(-32) } : d))])
+  const key = JSON.stringify([sheetW, sheetH, baseRough, baseMetal, deps, extra?.key ?? null, grain, fin.map((d) => (d.type === 'image' ? { ...d, src: d.src.length + d.src.slice(-32) } : d))])
 
   useEffect(() => {
     let dead = false
@@ -89,7 +94,7 @@ export function useFinishMaps(opts: {
   }, [key])
 
   useEffect(() => {
-    if (!fin.length && !extra) {
+    if (!fin.length && !extra && !grain) {
       setMaps((m) => (m.orm || m.bump ? { orm: null, bump: null } : m))
       return
     }
@@ -123,7 +128,7 @@ export function useFinishMaps(opts: {
           drawSilhouette(oc, d, s, imgOf, fill)
         }
       }
-      if (relief.length || extra) {
+      if (relief.length || extra || grain) {
         bump = document.createElement('canvas')
         bump.width = w
         bump.height = h
@@ -135,6 +140,16 @@ export function useFinishMaps(opts: {
         if (bc && tc) {
           bc.fillStyle = 'rgb(128,128,128)'
           bc.fillRect(0, 0, w, h)
+          if (grain) {
+            const g = paperGrain(grain, w, h, s)
+            const img = bc.getImageData(0, 0, w, h)
+            for (let i = 0; i < g.length; i++) {
+              img.data[i * 4] += g[i]
+              img.data[i * 4 + 1] += g[i]
+              img.data[i * 4 + 2] += g[i]
+            }
+            bc.putImageData(img, 0, 0)
+          }
           if (extra) {
             bc.save()
             extra.draw(bc, s, w)
@@ -170,10 +185,13 @@ export function useFinishMaps(opts: {
             const H = img.data
             for (let i = 3; i < H.length; i += 4) {
               if (!A[i]) continue
-              const dv = sign * reliefDepth(A[i], B[i])
-              H[i - 3] += dv
-              H[i - 2] += dv
-              H[i - 1] += dv
+              const depth = reliefDepth(A[i], B[i])
+              // ปั๊มจม: แม่พิมพ์อัดเนื้อกระดาษจนเรียบ → เนื้อนูนต่ำ (grain) ในแอ่งจางลงตามความลึก
+              const flat = sign < 0 ? 1 - 0.75 * (depth / 127) : 1
+              const v = 128 + (H[i - 3] - 128) * flat + sign * depth
+              H[i - 3] = v
+              H[i - 2] = v
+              H[i - 1] = v
             }
             bc.putImageData(img, 0, 0)
           }

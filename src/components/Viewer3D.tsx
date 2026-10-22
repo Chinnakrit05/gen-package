@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { useArtTexture } from './useArtTexture'
 import { useFinishMaps, finishMaterialProps, type FinishMaps } from './useFinishMaps'
 import { finishDef } from '../core/finish'
+import { paintHolo } from '../core/paperSurface'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { safeCanvasEvents } from './safeCanvasEvents'
@@ -101,7 +102,8 @@ function useSheetTexture(
     decos,
     fillImage,
     // ไม่มีทั้งลาย สีพื้น และรูปพื้น → ใช้สีวัสดุตรง ๆ ไม่ต้องมี texture (แต่มีลายน้ำ = ต้องมีแม้กล่องเปล่า)
-    enabled: decos.length > 0 || !!fillColor || !!fillImage || !!watermark,
+    // ฟิล์มโฮโลแกรม/กระดาษมุก: พื้นรุ้งอยู่ใน texture จึงต้องมีแม้ยังไม่มีลาย
+    enabled: decos.length > 0 || !!fillColor || !!fillImage || !!watermark || mat.surface === 'holo' || mat.surface === 'pearl',
     watermark,
     deps: [fillColor, fillImage, mat.color, mat.id, dieline],
     draw: (ctx, s, imgOf) => {
@@ -111,7 +113,11 @@ function useSheetTexture(
       else {
         ctx.fillStyle = mat.color
         ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+        if (mat.surface === 'holo') paintHolo(ctx, ctx.canvas.width, ctx.canvas.height)
+        else if (mat.surface === 'pearl') paintHolo(ctx, ctx.canvas.width, ctx.canvas.height, 0.14)
       }
+      // กระดาษสีไม่มีหมึกขาว (ดำ/คราฟท์): หมึกทับสีกระดาษแบบ multiply — ขาวไม่ขึ้น สีอ่อนจางลง (ฟอยล์ยังทึบ)
+      ctx.globalCompositeOperation = mat.inkMultiply ? 'multiply' : 'source-over'
       // รูปพื้นมาก่อน (ถ้ามี) ไม่งั้นใช้สีพื้นทึบ — แล้วค่อยลายทับ
       const fimg = fillImage ? imgOf(fillImage.src) : undefined
       try {
@@ -127,12 +133,17 @@ function useSheetTexture(
         try {
           // ฟอยล์ = รูปทรงสีโลหะ (ไม่มีหมึกใต้) — ความเงาโลหะมาจากแผนที่ผิว (useFinishMaps)
           const foil = finishDef(e.finish)?.foil
-          if (foil) drawSilhouette(ctx, e, s, imgOf, foil.base)
-          else drawDeco(ctx, e, s, imgOf)
+          if (foil) {
+            ctx.save()
+            ctx.globalCompositeOperation = 'source-over'
+            drawSilhouette(ctx, e, s, imgOf, foil.base)
+            ctx.restore()
+          } else drawDeco(ctx, e, s, imgOf)
         } catch (err) {
           console.warn('วาดองค์ประกอบลง texture ไม่สำเร็จ (ข้ามชิ้นนี้)', e.type, err)
         }
       }
+      ctx.globalCompositeOperation = 'source-over'
       if (mat.clear) inkOnClearFilm(ctx, !!mat.underbase)
     },
   })
@@ -293,6 +304,7 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillCol
     decos: decos ?? [],
     baseRough: mat.roughness ?? 0.8,
     baseMetal: mat.metalness ?? 0,
+    grain: mat.surface,
   })
 
   const geoms = useMemo(
@@ -394,7 +406,14 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillCol
 // จึงคำนวณ UV ของแต่ละหน้าให้ชี้ไปช่วง x ของหน้านั้น ๆ — หลังกลับ (หมุนรอบแกน Y) ให้อ่านถูกด้าน
 function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial, dimVariant, watermark }: ModelProps) {
   const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage, watermark)
-  const maps = useFinishMaps({ sheetW: dieline.width, sheetH: dieline.height, decos: decos ?? [], baseRough: mat.roughness ?? 0.8, baseMetal: 0 })
+  const maps = useFinishMaps({
+    sheetW: dieline.width,
+    sheetH: dieline.height,
+    decos: decos ?? [],
+    baseRough: mat.roughness ?? 0.8,
+    baseMetal: mat.metalness ?? 0,
+    grain: mat.surface,
+  })
   const front = dieline.panels[0]
   const back = dieline.panels[1]
   const fxs = front.outline.map((p) => p.x)
@@ -436,6 +455,7 @@ function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial, 
 
   const eps = 0.05
   const rough = mat.roughness ?? 0.8
+  const metal = mat.metalness ?? 0 // กระดาษมุก: เหลือบมุกทั้งสองหน้า
 
   // three คอมไพล์ shader ตาม define ตอนสร้าง — ถ้า material ถูกสร้างตอน tex ยังเป็น null
   // (การ์ดขึ้นจอก่อน texture วาดเสร็จ) แล้ว tex มาทีหลัง map จะไม่ขึ้นจนกว่าจะ needsUpdate
@@ -462,11 +482,11 @@ function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial, 
         </mesh>
         {/* ด้านหน้า (+Z) */}
         <mesh geometry={frontGeo} position={[0, 0, t / 2 + eps]}>
-          <meshStandardMaterial ref={frontMat} map={tex} color={tex ? '#ffffff' : mat.color} {...finishMaterialProps(maps, rough, 0)} />
+          <meshStandardMaterial ref={frontMat} map={tex} color={tex ? '#ffffff' : mat.color} {...finishMaterialProps(maps, rough, metal)} />
         </mesh>
         {/* ด้านหลัง (-Z) — หมุน 180° รอบแกน Y ให้ลายอ่านถูกด้านเมื่อพลิกการ์ด */}
         <mesh geometry={backGeo} position={[0, 0, -t / 2 - eps]} rotation={[0, Math.PI, 0]}>
-          <meshStandardMaterial ref={backMat} map={tex} color={tex ? '#ffffff' : mat.color} {...finishMaterialProps(maps, rough, 0)} />
+          <meshStandardMaterial ref={backMat} map={tex} color={tex ? '#ffffff' : mat.color} {...finishMaterialProps(maps, rough, metal)} />
         </mesh>
       </group>
       {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant={dimVariant} />}

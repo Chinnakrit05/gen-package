@@ -70,8 +70,16 @@ export interface Material {
   clear?: boolean
   // พิมพ์หมึกขาวรองใต้ลาย (white underbase) บนฟิล์มใส → ลายทึบสด; ไฟล์ส่งออกมีเลเยอร์ White อัตโนมัติ
   underbase?: boolean
+  // ผิวกระดาษพิเศษ (นามบัตร/สติกเกอร์): felt = เนื้อฟูแบบคอตตอน/เท็กซ์เจอร์, linen = ลายผ้าลินิน,
+  // kraft = เส้นใยคราฟท์, holo = ฟิล์มโฮโลแกรมเหลือบรุ้ง, pearl = กระดาษมุกเหลือบรุ้งจาง ๆ
+  // — 3D เป็นแผนที่นูนต่ำ (`paperGrain`) / พื้นรุ้งใน texture (`paintHolo`), blueprint เป็นลายจาง ๆ
+  surface?: PaperSurface
+  // ไม่มีหมึกขาว บนกระดาษสี (ดำ/คราฟท์): หมึก CMYK ทับสีกระดาษแบบ multiply — สีขาว/สีอ่อนในงานแทบไม่ขึ้น
+  inkMultiply?: boolean
   note?: string
 }
+
+export type PaperSurface = 'felt' | 'linen' | 'kraft' | 'holo' | 'pearl'
 
 export interface BoxParams {
   W: number

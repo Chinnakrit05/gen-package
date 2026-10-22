@@ -4,6 +4,7 @@ import {
   askClaudeWithUsage,
   boxSpecModelOptions,
   BoxSpecResponseError,
+  mockSpec,
   type CurrentSpec,
   type RefImage,
 } from './boxSpec'
@@ -270,5 +271,18 @@ describe('AnthropicAiService', () => {
     expect(output.model).toBe('claude-haiku-5-5')
     expect(output.spec.reasoning).toBe(modelSpec.explanation)
     expect(output.usage).toEqual({ inputTokens: 5200, outputTokens: 640, cacheReadTokens: 0, cacheCreationTokens: 0 })
+  })
+})
+
+describe('mockSpec: กระดาษนามบัตร/สติกเกอร์', () => {
+  it.each([
+    ['ทำนามบัตรให้หน่อย', 'card-art-matte'],
+    ['นามบัตรคอตตอนปั๊มจม', 'card-cotton'],
+    ['นามบัตรกระดาษดำ', 'card-black'],
+    ['สติกเกอร์โฮโลแกรม', 'sticker-holo'],
+    ['สติกเกอร์คราฟท์', 'sticker-kraft'],
+    ['สติกเกอร์ pp', 'sticker-pp'],
+  ])('%s → %s', (prompt, id) => {
+    expect(mockSpec(prompt).materialId).toBe(id)
   })
 })

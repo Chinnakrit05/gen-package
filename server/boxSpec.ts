@@ -9,7 +9,7 @@ import path from 'node:path'
 import Anthropic from '@anthropic-ai/sdk'
 import { isLegacyAiRouteEnabled } from './http/legacyAiGuard'
 import { readRequestApiKey } from './modules/ai/requestApiKey'
-import { MATERIALS } from '../src/core/materials'
+import { CARD_STOCK_IDS, DEFAULT_CARD_MAT, MATERIALS } from '../src/core/materials'
 import { TEMPLATES } from '../src/core/templates'
 import { DEFAULT_AI_MODEL } from './config'
 
@@ -82,8 +82,8 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} — ${t.detail}`).join('\n')}
 - sleeve: W×D = หน้าตัดด้านในของท่อ (ต้องพอดีกับของที่สวม เช่น แก้ว ⌀90 → W≈92, D≈92), H = ความสูงของปลอก — ระบบคำนวณความยาวแผ่นพันรอบ (ปีกกาว + 2(W+D)) ให้เองอยู่แล้ว ห้ามเอาเส้นรอบวงของมาใส่ใน W เด็ดขาด
 - sleeve เป็นท่อทรงตรง — ของทรงเรียว (แก้วกาแฟ) จะหลวมด้านแคบ ให้ประกาศเป็นข้อจำกัดใน assumptions
 - bottle-carrier: W×D = footprint ด้านใน (เช่น ขวด ⌀66 วาง 2×2 → W,D ≈ 150), H = ความสูงขวด — ระบบสร้างให้เองอัตโนมัติ: แผ่นหูหิ้วกลางสูงกว่าขวด ~55 มม. พร้อมรูมือกลม, ผนังข้างสูง ~42% ของ H, หน้าต่างโชว์สินค้าสองช่องต่อผนัง (handle flag ไม่เกี่ยวกับ template นี้ — หูหิ้วมีในตัว)
-- card (นามบัตร): การ์ดแบนพิมพ์สองหน้า (หน้า+หลัง วางเรียงกันบนแผ่นออกแบบ ตกแต่งได้ทั้งสองด้าน) ไม่มีรอยพับ — W = กว้าง, H = สูง, ค่า D ไม่ใช้ (ใส่ค่าใดก็ได้ในลิมิต), handle ต้องเป็น false; ขนาดมาตรฐาน 90×54 มม. เลือกเมื่อลูกค้าขอ "นามบัตร / business card" เท่านั้น (เป็นงานพิมพ์การ์ด ไม่ใช่บรรจุภัณฑ์)
-- sticker (สติกเกอร์ไดคัท): แผ่นพิมพ์แบนชิ้นเดียว เส้นตัดเป็นสี่เหลี่ยมมุมมน (ไดคัทตามรูป) ไม่มีรอยพับ — W = กว้าง, H = สูง, ค่า D ไม่ใช้, handle ต้องเป็น false; ต้องใช้คู่กับวัสดุสติกเกอร์: sticker-vinyl (ไวนิลกันน้ำ ทนแดด), sticker-pp (PP ขาว กันน้ำ ทนกว่ากระดาษ), sticker-pp-clear (PP ใส ไม่มีหมึกขาว — สีขาวในงานจะใส สีอ่อนจาง เหมาะลายสีเข้มบนขวดแก้ว/กระจก), sticker-pp-clear-white (PP ใส รองขาว — ลายทึบสดบนพื้นใส) หรือ sticker-paper (ประหยัด); เลือกเมื่อลูกค้าขอ "สติกเกอร์ / ฉลากติด / label / โลโก้ติด" (เป็นงานพิมพ์แบน ไม่ใช่บรรจุภัณฑ์)
+- card (นามบัตร): การ์ดแบนพิมพ์สองหน้า (หน้า+หลัง วางเรียงกันบนแผ่นออกแบบ ตกแต่งได้ทั้งสองด้าน) ไม่มีรอยพับ — W = กว้าง, H = สูง, ค่า D ไม่ใช้ (ใส่ค่าใดก็ได้ในลิมิต), handle ต้องเป็น false; ขนาดมาตรฐาน 90×54 มม. เลือกเมื่อลูกค้าขอ "นามบัตร / business card" เท่านั้น (เป็นงานพิมพ์การ์ด ไม่ใช่บรรจุภัณฑ์); ต้องใช้คู่กับกระดาษนามบัตร: card-art-matte (อาร์ตการ์ดเคลือบด้าน — มาตรฐาน), card-art-gloss (เคลือบเงา สีสด), card-cotton (คอตตอน 600 แกรม พรีเมียม เหมาะปั๊มจม/letterpress), card-linen (ลายผ้าลินิน คลาสสิก), card-pearl (กระดาษมุก การ์ดเชิญ/ความงาม) หรือ card-black (กระดาษดำ — หมึกไม่ขึ้น ใช้ฟอยล์/ปั๊ม); วัสดุ card-* ใช้กับนามบัตรเท่านั้น
+- sticker (สติกเกอร์ไดคัท): แผ่นพิมพ์แบนชิ้นเดียว เส้นตัดเป็นสี่เหลี่ยมมุมมน (ไดคัทตามรูป) ไม่มีรอยพับ — W = กว้าง, H = สูง, ค่า D ไม่ใช้, handle ต้องเป็น false; ต้องใช้คู่กับวัสดุสติกเกอร์: sticker-vinyl (ไวนิลกันน้ำ ทนแดด), sticker-pp (PP ขาว กันน้ำ ทนกว่ากระดาษ), sticker-pp-clear (PP ใส ไม่มีหมึกขาว — สีขาวในงานจะใส สีอ่อนจาง เหมาะลายสีเข้มบนขวดแก้ว/กระจก), sticker-pp-clear-white (PP ใส รองขาว — ลายทึบสดบนพื้นใส), sticker-paper (ประหยัด), sticker-art-gloss (อาร์ตมัน สีสด ในร่ม), sticker-kraft (คราฟท์ อีโค่ — ไม่มีหมึกขาว), sticker-felt (กระดาษเท็กซ์เจอร์ ฉลากไวน์/พรีเมียม), sticker-silver (เมทัลลิกเงิน) หรือ sticker-holo (โฮโลแกรมเหลือบรุ้ง); เลือกเมื่อลูกค้าขอ "สติกเกอร์ / ฉลากติด / label / โลโก้ติด" (เป็นงานพิมพ์แบน ไม่ใช่บรรจุภัณฑ์)
 
 ## วัสดุที่มีในระบบ (materialId)
 ${MATERIALS.map(
@@ -101,7 +101,8 @@ ${MATERIALS.map(
 - ถ้าลูกค้าต้องการ "กล่องใส่ขวด/แก้ว" ให้เลือกวัสดุกล่อง แต่ถ้าต้องการผลิตตัวขวด/กระป๋อง/โหลเอง → pet-bottle / aluminum / glass
 - ถุง/ซอง/doypack/ถุงซิป/ถุงตั้งได้ (กาแฟ ชา ขนม ผงชง ของแห้ง) → pouch-foil (กันชื้นดี, ค่าเริ่มต้นของถุง); สายอีโค่/คราฟท์ → pouch-kraft; อยากโชว์สินค้าข้างใน → pouch-clear
 - หลอดครีม/เจล/โลชั่น/ยาสีฟัน (หลอดบีบ) → tube-laminate (template ใส่อะไรก็ได้ ถูกละเลย)
-- สติกเกอร์/ฉลากติด/โลโก้ติด/label → template sticker + วัสดุ sticker-vinyl (กันน้ำ ทนแดด) / sticker-pp (ฉลากขวด เครื่องสำอาง ของเข้าตู้เย็น) / sticker-pp-clear หรือ sticker-pp-clear-white (สติกเกอร์ใส ติดแก้ว/กระจก — ลายสีอ่อน/ขาวหรืออยากให้ลายทึบ ใช้ -white) / sticker-paper (ในร่ม/ประหยัด)
+- นามบัตร → template card + card-art-matte (ทั่วไป) / card-art-gloss (สีสด) / card-cotton (หรู พรีเมียม ปั๊มจม) / card-linen (คลาสสิก ทางการ) / card-pearl (การ์ดเชิญ ความงาม) / card-black (ดำหรู คู่ฟอยล์)
+- สติกเกอร์/ฉลากติด/โลโก้ติด/label → template sticker + วัสดุ sticker-vinyl (กันน้ำ ทนแดด) / sticker-pp (ฉลากขวด เครื่องสำอาง ของเข้าตู้เย็น) / sticker-pp-clear หรือ sticker-pp-clear-white (สติกเกอร์ใส ติดแก้ว/กระจก — ลายสีอ่อน/ขาวหรืออยากให้ลายทึบ ใช้ -white) / sticker-paper (ในร่ม/ประหยัด) / sticker-art-gloss (สีสดเงา) / sticker-kraft (อีโค่ คราฟท์) / sticker-felt (ฉลากไวน์ พรีเมียม) / sticker-silver (เมทัลลิก) / sticker-holo (โฮโลแกรม)
 
 ## ตารางขนาดของที่พบบ่อย (มม.)
 ${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? ' (เปราะ)' : ''}`).join('\n')}
@@ -166,12 +167,15 @@ export const BOX_SPEC_SCHEMA: Record<string, unknown> = {
 }
 
 function sanitize(raw: Record<string, unknown>, mock: boolean): BoxSpecResult {
-  const materialId = MATERIALS.some((m) => m.id === raw.materialId)
+  let materialId = MATERIALS.some((m) => m.id === raw.materialId)
     ? (raw.materialId as string)
     : 'carton-300'
   const template = TEMPLATE_IDS.includes(raw.template as string)
     ? (raw.template as string)
     : 'tuck-end'
+  // กระดาษนามบัตร (card-*) ใช้กับนามบัตรเท่านั้น และนามบัตรใช้กระดาษการ์ด — โมเดลจับคู่ผิดให้แก้เป็นค่าเริ่มต้น
+  if (template === 'card' && !CARD_STOCK_IDS.includes(materialId)) materialId = DEFAULT_CARD_MAT
+  else if (template !== 'card' && materialId.startsWith('card-')) materialId = 'carton-300'
   return {
     template,
     materialId,
@@ -242,7 +246,17 @@ export function mockSpec(prompt: string, current?: CurrentSpec, image?: RefImage
     assumptions.push('รูปแบบ: นามบัตร (การ์ดแบน) ขนาดมาตรฐาน 90×54 มม.')
     return sanitize(
       {
-        materialId: 'carton-300',
+        materialId: /คอตตอน|cotton|ปั๊มจม|letterpress|หรู|พรีเมียม/i.test(prompt)
+          ? 'card-cotton'
+          : /ดำ|black/i.test(prompt)
+            ? 'card-black'
+            : /มุก|pearl/i.test(prompt)
+              ? 'card-pearl'
+              : /ลินิน|linen|ลายผ้า/i.test(prompt)
+                ? 'card-linen'
+                : /เงา|gloss/i.test(prompt)
+                  ? 'card-art-gloss'
+                  : DEFAULT_CARD_MAT,
         template: 'card',
         handle: false,
         W: 90,
@@ -262,11 +276,21 @@ export function mockSpec(prompt: string, current?: CurrentSpec, image?: RefImage
       ? /รองขาว|หมึกขาว|white/i.test(prompt)
         ? 'sticker-pp-clear-white'
         : 'sticker-pp-clear'
-      : /pp|พีพี/i.test(prompt)
-        ? 'sticker-pp'
-        : /กระดาษ|ประหยัด|ในร่ม/.test(prompt)
-          ? 'sticker-paper'
-          : 'sticker-vinyl'
+      : /โฮโลแกรม|holo/i.test(prompt)
+        ? 'sticker-holo'
+        : /เมทัลลิก|metallic|สีเงิน|ฟอยล์เงิน/i.test(prompt)
+          ? 'sticker-silver'
+          : /คราฟท์|kraft|อีโค่/i.test(prompt)
+            ? 'sticker-kraft'
+            : /เท็กซ์เจอร์|texture|ไวน์|wine/i.test(prompt)
+              ? 'sticker-felt'
+              : /อาร์ต|art ?gloss|มัน/i.test(prompt)
+                ? 'sticker-art-gloss'
+                : /\bpp\b|พีพี/i.test(prompt)
+                  ? 'sticker-pp'
+                  : /กระดาษ|ประหยัด|ในร่ม/.test(prompt)
+                    ? 'sticker-paper'
+                    : 'sticker-vinyl'
     assumptions.push('รูปแบบ: สติกเกอร์ไดคัท (แผ่นพิมพ์แบนมุมมน)')
     assumptions.push(`วัสดุ: ${MATERIALS.find((m) => m.id === sMat)?.nameTh ?? sMat}`)
     return sanitize(

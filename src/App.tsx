@@ -5,7 +5,7 @@ import { LogOut } from 'lucide-react'
 // true เมื่อ DimField อยู่ในแถบปรับแต่งด้านบน (Canva-style) → เปลี่ยนสไลเดอร์เป็นปุ่ม+dropdown อัตโนมัติ
 const TopBarCtx = createContext(false)
 import { LangCtx, loadLang, LANG_KEY, useT, type Lang } from './i18n'
-import { MATERIALS, getMaterial, packKind } from './core/materials'
+import { CARD_STOCK_IDS, DEFAULT_CARD_MAT, MATERIALS, getMaterial, isCardMat, packKind } from './core/materials'
 import { TEMPLATES, getTemplate } from './core/templates'
 import type { Dieline, Vec2 } from './core/types'
 import type { AiBoxSpec, ArtworkRequestInput, ArtworkResponse, CurrentSpec } from './core/ai'
@@ -1816,6 +1816,8 @@ export default function App({
   const isCard = kind === 'box' && templateId === 'card'
   // สติกเกอร์ไดคัท = box (แผ่นแบนชิ้นเดียว) นำเสนอเป็นประเภทงานแยก
   const isSticker = kind === 'box' && templateId === 'sticker'
+  // สี/ผิวกระดาษใต้แผงของงานพิมพ์แบน (blueprint) — object คงที่ต่อวัสดุ ให้ DielineSVG (memo) ไม่วาดใหม่ทุกครั้ง
+  const stockLook = useMemo(() => ({ color: mat.color, surface: mat.surface }), [mat])
   // หลอดครีม = vessel (revolve) วัสดุ tube นำเสนอเป็นประเภทงานแยก
   const isTube = kind === 'vessel' && mat.form === 'tube'
   // วัสดุพับไม่ได้แยกเป็น 2 เส้นทาง: ภาชนะ (revolve + ฉลากพันรอบ) กับ ถุงฟิล์ม (doypack)
@@ -3532,7 +3534,7 @@ export default function App({
                 onClick={() => {
                   if (kind === 'box' && !isCard && !isSticker) return
                   guardedSwitch(whatKind, kindName, t('กล่องพับ', 'Folding box'), () => {
-                    if (kind !== 'box' || isSticker) changeMaterial('carton-300')
+                    if (kind !== 'box' || isSticker || materialId.startsWith('card-')) changeMaterial('carton-300')
                     if (templateId === 'card' || templateId === 'sticker') changeTemplate('tuck-end')
                     else if (kind !== 'box') resetKindSize('box')
                   })
@@ -3617,7 +3619,8 @@ export default function App({
                 onClick={() => {
                   if (isCard) return
                   guardedSwitch(whatKind, kindName, t('นามบัตร', 'Business card'), () => {
-                    if (kind !== 'box' || materialId.startsWith('sticker-')) changeMaterial('carton-300')
+                    // กระดาษนามบัตรโดยเฉพาะ (card-*) เป็นค่าเริ่มต้น — ไม่ใช้กระดาษกล่องที่ค้างจากงานก่อน
+                    if (!materialId.startsWith('card-')) changeMaterial(DEFAULT_CARD_MAT)
                     changeTemplate('card')
                   })
                 }}
@@ -3732,13 +3735,16 @@ export default function App({
                 if (packKind(m) !== kind) return false
                 const sticker = m.id.startsWith('sticker-')
                 const tube = m.form === 'tube'
-                // นามบัตรใช้กระดาษการ์ดเท่านั้น (ไม่ใช่ลูกฟูก/พลาสติกใส/สติกเกอร์)
-                if (isCard) return m.id === 'carton-300' || m.id === 'carton-400' || m.id === 'kraft-350'
+                // นามบัตรใช้กระดาษการ์ดเท่านั้น (card-* + กระดาษกล่องเดิม — ไม่ใช่ลูกฟูก/พลาสติกใส/สติกเกอร์)
+                if (isCard) return CARD_STOCK_IDS.includes(m.id)
                 if (isSticker) return sticker // สติกเกอร์โชว์เฉพาะวัสดุสติกเกอร์
                 if (isTube) return tube // หลอดครีมโชว์เฉพาะวัสดุหลอด
-                // กล่อง/ภาชนะทั่วไปไม่ปนวัสดุสติกเกอร์/หลอด
-                return !sticker && !tube
-              }).map((m) => (
+                // กล่อง/ภาชนะทั่วไปไม่ปนวัสดุสติกเกอร์/หลอด/กระดาษนามบัตร
+                return !sticker && !tube && !isCardMat(m)
+              })
+                // นามบัตร: เรียงตาม CARD_STOCK_IDS (กระดาษการ์ดโดยเฉพาะก่อน กระดาษกล่องท้ายรายการ)
+                .sort((a, b) => (isCard ? CARD_STOCK_IDS.indexOf(a.id) - CARD_STOCK_IDS.indexOf(b.id) : 0))
+                .map((m) => (
                 <button
                   key={m.id}
                   className={`pick-item mat${materialId === m.id ? ' active' : ''}`}
@@ -6404,6 +6410,7 @@ export default function App({
                 lowResDpi={lowResMap}
                 fillLowDpi={fillLowDpi}
                 clearFilm={isSticker && !!mat.clear}
+                stock={(isSticker || isCard) && !mat.clear ? stockLook : undefined}
                 watermark={watermark}
               />
               <span className="bp-legend">
