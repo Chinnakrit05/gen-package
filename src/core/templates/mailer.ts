@@ -17,7 +17,10 @@ export function generateMailerBox(box: BoxParams, mat: Material): Dieline {
   const dustIn = Math.max(1.5, 2 * t + 0.5)
   const lipH = Math.max(10, Math.min(0.7 * Hp, 0.8 * Dp))
   const lipS = Math.max(8, Math.min(0.7 * Hp, Hp - t - 1))
-  const lipIns = Math.max(2, t + 1)
+  // ปีกข้างฝาเก็บด้านในผนังข้าง: รอยพับร่นเข้าจากขอบนอกเท่าชั้นวัสดุ (ฝาแคบกว่าผนังหลังข้างละ sideIn)
+  // และสั้นกว่าความลึกพอหลบลิ้นกันฝุ่น/ลิ้นหน้าที่แนบด้านในผนังหน้า-หลัง (ชั้นละ layer)
+  const sideIn = layer
+  const lipIns = Math.max(2, 2 * t + 1)
   const lipSlant = Math.min(6, lipS * 0.4)
   const dustW = Math.max(8, Math.min(0.75 * Hp, Wp / 2 - 4) - t)
   const dustSlant = Math.min(5, dustW * 0.45)
@@ -26,6 +29,8 @@ export function generateMailerBox(box: BoxParams, mat: Material): Dieline {
   const margin = Math.max(Hp, lipS)
   const cx0 = margin
   const cx1 = cx0 + Wp
+  const lx0 = cx0 + sideIn // ขอบฝา = รอยพับปีกข้าง
+  const lx1 = cx1 - sideIn
   const y1 = lipH
   const y2 = y1 + Dp
   const y3 = y2 + Hp
@@ -43,6 +48,10 @@ export function generateMailerBox(box: BoxParams, mat: Material): Dieline {
   const holeOff = Math.min(Math.max(14, 0.3 * Hp), Hp / 2)
   const holeLx = cx0 - Hp + holeOff
   const holeRx = cx1 + Hp - holeOff
+  // ปีกข้างฝาแนบในผนังข้างตรงรูหิ้ว → เจาะรูตรงกัน (ระยะจากขอบบนเท่ากัน: บานพับปีกอยู่ระดับขอบบนผนัง)
+  const flapLx = lx0 - holeOff
+  const flapRx = lx1 + holeOff
+  const flapCy = (y1 + y2) / 2
 
   const lipOutline = [
     P(cx0 + tuckIn, y1),
@@ -59,7 +68,10 @@ export function generateMailerBox(box: BoxParams, mat: Material): Dieline {
   ]
 
   // ลำดับพับแบบกล่องจริง: ผนังข้าง (0) → ลิ้นกันฝุ่นพับเข้า (1) → ผนังหน้า-หลังตั้งปิดทับ (2)
-  // → ฝา + ลิ้นหน้า (tuck) + ปีกข้างฝาพับลงพร้อมกัน (3) — ปีกข้างอยู่ในระนาบนอกผนังข้างตลอดทาง
+  // → ฝา + ลิ้นหน้า (tuck) + ปีกข้างฝา (3): ปีกพับตั้งฉากกับฝาก่อน (`EARLY`) แล้วฝาค่อยปิด (`LID_LAG`)
+  // ปีกจึงลงไปในระนาบด้านในผนังข้างตลอดทาง — ถ้าพับพร้อมฝา ปีกที่ยังกางจะกวาดผ่านขอบบนผนังข้าง
+  const EARLY: [number, number] = [0, 0.35]
+  const LID_LAG: [number, number] = [0.3, 1]
   const panels: Panel[] = [
     { id: 'base', parentId: null, outline: rect(cx0, y3, cx1, y4), stage: 0 },
     {
@@ -97,8 +109,8 @@ export function generateMailerBox(box: BoxParams, mat: Material): Dieline {
       hingeA: P(cx1, y4), hingeB: P(cx1 + Hp, y4), foldAngle: -90, stage: 1, zOffset: layer,
     },
     {
-      id: 'lid', parentId: 'back', outline: rect(cx0, y1, cx1, y2),
-      hingeA: P(cx0, y2), hingeB: P(cx1, y2), foldAngle: 90, stage: 3,
+      id: 'lid', parentId: 'back', outline: rect(lx0, y1, lx1, y2),
+      hingeA: P(lx0, y2), hingeB: P(lx1, y2), foldAngle: 90, stage: 3, within: LID_LAG,
     },
     {
       id: 'lip', parentId: 'lid', outline: lipOutline,
@@ -107,22 +119,24 @@ export function generateMailerBox(box: BoxParams, mat: Material): Dieline {
     {
       id: 'lip-left', parentId: 'lid',
       outline: [
-        P(cx0, y1 + lipIns),
-        P(cx0 - lipS, y1 + lipIns + lipSlant),
-        P(cx0 - lipS, y2 - lipIns - lipSlant),
-        P(cx0, y2 - lipIns),
+        P(lx0, y1 + lipIns),
+        P(lx0 - lipS, y1 + lipIns + lipSlant),
+        P(lx0 - lipS, y2 - lipIns - lipSlant),
+        P(lx0, y2 - lipIns),
       ],
-      hingeA: P(cx0, y1), hingeB: P(cx0, y2), foldAngle: -90, stage: 3, zOffset: -layer,
+      holes: hasHandle ? [obroundPts(flapLx, flapCy, holeLen, holeThick, true)] : undefined,
+      hingeA: P(lx0, y1), hingeB: P(lx0, y2), foldAngle: -90, stage: 3, within: EARLY,
     },
     {
       id: 'lip-right', parentId: 'lid',
       outline: [
-        P(cx1, y1 + lipIns),
-        P(cx1 + lipS, y1 + lipIns + lipSlant),
-        P(cx1 + lipS, y2 - lipIns - lipSlant),
-        P(cx1, y2 - lipIns),
+        P(lx1, y1 + lipIns),
+        P(lx1 + lipS, y1 + lipIns + lipSlant),
+        P(lx1 + lipS, y2 - lipIns - lipSlant),
+        P(lx1, y2 - lipIns),
       ],
-      hingeA: P(cx1, y1), hingeB: P(cx1, y2), foldAngle: 90, stage: 3, zOffset: -layer,
+      holes: hasHandle ? [obroundPts(flapRx, flapCy, holeLen, holeThick, true)] : undefined,
+      hingeA: P(lx1, y1), hingeB: P(lx1, y2), foldAngle: 90, stage: 3, within: EARLY,
     },
   ]
 
@@ -138,15 +152,15 @@ export function generateMailerBox(box: BoxParams, mat: Material): Dieline {
       `M ${cx0 + tuckIn} ${y1} L ${cx0 + tuckIn} ${r} Q ${cx0 + tuckIn} 0 ${cx0 + tuckIn + r} 0 ` +
         `L ${cx1 - tuckIn - r} 0 Q ${cx1 - tuckIn} 0 ${cx1 - tuckIn} ${r} L ${cx1 - tuckIn} ${y1}`,
     ),
-    cut(`M ${cx0} ${y1} L ${cx0 + tuckIn} ${y1}`),
-    cut(`M ${cx1 - tuckIn} ${y1} L ${cx1} ${y1}`),
+    cut(`M ${lx0} ${y1} L ${cx0 + tuckIn} ${y1}`),
+    cut(`M ${cx1 - tuckIn} ${y1} L ${lx1} ${y1}`),
     cut(
-      `M ${cx0} ${y1} L ${cx0} ${y1 + lipIns} L ${cx0 - lipS} ${y1 + lipIns + lipSlant} ` +
-        `L ${cx0 - lipS} ${y2 - lipIns - lipSlant} L ${cx0} ${y2 - lipIns} L ${cx0} ${y2}`,
+      `M ${lx0} ${y1} L ${lx0} ${y1 + lipIns} L ${lx0 - lipS} ${y1 + lipIns + lipSlant} ` +
+        `L ${lx0 - lipS} ${y2 - lipIns - lipSlant} L ${lx0} ${y2 - lipIns} L ${lx0} ${y2} L ${cx0} ${y2}`,
     ),
     cut(
-      `M ${cx1} ${y1} L ${cx1} ${y1 + lipIns} L ${cx1 + lipS} ${y1 + lipIns + lipSlant} ` +
-        `L ${cx1 + lipS} ${y2 - lipIns - lipSlant} L ${cx1} ${y2 - lipIns} L ${cx1} ${y2}`,
+      `M ${lx1} ${y1} L ${lx1} ${y1 + lipIns} L ${lx1 + lipS} ${y1 + lipIns + lipSlant} ` +
+        `L ${lx1 + lipS} ${y2 - lipIns - lipSlant} L ${lx1} ${y2 - lipIns} L ${lx1} ${y2} L ${cx1} ${y2}`,
     ),
     cut(`M ${cx0} ${y2} L ${cx0} ${y3}`),
     cut(`M ${cx1} ${y2} L ${cx1} ${y3}`),
@@ -160,9 +174,9 @@ export function generateMailerBox(box: BoxParams, mat: Material): Dieline {
     cut(`M ${cx1} ${y4} L ${cx1} ${y5}`),
     cut(`M ${cx0} ${y5} L ${cx1} ${y5}`),
     crease(`M ${cx0 + tuckIn} ${y1} L ${cx1 - tuckIn} ${y1}`),
-    crease(`M ${cx0} ${y1 + lipIns} L ${cx0} ${y2 - lipIns}`),
-    crease(`M ${cx1} ${y1 + lipIns} L ${cx1} ${y2 - lipIns}`),
-    crease(`M ${cx0} ${y2} L ${cx1} ${y2}`),
+    crease(`M ${lx0} ${y1 + lipIns} L ${lx0} ${y2 - lipIns}`),
+    crease(`M ${lx1} ${y1 + lipIns} L ${lx1} ${y2 - lipIns}`),
+    crease(`M ${lx0} ${y2} L ${lx1} ${y2}`),
     crease(`M ${cx0} ${y3} L ${cx1} ${y3}`),
     crease(`M ${cx0} ${y4} L ${cx1} ${y4}`),
     crease(`M ${cx0} ${y3} L ${cx0} ${y4}`),
@@ -175,6 +189,8 @@ export function generateMailerBox(box: BoxParams, mat: Material): Dieline {
   if (hasHandle) {
     segments.push(cut(obroundPath(holeLx, holeCy, holeLen, holeThick, true)))
     segments.push(cut(obroundPath(holeRx, holeCy, holeLen, holeThick, true)))
+    segments.push(cut(obroundPath(flapLx, flapCy, holeLen, holeThick, true)))
+    segments.push(cut(obroundPath(flapRx, flapCy, holeLen, holeThick, true)))
   }
 
   const dims: DimMark[] = [
