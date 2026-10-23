@@ -381,7 +381,9 @@ export function buildPouchGeometry(pouch: Pouch) {
         for (let iv = 0; iv < rows.length - 1; iv++) {
           for (let k = 0; k < cols - 1; k++) {
             const q = starts[starts.length - 1] + iv * cols + k
-            idx.push(q, q + 1, q + cols, q + 1, q + cols + 1, q + cols)
+            // เส้นทแยงของสี่เหลี่ยมสะท้อนกันซ้าย-ขวา (ครึ่งซ้ายทแยงทางหนึ่ง ครึ่งขวาอีกทาง) → แสงเงาสองข้างเท่ากัน
+            if (k < (cols - 1) / 2) idx.push(q, q + 1, q + cols, q + 1, q + cols + 1, q + cols)
+            else idx.push(q, q + cols + 1, q + cols, q, q + 1, q + cols + 1)
           }
         }
       }
@@ -976,10 +978,13 @@ export function PouchViewer3D({
   watermark?: string | null
 }) {
   const dist = Math.max(pouch.H, pouch.W) * 2.6
+  // ถุงตั้ง/ก้น K เปิดมาหน้าตรง (แบบภาพ mockup) ให้สองข้างสมดุล — มุมเฉียงขวาเห็นความหนาด้านขวาข้างเดียว
+  // ถุงแบบอื่นคงมุมเฉียงเดิม (เห็นจีบข้าง/ความลึก)
+  const front = pouch.style === 'stand' || pouch.style === 'kseal'
   return (
     <Canvas
       events={safeCanvasEvents}
-      camera={{ position: [dist * 0.35, dist * 0.25, dist], fov: 36, near: 1, far: 8000 }}
+      camera={{ position: front ? [0, dist * 0.12, dist] : [dist * 0.35, dist * 0.25, dist], fov: 36, near: 1, far: 8000 }}
       role="img"
       aria-label="มุมมอง 3 มิติของถุงพร้อมลาย"
     >
