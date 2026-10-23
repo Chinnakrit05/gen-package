@@ -244,6 +244,12 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ปากขวดทุกชนิด (PET/แก้ว/อะลูมิเนียม) มีขอบปากวงแหวน (`SHAPES.ring`, สูง `mouthLip`) → `Vessel.mouth`; ฝาขวดเลือกได้
   `Project.capStyle` none/screw/flip/pump/cork/foil/crown (crown = ฝาจีบโลหะสูง ≤9 มม. จีบ 21; เลือกแล้วปากเป็น crown finish วงแหวนเตี้ย 2.5–5 มม. ผ่าน `VesselShape.capStyle` → `mouthLip` ฝาจึงครอบลงใต้วงแหวน; foil = แคปซูลฟอยล์หุ้มหัวจุก+คอ ไม่เลยโคนคอ + ก้านจุก `inner`; จุกก๊อกเสียบในคอ ลึกไม่เลย `mouth.neckY`, สีเริ่ม `defaultCapColor`) + `capColor` — `capShape(style, mouth)` (pure) คืน lathe + ชิ้นกล่องเล็ก, ภาพ 3D เท่านั้น
   (ไม่อยู่ใน dieline), ครอบลงต่ำกว่าวงแหวน; PROJECT_FILE_VERSION 14
+  ขวดเหลี่ยม (แก้ว/PET เท่านั้น `canRectBottle`): `Project.rectDepth` = ลึกลำตัว (มีค่า = เหลี่ยม; W = กว้าง) → `Vessel.rect` (`RectSection`)
+  หน้าตัดสี่เหลี่ยมผืนผ้ามุมมน (`RECT_CORNER`·ด้านสั้น) ไล่เป็นวงกลมที่คอด้วย `rectSectionAt(rs, r)` ตามรัศมีของโปรไฟล์ขวดกลมชุดเดิม
+  (ใช้ร่วม 3D `rectBodyGeometry` + ความจุ `vesselVolumeMl(profile, rect)`); `circ` = เส้นรอบรูปจริง, `labelR` = circ/2π จึงใช้สูตรฉลากเดิมได้;
+  ฉลากเลือกพันรอบ (รอยต่อกลางหลัง) / หน้าเดียว (`labelBox.w` ≈ 90% หน้าแบน) → `rectLabelGeometry` แถบตามเส้นรอบรูปเริ่มกึ่งกลางหน้า
+  (ฉลากลอย 0.3 มม. → เดินตามสัดส่วนเส้นรอบรูปที่ลอย ไม่งั้นพันรอบเหลือช่องที่รอยต่อ; FrontSide ไม่ให้ด้านในโผล่ผ่านแก้วใส);
+  `roundedRectPoint` ที่ r = 0 ต้องคืน (0,0) — NaN ทำ normal ทั้งก้นเพี้ยนเป็นแถบดำ; สลับวัสดุอื่นล้าง rectDepth; PROJECT_FILE_VERSION 22
 - หลอดครีม (tube-laminate, path ภาชนะ): W = ⌀ท่อ — ลำตัวสร้างจาก `tubeSection` (pure, vessel.ts) หน้าตัดวงรีเส้นรอบวงคงที่ πW
   (กลมที่ไหล่ → แบนกว้าง πW/2 ที่ซีล, ด้านข้างหัวกระสุน 1−v^`TUBE_BULLET`) ใช้ร่วม 3D + ความจุ (`tubeVolumeMl`); ตั้งบนฝา flip-top
   กว้างเกือบเท่าท่อ (`tubeCapR`), ซีลบน `TUBE_SEAL` มีลอนกด; พิมพ์รอบตัวทั้งท่อ (ค่ามาตรฐาน = ไหล่ถึงใต้ซีล) UV ตามความยาวผิว เริ่มกลางหลัง
@@ -313,7 +319,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
-  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 21); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 22); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° ได้สันโค้งจาก `rollBeads` ใน fold.ts (ทรงกระบอกบาง รัศมี = ครึ่งระยะสองชั้น) — ตอนนี้ไม่มี template ใช้แล้ว
 - FEFCO 0427 ตามผัง dieline มาตรฐาน: ผนังข้างทบเป็นรอยพับคู่ (ผนัง → สัน กว้าง sp = 3t+0.2 = ผนัง+หู+ชั้นทบ → ชั้นทบ)
   ลิ้นปลายชั้นทบลงช่องบนฐานที่ sp − t/2; ฝาแคบกว่ากล่องข้างละ sp มีปีกข้างคางหมูพับลงด้านในชั้นทบ (stage 4 ก่อนฝาปิด 5),

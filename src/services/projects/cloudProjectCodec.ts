@@ -178,6 +178,7 @@ export async function dehydrateProject(input: DehydrateProjectInput): Promise<De
     ...(project.labelStyle ? { labelStyle: project.labelStyle } : {}),
     ...(project.neckH !== undefined ? { neckH: project.neckH } : {}),
     ...(project.shoulderH !== undefined ? { shoulderH: project.shoulderH } : {}),
+    ...(project.rectDepth !== undefined ? { rectDepth: project.rectDepth } : {}),
     ...(project.shoulderStyle && project.shoulderStyle !== 'round' ? { shoulderStyle: project.shoulderStyle } : {}),
     ...(project.labelBox && Object.keys(project.labelBox).length ? { labelBox: { ...project.labelBox } } : {}),
     ...(project.capStyle && project.capStyle !== 'none' ? { capStyle: project.capStyle } : {}),

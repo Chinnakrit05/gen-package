@@ -98,7 +98,7 @@ import { isFreshWork, standardSizeFor, VESSEL_STANDARD, type StdSize } from './c
 import { hasDesignWork } from './core/designWork'
 import { freshProjectFor, type NewWorkTarget } from './core/newWork'
 import { SwitchGuardModal } from './components/SwitchGuardModal'
-import { BODY_MIN, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, defaultCapColor, TUBE_CAP_STYLES, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
+import { BODY_MIN, canRectBottle, defaultRectDepth, RECT_DEPTH_MAX, rectDepthMin, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, defaultCapColor, TUBE_CAP_STYLES, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
 import {
   generatePouch,
   POUCH_STYLES,
@@ -1113,6 +1113,7 @@ interface EditSnapshot {
   labelStyle: LabelStyle
   neckH: number | undefined
   shoulderH: number | undefined
+  rectDepth: number | undefined
   shoulderStyle: ShoulderStyle
   labelBox: LabelBox | undefined
   capStyle: CapStyle
@@ -1138,6 +1139,7 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.labelStyle === b.labelStyle &&
   a.neckH === b.neckH &&
   a.shoulderH === b.shoulderH &&
+  a.rectDepth === b.rectDepth &&
   a.shoulderStyle === b.shoulderStyle &&
   sameLabelBox(a.labelBox, b.labelBox) &&
   a.capStyle === b.capStyle &&
@@ -1448,6 +1450,8 @@ export default function App({
   const [neckH, setNeckH] = useState<number | undefined>(initialActive.neckH)
   // ไหล่ (รอยต่อตัว→คอ): ความสูง มม. (undefined = สัดส่วนมาตรฐาน) + รูปทรง
   const [shoulderH, setShoulderH] = useState<number | undefined>(initialActive.shoulderH)
+  // ขวดเหลี่ยม: ความลึกลำตัว (มม.) — undefined = ขวดกลม; ใช้ได้เฉพาะแก้ว/PET (`canRectBottle`)
+  const [rectDepth, setRectDepth] = useState<number | undefined>(initialActive.rectDepth)
   const [shoulderStyle, setShoulderStyle] = useState<ShoulderStyle>(initialActive.shoulderStyle ?? 'round')
   // ฉลากกำหนดเอง (ตำแหน่ง/สูง/ยาวรอบตัว) — undefined = ตามรูปแบบฉลาก
   const [labelBox, setLabelBox] = useState<LabelBox | undefined>(initialActive.labelBox)
@@ -1846,8 +1850,8 @@ export default function App({
   // ฉลากจึงอยู่ด้านหน้าเสมอ ไม่ค้างมุมที่ผู้ใช้แก้คืนไม่ได้; engine (`Vessel.labelRot`) ยังรองรับไว้เผื่อเปิดกลับ
   const labelNoRot = useMemo(() => (labelBox?.rot === undefined ? labelBox : { ...labelBox, rot: undefined }), [labelBox])
   const vessel = useMemo(
-    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, { neckH, shoulderH, shoulderStyle, label: labelNoRot, capStyle }) : null),
-    [W, D, H, handle, mat, labelStyle, neckH, shoulderH, shoulderStyle, labelNoRot, capStyle, kind],
+    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, { neckH, shoulderH, shoulderStyle, label: labelNoRot, capStyle, rectDepth }) : null),
+    [W, D, H, handle, mat, labelStyle, neckH, shoulderH, shoulderStyle, labelNoRot, capStyle, rectDepth, kind],
   )
   const pouch = useMemo(
     () =>
@@ -2039,7 +2043,7 @@ export default function App({
     if (kind === 'vessel' && vessel)
       return isTube && vessel.tube
         ? tubeVolumeMl(vessel.tube)
-        : vesselVolumeMl(vessel.profile)
+        : vesselVolumeMl(vessel.profile, vessel.rect)
     if (kind === 'box') return boxVolumeMl(W, D, H)
     return null
   }, [kind, W, D, H, pouch, vessel, pouchStyle, isTube, isCard, isSticker])
@@ -2069,6 +2073,7 @@ export default function App({
               && (p.labelStyle ?? 'body') === labelStyle
               && p.neckH === neckH
               && p.shoulderH === shoulderH
+              && p.rectDepth === rectDepth
               && (p.shoulderStyle ?? 'round') === shoulderStyle
               && sameLabelBox(p.labelBox, labelBox)
               && (p.capStyle ?? 'none') === capStyle
@@ -2091,6 +2096,7 @@ export default function App({
                     labelStyle,
                     neckH,
                     shoulderH,
+                    rectDepth,
                     shoulderStyle,
                     labelBox,
                     capStyle,
@@ -2110,7 +2116,7 @@ export default function App({
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
 
   // local demo เขียน localStorage; cloud ส่ง active project เข้า durable IndexedDB/save queue
   useEffect(() => {
@@ -2193,6 +2199,7 @@ export default function App({
     labelStyle,
     neckH,
     shoulderH,
+    rectDepth,
     shoulderStyle,
     labelBox,
     capStyle,
@@ -2224,7 +2231,7 @@ export default function App({
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
+  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -2240,6 +2247,7 @@ export default function App({
     setLabelStyle(s.labelStyle ?? 'body')
     setNeckH(s.neckH)
     setShoulderH(s.shoulderH)
+    setRectDepth(s.rectDepth)
     setShoulderStyle(s.shoulderStyle ?? 'round')
     setLabelBox(s.labelBox)
     setCapStyle(s.capStyle ?? 'none')
@@ -2338,6 +2346,7 @@ export default function App({
           && (p.labelStyle ?? 'body') === labelStyle
           && p.neckH === neckH
           && p.shoulderH === shoulderH
+          && p.rectDepth === rectDepth
           && (p.shoulderStyle ?? 'round') === shoulderStyle
           && sameLabelBox(p.labelBox, labelBox)
           && (p.capStyle ?? 'none') === capStyle
@@ -2351,7 +2360,7 @@ export default function App({
           && p.history === history
           && p.histIdx === histIdx
             ? p
-            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, capStyle, capColor: capColor ?? undefined, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
+            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, shoulderStyle, labelBox, capStyle, capColor: capColor ?? undefined, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -2369,6 +2378,7 @@ export default function App({
     setLabelStyle(p.labelStyle ?? 'body')
     setNeckH(p.neckH)
     setShoulderH(p.shoulderH)
+    setRectDepth(p.rectDepth)
     setShoulderStyle(p.shoulderStyle ?? 'round')
     setLabelBox(p.labelBox)
     setCapStyle(p.capStyle ?? 'none')
@@ -2577,6 +2587,7 @@ export default function App({
     }
     setMaterialId(id)
     if (!m.foldable) setFold(1)
+    if (!canRectBottle(id)) setRectDepth(undefined) // ขวดเหลี่ยมมีเฉพาะแก้ว/PET — ไม่เก็บค่าที่ใช้ไม่ได้ค้างไว้
   }
   const changePouchStyle = (s: PouchStyle) => {
     if (s !== pouchStyle) applyStdSize(standardSizeFor(materialId, s, 'pouch'))
@@ -3234,7 +3245,7 @@ export default function App({
   const dims3d: Dim3D[] =
     kind === 'vessel'
       ? [
-          { label: '⌀ ตัว', mm: W },
+          { label: vessel?.rect ? 'กว้าง' : '⌀ ตัว', mm: W },
           { label: showNeck ? '⌀ คอ' : '⌀ ปาก', mm: D },
           { label: 'สูง', mm: H },
         ]
@@ -3828,6 +3839,32 @@ export default function App({
                     disabled={aiBusy}
                     onChange={(v) => setLabelBox((b) => ({ ...b, y: Math.round(vessel.labelY0 * 2) / 2, h: v }))}
                   />
+                  {vessel.rect && (
+                    // ขวดเหลี่ยม: เลือกฉลากพันรอบ (ยาวเท่าเส้นรอบรูป) หรือหน้าเดียว (90% ของหน้าแบนด้านหน้า ไม่อ้อมมุมมน)
+                    <div className="unit-toggle" role="group" aria-label={t('แบบฉลาก', 'Label type')}>
+                      <button
+                        type="button"
+                        className={vessel.labelArc >= 2 * Math.PI - 1e-9 ? 'active' : ''}
+                        aria-pressed={vessel.labelArc >= 2 * Math.PI - 1e-9}
+                        disabled={aiBusy}
+                        onClick={() => setLabelBox((b) => ({ ...b, w: undefined }))}
+                      >
+                        {t('พันรอบ', 'Wrap-around')}
+                      </button>
+                      <button
+                        type="button"
+                        className={vessel.labelArc < 2 * Math.PI - 1e-9 ? 'active' : ''}
+                        aria-pressed={vessel.labelArc < 2 * Math.PI - 1e-9}
+                        disabled={aiBusy}
+                        onClick={() => {
+                          const rs = vessel.rect!
+                          setLabelBox((b) => ({ ...b, w: Math.floor(2 * (rs.a - rs.rc) * 0.9 * 2) / 2 }))
+                        }}
+                      >
+                        {t('หน้าเดียว', 'Front only')}
+                      </button>
+                    </div>
+                  )}
                   <DimField
                     imperial={imperial}
                     label={t('ยาวรอบขวด', 'Length around')}
@@ -4287,7 +4324,9 @@ export default function App({
                         : pouchStyle === 'pillow'
                           ? t('กว้าง W', 'Width W')
                           : t('กว้างถุง W', 'Pouch width W')
-                    : t('⌀ ตัว W', '⌀ body W')
+                    : vessel?.rect
+                      ? t('กว้างขวด W', 'Bottle width W')
+                      : t('⌀ ตัว W', '⌀ body W')
               }
               value={W}
               min={isSticker ? STICKER_MIN_SIZE : 30}
@@ -4295,6 +4334,43 @@ export default function App({
               disabled={aiBusy || perSheetLocked}
               onChange={setW}
             />
+            {/* ขวดเหลี่ยม (แก้ว/PET): สลับทรงกลม/เหลี่ยม + ความลึกลำตัว (สี่เหลี่ยมผืนผ้า กว้าง W × ลึก) */}
+            {kind === 'vessel' && canRectBottle(mat.id) && (
+              <div className="field">
+                <span className="field-head">{t('ทรงขวด', 'Bottle shape')}</span>
+                <div className="unit-toggle" role="group" aria-label={t('ทรงขวด', 'Bottle shape')}>
+                  <button
+                    type="button"
+                    className={rectDepth === undefined ? 'active' : ''}
+                    aria-pressed={rectDepth === undefined}
+                    disabled={aiBusy}
+                    onClick={() => setRectDepth(undefined)}
+                  >
+                    {t('กลม', 'Round')}
+                  </button>
+                  <button
+                    type="button"
+                    className={rectDepth !== undefined ? 'active' : ''}
+                    aria-pressed={rectDepth !== undefined}
+                    disabled={aiBusy}
+                    onClick={() => setRectDepth((d) => d ?? defaultRectDepth(W, D))}
+                  >
+                    {t('เหลี่ยม', 'Rectangular')}
+                  </button>
+                </div>
+              </div>
+            )}
+            {kind === 'vessel' && vessel?.rect && (
+              <DimField
+                imperial={imperial}
+                label={t('ลึกขวด', 'Bottle depth')}
+                value={Math.round(vessel.rect.b * 4) / 2}
+                min={rectDepthMin(D)}
+                max={RECT_DEPTH_MAX}
+                disabled={aiBusy}
+                onChange={setRectDepth}
+              />
+            )}
             {showNeck && (
               <DimField
                 imperial={imperial}
