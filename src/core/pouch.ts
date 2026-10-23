@@ -496,9 +496,11 @@ export function lensArc(ai: number, d: number, n = 64): number {
 // มุมก้นมน (มม.): ตะเข็บข้างโค้งเข้าหาก้น (ซีลก้นโค้ง + ก้น gusset ดึงมุมเข้า) — มองจากหน้าเป็นมุมมน
 export const doypackCorner = (W: number, PH: number) => ({ rx: Math.min(W * 0.07, PH * 0.08), ry: Math.min(W * 0.1, PH * 0.1) })
 
-// แถวโปรไฟล์ doypack จากพื้น (ขอบล่างแผง) ถึงขอบบน:
+// แถวโปรไฟล์ doypack จากพื้นถึงขอบบน:
 // ช่วงพอง (พื้น → ปลายแหลมใต้ซิป) → ปากบีบแบน (ซิปแข็งหนีบปากไว้) → ซีลบน
 // ซีลข้างแบนกว้าง POUCH_SIDE_SEAL ตลอดความสูง ตรงเกือบดิ่ง (ดึงเข้าเล็กน้อยตามความพอง) มุมล่างมน
+// ถุงตั้ง (stand): ผิวหน้าคือแผง [ซีลบน → แนวพับก้น] เท่านั้น — ครึ่งก้นใต้แนวพับพับเข้าไปเป็นฐานเลนส์บนพื้น
+// (ขอบล่างผิวหน้า = ขอบฐาน, ดู `doypackBase`) แบบถุงจริง; ก้น K/ถุงมีจุกยังแม็พครึ่งก้นลงผิวหน้าส่วนล่าง
 export function doypackRows(
   p: Pick<Pouch, 'W' | 'depth3D' | 'frontRect' | 'zipper' | 'zipY'> & {
     label: { height: number }
@@ -512,15 +514,16 @@ export function doypackRows(
   const { W, depth3D } = p
   const st = p.frontRect.y
   const PH = p.label.height
-  const Hi = PH - st // พื้น → ใต้ซีลบน
+  const fold = doypackFold(p) // แนวพับก้นบนแผง = ขอบล่างของผิวหน้า (ไม่มีฐานแยก = ขอบล่างแผง)
+  const Hi = fold - st // พื้น → ใต้ซีลบน
   // ปลายช่วงพอง: ใต้ปีกซิป (ซิปหนีบปากแบน) ไม่มีซิป → ถึงซีลบน
   const tipY =
-    p.zipper && p.zipY !== undefined ? Math.max(Hi * 0.5, Math.min(Hi, PH - p.zipY - ZIP_HALF)) : Hi
+    p.zipper && p.zipY !== undefined ? Math.max(Hi * 0.5, Math.min(Hi, fold - p.zipY - ZIP_HALF)) : Hi
   const ss = p.sideSeal ?? POUCH_SIDE_SEAL
   const Wi = W - 2 * ss
   // ก้น K: มุมก้นเหลี่ยม (ซีลทแยงแข็ง ไม่ดึงมุมเข้าแบบซีลก้นโค้ง)
   const kseal = p.style === 'kseal'
-  const { rx, ry } = kseal ? { rx: 0, ry: 0 } : doypackCorner(W, PH)
+  const { rx, ry } = kseal ? { rx: 0, ry: 0 } : doypackCorner(W, fold)
   const fOf = (y: number) => (y >= tipY ? 0 : pouchDepthFactor(y / tipY, 'stand'))
   const pull = (y: number) => {
     if (y >= ry) return 0
@@ -540,7 +543,7 @@ export function doypackRows(
     kseal && half > 0 ? KSEAL_REACH * half * Math.max(0, Math.min(1, (dly - (PH - half)) / half)) : 0
   const rows: DoypackRow[] = ys.map((y, i) => {
     const aiBody = (Wi / 2) * (1 - DOYPACK_PULL * fOf(y)) - pull(y)
-    const dly = PH - (cum[i] / total) * Hi
+    const dly = fold - (cum[i] / total) * Hi
     const kfin = finAt(dly)
     return { y, a: aiBody + ss, ai: aiBody - kfin, b: DOYPACK_FIN + dOf(y), dly, ...(kseal ? { kfin } : {}) }
   })
@@ -550,6 +553,22 @@ export function doypackRows(
   }
   return rows
 }
+
+// แนวพับก้นบนแผง (พิกัด dieline แนวตั้ง): ถุงตั้งพับครึ่งก้นเข้าเป็นฐาน → ผิวหน้าจบที่ซีลบน + ลำตัว;
+// ก้น K/อื่น ๆ แม็พทั้งแผงลงผิวหน้า → ขอบล่างแผง
+export const doypackFold = (p: { label: { height: number }; style?: PouchStyle; gusset?: number }) =>
+  p.style === 'stand' && (p.gusset ?? 0) > 0 ? p.label.height - (p.gusset ?? 0) / 2 : p.label.height
+
+// ฐานถุงตั้ง: ครึ่งก้นของแผงหน้า/หลังปูเป็นครึ่งเลนส์บนพื้น — จากขอบฐาน (แนวพับก้น) เข้าหาแนวพับกลางก้น
+// (ขอบล่างแผง) ตามแกนยาวของเลนส์; กลางฐานนูนเข้าในถุงเล็กน้อย (ก้นยืนบนขอบ ไม่วางราบทั้งแผ่น)
+export const DOYPACK_BASE_LIFT = 0.05 // สัดส่วนความลึกก้น (สูงสุด 3 มม.)
+export const doypackBaseLift = (gusset: number) => Math.min(3, DOYPACK_BASE_LIFT * gusset)
+// จุดบนฐานที่ t ∈ [0,1] (0 = ขอบฐาน, 1 = แนวกลางก้น) ใต้จุดขอบ (x, zEdge): z ไล่เข้าหา 0, y ยกโค้งขึ้น
+export const doypackBasePoint = (x: number, zEdge: number, t: number, lift: number) => ({
+  x,
+  y: lift * Math.sin((Math.PI / 2) * t),
+  z: zEdge * (1 - t),
+})
 
 // ผิวหน้า (z ≥ 0) ที่ x ของแถว: ซีลข้างแบน = DOYPACK_FIN, ช่วงพองเป็นเลนส์
 // หน้าตัดช่วงพอง (0..1) ที่ u = x/ai: เลนส์ขอบคม (ตะเข็บ) — ช่วงไหล่ถุงมีจุกที่ฟิล์มแบนล้อม (flat > 0)

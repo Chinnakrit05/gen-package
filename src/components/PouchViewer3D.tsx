@@ -14,6 +14,9 @@ import {
   pouchWidthFactor,
   pouchSection,
   doypackRows,
+  doypackFold,
+  doypackBaseLift,
+  doypackBasePoint,
   spoutRows,
   spoutMarker,
   doypackAt,
@@ -383,6 +386,30 @@ export function buildPouchGeometry(pouch: Pouch) {
           }
         }
       }
+      // ถุงตั้ง: ฐานเลนส์พิมพ์ลายของครึ่งก้น (dieline ใต้แนวพับก้น → แนวพับกลางก้น) แผงหน้า = ครึ่งหน้า, หลัง = ครึ่งหลัง
+      const baseFold = doypackFold(pouch)
+      const printedBase = baseFold < dh - 1e-6
+      if (printedBase) {
+        const NB = 12
+        const lift = doypackBaseLift(pouch.gusset)
+        for (const side of [1, -1]) {
+          const start = pos.length / 3
+          for (let j = 0; j <= NB; j++) {
+            const t = j / NB
+            xRows[0].forEach((x0, k) => {
+              const q = doypackBasePoint(side * x0, side * doypackZ(rows[0], x0), t, lift)
+              pos.push(q.x, q.y, q.z)
+              uv.push((side > 0 ? us[k] : W + us[k]) / dw, (baseFold + t * (dh - baseFold)) / dh)
+            })
+          }
+          for (let j = 0; j < NB; j++) {
+            for (let k = 0; k < cols - 1; k++) {
+              const q = start + j * cols + k
+              idx.push(q, q + cols, q + 1, q + 1, q + cols, q + cols + 1)
+            }
+          }
+        }
+      }
       const sideCount = idx.length
       const P = (side: number, iv: number, k: number): [number, number, number] => {
         const x0 = xRows[iv][k]
@@ -411,24 +438,26 @@ export function buildPouchGeometry(pouch: Pouch) {
       for (let k = 0; k < cols - 1; k++) {
         quad(P(1, last, k), P(1, last, k + 1), P(-1, last, cols - 2 - k), P(-1, last, cols - 1 - k))
       }
-      // ฐาน (เลนส์บนพื้น): พัดจากกลาง ไปรอบแถวล่างหน้า (−a→+a) แล้วหลัง (+a→−a)
-      const center = pos.length / 3
-      pos.push(0, 0, 0)
-      uv.push(0, 0)
-      const ring = [
-        ...Array.from({ length: cols }, (_, k) => P(1, 0, k)),
-        mid(1, 0),
-        ...Array.from({ length: cols }, (_, k) => P(-1, 0, k)),
-        mid(-1, 0),
-      ]
-      for (const v of ring) {
-        pos.push(...v)
+      // ฐาน (เลนส์บนพื้น) ไม่พิมพ์ลาย (ก้น K/ถุงมีจุก): พัดจากกลาง ไปรอบแถวล่างหน้า (−a→+a) แล้วหลัง (+a→−a)
+      if (!printedBase) {
+        const center = pos.length / 3
+        pos.push(0, 0, 0)
         uv.push(0, 0)
-      }
-      for (let k = 0; k < ring.length; k++) {
-        const p0 = center + 1 + k
-        const p1 = center + 1 + ((k + 1) % ring.length)
-        idx.push(center, p1, p0)
+        const ring = [
+          ...Array.from({ length: cols }, (_, k) => P(1, 0, k)),
+          mid(1, 0),
+          ...Array.from({ length: cols }, (_, k) => P(-1, 0, k)),
+          mid(-1, 0),
+        ]
+        for (const v of ring) {
+          pos.push(...v)
+          uv.push(0, 0)
+        }
+        for (let k = 0; k < ring.length; k++) {
+          const p0 = center + 1 + k
+          const p1 = center + 1 + ((k + 1) % ring.length)
+          idx.push(center, p1, p0)
+        }
       }
       const geoD = new THREE.BufferGeometry()
       geoD.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
