@@ -24,6 +24,7 @@ export const VESSEL_STANDARD: Record<string, StdSize & { noteTh: string }> = {
 // ถุงฟิล์มตามรูปแบบ
 export const POUCH_STANDARD: Record<PouchStyle, StdSize & { noteTh: string }> = {
   stand: { W: 140, D: 80, H: 215, noteTh: 'ถุงตั้ง doypack 250 ก. (140×220+80)' }, // ≈700 มล.
+  kseal: { W: 130, D: 70, H: 195, noteTh: 'ถุงตั้งก้น K 250 ก. (130×200+70)' },
   flat: { W: 100, D: 20, H: 150, noteTh: 'ซองแบน 3 ด้าน 100×150' }, // ≈250 มล.
   gusset: { W: 80, D: 60, H: 210, noteTh: 'ถุงกาแฟข้างจีบ 250 ก. (80×250+60 รวมซีล)' }, // ≈770 มล.
   box: { W: 125, D: 65, H: 195, noteTh: 'ถุงก้นแบน 250 ก. (125×195+65)' },

@@ -13,8 +13,11 @@ export function vesselCameraFit(v: { H: number; labelR: number; tube?: unknown }
   return { shape: v.tube ? 'tube' : 'bottle', dist: Math.max(v.H, v.labelR * 4) * 2.2, dir: [0.45, 0.3, 1] }
 }
 
+// ถุงตั้ง/ก้น K เปิดมาหน้าตรง (แบบภาพ mockup) ให้สองข้างสมดุล — มุมเฉียงขวาเห็นความหนาด้านขวาข้างเดียว;
+// ถุงแบบอื่นคงมุมเฉียง (เห็นจีบข้าง/ความลึก)
 export function pouchCameraFit(p: { H: number; W: number }, style: string): ViewerCameraFit {
-  return { shape: `pouch:${style}`, dist: Math.max(p.H, p.W) * 2.6, dir: [0.35, 0.25, 1] }
+  const front = style === 'stand' || style === 'kseal'
+  return { shape: `pouch:${style}`, dist: Math.max(p.H, p.W) * 2.6, dir: front ? [0, 0.12, 1] : [0.35, 0.25, 1] }
 }
 
 // ตำแหน่งกล้องตามทิศเดิมของ viewer (ไม่ normalize ทิศ เพื่อให้ตรงกับตำแหน่งที่ Canvas ตั้งตอนสร้างทุกประการ)

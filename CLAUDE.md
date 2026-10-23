@@ -30,7 +30,8 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `src/components/Viewer3D.tsx` — R3F viewer + FitCamera (วัดจากส่วนแผ่นที่ยื่นไกลสุดจากแผงหน้า ไม่ใช่ครึ่งแผ่น)
 - `VesselViewer3D`/`PouchViewer3D` จัดกล้องด้วย `FitViewerCamera` + `src/components/viewerCamera.ts` (pure): prop `camera` ของ `<Canvas>`
   มีผลแค่ตอน mount — สลับขวด↔หลอด/รูปแบบถุงใช้ Canvas เดิม กล้องจึงค้างระยะของทรงก่อน (หลอดดูเล็ก ข้อความเหมือนถูกตัด จนกว่าจะสลับแท็บ);
-  จัดใหม่เมื่อทรงเปลี่ยนหรือระยะต่าง ≥ `REFIT_RATIO` 18% (กฎเดียวกับ FitCamera) — ปรับขนาดเล็กน้อยไม่ดึงมุมที่ผู้ใช้หมุนไว้
+  จัดใหม่เมื่อทรงเปลี่ยนหรือระยะต่าง ≥ `REFIT_RATIO` 18% (กฎเดียวกับ FitCamera) — ปรับขนาดเล็กน้อยไม่ดึงมุมที่ผู้ใช้หมุนไว้;
+  มุมเริ่มต่อรูปทรงอยู่ใน `vesselCameraFit`/`pouchCameraFit` (ถุงตั้ง/ก้น K หน้าตรง) ตั้งที่นั่นที่เดียว
 - `src/components/DielineSVG.tsx` — blueprint preview + เส้นบอกขนาด (toggle ได้) + ลาก/หมุน/ลบ artwork; การลากมี snap; ซูม/แพน (Ctrl+ล้อ), กริด, ไม้บรรทัด, เส้นไกด์ลากเอง (state ใน component; guideLines ≠ prop `guides` ที่เป็น bleed/safe); เส้นไกด์เข้า snapTargets ตอนลาก
 - เอฟเฟกต์ข้อความ `TextEl.fx` (`src/core/textFx.ts`, pure): drop/background/hollow/splice/double/echo/glow/long — `textFxPlan` แปลงเป็นชั้น
   (กล่องพื้นหลัง → ชั้นใต้ตัวอักษร เยื้อง/เบลอ/ทึบ → ตัวอักษร) แล้วตัววาดทุกทางวาดตามรายการเดียว: `textInnerSVG` (artwork.ts)
@@ -99,7 +100,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ข้างจีบกาแฟ 250 ก. 80×210+60, ก้นแบน 125×195+65, ซองขนม 150×220, มีจุก 250 มล. 100×160+50) — ความจุเทียบด้วยสูตร capacity.ts
   ใน standardSize.test; ตั้งให้ตอนยังไม่เริ่มงาน (`isFreshWork`: ไม่มีลาย/รูปพื้น) เมื่อสลับประเภทงาน (`resetKindSize`), สลับวัสดุภาชนะ
   (`changeMaterial`) หรือสลับรูปแบบถุง (`changePouchStyle`) + ล้าง neckH/shoulderH/labelBox (`applyStdSize`); มีลายแล้วคงขนาดเดิม
-  (หลอดตั้งค่ามาตรฐานเสมอ); กล่องใช้ defaults ของ template (กล่องไปรษณีย์ไทย: mailer/0427 = เบอร์ A 20×14×6, rollover = B 25×17×9,
+  (หลอดตั้งค่ามาตรฐานเสมอ; ถุงตั้งก้น K 250 ก. 130×195+70); กล่องใช้ defaults ของ template (กล่องไปรษณีย์ไทย: mailer/0427 = เบอร์ A 20×14×6, rollover = B 25×17×9,
   RSC = C 30×20×11 ซม.; นามบัตร 90×55)
 - สลับประเภทงาน/รูปแบบบรรจุภัณฑ์/รูปแบบถุงเมื่อมีงานตกแต่งแล้ว (`hasDesignWork` ใน `src/core/designWork.ts` = มีลาย/รูปพื้น/สีพื้น
   แม้อย่างเดียว): `guardedSwitch(target, apply)` ใน App เปิด `SwitchGuardModal` "เริ่มชิ้นงานใหม่" (โฟกัสเริ่มที่ยกเลิก) — ไม่ลบงานเดิม:
@@ -231,7 +232,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ฉลากกำหนดเอง `Project.labelBox` {y ขอบล่างจากก้น, h สูง, w ยาวรอบตัว} (เก็บเฉพาะคีย์ที่ตั้ง; เลือกรูปแบบฉลาก = ล้าง y/h):
   clamp บนลำตัวตรง (`Vessel.labelRange`); w ≥ เส้นรอบวง = พันรอบ+ทับกาว, น้อยกว่า = ฉลากแผ่นหน้าแผงเดียวไม่มีกาว →
   `Vessel.labelArc` (มุมหุ้ม) ให้ viewer สร้าง Cylinder ส่วนโค้งกึ่งกลางด้านหน้า; `labelBox.rot` องศา (0 หน้า, 180 หลัง → `Vessel.labelRot`
-  หมุน mesh ฉลาก); หลอดครีมไม่ใช้. ช่วงลำตัวตรงมาจาก `profileFor().straight` (ไม่ใช้เกณฑ์รัศมี — ขอบปากอาจกว้างเกือบเท่าตัว)
+  หมุน mesh ฉลาก — **ถอด UI ออกแล้ว** 23 ต.ค. 2026 และ App ตัดค่าที่เคยเก็บทิ้งก่อน generate (`labelNoRot`) ฉลากอยู่ด้านหน้าเสมอ; engine ยังรองรับ); หลอดครีมไม่ใช้. ช่วงลำตัวตรงมาจาก `profileFor().straight` (ไม่ใช้เกณฑ์รัศมี — ขอบปากอาจกว้างเกือบเท่าตัว)
   ปากขวดทุกชนิด (PET/แก้ว/อะลูมิเนียม) มีขอบปากวงแหวน (`SHAPES.ring`, สูง `mouthLip`) → `Vessel.mouth`; ฝาขวดเลือกได้
   `Project.capStyle` none/screw/flip/pump/cork/foil/crown (crown = ฝาจีบโลหะสูง ≤9 มม. จีบ 21; เลือกแล้วปากเป็น crown finish วงแหวนเตี้ย 2.5–5 มม. ผ่าน `VesselShape.capStyle` → `mouthLip` ฝาจึงครอบลงใต้วงแหวน; foil = แคปซูลฟอยล์หุ้มหัวจุก+คอ ไม่เลยโคนคอ + ก้านจุก `inner`; จุกก๊อกเสียบในคอ ลึกไม่เลย `mouth.neckY`, สีเริ่ม `defaultCapColor`) + `capColor` — `capShape(style, mouth)` (pure) คืน lathe + ชิ้นกล่องเล็ก, ภาพ 3D เท่านั้น
   (ไม่อยู่ใน dieline), ครอบลงต่ำกว่าวงแหวน; PROJECT_FILE_VERSION 14
@@ -250,7 +251,9 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   หน้าตัดวงรีเปลี่ยนตามความสูง (`pouchWidthFactor`/`pouchDepthFactor` เป็น pure ทดสอบได้: ก้นแบนตั้งได้
   พุงกลางป่อง ปากซีลแบน) + UV แม็พ frontRect/backRect ให้ลายอ่านไม่กลับด้านเมื่อมองจาก +Z (texture flipY=false)
   ความหมายขนาด: W = กว้างถุง, D = ลึกก้น (clamp ≤ W, ≥10; ซองแบนไม่ใช้ D), H = สูงลำตัว (template ถูกละเลย)
-  รูปแบบถุง `pouchStyle` (`POUCH_STYLES`) 6 แบบ: 'stand' doypack ก้นตั้ง / 'flat' ซองแบน 3 ด้าน (ไม่ใช้ D) /
+  รูปแบบถุง `pouchStyle` (`POUCH_STYLES`) 7 แบบ: 'stand' doypack ก้นตั้ง / 'kseal' ถุงตั้งก้น K (stand up pouch: เหมือน doypack ทุกอย่าง
+  แต่แนวพับก้นตรง + ซีลมุมก้นทแยงรูป K `KSEAL_REACH` บน dieline (อยู่ในครึ่งก้นที่พับเป็นฐาน), 3D ข้างตรงดิ่งเต็มกว้างถึงพื้น
+  มุมก้นเหลี่ยม ไม่หักเข้า (ไม่มี `doypackCorner` / `DOYPACK_PULL`) + ฐานพิมพ์ลายแบบถุงตั้ง; PROJECT_FILE_VERSION 21) / 'flat' ซองแบน 3 ด้าน (ไม่ใช้ D) /
   'gusset' ซองข้างจีบ brick (front+จีบ+back+จีบ, ทรงแท่ง) / 'box' ก้นแบนตั้งเหลี่ยม (จีบข้าง+ก้น gusset, ตั้งได้) /
   'pillow' ซองหลังกลาง (ไม่ใช้ D, fin seal กลางหลัง, พองนุ่ม) / 'spout' ถุงมีจุก (ก้นตั้งเหมือน stand + จุก 3D + marker บน dieline)
   — dieline คุมด้วย sideGusset (gusset/box) + bottomGusset (stand/box/spout) + sb (flat/gusset/pillow);
@@ -269,9 +272,15 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ถุงตั้ง/มีจุก (stand/spout) = doypack แบบงานพิมพ์จริง: dieline เป็นแผงหน้า [0,W] + หลัง [W,2W] แยกด้วยเส้นตัด แต่ละแผงมี
   ซีลข้าง `DOYPACK_SEAL` 3 มม. สองด้านตลอดความสูง + ซีลบน `DOYPACK_TOP_SEAL` 5 มม. (มีรูแขวน → หัวถุง 12) + ครึ่งก้น D/2 (ถุงมีจุกยังใช้ซีล 6/10 เพราะมุมมนต้องตัดในเนื้อซีล; `Pouch.sideSeal` บอกค่าที่ใช้จริง) ใต้ลำตัวที่ซีลโค้ง (`DOYPACK_BOTTOM_SAG`, Q curve)
   ไม่มีลิ้นกาว/รอยต่อหลัง (`backSeam` ใช้กับ pillow เท่านั้น); รูแขวน/รอยบากเจาะทั้งสองแผง
-  3D ใช้ `doypackRows`/`doypackAt`/`doypackZ` (pure): แต่ละแผงแม็พทั้งแผงของ dieline (รวมซีล) ซีลข้าง/ซีลบนแบนที่ ±`DOYPACK_FIN`,
+  3D ใช้ `doypackRows`/`doypackAt`/`doypackZ` (pure): ผิวหน้าแม็พแผงช่วงซีลบน → แนวพับก้น `doypackFold` (ถุงตั้ง/ก้น K: ครึ่งก้นใต้แนวพับ
+  เป็นฐานเลนส์พิมพ์ลาย จากขอบฐานเข้าหาแนวพับกลางก้น — แถบซีลก้น `doypackRimH` (ช่วงฟิล์ม `DOYPACK_RIM_T`) ห้อยดิ่งจากขอบล่างผิวหน้า
+  ถึงพื้น (ผิวหน้ายกขึ้นเท่า rim; มองหน้าเป็นแถบตามขอบล่างต่อจากซีลข้างเป็นมุมเหลี่ยม) แล้วก้นโก่งเป็นโดม `doypackBaseLift`
+  (`doypackBasePoint`) → สูง 3D = แถบซีลก้น + ลำตัว + ซีลบน;
+  ถุงมีจุกยังแม็พทั้งแผงลงผิวหน้า ฐานไม่พิมพ์) ซีลข้าง/ซีลบนแบนที่ ±`DOYPACK_FIN`,
   ช่วงพองหน้าตัดเลนส์ `lensZ`; ด้านข้างทรงหัวกระสุน 1−v^`DOYPACK_BULLET` (หนาสุดที่ก้น) จากพื้นถึงปลายแหลมใต้ปีกซิป (ซิปหนีบปากแบน)
-  ซีลข้างตรงเกือบดิ่ง (ดึงเข้าแค่ `DOYPACK_PULL`) + มุมก้นมน `doypackCorner` — ห้ามหดความกว้างตามความยาวโค้งเต็มที่ (ทำแล้วถุงเรียวผิดทรง);
+  ซีลข้างตรงเกือบดิ่ง (ดึงเข้าแค่ `DOYPACK_PULL`) มุมก้นเหลี่ยม (ไม่มีมุมมน) — ห้ามหดความกว้างตามความยาวโค้งเต็มที่ (ทำแล้วถุงเรียวผิดทรง);
+  ทั้งถุงเรียวเข้าหาก้น: ขอบข้าง (ซีลข้างพร้อมช่วงพอง) ร่นเข้า `doypackTaper` 0 ใต้ซิป → `DOYPACK_WEDGE`·W ที่พื้น (ซีลเอียงตามถุง);
+  mesh สมมาตรซ้าย-ขวา (เส้นทแยงของ quad สะท้อนกันสองครึ่ง) และ viewer เปิดถุงตั้ง/ก้น K มาหน้าตรง (ถุงอื่นมุมเฉียงเดิม);
   ขอบซีล (หนา 2·FIN) + ฐานเลนส์ = material 1; ซิป/วาล์ว/tin-tie/จุกวางผ่าน `doypackAt`
   ถุงมีจุก (spout) ต่อยอด doypack: แผงไดคัทมุมมน `SPOUT_CORNER_R` (≤ ซีลข้าง) ตัดแยกสองชิ้น + แนวเชื่อม "เรือ" จุกกลางขอบบนทั้งสองแผง
   (`spoutMarker` r/bw/bh ใช้ร่วม dieline/3D/ตรวจซิป); 3D ใช้ `spoutRows`: ปากไม่บีบแบนเพราะเรือค้ำ — ช่วงไหล่ `SPOUT_SHOULDER` รวบเข้าหาเรือ
@@ -288,10 +297,13 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ซิปใน 3D = รอยปั๊มนูนบนฟิล์มเอง (`zipReliefProfile` แถบนูน+สันคู่ ข้ามทั้งแผ่นที่แนว zipY ผ่าน `useFinishMaps` relief) ไม่ใช่แถบสีแยก
   → สี/ลาย/texture ตามถุงเสมอ; สันซิปต้องกว้างพอ (σ ≥ ~0.75 มม.) ไม่งั้นมองเฉียงเป็นจุดหยัก
   ผ่าน `pouchZipLayout` ชุดเดียวทั้ง dieline/3D; หลักผลิตตรวจใน `pouchPreflight.ts` (รอยบากพ้นซีล → เหนือซิป → ซิปไม่ทับวาล์ว/จุก/ก้นจีบ)
+  รอยบากฉีก V ลึก `tearNotchDepth` (70% ของซีลข้าง ≤ 4 มม. — จบในแถบซีล ไม่ตัดเข้าช่วงบรรจุ) เก็บเป็น `Pouch.tearNotches` (สามเหลี่ยมพิกัดแผ่นคลี่)
+  → dieline ตัดตามนี้ และ 3D เจาะผิวด้วย alpha mask พิกัดแผ่นคลี่ (`tearNotchMaskCanvas` → alphaMap + alphaTest ทั้งสองวัสดุ) ใช้ได้ทุกรูปแบบถุง;
+  ขอบซีลหนาของ doypack ได้ UV ตามขอบแผ่นคลี่ให้โดน mask ด้วย
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
-  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 20); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 21); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° ได้สันโค้งจาก `rollBeads` ใน fold.ts (ทรงกระบอกบาง รัศมี = ครึ่งระยะสองชั้น) — ตอนนี้ไม่มี template ใช้แล้ว
 - FEFCO 0427 ตามผัง dieline มาตรฐาน: ผนังข้างทบเป็นรอยพับคู่ (ผนัง → สัน กว้าง sp = 3t+0.2 = ผนัง+หู+ชั้นทบ → ชั้นทบ)
   ลิ้นปลายชั้นทบลงช่องบนฐานที่ sp − t/2; ฝาแคบกว่ากล่องข้างละ sp มีปีกข้างคางหมูพับลงด้านในชั้นทบ (stage 4 ก่อนฝาปิด 5),

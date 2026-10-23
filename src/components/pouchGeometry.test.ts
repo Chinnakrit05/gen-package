@@ -55,3 +55,22 @@ describe('3D ซองข้างจีบ: ซิปอยู่ช่วง�
     expect(s.flatL).toBe(0)
   })
 })
+
+describe('3D ถุงตั้งก้น K: mesh อยู่ในกรอบถุง ฐานวางพื้น', () => {
+  it.each([
+    [130, 70, 195],
+    [80, 40, 120],
+  ])('W%d D%d H%d', (W, D, H) => {
+    const p = generatePouch({ W, D, H }, mat, { style: 'kseal', zipper: true })
+    const pos = buildPouchGeometry(p).attributes.position
+    let minY = Infinity
+    let maxAbsX = 0
+    for (let i = 0; i < pos.count; i++) {
+      expect(Number.isFinite(pos.getX(i) + pos.getY(i) + pos.getZ(i))).toBe(true)
+      minY = Math.min(minY, pos.getY(i))
+      maxAbsX = Math.max(maxAbsX, Math.abs(pos.getX(i)))
+    }
+    expect(minY).toBeCloseTo(0, 6)
+    expect(maxAbsX).toBeLessThanOrEqual(W / 2 + 1e-6) // ขอบซีลไม่ยื่นเกินความกว้างถุง (มุมเหลี่ยมพอดีขอบ)
+  })
+})

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { buildPouchGeometry, getPouchSealColor } from './PouchViewer3D'
-import { brickShape, generatePouch, DOYPACK_FIN, FLAT_SEAL, POUCH_FIN_SEAL, type PouchStyle } from '../core/pouch'
+import { brickShape, generatePouch, DOYPACK_FIN, doypackFold, doypackRows, FLAT_SEAL, POUCH_FIN_SEAL, type PouchStyle } from '../core/pouch'
 import { getMaterial } from '../core/materials'
 
 describe('brick pouch seal color', () => {
@@ -160,7 +160,8 @@ describe.each<PouchStyle>(['stand', 'spout'])('doypack geometry (%s)', (style) =
     geometry.computeBoundingBox()
     const box = geometry.boundingBox!
     expect(box.min.y).toBeCloseTo(0, 6)
-    expect(box.max.y).toBeCloseTo(PH, 4) // ทั้งแผงรวมครึ่งก้น
+    // ถุงตั้ง: ครึ่งก้นพับเข้าเป็นฐาน → สูง = ซีลบน + ลำตัว; ถุงมีจุก: ทั้งแผงรวมครึ่งก้น
+    expect(box.max.y).toBeCloseTo(doypackRows(pouch).at(-1)!.y, 4) // ถุงตั้ง = แถบซีลก้น + ลำตัว + ซีลบน
     expect(box.max.x).toBeLessThanOrEqual(size.W / 2 + 1e-4)
     expect(box.max.z).toBeLessThanOrEqual(pouch.depth3D + DOYPACK_FIN + 1e-4)
     geometry.dispose()
@@ -175,7 +176,8 @@ describe.each<PouchStyle>(['stand', 'spout'])('doypack geometry (%s)', (style) =
     for (const v of printed(geometry)) {
       const x = uv.getX(v) * pouch.label.width
       const y = uv.getY(v) * pouch.label.height
-      const e = position.getZ(v) > 0 ? ext.f : ext.b
+      // ตามพิกัดฟิล์ม: แนวรอยต่อ u = W ใช้ด้านของผิว (ฐานกลางก้นอยู่ที่ z = 0 นับเป็นหน้า)
+      const e = x < size.W - 1e-6 || (x <= size.W + 1e-6 && position.getZ(v) >= 0) ? ext.f : ext.b
       e[0] = Math.min(e[0], x); e[1] = Math.max(e[1], x); e[2] = Math.min(e[2], y); e[3] = Math.max(e[3], y)
       if (Math.abs(position.getX(v)) < 10 && position.getY(v) > 20 && position.getY(v) < PH * 0.7) {
         expect(Math.sign(normal.getZ(v))).toBe(Math.sign(position.getZ(v)))
@@ -202,6 +204,7 @@ describe.each<PouchStyle>(['stand', 'spout'])('doypack geometry (%s)', (style) =
       const y = uv.getY(v) * pouch.label.height
       const inSideSeal = x < pouch.sideSeal - 1e-3 || x > size.W - pouch.sideSeal + 1e-3
       const inTopSeal = y < pouch.frontRect.y - 1e-3
+      if (y > doypackFold(pouch) + 1e-3) continue // ครึ่งก้นบนฐาน (ไม่ใช่แถบซีล)
       if (!inSideSeal && !inTopSeal) continue
       expect(Math.abs(position.getZ(v))).toBeCloseTo(DOYPACK_FIN, 4)
       seal++

@@ -16,6 +16,11 @@ import {
   pouchWidthFactor,
   pouchSection,
   doypackRows,
+  doypackFold,
+  doypackBaseLift,
+  doypackBasePoint,
+  doypackRimH,
+  DOYPACK_RIM_T,
   spoutRows,
   spoutMarker,
   doypackAt,
@@ -318,7 +323,7 @@ export function buildPouchGeometry(pouch: Pouch) {
 
     // ───────── doypack (stand/spout): แผงหน้า-หลังแยก ซีลข้าง/ซีลบนแบน + ช่วงพองหน้าตัดเลนส์ ─────────
     // แต่ละแผงแม็พทั้งแผงของ dieline (รวมแถบซีล) → ลายบนซีลก็ขึ้น; ความกว้างช่วงพองแก้ให้ความยาวโค้ง = ฟิล์มจริง
-    if (style === 'stand' || style === 'spout') {
+    if (style === 'stand' || style === 'kseal' || style === 'spout') {
       const rows = style === 'spout' ? spoutRows(pouch) : doypackRows(pouch)
       const ss = pouch.sideSeal
       const Wi = W - 2 * ss
@@ -379,7 +384,37 @@ export function buildPouchGeometry(pouch: Pouch) {
         for (let iv = 0; iv < rows.length - 1; iv++) {
           for (let k = 0; k < cols - 1; k++) {
             const q = starts[starts.length - 1] + iv * cols + k
-            idx.push(q, q + 1, q + cols, q + 1, q + cols + 1, q + cols)
+            // เส้นทแยงของสี่เหลี่ยมสะท้อนกันซ้าย-ขวา (ครึ่งซ้ายทแยงทางหนึ่ง ครึ่งขวาอีกทาง) → แสงเงาสองข้างเท่ากัน
+            if (k < (cols - 1) / 2) idx.push(q, q + 1, q + cols, q + 1, q + cols + 1, q + cols)
+            else idx.push(q, q + cols + 1, q + cols, q, q + 1, q + cols + 1)
+          }
+        }
+      }
+      // ถุงตั้ง/ก้น K: ฐานเลนส์พิมพ์ลายของครึ่งก้น (dieline ใต้แนวพับก้น → แนวพับกลางก้น) แผงหน้า = ครึ่งหน้า, หลัง = ครึ่งหลัง
+      const baseFold = doypackFold(pouch)
+      const printedBase = baseFold < dh - 1e-6
+      if (printedBase) {
+        const NB = 12
+        const lift = doypackBaseLift(pouch.gusset)
+        const rim = doypackRimH(pouch.gusset)
+        // จุดแบ่งฟิล์มฐาน: แถบซีลก้น (ห้อยถึงพื้นพอดีที่ DOYPACK_RIM_T) แล้วโดม NB ช่วง
+        const ts = rim > 0
+          ? [0, DOYPACK_RIM_T / 2, ...Array.from({ length: NB + 1 }, (_, j) => DOYPACK_RIM_T + ((1 - DOYPACK_RIM_T) * j) / NB)]
+          : Array.from({ length: NB + 1 }, (_, j) => j / NB)
+        for (const side of [1, -1]) {
+          const start = pos.length / 3
+          for (const t of ts) {
+            xRows[0].forEach((x0, k) => {
+              const q = doypackBasePoint(side * x0, side * doypackZ(rows[0], x0), t, lift, rim)
+              pos.push(q.x, q.y, q.z)
+              uv.push((side > 0 ? us[k] : W + us[k]) / dw, (baseFold + t * (dh - baseFold)) / dh)
+            })
+          }
+          for (let j = 0; j < ts.length - 1; j++) {
+            for (let k = 0; k < cols - 1; k++) {
+              const q = start + j * cols + k
+              idx.push(q, q + cols, q + 1, q + 1, q + cols, q + cols + 1)
+            }
           }
         }
       }
@@ -389,10 +424,12 @@ export function buildPouchGeometry(pouch: Pouch) {
         return [side * x0, rows[iv].y, side * doypackZ(rows[iv], x0)]
       }
       // ขอบซีล (หนา 2·FIN) ข้างซ้าย/ขวา/บน — จุดแยก ไม่เกลี่ย normal กับผิวพิมพ์
-      const quad = (a: number[], b: number[], c: number[], d: number[]) => {
+      // uvU/dl0/dl1: พิกัดแผ่นคลี่ของขอบ (a,b ที่แถว dl0; c,d ที่แถว dl1) — ขอบข้างต้องโดน mask รอยบากฉีกด้วย
+      // ไม่งั้นแถบขอบหนา 2·FIN ยังขวางปากรอยบากเป็นเส้นบาง; ขอบบนใช้มุมแผ่น (0,0) ที่ไม่มีรอยบาก
+      const quad = (a: number[], b: number[], c: number[], d: number[], uvU = 0, dl0 = 0, dl1 = 0) => {
         const i0 = pos.length / 3
         pos.push(...a, ...b, ...c, ...d)
-        for (let k = 0; k < 4; k++) uv.push(0, 0)
+        uv.push(uvU / dw, dl0 / dh, uvU / dw, dl0 / dh, uvU / dw, dl1 / dh, uvU / dw, dl1 / dh)
         idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3)
       }
       const last = rows.length - 1
@@ -403,32 +440,36 @@ export function buildPouchGeometry(pouch: Pouch) {
       }
       for (let iv = 0; iv < last; iv++) {
         // ซ้าย: หน้า col 0 → กลาง → หลัง col สุดท้าย (x=−a ทั้งคู่); ขวา: หน้า col สุดท้าย → กลาง → หลัง col 0
-        quad(P(1, iv, 0), mid(-1, iv), mid(-1, iv + 1), P(1, iv + 1, 0))
-        quad(mid(-1, iv), P(-1, iv, cols - 1), P(-1, iv + 1, cols - 1), mid(-1, iv + 1))
-        quad(P(-1, iv, 0), mid(1, iv), mid(1, iv + 1), P(-1, iv + 1, 0))
-        quad(mid(1, iv), P(1, iv, cols - 1), P(1, iv + 1, cols - 1), mid(1, iv + 1))
+        const d0 = rows[iv].dly
+        const d1 = rows[iv + 1].dly
+        quad(P(1, iv, 0), mid(-1, iv), mid(-1, iv + 1), P(1, iv + 1, 0), 0, d0, d1)
+        quad(mid(-1, iv), P(-1, iv, cols - 1), P(-1, iv + 1, cols - 1), mid(-1, iv + 1), 0, d0, d1)
+        quad(P(-1, iv, 0), mid(1, iv), mid(1, iv + 1), P(-1, iv + 1, 0), W, d0, d1)
+        quad(mid(1, iv), P(1, iv, cols - 1), P(1, iv + 1, cols - 1), mid(1, iv + 1), W, d0, d1)
       }
       for (let k = 0; k < cols - 1; k++) {
         quad(P(1, last, k), P(1, last, k + 1), P(-1, last, cols - 2 - k), P(-1, last, cols - 1 - k))
       }
-      // ฐาน (เลนส์บนพื้น): พัดจากกลาง ไปรอบแถวล่างหน้า (−a→+a) แล้วหลัง (+a→−a)
-      const center = pos.length / 3
-      pos.push(0, 0, 0)
-      uv.push(0, 0)
-      const ring = [
-        ...Array.from({ length: cols }, (_, k) => P(1, 0, k)),
-        mid(1, 0),
-        ...Array.from({ length: cols }, (_, k) => P(-1, 0, k)),
-        mid(-1, 0),
-      ]
-      for (const v of ring) {
-        pos.push(...v)
+      // ฐาน (เลนส์บนพื้น) ไม่พิมพ์ลาย (ถุงมีจุก): พัดจากกลาง ไปรอบแถวล่างหน้า (−a→+a) แล้วหลัง (+a→−a)
+      if (!printedBase) {
+        const center = pos.length / 3
+        pos.push(0, 0, 0)
         uv.push(0, 0)
-      }
-      for (let k = 0; k < ring.length; k++) {
-        const p0 = center + 1 + k
-        const p1 = center + 1 + ((k + 1) % ring.length)
-        idx.push(center, p1, p0)
+        const ring = [
+          ...Array.from({ length: cols }, (_, k) => P(1, 0, k)),
+          mid(1, 0),
+          ...Array.from({ length: cols }, (_, k) => P(-1, 0, k)),
+          mid(-1, 0),
+        ]
+        for (const v of ring) {
+          pos.push(...v)
+          uv.push(0, 0)
+        }
+        for (let k = 0; k < ring.length; k++) {
+          const p0 = center + 1 + k
+          const p1 = center + 1 + ((k + 1) % ring.length)
+          idx.push(center, p1, p0)
+        }
       }
       const geoD = new THREE.BufferGeometry()
       geoD.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
@@ -721,6 +762,44 @@ export function buildPouchGeometry(pouch: Pouch) {
     return geo
 }
 
+// alpha mask รอยบากฉีก (พิกัดแผ่นคลี่ ขาว = ผิว, ดำ = เจาะ) — ใช้เป็น alphaMap + alphaTest ของทั้งสองวัสดุถุง
+// flipY ต้องตรงกับ texture ลาย (false); ไม่มีรอยบาก = null (ไม่เพิ่ม texture)
+export function tearNotchMaskCanvas(pouch: Pouch, pxPerMm = 6): HTMLCanvasElement | null {
+  if (!pouch.tearNotches.length) return null
+  const { width, height } = pouch.label
+  const s = Math.min(pxPerMm, 2048 / Math.max(width, height))
+  const c = document.createElement('canvas')
+  c.width = Math.max(1, Math.round(width * s))
+  c.height = Math.max(1, Math.round(height * s))
+  const ctx = c.getContext('2d')
+  if (!ctx) return null
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, c.width, c.height)
+  ctx.fillStyle = '#000000'
+  for (const tri of pouch.tearNotches) {
+    ctx.beginPath()
+    tri.forEach((p, i) => (i ? ctx.lineTo(p.x * s, p.y * s) : ctx.moveTo(p.x * s, p.y * s)))
+    ctx.closePath()
+    ctx.fill()
+  }
+  return c
+}
+
+function useTearNotchMask(pouch: Pouch): THREE.CanvasTexture | null {
+  const tex = useMemo(() => {
+    const c = tearNotchMaskCanvas(pouch)
+    if (!c) return null
+    const t = new THREE.CanvasTexture(c)
+    t.flipY = false
+    t.colorSpace = THREE.NoColorSpace
+    t.generateMipmaps = false // ขอบรอยบากคมตอนย่อ (mipmap เกลี่ยดำ-ขาวจนเจาะไม่ถึงปลาย V)
+    t.minFilter = THREE.LinearFilter
+    return t
+  }, [pouch])
+  useEffect(() => () => tex?.dispose(), [tex])
+  return tex
+}
+
 function usePouchGeometry(pouch: Pouch) {
   return useMemo(() => buildPouchGeometry(pouch), [pouch])
 }
@@ -761,19 +840,28 @@ function PouchModel({
   })
   const geo = usePouchGeometry(pouch)
   useEffect(() => () => geo.dispose(), [geo])
+  const notchMask = useTearNotchMask(pouch)
 
   // three คอมไพล์ shader ตาม define ตอนสร้าง — map เปลี่ยน null → texture ต้อง needsUpdate ให้ recompile
   const matRef = useRef<THREE.MeshStandardMaterial>(null!)
+  const mat1Ref = useRef<THREE.MeshStandardMaterial>(null!)
   const hasTex = !!tex
+  const hasNotch = !!notchMask
   useLayoutEffect(() => {
     if (matRef.current) matRef.current.needsUpdate = true
-  }, [hasTex, !!maps.orm, !!maps.bump])
+    if (mat1Ref.current) mat1Ref.current.needsUpdate = true
+  }, [hasTex, !!maps.orm, !!maps.bump, hasNotch])
 
   // brick: ทรงตามความยาวฟิล์ม (ไหล่เอียง) → ซิป/วาล์ว/tin-tie วางตามระยะบน dieline ผ่าน brickAt
   const brick = useMemo(() => (pouch.style === 'gusset' ? brickShape(pouch) : null), [pouch])
   // doypack: แถวโปรไฟล์ชุดเดียวกับผิว → ซิป/วาล์ว/tin-tie วางตามพิกัด dieline ผ่าน doypackAt
   const doy = useMemo(
-    () => (pouch.style === 'spout' ? spoutRows(pouch) : pouch.style === 'stand' ? doypackRows(pouch) : null),
+    () =>
+      pouch.style === 'spout'
+        ? spoutRows(pouch)
+        : pouch.style === 'stand' || pouch.style === 'kseal'
+          ? doypackRows(pouch)
+          : null,
     [pouch],
   )
   const pil = useMemo(() => (pouch.style === 'pillow' ? pillowRows(pouch) : null), [pouch])
@@ -831,6 +919,9 @@ function PouchModel({
           map={tex}
           color={tex ? '#ffffff' : mat.color}
           {...finishMaterialProps(maps, mat.roughness ?? 0.6, mat.metalness ?? 0)}
+          // รอยบากฉีก: เจาะผิวตาม alpha mask พิกัดแผ่นคลี่ (ทุกรูปแบบถุงแม็พ UV จาก dieline เดียวกัน)
+          alphaMap={notchMask}
+          alphaTest={notchMask ? 0.5 : 0}
           transparent={mat.opacity !== undefined}
           opacity={mat.opacity ?? 1}
           side={THREE.DoubleSide}
@@ -838,6 +929,9 @@ function PouchModel({
         {/* Neutral base/caps: match the brick's print background without stretching artwork. */}
         <meshStandardMaterial
           attach="material-1"
+          ref={mat1Ref}
+          alphaMap={notchMask}
+          alphaTest={notchMask ? 0.5 : 0}
           color={getPouchSealColor(pouch, mat, fillColor, hasTex)}
           roughness={mat.roughness ?? 0.6}
           metalness={mat.metalness ?? 0}
@@ -941,7 +1035,8 @@ export function PouchViewer3D({
   lightMode?: LightMode
   watermark?: string | null
 }) {
-  // ตำแหน่งแรกจาก Canvas; สลับรูปแบบถุง/ขนาดต่างมากโดยไม่ถอดหน้า 3D → FitViewerCamera จัดกล้องใหม่
+  // ตำแหน่งแรกจาก Canvas (ถุงตั้ง/ก้น K หน้าตรง, แบบอื่นมุมเฉียง — ดู pouchCameraFit);
+  // สลับรูปแบบถุง/ขนาดต่างมากโดยไม่ถอดหน้า 3D → FitViewerCamera จัดกล้องใหม่ตามมุมของรูปแบบใหม่
   const fit = pouchCameraFit(pouch, pouch.style)
   return (
     <Canvas

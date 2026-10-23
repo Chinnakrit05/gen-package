@@ -10,7 +10,10 @@ describe('viewer camera refit (ภาชนะ/ถุง)', () => {
     const d = Math.max(130, 15 * 4) * 2.2
     expect(cameraPosition(vesselCameraFit(tube))).toEqual([d * 0.45, d * 0.3, d])
     const p = Math.max(215, 140) * 2.6
-    expect(cameraPosition(pouchCameraFit({ H: 215, W: 140 }, 'stand'))).toEqual([p * 0.35, p * 0.25, p])
+    // ถุงตั้ง/ก้น K เปิดหน้าตรง, แบบอื่นมุมเฉียงเห็นจีบข้าง
+    expect(cameraPosition(pouchCameraFit({ H: 215, W: 140 }, 'stand'))).toEqual([0, p * 0.12, p])
+    expect(cameraPosition(pouchCameraFit({ H: 215, W: 140 }, 'kseal'))).toEqual([0, p * 0.12, p])
+    expect(cameraPosition(pouchCameraFit({ H: 215, W: 140 }, 'gusset'))).toEqual([p * 0.35, p * 0.25, p])
   })
 
   it('สลับขวด → หลอดโดยไม่ถอดหน้า 3D = จัดกล้องใหม่ (กรณีที่หลอดดูเล็ก/เอียงจนชื่อแบรนด์ไปตกขอบโค้ง)', () => {
