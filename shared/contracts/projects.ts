@@ -15,6 +15,7 @@ export interface CloudProjectDocumentV1 {
   labelStyle?: string
   neckH?: number
   shoulderH?: number
+  rectDepth?: number
   shoulderStyle?: string
   labelBox?: Record<string, number>
   capStyle?: string

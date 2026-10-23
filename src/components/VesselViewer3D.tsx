@@ -7,7 +7,18 @@ import { FitViewerCamera } from './FitViewerCamera'
 import { cameraPosition, vesselCameraFit } from './viewerCamera'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
-import { capShape, CORK_COLOR, defaultCapColor, tubeSection, type CapStyle, type Vessel } from '../core/vessel'
+import {
+  capShape,
+  CORK_COLOR,
+  defaultCapColor,
+  rectSectionAt,
+  roundedRectPerimeter,
+  roundedRectPoint,
+  tubeSection,
+  type CapStyle,
+  type RectSection,
+  type Vessel,
+} from '../core/vessel'
 import { drawDecoPreview, fillImageRect, type Deco, type FillImage } from '../core/artwork'
 import { useFinishMaps, finishMaterialProps } from './useFinishMaps'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
@@ -69,6 +80,62 @@ function labelTextureConfigure(vessel: Vessel, t: THREE.CanvasTexture) {
   t.wrapS = THREE.ClampToEdgeWrapping
 }
 
+// ขวดเหลี่ยม: ลำตัว loft ตามโปรไฟล์ขวดกลม — แต่ละแถวเป็นวงหน้าตัดสี่เหลี่ยมมุมมน (`rectSectionAt`) ไล่เป็นวงกลมที่คอ
+// จุดในวงเรียงตามความยาวเส้นรอบรูปเริ่มกึ่งกลางด้านหลัง (รอยต่อ mesh อยู่บนหน้าแบนด้านหลัง ไม่เห็นเส้นเงา)
+export function rectBodyGeometry(profile: { x: number; y: number }[], rs: RectSection, N = 128): THREE.BufferGeometry {
+  const pos: number[] = []
+  const idx: number[] = []
+  for (const p of profile) {
+    const s = rectSectionAt(rs, p.x)
+    const per = roundedRectPerimeter(s.a, s.b, s.rc)
+    for (let k = 0; k <= N; k++) {
+      const [x, z] = roundedRectPoint(s.a, s.b, s.rc, per / 2 + (per * k) / N)
+      pos.push(x, p.y, z)
+    }
+  }
+  const stride = N + 1
+  for (let i = 0; i < profile.length - 1; i++) {
+    for (let k = 0; k < N; k++) {
+      const q = i * stride + k
+      // หน้าสามเหลี่ยมหันออกนอก (s เดินไป +x ที่หน้าขวด: tangent × ขึ้น = +z)
+      idx.push(q, q + 1, q + stride, q + 1, q + stride + 1, q + stride)
+    }
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.setIndex(idx)
+  g.computeVertexNormals()
+  return g
+}
+
+// ฉลากบนขวดเหลี่ยม: แถบตามเส้นรอบรูปลำตัว (ลอยเหนือผิว 0.3 มม.) ยาว L = ความยาวที่หุ้มจริง จัดกึ่งกลางด้านหน้า —
+// พันรอบ (L = เส้นรอบรูป) รอยต่ออยู่กลางหลัง; u ไล่ซ้าย→ขวาเมื่อมองจากหน้า, v ล่าง→บน (ตรงกับ texture ฉลาก)
+export function rectLabelGeometry(rs: RectSection, y0: number, y1: number, L: number, lift = 0.3): THREE.BufferGeometry {
+  const a = rs.a + lift
+  const b = rs.b + lift
+  const rc = rs.rc + lift
+  // ผิวที่ลอยยาวกว่าผิวขวด 2π·lift — เดินตามสัดส่วน ไม่งั้นฉลากพันรอบเหลือช่องว่างที่รอยต่อหลัง ~2 มม.
+  const grow = roundedRectPerimeter(a, b, rc) / roundedRectPerimeter(rs.a, rs.b, rs.rc)
+  const NU = 2 * Math.max(12, Math.ceil(L / 3)) // จำนวนคู่ → กึ่งกลางหน้าเป็นจุดยอดพอดี (สมมาตรซ้าย-ขวา)
+  const pos: number[] = []
+  const uv: number[] = []
+  const idx: number[] = []
+  for (const [y, v] of [[y0, 0], [y1, 1]] as const) {
+    for (let k = 0; k <= NU; k++) {
+      const [x, z] = roundedRectPoint(a, b, rc, (-L / 2 + (L * k) / NU) * grow)
+      pos.push(x, y, z)
+      uv.push(k / NU, v)
+    }
+  }
+  for (let k = 0; k < NU; k++) idx.push(k, k + 1, k + NU + 1, k + 1, k + NU + 2, k + NU + 1)
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+  g.setIndex(idx)
+  g.computeVertexNormals()
+  return g
+}
+
 function VesselModel({
   vessel,
   mat,
@@ -117,7 +184,10 @@ function VesselModel({
 
   // ฝา+ไหล่ (ทรงหมุน) — หลอดครีม profile เก็บแค่ส่วนนี้ (เปิดปลายบนให้ลำตัว loft รับต่อ)
   const body = useMemo(
-    () => new THREE.LatheGeometry(vessel.profile.map((p) => new THREE.Vector2(p.x, p.y)), 64),
+    () =>
+      vessel.rect
+        ? rectBodyGeometry(vessel.profile, vessel.rect)
+        : new THREE.LatheGeometry(vessel.profile.map((p) => new THREE.Vector2(p.x, p.y)), 64),
     [vessel],
   )
 
@@ -243,6 +313,7 @@ function VesselModel({
   const labelH = vessel.labelY1 - vessel.labelY0
   const labelGeo = useMemo(() => {
     if (tube) return loftTube(range(vessel.labelY0, vessel.labelY1, 40), 0.25, true)
+    if (vessel.rect) return rectLabelGeometry(vessel.rect, vessel.labelY0, vessel.labelY1, vessel.labelArc * vessel.labelR)
     // ลอยเหนือผิว 0.3 มม. กัน z-fighting กับตัวภาชนะ
     // ฉลากแผ่นหน้า (ไม่พันรอบ): ส่วนโค้งกว้าง labelArc จัดกึ่งกลางที่ θ=π (หลังหมุนกลุ่ม π = ด้านหน้า)
     const arc = vessel.labelArc
@@ -325,9 +396,10 @@ function VesselModel({
         </mesh>
       )}
       {/* ฉลาก: หลอด = เปลือก loft ตามผิว (วาง y จริง); ภาชนะอื่น = ทรงกระบอกจัดกึ่งกลาง band หมุนรอยต่อไปหลัง */}
-      {tube ? (
+      {tube || vessel.rect ? (
         <mesh geometry={labelGeo}>
-          <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} {...finishMaterialProps(maps, 0.8, 0)} side={THREE.DoubleSide} />
+          {/* ขวดเหลี่ยม: หน้าเดียว (ด้านในฉลากไม่โผล่ผ่านแก้วใสเหมือนฉลากทรงกระบอก) */}
+          <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} {...finishMaterialProps(maps, 0.8, 0)} side={tube ? THREE.DoubleSide : THREE.FrontSide} />
         </mesh>
       ) : (
         <mesh geometry={labelGeo} position={[0, (vessel.labelY0 + vessel.labelY1) / 2, 0]} rotation={[0, Math.PI + vessel.labelRot, 0]}>

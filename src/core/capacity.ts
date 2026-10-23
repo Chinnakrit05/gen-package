@@ -1,5 +1,5 @@
 import type { Vec2 } from './types'
-import { tubeSection, type TubeShape } from './vessel'
+import { rectSectionAt, roundedRectArea, tubeSection, type RectSection, type TubeShape } from './vessel'
 import { FLAT_SEAL, pouchWidthFactor, pouchDepthFactor, pouchSectionArea, type PouchStyle } from './pouch'
 
 // ความจุโดยประมาณ (มล.) ของบรรจุภัณฑ์ — ประเมินจากปริมาตรใช้งานด้านใน
@@ -36,8 +36,20 @@ export function pouchVolumeMl(W: number, H: number, depth3D: number, style: Pouc
 }
 
 // ภาชนะหมุนขึ้นรูป (ขวด/โหล/กระป๋อง): ปริมาตรทรงหมุนจากโปรไฟล์ (ผลรวม frustum) หักผนัง/คอ/headspace
-export function vesselVolumeMl(profile: Vec2[]): number {
+// ขวดเหลี่ยม: หน้าตัดสี่เหลี่ยมมุมมนที่แต่ละระดับ (`rectSectionAt` ชุดเดียวกับ 3D) — อินทิเกรตแบบสี่เหลี่ยมคางหมู
+export function vesselVolumeMl(profile: Vec2[], rect?: RectSection): number {
   let v3 = 0
+  if (rect) {
+    const area = (r: number) => {
+      const s = rectSectionAt(rect, r)
+      return roundedRectArea(s.a, s.b, s.rc)
+    }
+    for (let i = 1; i < profile.length; i++) {
+      const dy = Math.abs(profile[i].y - profile[i - 1].y)
+      v3 += ((area(profile[i - 1].x) + area(profile[i].x)) / 2) * dy
+    }
+    return (v3 / 1000) * 0.8
+  }
   for (let i = 1; i < profile.length; i++) {
     const r0 = profile[i - 1].x
     const r1 = profile[i].x
