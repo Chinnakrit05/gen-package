@@ -338,15 +338,13 @@ export function buildPouchGeometry(pouch: Pouch) {
           if (i) cum.push(cum[i - 1] + Math.hypot(x - px[i - 1], d * (sectionZ(r, x / r.ai) - sectionZ(r, px[i - 1] / r.ai))))
         }
         const L = cum[M] || 1
-        // ฟิล์มแบนรอบช่วงพอง: ไหล่ถุงมีจุก (flat) / ครีบมุมฐานก้น K (kfin)
-        const flat = (r.flat ?? 0) + (r.kfin ?? 0)
+        const flat = r.flat ?? 0
         const inner = r.ai + flat
         let j = 0
         return us.map((u0) => {
-          if (r.cut !== undefined || r.kfin !== undefined) {
-            // ถุงมีจุก/ก้น K: ฟิล์มแม็พ 1:1 — ขอบที่มุมมนตัดทิ้ง (u < cut), ฟิล์มแบนรอบช่วงพอง
-            const cut = r.cut ?? 0
-            const u = Math.min(W - cut, Math.max(cut, u0))
+          if (r.cut !== undefined) {
+            // ถุงมีจุก: ฟิล์มแม็พ 1:1 — ขอบที่มุมมนตัดทิ้ง (u < cut), ฟิล์มแบนรอบช่วงพอง (ไหล่รวบเข้าหาเรือ)
+            const u = Math.min(W - r.cut, Math.max(r.cut, u0))
             if (u <= ss) return -(inner + ss - u)
             if (u >= W - ss) return inner + (u - (W - ss))
             const sf = u - ss
@@ -386,7 +384,7 @@ export function buildPouchGeometry(pouch: Pouch) {
           }
         }
       }
-      // ถุงตั้ง: ฐานเลนส์พิมพ์ลายของครึ่งก้น (dieline ใต้แนวพับก้น → แนวพับกลางก้น) แผงหน้า = ครึ่งหน้า, หลัง = ครึ่งหลัง
+      // ถุงตั้ง/ก้น K: ฐานเลนส์พิมพ์ลายของครึ่งก้น (dieline ใต้แนวพับก้น → แนวพับกลางก้น) แผงหน้า = ครึ่งหน้า, หลัง = ครึ่งหลัง
       const baseFold = doypackFold(pouch)
       const printedBase = baseFold < dh - 1e-6
       if (printedBase) {
@@ -438,7 +436,7 @@ export function buildPouchGeometry(pouch: Pouch) {
       for (let k = 0; k < cols - 1; k++) {
         quad(P(1, last, k), P(1, last, k + 1), P(-1, last, cols - 2 - k), P(-1, last, cols - 1 - k))
       }
-      // ฐาน (เลนส์บนพื้น) ไม่พิมพ์ลาย (ก้น K/ถุงมีจุก): พัดจากกลาง ไปรอบแถวล่างหน้า (−a→+a) แล้วหลัง (+a→−a)
+      // ฐาน (เลนส์บนพื้น) ไม่พิมพ์ลาย (ถุงมีจุก): พัดจากกลาง ไปรอบแถวล่างหน้า (−a→+a) แล้วหลัง (+a→−a)
       if (!printedBase) {
         const center = pos.length / 3
         pos.push(0, 0, 0)

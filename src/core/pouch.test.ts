@@ -547,18 +547,17 @@ describe('pouch: ถุงตั้งก้น K (stand up pouch, K-seal)', () 
     }
   })
 
-  it('3D: มุมก้นเหลี่ยม (ขอบนอกไม่ดึงเข้าแบบ doypack) ครีบแบนที่มุมฐานกว้างเท่าเส้นทแยง และไม่มีครีบเหนือแนวพับก้น', () => {
+  it('3D: ขอบข้างตรงดิ่งลงถึงพื้น มุมก้นเหลี่ยม ไม่หักเข้า — ครึ่งก้น (มีเส้น K) พับเข้าเป็นฐาน', () => {
     const rows = doypackRows(p)
     const bottom = rows[0]
     expect(bottom.y).toBe(0)
-    expect(bottom.kfin).toBeCloseTo(reach, 6)
-    expect(bottom.a - bottom.ai).toBeCloseTo(DOYPACK_SEAL + reach, 6) // แบนจากขอบ = ซีลข้าง + ครีบมุม
-    // doypack ดึงมุมล่างเข้า (มุมมน) — ก้น K ไม่ดึง: ขอบนอกที่ฐานกว้างเท่าแถวถัดขึ้นไป (ต่างกันแค่ตามความพอง)
+    expect(doypackFold(p)).toBeCloseTo(fold, 9)
+    expect(bottom.dly).toBeCloseTo(fold, 9) // ขอบล่างผิวหน้า = แนวพับก้น (ส่วนเส้น K อยู่ใต้ฐาน)
+    expect(bottom.a - bottom.ai).toBeCloseTo(DOYPACK_SEAL, 9) // ซีลข้างกว้างเท่าเดิมถึงพื้น ไม่มีแผ่นแบนเพิ่มที่มุม
+    // doypack ดึงมุมล่างเข้า (มุมมน) — ก้น K ไม่ดึง: ขอบนอกกว้างเต็มเท่ากันทุกแถว (ข้างตรงดิ่ง)
     const doy = doypackRows(generatePouch({ W, D, H }, mat, { style: 'stand', zipper: true }))
     expect(bottom.a).toBeGreaterThan(doy[0].a + 1)
-    for (const r of rows) if (r.dly <= PH - D / 2 + 1e-9) expect(r.kfin ?? 0).toBe(0)
-    // ครีบแบน: ผิวช่วงครีบประกบกันที่ FIN (ไม่พอง)
-    expect(doypackZ(bottom, bottom.ai + bottom.kfin! / 2)).toBeCloseTo(DOYPACK_FIN, 9)
+    for (const r of rows) expect(r.a).toBeCloseTo(W / 2, 9)
   })
 
   it('ขนาดมาตรฐานของรูปแบบนี้มีค่า และเก็บลงไฟล์งานได้', () => {
@@ -577,10 +576,8 @@ describe('pouch: ฐานถุงตั้ง (ครึ่งก้นปู�
     expect(c.z).toBeCloseTo(0, 9)
   })
 
-  it('ก้น K/ถุงมีจุกไม่พับครึ่งก้นเป็นฐาน (แนวพับ = ขอบล่างแผง)', () => {
-    for (const style of ['kseal', 'spout'] as const) {
-      const q = generatePouch({ W: 120, D: 60, H: 180 }, mat, { style })
-      expect(doypackFold(q)).toBe(q.label.height)
-    }
+  it('ถุงมีจุกไม่พับครึ่งก้นเป็นฐาน (แนวพับ = ขอบล่างแผง)', () => {
+    const q = generatePouch({ W: 120, D: 60, H: 180 }, mat, { style: 'spout' })
+    expect(doypackFold(q)).toBe(q.label.height)
   })
 })
