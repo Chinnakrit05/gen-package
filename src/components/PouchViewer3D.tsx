@@ -338,15 +338,13 @@ export function buildPouchGeometry(pouch: Pouch) {
           if (i) cum.push(cum[i - 1] + Math.hypot(x - px[i - 1], d * (sectionZ(r, x / r.ai) - sectionZ(r, px[i - 1] / r.ai))))
         }
         const L = cum[M] || 1
-        // ฟิล์มแบนรอบช่วงพอง: ไหล่ถุงมีจุก (flat) / ลิ่มข้างช่วงพองของถุงตั้ง (wedge)
-        const flat = (r.flat ?? 0) + (r.wedge ?? 0)
+        const flat = r.flat ?? 0
         const inner = r.ai + flat
         let j = 0
         return us.map((u0) => {
-          if (r.cut !== undefined || r.wedge !== undefined) {
-            // ถุงมีจุก/ถุงตั้ง: ฟิล์มแม็พ 1:1 — ขอบที่มุมมนตัดทิ้ง (u < cut), ฟิล์มแบนรอบช่วงพอง
-            const cut = r.cut ?? 0
-            const u = Math.min(W - cut, Math.max(cut, u0))
+          if (r.cut !== undefined) {
+            // ถุงมีจุก: ฟิล์มแม็พ 1:1 — ขอบที่มุมมนตัดทิ้ง (u < cut), ฟิล์มแบนรอบช่วงพอง (ไหล่รวบเข้าหาเรือ)
+            const u = Math.min(W - r.cut, Math.max(r.cut, u0))
             if (u <= ss) return -(inner + ss - u)
             if (u >= W - ss) return inner + (u - (W - ss))
             const sf = u - ss

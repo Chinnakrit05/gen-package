@@ -17,6 +17,8 @@ import {
   doypackCorner,
   doypackFold,
   DOYPACK_WEDGE,
+  doypackTaper,
+  ZIP_HALF,
   doypackBasePoint,
   doypackBaseLift,
   DOYPACK_FIN,
@@ -322,6 +324,7 @@ describe('pouch: ทรง 3D ถุงตั้ง (doypack)', () => {
   const PH = p.label.height
   const fold = doypackFold(p) // ผิวหน้าจบที่แนวพับก้น — ครึ่งก้นพับเข้าไปเป็นฐาน
   const Hi = fold - st
+  const tipY = Math.max(Hi * 0.5, Math.min(Hi, fold - p.zipY! - ZIP_HALF)) // ปลายช่วงพองใต้ซิป (สูตรเดียวกับ doypackRows)
 
   it('แถบซีลบนแบนกว้างเต็ม = แถบซีลบน dieline [0..st] บนสุดของแผง', () => {
     const fin = rows.filter((r) => r.y > Hi)
@@ -349,21 +352,23 @@ describe('pouch: ทรง 3D ถุงตั้ง (doypack)', () => {
     const Wi2 = p.W / 2 - DOYPACK_SEAL
     const { ry } = doypackCorner(p.W, fold)
     for (const r of rows) {
-      expect(r.a - r.ai).toBeCloseTo(DOYPACK_SEAL + (r.wedge ?? 0), 9) // ซีลข้าง + ลิ่มฟิล์มแบน
+      expect(r.a - r.ai).toBeCloseTo(DOYPACK_SEAL, 9) // ซีลข้างกว้างเท่า dieline ตลอดความสูง (เอียงตามถุง)
       expect(doypackZ(r, r.ai + 1)).toBe(DOYPACK_FIN) // ซีลข้างแบน
       expect(doypackZ(r, 0)).toBeCloseTo(r.b, 9)
-      if (r.y >= ry) expect(r.ai + (r.wedge ?? 0)).toBeGreaterThanOrEqual(Wi2 * 0.95 - 1e-9) // ซีลแข็ง ไม่หดตามความพอง
+      if (r.y >= ry) expect(r.ai + doypackTaper('stand', p.W, r.y, tipY)).toBeGreaterThanOrEqual(Wi2 * 0.95 - 1e-9) // ซีลแข็ง ไม่หดตามความพอง
     }
     expect(rows[0].b).toBeCloseTo(DOYPACK_FIN + p.depth3D, 9) // หนาสุดที่ก้น
     expect(rows[0].a).toBeLessThan(rows.find((r) => r.y >= ry)!.a) // มุมล่างมนเข้า
   })
 
-  it('ช่วงพองเรียวเข้าหาก้น: ลิ่มฟิล์มแบนข้างช่วงพอง 0 ใต้ซิป → DOYPACK_WEDGE·W ที่พื้น ขอบนอกถุงไม่เปลี่ยน', () => {
-    expect(rows[0].wedge).toBeCloseTo(DOYPACK_WEDGE * p.W, 9)
-    const tip = rows.filter((r) => r.wedge !== undefined).at(-1)!
-    expect(tip.wedge).toBeCloseTo(0, 9)
-    const ws = rows.filter((r) => r.wedge !== undefined).map((r) => r.wedge!)
-    for (let i = 1; i < ws.length; i++) expect(ws[i]).toBeLessThanOrEqual(ws[i - 1] + 1e-9)
+  it('ทั้งถุงเรียวเข้าหาก้น: ขอบข้าง (ซีลข้าง) ร่นเข้า 0 ใต้ซิป → DOYPACK_WEDGE·W ที่พื้น เอียงตามช่วงพอง', () => {
+    expect(doypackTaper('stand', p.W, 0, tipY)).toBeCloseTo(DOYPACK_WEDGE * p.W, 9)
+    expect(doypackTaper('stand', p.W, tipY, tipY)).toBe(0)
+    expect(doypackTaper('kseal', p.W, 0, tipY)).toBe(0)
+    const body = rows.filter((r) => r.y <= tipY)
+    const top = body[body.length - 1]
+    expect(top.a - body[0].a).toBeGreaterThan(DOYPACK_WEDGE * p.W * 0.9) // ขอบนอกที่พื้นแคบกว่าใต้ซิป
+    for (let i = 1; i < body.length; i++) expect(body[i].a).toBeGreaterThanOrEqual(body[i - 1].a - 1e-9)
   })
 
   it('doypackAt: แนวซิปบน dieline ตกใกล้ปาก — ซิปหนีบปากแบน ใต้ปีกซิปเริ่มพองและเอนไปหลัง', () => {
