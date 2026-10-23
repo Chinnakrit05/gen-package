@@ -1,4 +1,4 @@
-import type { BoxParams, Dieline, DimMark, Material, Panel, Segment } from './types'
+import type { BoxParams, Dieline, DimMark, Material, Panel, Segment, Vec2 } from './types'
 import { P, fmt, rect, roundedRectPath, roundedRectPts } from './templates/shared'
 
 // ถุงฟิล์มซีลขอบ : วัสดุกลุ่ม form==='pouch' — มีหลายรูปแบบ (PouchStyle)
@@ -60,6 +60,7 @@ export interface Pouch {
   zipper: boolean // มีซิปล็อก + รอยฉีกไหม
   zipY?: number // พิกัดแผ่นคลี่ y ของแนวซิป (เมื่อ zipper=true) — ใช้วางแถบซิปใน 3D
   tearY?: number // พิกัดแผ่นคลี่ y ของรอยบากฉีก (เมื่อ zipper=true)
+  tearNotches: Vec2[][] // รอยบากฉีก (สามเหลี่ยม V พิกัดแผ่นคลี่) ที่ขอบแผง — dieline ตัดตามนี้, 3D เจาะผิวตามนี้ (alpha mask)
   hangHole: boolean // รูแขวน (euro-hole) ที่ริมซีลบน
   valve: boolean // วาล์วระบายแก๊ส (กาแฟ) บนหน้าถุง
   tinTie: boolean // ที่รัดปาก (tin-tie) ใกล้ปากถุง
@@ -80,6 +81,9 @@ export interface PouchAddons {
 export const ZIP_HALF = 5
 export const TEAR_GAP = 8
 export const TEAR_SEAL_GAP = 3 // รอยบากควรต่ำกว่าแนวซีลบนอย่างน้อยเท่านี้
+export const TEAR_NOTCH_H = 2.5 // ครึ่งความสูงปากรอยบาก V (มม.)
+// ความลึกรอยบาก: ต้องจบในแถบซีลข้าง (ลึกเกินซีล = ตัดเข้าช่วงบรรจุ ถุงรั่ว) — 70% ของซีล ไม่เกิน 4 มม.
+export const tearNotchDepth = (sealW: number) => Math.min(4, Math.max(1.5, Math.round(sealW * 7) / 10))
 export const ZIP_AT_MAX = 300
 export const zipAtDefault = (st: number, H: number) => st + Math.min(POUCH_ZIP_INSET, H * 0.5)
 // รอยบากอัตโนมัติ: เหนือซิป TEAR_GAP; ถ้าซิปชิดซีลจนไม่พอ → กึ่งกลางระหว่างซีลกับซิป
@@ -342,11 +346,15 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     dims.push({ a: P(0, ty + 3), b: P(Wp, ty + 3), label: 'ที่รัดปาก (tin-tie)' })
   }
 
+  const tearNotches: Vec2[][] = []
   if (zipper && zipY !== undefined && tearY !== undefined) {
     // แนวซิปล็อกพาดขวางหน้า+หลัง + รอยฉีก (V) ที่ขอบซีลสองข้าง เหนือซิปเพื่อฉีกเปิดแล้วเหลือซิปไว้ปิดซ้ำ
-    const nz = 4 // ความลึกรอยฉีก
-    const notch = (x: number, dir: 1 | -1) =>
-      cut(`M ${x} ${tearY - 2.5} L ${x + dir * nz} ${tearY} L ${x} ${tearY + 2.5}`)
+    const nz = tearNotchDepth(two ? pss : ss) // ลึกไม่เกินแถบซีลข้าง
+    const notch = (x: number, dir: 1 | -1) => {
+      const tri = [P(x, tearY - TEAR_NOTCH_H), P(x + dir * nz, tearY), P(x, tearY + TEAR_NOTCH_H)]
+      tearNotches.push(tri)
+      return cut(`M ${tri[0].x} ${tri[0].y} L ${tri[1].x} ${tri[1].y} L ${tri[2].x} ${tri[2].y}`)
+    }
     if (two) {
       // แนวซิปต่อแผงระหว่างซีลข้าง; รอยฉีกบากที่ซีลข้างทั้งสองด้านของทั้งสองแผง (ฉีกทะลุสองชั้น)
       for (const x0 of [0, W]) segments.push(crease(`M ${x0 + pss} ${zipY} L ${x0 + W - pss} ${zipY}`))
@@ -382,6 +390,7 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     zipper,
     zipY,
     tearY,
+    tearNotches,
     hangHole,
     valve,
     tinTie,

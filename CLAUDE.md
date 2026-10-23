@@ -284,6 +284,9 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ซิปใน 3D = รอยปั๊มนูนบนฟิล์มเอง (`zipReliefProfile` แถบนูน+สันคู่ ข้ามทั้งแผ่นที่แนว zipY ผ่าน `useFinishMaps` relief) ไม่ใช่แถบสีแยก
   → สี/ลาย/texture ตามถุงเสมอ; สันซิปต้องกว้างพอ (σ ≥ ~0.75 มม.) ไม่งั้นมองเฉียงเป็นจุดหยัก
   ผ่าน `pouchZipLayout` ชุดเดียวทั้ง dieline/3D; หลักผลิตตรวจใน `pouchPreflight.ts` (รอยบากพ้นซีล → เหนือซิป → ซิปไม่ทับวาล์ว/จุก/ก้นจีบ)
+  รอยบากฉีก V ลึก `tearNotchDepth` (70% ของซีลข้าง ≤ 4 มม. — จบในแถบซีล ไม่ตัดเข้าช่วงบรรจุ) เก็บเป็น `Pouch.tearNotches` (สามเหลี่ยมพิกัดแผ่นคลี่)
+  → dieline ตัดตามนี้ และ 3D เจาะผิวด้วย alpha mask พิกัดแผ่นคลี่ (`tearNotchMaskCanvas` → alphaMap + alphaTest ทั้งสองวัสดุ) ใช้ได้ทุกรูปแบบถุง;
+  ขอบซีลหนาของ doypack ได้ UV ตามขอบแผ่นคลี่ให้โดน mask ด้วย
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);

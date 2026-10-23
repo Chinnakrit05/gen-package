@@ -422,10 +422,12 @@ export function buildPouchGeometry(pouch: Pouch) {
         return [side * x0, rows[iv].y, side * doypackZ(rows[iv], x0)]
       }
       // ขอบซีล (หนา 2·FIN) ข้างซ้าย/ขวา/บน — จุดแยก ไม่เกลี่ย normal กับผิวพิมพ์
-      const quad = (a: number[], b: number[], c: number[], d: number[]) => {
+      // uvU/dl0/dl1: พิกัดแผ่นคลี่ของขอบ (a,b ที่แถว dl0; c,d ที่แถว dl1) — ขอบข้างต้องโดน mask รอยบากฉีกด้วย
+      // ไม่งั้นแถบขอบหนา 2·FIN ยังขวางปากรอยบากเป็นเส้นบาง; ขอบบนใช้มุมแผ่น (0,0) ที่ไม่มีรอยบาก
+      const quad = (a: number[], b: number[], c: number[], d: number[], uvU = 0, dl0 = 0, dl1 = 0) => {
         const i0 = pos.length / 3
         pos.push(...a, ...b, ...c, ...d)
-        for (let k = 0; k < 4; k++) uv.push(0, 0)
+        uv.push(uvU / dw, dl0 / dh, uvU / dw, dl0 / dh, uvU / dw, dl1 / dh, uvU / dw, dl1 / dh)
         idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3)
       }
       const last = rows.length - 1
@@ -436,10 +438,12 @@ export function buildPouchGeometry(pouch: Pouch) {
       }
       for (let iv = 0; iv < last; iv++) {
         // ซ้าย: หน้า col 0 → กลาง → หลัง col สุดท้าย (x=−a ทั้งคู่); ขวา: หน้า col สุดท้าย → กลาง → หลัง col 0
-        quad(P(1, iv, 0), mid(-1, iv), mid(-1, iv + 1), P(1, iv + 1, 0))
-        quad(mid(-1, iv), P(-1, iv, cols - 1), P(-1, iv + 1, cols - 1), mid(-1, iv + 1))
-        quad(P(-1, iv, 0), mid(1, iv), mid(1, iv + 1), P(-1, iv + 1, 0))
-        quad(mid(1, iv), P(1, iv, cols - 1), P(1, iv + 1, cols - 1), mid(1, iv + 1))
+        const d0 = rows[iv].dly
+        const d1 = rows[iv + 1].dly
+        quad(P(1, iv, 0), mid(-1, iv), mid(-1, iv + 1), P(1, iv + 1, 0), 0, d0, d1)
+        quad(mid(-1, iv), P(-1, iv, cols - 1), P(-1, iv + 1, cols - 1), mid(-1, iv + 1), 0, d0, d1)
+        quad(P(-1, iv, 0), mid(1, iv), mid(1, iv + 1), P(-1, iv + 1, 0), W, d0, d1)
+        quad(mid(1, iv), P(1, iv, cols - 1), P(1, iv + 1, cols - 1), mid(1, iv + 1), W, d0, d1)
       }
       for (let k = 0; k < cols - 1; k++) {
         quad(P(1, last, k), P(1, last, k + 1), P(-1, last, cols - 2 - k), P(-1, last, cols - 1 - k))
@@ -756,6 +760,44 @@ export function buildPouchGeometry(pouch: Pouch) {
     return geo
 }
 
+// alpha mask รอยบากฉีก (พิกัดแผ่นคลี่ ขาว = ผิว, ดำ = เจาะ) — ใช้เป็น alphaMap + alphaTest ของทั้งสองวัสดุถุง
+// flipY ต้องตรงกับ texture ลาย (false); ไม่มีรอยบาก = null (ไม่เพิ่ม texture)
+export function tearNotchMaskCanvas(pouch: Pouch, pxPerMm = 6): HTMLCanvasElement | null {
+  if (!pouch.tearNotches.length) return null
+  const { width, height } = pouch.label
+  const s = Math.min(pxPerMm, 2048 / Math.max(width, height))
+  const c = document.createElement('canvas')
+  c.width = Math.max(1, Math.round(width * s))
+  c.height = Math.max(1, Math.round(height * s))
+  const ctx = c.getContext('2d')
+  if (!ctx) return null
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, c.width, c.height)
+  ctx.fillStyle = '#000000'
+  for (const tri of pouch.tearNotches) {
+    ctx.beginPath()
+    tri.forEach((p, i) => (i ? ctx.lineTo(p.x * s, p.y * s) : ctx.moveTo(p.x * s, p.y * s)))
+    ctx.closePath()
+    ctx.fill()
+  }
+  return c
+}
+
+function useTearNotchMask(pouch: Pouch): THREE.CanvasTexture | null {
+  const tex = useMemo(() => {
+    const c = tearNotchMaskCanvas(pouch)
+    if (!c) return null
+    const t = new THREE.CanvasTexture(c)
+    t.flipY = false
+    t.colorSpace = THREE.NoColorSpace
+    t.generateMipmaps = false // ขอบรอยบากคมตอนย่อ (mipmap เกลี่ยดำ-ขาวจนเจาะไม่ถึงปลาย V)
+    t.minFilter = THREE.LinearFilter
+    return t
+  }, [pouch])
+  useEffect(() => () => tex?.dispose(), [tex])
+  return tex
+}
+
 function usePouchGeometry(pouch: Pouch) {
   return useMemo(() => buildPouchGeometry(pouch), [pouch])
 }
@@ -796,13 +838,17 @@ function PouchModel({
   })
   const geo = usePouchGeometry(pouch)
   useEffect(() => () => geo.dispose(), [geo])
+  const notchMask = useTearNotchMask(pouch)
 
   // three คอมไพล์ shader ตาม define ตอนสร้าง — map เปลี่ยน null → texture ต้อง needsUpdate ให้ recompile
   const matRef = useRef<THREE.MeshStandardMaterial>(null!)
+  const mat1Ref = useRef<THREE.MeshStandardMaterial>(null!)
   const hasTex = !!tex
+  const hasNotch = !!notchMask
   useLayoutEffect(() => {
     if (matRef.current) matRef.current.needsUpdate = true
-  }, [hasTex, !!maps.orm, !!maps.bump])
+    if (mat1Ref.current) mat1Ref.current.needsUpdate = true
+  }, [hasTex, !!maps.orm, !!maps.bump, hasNotch])
 
   // brick: ทรงตามความยาวฟิล์ม (ไหล่เอียง) → ซิป/วาล์ว/tin-tie วางตามระยะบน dieline ผ่าน brickAt
   const brick = useMemo(() => (pouch.style === 'gusset' ? brickShape(pouch) : null), [pouch])
@@ -871,6 +917,9 @@ function PouchModel({
           map={tex}
           color={tex ? '#ffffff' : mat.color}
           {...finishMaterialProps(maps, mat.roughness ?? 0.6, mat.metalness ?? 0)}
+          // รอยบากฉีก: เจาะผิวตาม alpha mask พิกัดแผ่นคลี่ (ทุกรูปแบบถุงแม็พ UV จาก dieline เดียวกัน)
+          alphaMap={notchMask}
+          alphaTest={notchMask ? 0.5 : 0}
           transparent={mat.opacity !== undefined}
           opacity={mat.opacity ?? 1}
           side={THREE.DoubleSide}
@@ -878,6 +927,9 @@ function PouchModel({
         {/* Neutral base/caps: match the brick's print background without stretching artwork. */}
         <meshStandardMaterial
           attach="material-1"
+          ref={mat1Ref}
+          alphaMap={notchMask}
+          alphaTest={notchMask ? 0.5 : 0}
           color={getPouchSealColor(pouch, mat, fillColor, hasTex)}
           roughness={mat.roughness ?? 0.6}
           metalness={mat.metalness ?? 0}

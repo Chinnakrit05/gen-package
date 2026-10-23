@@ -38,10 +38,13 @@ describe('pouchZipLayout', () => {
     // doypack: แนวซิปต่อแผงระหว่างซีลข้าง + รอยบากที่ซีลข้างทั้ง 4 ขอบของสองแผง
     expect(ds).toContain('M 3 40 L 117 40') // ถุงตั้ง: ซีลข้าง 3 มม.
     expect(ds).toContain('M 123 40 L 237 40')
-    expect(ds).toContain('M 0 19.5 L 4 22 L 0 24.5')
-    expect(ds).toContain('M 120 19.5 L 116 22 L 120 24.5')
-    expect(ds).toContain('M 120 19.5 L 124 22 L 120 24.5')
-    expect(ds).toContain('M 240 19.5 L 236 22 L 240 24.5')
+    // รอยบากลึก 2.1 มม. = 70% ของซีลข้าง 3 มม. — จบในแถบซีล ไม่ตัดเข้าช่วงบรรจุ
+    expect(ds).toContain('M 0 19.5 L 2.1 22 L 0 24.5')
+    expect(ds).toContain('M 120 19.5 L 117.9 22 L 120 24.5')
+    expect(ds).toContain('M 120 19.5 L 122.1 22 L 120 24.5')
+    expect(ds).toContain('M 240 19.5 L 237.9 22 L 240 24.5')
+    expect(p.tearNotches).toHaveLength(4)
+    for (const tri of p.tearNotches) expect(Math.abs(tri[1].x - tri[0].x)).toBeLessThan(p.sideSeal)
   })
 })
 
