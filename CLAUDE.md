@@ -28,6 +28,10 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `src/core/templates/tuckEnd.ts` / `mailer.ts` / `sleeve.ts` / `bottleCarrier.ts` / `tray.ts` / `gable.ts` — generators: รับ W/D/H "ด้านใน" แปลงเป็นระยะ score +2t ต่อแกน, ระยะหลบ flap สเกลตาม t, ผลิตทั้ง segments (SVG มี Q curve) และ panels (3D, polygonized) จาก geometry เดียวกัน; mailer/tray/gable ใช้ tilt หมุนโมเดลให้ฐานลงพื้นตามจังหวะพับ (tray = ถาดเปิดบนผนังทบ roll end — `rollEndLayout(…, { lid: false })` โครงเดียวกับ FEFCO 0427 ไม่มีฝา; gable = กล่องหูหิ้ว carry box ตาม dieline มาตรฐาน: ท่อทากาวข้าง (กาว|หน้า|ข้าง|หลัง|ข้าง) + ก้น snap-lock + ฝาแบนผ่าร่องกลาง + หูหิ้วสองชั้น + แผงปิดบนสองซีกจากผนังข้างพับทับฝา (zOffset −layer) ลิ้นปลายงอรอก่อน (stage 4) แล้วลงร่องกลาง — เส้นตัด/รอยพับสร้างจากแผงด้วย `autoSegments` (shared.ts))
 - `src/core/fold.ts` — fold engine: panel หมุนรอบ crease ในพิกัดแผ่นคลี่ คูณ matrix แม่เป็นลูกโซ่; ด้านในกล่อง = +z; stage 0-3 (ลำตัว→ลิ้นกันฝุ่น→ฝาเสียบ→ลิ้น); zOffset ดันชั้นวัสดุที่ซ้อนกันกัน z-fighting
 - `src/components/Viewer3D.tsx` — R3F viewer + FitCamera (วัดจากส่วนแผ่นที่ยื่นไกลสุดจากแผงหน้า ไม่ใช่ครึ่งแผ่น)
+- `VesselViewer3D`/`PouchViewer3D` จัดกล้องด้วย `FitViewerCamera` + `src/components/viewerCamera.ts` (pure): prop `camera` ของ `<Canvas>`
+  มีผลแค่ตอน mount — สลับขวด↔หลอด/รูปแบบถุงใช้ Canvas เดิม กล้องจึงค้างระยะของทรงก่อน (หลอดดูเล็ก ข้อความเหมือนถูกตัด จนกว่าจะสลับแท็บ);
+  จัดใหม่เมื่อทรงเปลี่ยนหรือระยะต่าง ≥ `REFIT_RATIO` 18% (กฎเดียวกับ FitCamera) — ปรับขนาดเล็กน้อยไม่ดึงมุมที่ผู้ใช้หมุนไว้;
+  มุมเริ่มต่อรูปทรงอยู่ใน `vesselCameraFit`/`pouchCameraFit` (ถุงตั้ง/ก้น K หน้าตรง) ตั้งที่นั่นที่เดียว
 - `src/components/DielineSVG.tsx` — blueprint preview + เส้นบอกขนาด (toggle ได้) + ลาก/หมุน/ลบ artwork; การลากมี snap; ซูม/แพน (Ctrl+ล้อ), กริด, ไม้บรรทัด, เส้นไกด์ลากเอง (state ใน component; guideLines ≠ prop `guides` ที่เป็น bleed/safe); เส้นไกด์เข้า snapTargets ตอนลาก
 - เอฟเฟกต์ข้อความ `TextEl.fx` (`src/core/textFx.ts`, pure): drop/background/hollow/splice/double/echo/glow/long — `textFxPlan` แปลงเป็นชั้น
   (กล่องพื้นหลัง → ชั้นใต้ตัวอักษร เยื้อง/เบลอ/ทึบ → ตัวอักษร) แล้วตัววาดทุกทางวาดตามรายการเดียว: `textInnerSVG` (artwork.ts)
@@ -129,6 +133,12 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   glue = ห้ามพิมพ์); `compileArtworkPlan(plan, panels, { measure, assets })` แปลงเป็น Deco จริง: วัดความกว้างข้อความ (client ส่ง `measureText`
   จริง, server ใช้ `estimateTextWidth`), ตัดบรรทัดที่ขอบคำด้วย `Intl.Segmenter` แล้วค่อยลดขนาด (`fitText`, ไม่ต่ำกว่า `ART_MIN_TEXT_MM` 2.5),
   ดันเข้ากรอบ/ย่อชิ้นที่ล้นแผง (เว้นขอบ `ART_SAFE_MM` 3 ยกเว้น shape/path ชนขอบได้), ตัดชิ้นบนปีกกาว, ตัด `curve` ออกจากข้อความไทย
+- ภาชนะทรงกระบอกอ่านตรงได้แค่ ~1/3 รอบ (±60°): `labelFrontZone(panels, W)` (ฉลากพันรอบ = กึ่งกลางเส้นรอบวง เพราะ UV เริ่มกลางหลัง,
+  ฉลากแผ่นหน้า = กึ่งกลางแผ่น) — CopilotDrawer ส่งเป็น `front` ไปกับคำขอ (server เขียนช่วง/ความกว้างลง prompt; ค่าผิดถูกเมิน) และให้ compile:
+  ข้อความที่กึ่งกลางอยู่ในช่วงแต่กว้างเกิน → `fitFrontText` ย่อทั้งบล็อกคงบรรทัดเดิมก่อน (ถึง `FRONT_SHRINK_MIN` 60% — Intl.Segmenter
+  หั่นชื่อแบรนด์ "ลมหาย" เป็น "ลม|หาย") ไม่งั้นตัดบรรทัดได้แค่ในที่ว่างถึงชิ้นเนื้อหาถัดลงไป (ข้อความ/รูป/โภชนาการ เว้น `FRONT_GAP_MM`;
+  รูปทรง/เส้นเป็นพื้นหลัง ทับได้) — ตัดบรรทัดที่ขนาดเดิมทำให้บล็อกสูงจนทับชิ้นด้านล่าง; ไม่ได้ทั้งคู่ = คงเดิม + เตือน `front-fit`;
+  รูปกว้างเกินย่อเท่าช่วง, รูปทรง/เส้นไม่จำกัด (แถบสีพันรอบได้)
 - รูปของ AI มี 3 ทาง: `preset:<id>:<#สี>` (ไลบรารี), `asset:<id>` (รูปที่ผู้ใช้อัปโหลด client แทนที่เป็น data URL จริงตอน compile),
   `svg:<markup>` ที่ AI วาดเอง → `sanitizeSvg` (allowlist แท็ก/แอตทริบิวต์, ไม่มี script/style/image/use/ลิงก์ภายนอก, `url(#id)` เท่านั้น,
   ≤ 60k ตัวอักษร/รูป) → data URL เหมือน preset; `background` = SVG รูปพื้นทั้งแผ่น → `FillImage`
@@ -195,7 +205,10 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - three ต้อง >= 0.185 — r175 มีบั๊ก ExtrudeGeometry ไม่สร้างฝาหน้า-หลังเมื่อ bevelEnabled:false (กล่องกลายเป็น wireframe)
 - เปลี่ยนเวอร์ชัน dependency แล้วต้องลบ `node_modules/.vite` แล้วรีสตาร์ท dev server ไม่งั้น pre-bundle เก่าค้าง
 - พิกัดแผ่นคลี่: x ขวา y ลง หน่วย mm; แปลงเป็น 3D ที่ (x, -y, 0)
-- ฟอนต์ไทย self-host ผ่าน `@fontsource/*` (import ใน main.tsx, ไม่พึ่ง Google CDN); ข้อความเลือกได้หลายฟอนต์ (registry `FONTS` ใน artwork.ts: noto/sarabun/prompt/kanit) + น้ำหนัก 400/700 — เพิ่มฟอนต์ใหม่ต้องทำ 3 จุด: import css ใน main.tsx, เพิ่มใน `FONTS`, และ `ensureThaiFont` โหลดให้; ก่อน rasterize ลง canvas (renderArtworkCanvas/ใบสเปก) ต้อง `await ensureThaiFont()` เพราะ fontsource โหลด subset ต่อน้ำหนักแบบ lazy — ถ้าไม่รอ canvas จะ fallback ทำให้ไทยในไฟล์ export เพี้ยน
+- ฟอนต์ไทย self-host ผ่าน `@fontsource/*` (import ใน main.tsx, ไม่พึ่ง Google CDN); ข้อความเลือกได้หลายฟอนต์ (registry `FONTS` ใน artwork.ts: noto/sarabun/prompt/kanit) + น้ำหนัก 400/700 — เพิ่มฟอนต์ใหม่ต้องทำ 3 จุด: import css ใน main.tsx, เพิ่มใน `FONTS`, และ `ensureThaiFont` โหลดให้; ก่อน rasterize ลง canvas (renderArtworkCanvas/ใบสเปก) ต้อง `await ensureThaiFont()` เพราะ fontsource โหลด subset ต่อน้ำหนักแบบ lazy — ถ้าไม่รอ canvas จะ fallback ทำให้ไทยในไฟล์ export เพี้ยน;
+  texture 3D (`useArtTexture`) วาดทันทีไม่รอ แล้ววาดซ้ำเมื่อฟอนต์ของข้อความโหลดเสร็จ (`textFontsKey`/`fontsReady` ใน artwork.ts → `fontTick`)
+  ไม่งั้นข้อความใน 3D ค้างเป็นฟอนต์สำรองจนกว่าจะแก้งาน
+- regex กรองตัวอักษรไทยต้องรวม `\p{M}` — สระบน/ล่างและวรรณยุกต์เป็นเครื่องหมายกำกับ ไม่ใช่ `\p{L}` (mock งานศิลป์เคยได้ "คร" แทน "ครีม")
 - PDF (`dielinePDFBytes`) ใช้ Helvetica (ASCII เท่านั้น): ป้ายบอกขนาดภาษาไทย (ฉลาก/ถุง) ต้องส่ง `dimMasks` = ภาพ 1 บิตจาก
   `renderDimTextMasks` (src/core/pdfDimText.ts, canvas 600 dpi + Noto Sans Thai) → ImageMask + RunLengthDecode ในเลเยอร์ dims
   (ไม่ส่ง = ตัดอักษรนอก ASCII ทิ้ง ไม่ขึ้น ?); ภาพลายใน PDF เป็น JPEG ทึบ → สีพื้นต้อง bake ลง raster ด้วย

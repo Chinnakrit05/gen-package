@@ -3,6 +3,8 @@ import * as THREE from 'three'
 import { useArtTexture } from './useArtTexture'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import { FitViewerCamera } from './FitViewerCamera'
+import { cameraPosition, pouchCameraFit } from './viewerCamera'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
 import {
@@ -1033,14 +1035,13 @@ export function PouchViewer3D({
   lightMode?: LightMode
   watermark?: string | null
 }) {
-  const dist = Math.max(pouch.H, pouch.W) * 2.6
-  // ถุงตั้ง/ก้น K เปิดมาหน้าตรง (แบบภาพ mockup) ให้สองข้างสมดุล — มุมเฉียงขวาเห็นความหนาด้านขวาข้างเดียว
-  // ถุงแบบอื่นคงมุมเฉียงเดิม (เห็นจีบข้าง/ความลึก)
-  const front = pouch.style === 'stand' || pouch.style === 'kseal'
+  // ตำแหน่งแรกจาก Canvas (ถุงตั้ง/ก้น K หน้าตรง, แบบอื่นมุมเฉียง — ดู pouchCameraFit);
+  // สลับรูปแบบถุง/ขนาดต่างมากโดยไม่ถอดหน้า 3D → FitViewerCamera จัดกล้องใหม่ตามมุมของรูปแบบใหม่
+  const fit = pouchCameraFit(pouch, pouch.style)
   return (
     <Canvas
       events={safeCanvasEvents}
-      camera={{ position: front ? [0, dist * 0.12, dist] : [dist * 0.35, dist * 0.25, dist], fov: 36, near: 1, far: 8000 }}
+      camera={{ position: cameraPosition(fit), fov: 36, near: 1, far: 8000 }}
       role="img"
       aria-label="มุมมอง 3 มิติของถุงพร้อมลาย"
     >
@@ -1048,6 +1049,7 @@ export function PouchViewer3D({
       <SceneLighting mode={lightMode ?? 'soft'} />
       <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} dimVariant={dimVariant} watermark={watermark} />
       <OrbitControls makeDefault enableDamping />
+      <FitViewerCamera fit={fit} />
     </Canvas>
   )
 }

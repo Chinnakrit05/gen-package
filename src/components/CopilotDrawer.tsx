@@ -4,8 +4,8 @@
 // ผลลัพธ์ทุกแบบถูก "วางลงงานทันที" (undo ได้) แล้วโชว์เป็นการ์ดในบทสนทนา; ผล artwork เก็บเป็น snapshot ให้เปิดดู/สลับบนเวที 3D
 import { useEffect, useRef, useState } from 'react'
 import { requestArtworkPlan, requestBoxSpec, type AiBoxSpec, type ArtworkImageInput, type ArtworkRequestInput, type CurrentSpec } from '../core/ai'
-import { compileArtworkPlan, panelBoxes, parseArtworkPlan, type ArtIssue } from '../core/aiArtwork'
-import { loadImageFile, measureText, type Deco, type FillImage } from '../core/artwork'
+import { compileArtworkPlan, labelFrontZone, panelBoxes, parseArtworkPlan, type ArtIssue } from '../core/aiArtwork'
+import { loadImageFile, loadTextFont, measureText, type Deco, type FillImage } from '../core/artwork'
 import type { Dieline } from '../core/types'
 import { useT } from '../i18n'
 import { ApiClientError } from '../services/api/client'
@@ -201,6 +201,8 @@ export function CopilotDrawer({
       ...refs.map((r) => ({ data: r.base64, mediaType: 'image/jpeg', role: 'reference' as const, note: r.name })),
       ...(logo ? [{ data: logo.ref.base64, mediaType: 'image/jpeg', role: 'logo' as const, assetId: 'logo', note: logo.ref.name }] : []),
     ]
+    // ภาชนะทรงกระบอก: ช่วงด้านหน้าที่อ่านได้ตรง — บอก AI และใช้จำกัดความกว้างชื่อแบรนด์/โลโก้ตอน compile
+    const front = artwork.kind === 'vessel' ? labelFrontZone(panels, artwork.box.W) : null
     const input: ArtworkRequestInput = {
       prompt,
       kind: artwork.kind,
@@ -212,14 +214,18 @@ export function CopilotDrawer({
       fillColor: artwork.fillColor,
       existing: artMode === 'replace' ? 0 : artwork.existingCount,
       images,
+      ...(front ? { front } : {}),
     }
     const request = artwork.request ?? requestArtworkPlan
     const res = await request(input, allowApiKey && apiKey.trim() ? apiKey.trim() : undefined, signal)
     const parsed = parseArtworkPlan(res.plan)
     if (!parsed.ok) throw new Error(res.issues[0]?.message ?? t('AI ยังออกแบบไม่สำเร็จ ลองใหม่อีกครั้ง', 'The AI could not finish the design, please retry'))
+    // วัดความกว้างข้อความด้วยฟอนต์จริง — ฟอนต์ที่ AI เลือก (Kanit/Prompt …) อาจยังไม่โหลด วัดตอนนั้นจะได้ค่าของฟอนต์สำรอง
+    await Promise.all(parsed.plan.elements.filter((el) => el.type === 'text').map((el) => loadTextFont(el.font, el.weight ?? 400, el.text)))
     const compiled = compileArtworkPlan(parsed.plan, panels, {
       measure: (txt, size, font, weight) => measureText(txt, size, font, weight),
       assets: logo ? { logo: logo.asset } : undefined,
+      front,
     })
     if (!compiled.decos.length) throw new Error(t('AI ไม่ได้วางชิ้นงานบนแผงที่พิมพ์ได้เลย ลองใหม่', 'The AI placed nothing on a printable panel, please retry'))
     let { decos, fillImage } = compiled

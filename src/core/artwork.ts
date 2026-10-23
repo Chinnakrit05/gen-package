@@ -613,14 +613,14 @@ export async function loadTextFont(font?: string, weight = 400, text = ''): Prom
   }
 }
 
-// โหลดเฉพาะฟอนต์ที่งานใช้ก่อน rasterize; ใบสเปกและตารางโภชนาการใช้ Noto เพิ่มเอง
-export async function ensureThaiFont(decos: readonly Deco[] = []): Promise<void> {
-  const required = new Map<string, { font?: string; weight: number; text: string }>()
+// ฟอนต์ (ตระกูล:น้ำหนัก) ที่งานต้องใช้ตอน rasterize: Noto 400/600/700 เสมอ (ใบสเปก/ตารางโภชนาการ) + ทุกข้อความที่มองเห็น
+function requiredFonts(decos: readonly Deco[]): { key: string; font?: string; weight: number; text: string }[] {
+  const required = new Map<string, { key: string; font?: string; weight: number; text: string }>()
   const add = (font: string | undefined, weight: number, text: string) => {
     const key = `${font ?? 'noto'}:${weight}`
     const existing = required.get(key)
     if (existing) existing.text += text
-    else required.set(key, { font, weight, text })
+    else required.set(key, { key, font, weight, text })
   }
   add(undefined, 400, '')
   add(undefined, 600, '')
@@ -628,7 +628,29 @@ export async function ensureThaiFont(decos: readonly Deco[] = []): Promise<void>
   for (const d of decos) {
     if (d.type === 'text' && !d.hidden) add(d.font, d.weight ?? 400, d.text)
   }
-  await Promise.all([...required.values()].map(({ font, weight, text }) => loadTextFont(font, weight, text)))
+  return [...required.values()]
+}
+
+// โหลดเฉพาะฟอนต์ที่งานใช้ก่อน rasterize; ใบสเปกและตารางโภชนาการใช้ Noto เพิ่มเอง
+export async function ensureThaiFont(decos: readonly Deco[] = []): Promise<void> {
+  await Promise.all(requiredFonts(decos).map(({ font, weight, text }) => loadTextFont(font, weight, text)))
+}
+
+// ชุดฟอนต์ที่งานใช้ (ไม่รวมเนื้อความ) — เปลี่ยนเมื่อมีฟอนต์/น้ำหนักใหม่เท่านั้น ใช้เป็น key สั่งวาด texture 3D ใหม่หลังฟอนต์โหลด
+export const textFontsKey = (decos: readonly Deco[]): string =>
+  requiredFonts(decos).map((f) => f.key).sort().join('|')
+
+// ทุกฟอนต์ที่งานใช้โหลดเสร็จแล้วหรือยัง (document.fonts.check กับตัวอย่างเดียวกับตอนโหลด) — นอก browser ถือว่าพร้อม
+export function fontsReady(decos: readonly Deco[]): boolean {
+  const fonts = typeof document === 'undefined' ? undefined : document.fonts
+  if (!fonts?.check) return true
+  return requiredFonts(decos).every(({ font, weight, text }) => {
+    try {
+      return fonts.check(`${weight} 16px ${fontCss(font)}`, FONT_LOAD_SAMPLE + text)
+    } catch {
+      return true
+    }
+  })
 }
 
 // อัปเดตความกว้างที่เก็บของ text element หลังแก้ข้อความ/ขนาด/ฟอนต์/น้ำหนัก
