@@ -614,3 +614,25 @@ describe('pouch: ฐานถุงตั้ง (ครึ่งก้นปู�
     expect(doypackFold(f)).toBe(f.label.height)
   })
 })
+
+describe('pouch: รูแขวน (euro-hole) — dieline ตัด + 3D เจาะทะลุสองชั้น', () => {
+  it('ถุงแผงแยก (doypack): รูกลางซีลบนทั้งแผงหน้าและหลัง ตัดจริงบน dieline', () => {
+    const p = generatePouch({ W: 120, D: 60, H: 180 }, mat, { style: 'stand', addons: { hangHole: true } })
+    expect(p.hangHoles.map((h) => [h.x, h.cut])).toEqual([[60, true], [180, true]])
+    for (const h of p.hangHoles) {
+      expect(h.y - h.r).toBeGreaterThan(0) // อยู่ในแถบซีลบน
+      expect(h.y + h.r).toBeLessThan(p.frontRect.y)
+    }
+  })
+
+  it('ถุงฟิล์มม้วน (ข้างจีบ): dieline ตัดเฉพาะหน้า แต่ 3D เจาะชั้นหลังตรงกันด้วย', () => {
+    const p = generatePouch({ W: 80, D: 60, H: 210 }, mat, { style: 'gusset', addons: { hangHole: true } })
+    expect(p.hangHoles.filter((h) => h.cut).map((h) => h.x)).toEqual([40])
+    const back = p.hangHoles.find((h) => !h.cut)!
+    expect(back.x).toBeCloseTo(p.backRect.x + p.backRect.w / 2, 9)
+  })
+
+  it('ไม่เปิดรูแขวน = ไม่มีรู', () => {
+    expect(generatePouch({ W: 120, D: 60, H: 180 }, mat, { style: 'stand' }).hangHoles).toEqual([])
+  })
+})

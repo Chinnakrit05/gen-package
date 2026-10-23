@@ -759,10 +759,10 @@ export function buildPouchGeometry(pouch: Pouch) {
     return geo
 }
 
-// alpha mask รอยบากฉีก (พิกัดแผ่นคลี่ ขาว = ผิว, ดำ = เจาะ) — ใช้เป็น alphaMap + alphaTest ของทั้งสองวัสดุถุง
-// flipY ต้องตรงกับ texture ลาย (false); ไม่มีรอยบาก = null (ไม่เพิ่ม texture)
-export function tearNotchMaskCanvas(pouch: Pouch, pxPerMm = 6): HTMLCanvasElement | null {
-  if (!pouch.tearNotches.length) return null
+// alpha mask ส่วนที่เจาะทะลุฟิล์ม: รอยบากฉีก + รูแขวน (พิกัดแผ่นคลี่ ขาว = ผิว, ดำ = เจาะ) — alphaMap + alphaTest ของทั้งสองวัสดุถุง
+// flipY ต้องตรงกับ texture ลาย (false); ไม่มีอะไรเจาะ = null (ไม่เพิ่ม texture)
+export function pouchCutMaskCanvas(pouch: Pouch, pxPerMm = 6): HTMLCanvasElement | null {
+  if (!pouch.tearNotches.length && !pouch.hangHoles.length) return null
   const { width, height } = pouch.label
   const s = Math.min(pxPerMm, 2048 / Math.max(width, height))
   const c = document.createElement('canvas')
@@ -779,12 +779,17 @@ export function tearNotchMaskCanvas(pouch: Pouch, pxPerMm = 6): HTMLCanvasElemen
     ctx.closePath()
     ctx.fill()
   }
+  for (const h of pouch.hangHoles) {
+    ctx.beginPath()
+    ctx.arc(h.x * s, h.y * s, h.r * s, 0, Math.PI * 2)
+    ctx.fill()
+  }
   return c
 }
 
-function useTearNotchMask(pouch: Pouch): THREE.CanvasTexture | null {
+function usePouchCutMask(pouch: Pouch): THREE.CanvasTexture | null {
   const tex = useMemo(() => {
-    const c = tearNotchMaskCanvas(pouch)
+    const c = pouchCutMaskCanvas(pouch)
     if (!c) return null
     const t = new THREE.CanvasTexture(c)
     t.flipY = false
@@ -837,7 +842,7 @@ function PouchModel({
   })
   const geo = usePouchGeometry(pouch)
   useEffect(() => () => geo.dispose(), [geo])
-  const notchMask = useTearNotchMask(pouch)
+  const notchMask = usePouchCutMask(pouch)
 
   // three คอมไพล์ shader ตาม define ตอนสร้าง — map เปลี่ยน null → texture ต้อง needsUpdate ให้ recompile
   const matRef = useRef<THREE.MeshStandardMaterial>(null!)
@@ -916,7 +921,7 @@ function PouchModel({
           map={tex}
           color={tex ? '#ffffff' : mat.color}
           {...finishMaterialProps(maps, mat.roughness ?? 0.6, mat.metalness ?? 0)}
-          // รอยบากฉีก: เจาะผิวตาม alpha mask พิกัดแผ่นคลี่ (ทุกรูปแบบถุงแม็พ UV จาก dieline เดียวกัน)
+          // รอยบากฉีก/รูแขวน: เจาะผิวตาม alpha mask พิกัดแผ่นคลี่ (ทุกรูปแบบถุงแม็พ UV จาก dieline เดียวกัน)
           alphaMap={notchMask}
           alphaTest={notchMask ? 0.5 : 0}
           transparent={mat.opacity !== undefined}

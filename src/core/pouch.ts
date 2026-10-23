@@ -61,6 +61,8 @@ export interface Pouch {
   zipY?: number // พิกัดแผ่นคลี่ y ของแนวซิป (เมื่อ zipper=true) — ใช้วางแถบซิปใน 3D
   tearY?: number // พิกัดแผ่นคลี่ y ของรอยบากฉีก (เมื่อ zipper=true)
   tearNotches: Vec2[][] // รอยบากฉีก (สามเหลี่ยม V พิกัดแผ่นคลี่) ที่ขอบแผง — dieline ตัดตามนี้, 3D เจาะผิวตามนี้ (alpha mask)
+  // รูแขวน (วงกลมพิกัดแผ่นคลี่) — dieline ตัดเฉพาะ cut: true; 3D เจาะทุกวง (รวมชั้นหลังของถุงฟิล์มม้วนที่เจาะหลังขึ้นรูป)
+  hangHoles: { x: number; y: number; r: number; cut: boolean }[]
   hangHole: boolean // รูแขวน (euro-hole) ที่ริมซีลบน
   valve: boolean // วาล์วระบายแก๊ส (กาแฟ) บนหน้าถุง
   tinTie: boolean // ที่รัดปาก (tin-tie) ใกล้ปากถุง
@@ -325,11 +327,17 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const hangHole = addons.hangHole === true
   const valve = addons.valve === true
   const tinTie = addons.tinTie === true
+  const hangHoles: Pouch['hangHoles'] = []
   if (hangHole) {
     // รูแขวน (euro-hole) กลางริมซีลบน — เจาะจริง (cut) ให้เครื่องปั๊มตัด
     const hr = HANG_HOLE_R
     // เจาะทะลุทั้งสองชั้น → doypack มีรูทั้งแผงหน้าและหลัง
-    for (const cx of two ? [fcx, W + W / 2] : [fcx]) segments.push(cut(circlePath(cx, hangHoleY(st), hr)))
+    for (const cx of two ? [fcx, W + W / 2] : [fcx]) {
+      segments.push(cut(circlePath(cx, hangHoleY(st), hr)))
+      hangHoles.push({ x: cx, y: hangHoleY(st), r: hr, cut: true })
+    }
+    // ถุงฟิล์มม้วน (แผ่นเดียว ไม่ใช่ซองหลังกลาง): ชั้นหลังทะลุด้วยตอนเจาะหลังขึ้นรูป — ให้ 3D เห็นรูทะลุทั้งสองชั้น
+    if (!two && !backSeam) hangHoles.push({ x: W + sideGusset + W / 2, y: hangHoleY(st), r: hr, cut: false })
     dims.push({ a: P(fcx - hr, 0), b: P(fcx + hr, 0), label: `รูแขวน ⌀${fmt(2 * hr)}` })
   }
   if (valve) {
@@ -391,6 +399,7 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     zipY,
     tearY,
     tearNotches,
+    hangHoles,
     hangHole,
     valve,
     tinTie,
