@@ -14,10 +14,10 @@ import {
   doypackRows,
   doypackAt,
   doypackZ,
-  doypackCorner,
   doypackFold,
   DOYPACK_WEDGE,
   doypackTaper,
+  DOYPACK_PULL,
   ZIP_HALF,
   doypackBasePoint,
   doypackBaseLift,
@@ -336,13 +336,13 @@ describe('pouch: ทรง 3D ถุงตั้ง (doypack)', () => {
       expect(r.b).toBe(DOYPACK_FIN)
       expect(r.dly).toBeLessThanOrEqual(st + 1e-9)
     }
-    expect(rows[rows.length - 1].y).toBeCloseTo(fold, 9) // สูงจริง = ซีลบน + ลำตัว (ไม่รวมครึ่งก้น)
+    expect(rows[rows.length - 1].y).toBeCloseTo(fold + doypackRimH(60), 9) // สูงจริง = แถบซีลก้น + ลำตัว + ซีลบน (ไม่รวมครึ่งก้น)
     expect(rows[rows.length - 1].dly).toBeCloseTo(0, 9)
   })
 
   it('ผิวหน้าแม็พแผงช่วงซีลบน → แนวพับก้น (ขอบฐานบนพื้น) ครึ่งก้นที่เหลือเป็นฐาน และ dly ลดลงต่อเนื่องถึงขอบบน', () => {
     expect(fold).toBeCloseTo(PH - 60 / 2, 9)
-    expect(rows[0].y).toBe(0)
+    expect(rows[0].y).toBeCloseTo(doypackRimH(60), 9) // ขอบล่างผิวหน้าอยู่บนแถบซีลก้นที่ห้อยถึงพื้น
     expect(rows[0].dly).toBeCloseTo(fold, 9)
     for (let i = 1; i < rows.length; i++) {
       expect(rows[i].y).toBeGreaterThan(rows[i - 1].y)
@@ -350,17 +350,18 @@ describe('pouch: ทรง 3D ถุงตั้ง (doypack)', () => {
     }
   })
 
-  it('ซีลข้างแบนกว้างเท่า dieline ตรงเกือบดิ่ง; มุมก้นมนเข้า; ฐานลึกเต็มตั้งได้', () => {
+  it('ซีลข้างแบนกว้างเท่า dieline ตรงเกือบดิ่ง; มุมก้นเหลี่ยม; ฐานลึกเต็มตั้งได้', () => {
     const Wi2 = p.W / 2 - DOYPACK_SEAL
-    const { ry } = doypackCorner(p.W, fold)
+    const ry = 0 // มุมก้นเหลี่ยม — ไม่มีช่วงมุมมน
     for (const r of rows) {
       expect(r.a - r.ai).toBeCloseTo(DOYPACK_SEAL, 9) // ซีลข้างกว้างเท่า dieline ตลอดความสูง (เอียงตามถุง)
       expect(doypackZ(r, r.ai + 1)).toBe(DOYPACK_FIN) // ซีลข้างแบน
       expect(doypackZ(r, 0)).toBeCloseTo(r.b, 9)
-      if (r.y >= ry) expect(r.ai + doypackTaper('stand', p.W, r.y, tipY)).toBeGreaterThanOrEqual(Wi2 * 0.95 - 1e-9) // ซีลแข็ง ไม่หดตามความพอง
+      if (r.y >= ry) expect(r.ai + doypackTaper('stand', p.W, r.y - doypackRimH(60), tipY)).toBeGreaterThanOrEqual(Wi2 * 0.95 - 1e-9) // ซีลแข็ง ไม่หดตามความพอง
     }
     expect(rows[0].b).toBeCloseTo(DOYPACK_FIN + p.depth3D, 9) // หนาสุดที่ก้น
-    expect(rows[0].a).toBeLessThan(rows.find((r) => r.y >= ry)!.a) // มุมล่างมนเข้า
+    // มุมก้นเหลี่ยม: ขอบนอกล่างสุด = ครึ่งกว้างหลังหักความเรียวและความพองเท่านั้น (ไม่มีการดึงมุมเข้าเพิ่ม)
+    expect(rows[0].a).toBeCloseTo(Wi2 * (1 - DOYPACK_PULL) - doypackTaper('stand', p.W, 0, tipY) + DOYPACK_SEAL, 9)
   })
 
   it('ทั้งถุงเรียวเข้าหาก้น: ขอบข้าง (ซีลข้าง) ร่นเข้า 0 ใต้ซิป → DOYPACK_WEDGE·W ที่พื้น เอียงตามช่วงพอง', () => {
@@ -566,7 +567,7 @@ describe('pouch: ถุงตั้งก้น K (stand up pouch, K-seal)', () 
   it('3D: ขอบข้างตรงดิ่งลงถึงพื้น มุมก้นเหลี่ยม ไม่หักเข้า — ครึ่งก้น (มีเส้น K) พับเข้าเป็นฐาน', () => {
     const rows = doypackRows(p)
     const bottom = rows[0]
-    expect(bottom.y).toBe(0)
+    expect(bottom.y).toBeCloseTo(doypackRimH(D), 9) // ผิวหน้าเริ่มบนแถบซีลก้นที่ห้อยถึงพื้น
     expect(doypackFold(p)).toBeCloseTo(fold, 9)
     expect(bottom.dly).toBeCloseTo(fold, 9) // ขอบล่างผิวหน้า = แนวพับก้น (ส่วนเส้น K อยู่ใต้ฐาน)
     expect(bottom.a - bottom.ai).toBeCloseTo(DOYPACK_SEAL, 9) // ซีลข้างกว้างเท่าเดิมถึงพื้น ไม่มีแผ่นแบนเพิ่มที่มุม
@@ -582,24 +583,22 @@ describe('pouch: ถุงตั้งก้น K (stand up pouch, K-seal)', () 
 })
 
 describe('pouch: ฐานถุงตั้ง (ครึ่งก้นปูเป็นเลนส์บนพื้น)', () => {
-  it('ถุงยืนบนขอบซีลรอบเลนส์: ขอบฐานบนพื้นที่ผิวหน้า ขอบซีลตั้งขึ้น (เอนเข้าเล็กน้อย) แล้วโดมก้นโก่งเข้าในถุงถึงแกนกลาง', () => {
+  it('ถุงยืนบนแถบซีลก้นที่ห้อยจากขอบล่างผิวหน้าถึงพื้น แล้วโดมก้นโก่งเข้าในถุงถึงแกนกลาง', () => {
     const lift = doypackBaseLift(60)
     const rim = doypackRimH(60)
     expect(rim).toBeGreaterThan(0)
     expect(rim).toBeLessThanOrEqual(4)
     expect(lift).toBeLessThanOrEqual(8)
-    expect(doypackBasePoint(10, 25, 0, lift, rim)).toEqual({ x: 10, y: 0, z: 25 })
-    const top = doypackBasePoint(10, 25, DOYPACK_RIM_T, lift, rim) // บนขอบซีล
-    expect(top.y).toBeCloseTo(rim, 9)
-    expect(top.z).toBeLessThan(25)
-    expect(top.z).toBeGreaterThan(25 * 0.9) // เอนเข้าน้อย — เกือบตั้งตรง
+    // เริ่มที่ขอบล่างผิวหน้า (สูง rim) แถบซีลห้อยดิ่งลงถึงพื้น (z คงที่)
+    expect(doypackBasePoint(10, 25, 0, lift, rim)).toEqual({ x: 10, y: rim, z: 25 })
+    expect(doypackBasePoint(10, 25, DOYPACK_RIM_T, lift, rim)).toEqual({ x: 10, y: 0, z: 25 })
     const c = doypackBasePoint(10, 25, 1, lift, rim)
-    expect(c.y).toBeCloseTo(rim + lift, 9) // กลางโดมสูงสุด
+    expect(c.y).toBeCloseTo(lift, 9) // กลางโดมสูงสุด
     expect(c.z).toBeCloseTo(0, 9)
-    // ความสูงขึ้นต่อเนื่องจากขอบถึงกลาง
+    // โดม: ความสูงขึ้นต่อเนื่องจากขอบบนพื้นถึงกลาง
     let prev = -1
     for (let i = 0; i <= 20; i++) {
-      const q = doypackBasePoint(10, 25, i / 20, lift, rim)
+      const q = doypackBasePoint(10, 25, DOYPACK_RIM_T + ((1 - DOYPACK_RIM_T) * i) / 20, lift, rim)
       expect(q.y).toBeGreaterThanOrEqual(prev - 1e-9)
       prev = q.y
     }

@@ -18,6 +18,7 @@ import {
   doypackBaseLift,
   doypackBasePoint,
   doypackRimH,
+  DOYPACK_RIM_T,
   spoutRows,
   spoutMarker,
   doypackAt,
@@ -394,17 +395,20 @@ export function buildPouchGeometry(pouch: Pouch) {
         const NB = 12
         const lift = doypackBaseLift(pouch.gusset)
         const rim = doypackRimH(pouch.gusset)
+        // จุดแบ่งฟิล์มฐาน: แถบซีลก้น (ห้อยถึงพื้นพอดีที่ DOYPACK_RIM_T) แล้วโดม NB ช่วง
+        const ts = rim > 0
+          ? [0, DOYPACK_RIM_T / 2, ...Array.from({ length: NB + 1 }, (_, j) => DOYPACK_RIM_T + ((1 - DOYPACK_RIM_T) * j) / NB)]
+          : Array.from({ length: NB + 1 }, (_, j) => j / NB)
         for (const side of [1, -1]) {
           const start = pos.length / 3
-          for (let j = 0; j <= NB; j++) {
-            const t = j / NB
+          for (const t of ts) {
             xRows[0].forEach((x0, k) => {
               const q = doypackBasePoint(side * x0, side * doypackZ(rows[0], x0), t, lift, rim)
               pos.push(q.x, q.y, q.z)
               uv.push((side > 0 ? us[k] : W + us[k]) / dw, (baseFold + t * (dh - baseFold)) / dh)
             })
           }
-          for (let j = 0; j < NB; j++) {
+          for (let j = 0; j < ts.length - 1; j++) {
             for (let k = 0; k < cols - 1; k++) {
               const q = start + j * cols + k
               idx.push(q, q + cols, q + 1, q + 1, q + cols, q + cols + 1)

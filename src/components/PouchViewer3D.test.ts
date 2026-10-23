@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { buildPouchGeometry, getPouchSealColor } from './PouchViewer3D'
-import { brickShape, generatePouch, DOYPACK_FIN, doypackFold, FLAT_SEAL, POUCH_FIN_SEAL, type PouchStyle } from '../core/pouch'
+import { brickShape, generatePouch, DOYPACK_FIN, doypackFold, doypackRows, FLAT_SEAL, POUCH_FIN_SEAL, type PouchStyle } from '../core/pouch'
 import { getMaterial } from '../core/materials'
 
 describe('brick pouch seal color', () => {
@@ -161,7 +161,7 @@ describe.each<PouchStyle>(['stand', 'spout'])('doypack geometry (%s)', (style) =
     const box = geometry.boundingBox!
     expect(box.min.y).toBeCloseTo(0, 6)
     // ถุงตั้ง: ครึ่งก้นพับเข้าเป็นฐาน → สูง = ซีลบน + ลำตัว; ถุงมีจุก: ทั้งแผงรวมครึ่งก้น
-    expect(box.max.y).toBeCloseTo(doypackFold(pouch), 4)
+    expect(box.max.y).toBeCloseTo(doypackRows(pouch).at(-1)!.y, 4) // ถุงตั้ง = แถบซีลก้น + ลำตัว + ซีลบน
     expect(box.max.x).toBeLessThanOrEqual(size.W / 2 + 1e-4)
     expect(box.max.z).toBeLessThanOrEqual(pouch.depth3D + DOYPACK_FIN + 1e-4)
     geometry.dispose()
