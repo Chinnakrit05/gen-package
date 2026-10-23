@@ -21,6 +21,8 @@ import {
   ZIP_HALF,
   doypackBasePoint,
   doypackBaseLift,
+  doypackRimH,
+  DOYPACK_RIM_T,
   DOYPACK_FIN,
   DOYPACK_LENS,
   isPouch,
@@ -580,14 +582,27 @@ describe('pouch: ถุงตั้งก้น K (stand up pouch, K-seal)', () 
 })
 
 describe('pouch: ฐานถุงตั้ง (ครึ่งก้นปูเป็นเลนส์บนพื้น)', () => {
-  it('ขอบฐานอยู่บนพื้นที่ผิวหน้า กลางฐานนูนเข้าในถุงเล็กน้อยและอยู่บนแกนกลาง (z = 0)', () => {
+  it('ถุงยืนบนขอบซีลรอบเลนส์: ขอบฐานบนพื้นที่ผิวหน้า ขอบซีลตั้งขึ้น (เอนเข้าเล็กน้อย) แล้วโดมก้นโก่งเข้าในถุงถึงแกนกลาง', () => {
     const lift = doypackBaseLift(60)
-    expect(lift).toBeGreaterThan(0)
-    expect(lift).toBeLessThanOrEqual(3)
-    expect(doypackBasePoint(10, 25, 0, lift)).toEqual({ x: 10, y: 0, z: 25 })
-    const c = doypackBasePoint(10, 25, 1, lift)
-    expect(c.y).toBeCloseTo(lift, 9)
+    const rim = doypackRimH(60)
+    expect(rim).toBeGreaterThan(0)
+    expect(rim).toBeLessThanOrEqual(4)
+    expect(lift).toBeLessThanOrEqual(8)
+    expect(doypackBasePoint(10, 25, 0, lift, rim)).toEqual({ x: 10, y: 0, z: 25 })
+    const top = doypackBasePoint(10, 25, DOYPACK_RIM_T, lift, rim) // บนขอบซีล
+    expect(top.y).toBeCloseTo(rim, 9)
+    expect(top.z).toBeLessThan(25)
+    expect(top.z).toBeGreaterThan(25 * 0.9) // เอนเข้าน้อย — เกือบตั้งตรง
+    const c = doypackBasePoint(10, 25, 1, lift, rim)
+    expect(c.y).toBeCloseTo(rim + lift, 9) // กลางโดมสูงสุด
     expect(c.z).toBeCloseTo(0, 9)
+    // ความสูงขึ้นต่อเนื่องจากขอบถึงกลาง
+    let prev = -1
+    for (let i = 0; i <= 20; i++) {
+      const q = doypackBasePoint(10, 25, i / 20, lift, rim)
+      expect(q.y).toBeGreaterThanOrEqual(prev - 1e-9)
+      prev = q.y
+    }
   })
 
   it('ถุงมีจุกไม่พับครึ่งก้นเป็นฐาน (แนวพับ = ขอบล่างแผง)', () => {

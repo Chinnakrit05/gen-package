@@ -17,6 +17,7 @@ import {
   doypackFold,
   doypackBaseLift,
   doypackBasePoint,
+  doypackRimH,
   spoutRows,
   spoutMarker,
   doypackAt,
@@ -390,12 +391,13 @@ export function buildPouchGeometry(pouch: Pouch) {
       if (printedBase) {
         const NB = 12
         const lift = doypackBaseLift(pouch.gusset)
+        const rim = doypackRimH(pouch.gusset)
         for (const side of [1, -1]) {
           const start = pos.length / 3
           for (let j = 0; j <= NB; j++) {
             const t = j / NB
             xRows[0].forEach((x0, k) => {
-              const q = doypackBasePoint(side * x0, side * doypackZ(rows[0], x0), t, lift)
+              const q = doypackBasePoint(side * x0, side * doypackZ(rows[0], x0), t, lift, rim)
               pos.push(q.x, q.y, q.z)
               uv.push((side > 0 ? us[k] : W + us[k]) / dw, (baseFold + t * (dh - baseFold)) / dh)
             })

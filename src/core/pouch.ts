@@ -560,16 +560,25 @@ export const doypackFold = (p: { label: { height: number }; style?: PouchStyle; 
     ? p.label.height - (p.gusset ?? 0) / 2
     : p.label.height
 
-// ฐานถุงตั้ง: ครึ่งก้นของแผงหน้า/หลังปูเป็นครึ่งเลนส์บนพื้น — จากขอบฐาน (แนวพับก้น) เข้าหาแนวพับกลางก้น
-// (ขอบล่างแผง) ตามแกนยาวของเลนส์; กลางฐานนูนเข้าในถุงเล็กน้อย (ก้นยืนบนขอบ ไม่วางราบทั้งแผ่น)
-export const DOYPACK_BASE_LIFT = 0.05 // สัดส่วนความลึกก้น (สูงสุด 3 มม.)
-export const doypackBaseLift = (gusset: number) => Math.min(3, DOYPACK_BASE_LIFT * gusset)
-// จุดบนฐานที่ t ∈ [0,1] (0 = ขอบฐาน, 1 = แนวกลางก้น) ใต้จุดขอบ (x, zEdge): z ไล่เข้าหา 0, y ยกโค้งขึ้น
-export const doypackBasePoint = (x: number, zEdge: number, t: number, lift: number) => ({
-  x,
-  y: lift * Math.sin((Math.PI / 2) * t),
-  z: zEdge * (1 - t),
-})
+// ฐานถุงตั้ง: ครึ่งก้นของแผงหน้า/หลังปูเป็นครึ่งเลนส์ — จากขอบฐาน (แนวพับก้น) เข้าหาแนวพับกลางก้น (ขอบล่างแผง)
+// ตามแกนยาวของเลนส์ แบบก้น doypack จริง (ภาพใต้ถุงอ้างอิง): ถุงยืนบน "ขอบซีล" รอบเลนส์ — แถบซีลก้นกับแผงตั้งขึ้น
+// เป็นขอบสูง rim (เอนเข้าเล็กน้อย มองจากใต้ถุงเห็นเป็นแถบรอบเลนส์) แล้วก้น gusset โก่งเป็นโดมเข้าในถุงอีก lift
+export const DOYPACK_RIM = 0.06 // ความสูงขอบซีลก้น = สัดส่วนความลึกก้น (สูงสุด 4 มม.)
+export const DOYPACK_BASE_LIFT = 0.1 // ความโก่งของโดมก้นเหนือขอบ = สัดส่วนความลึกก้น (สูงสุด 8 มม.)
+export const DOYPACK_RIM_T = 0.15 // สัดส่วนฟิล์มครึ่งก้น (จากแนวพับก้น) ที่เป็นแถบขอบซีล
+export const doypackRimH = (gusset: number) => Math.min(4, DOYPACK_RIM * gusset)
+export const doypackBaseLift = (gusset: number) => Math.min(8, DOYPACK_BASE_LIFT * gusset)
+// จุดบนฐานที่ t ∈ [0,1] (0 = ขอบฐานบนพื้น, 1 = แนวกลางก้น) ใต้จุดขอบ (x, zEdge):
+// ช่วงแรกตั้งขึ้นเป็นขอบซีล (เอนเข้า 8%) แล้วโค้งเป็นโดมเข้าหาแกนกลาง (z = 0) ที่ความสูง rim + lift
+export const doypackBasePoint = (x: number, zEdge: number, t: number, lift: number, rim = 0) => {
+  if (rim > 0 && t <= DOYPACK_RIM_T) {
+    const s = t / DOYPACK_RIM_T
+    return { x, y: rim * s, z: zEdge * (1 - 0.08 * s) }
+  }
+  const s = rim > 0 ? (t - DOYPACK_RIM_T) / (1 - DOYPACK_RIM_T) : t
+  const z0 = rim > 0 ? zEdge * 0.92 : zEdge
+  return { x, y: rim + lift * Math.sin((Math.PI / 2) * s), z: z0 * (1 - s) }
+}
 
 // ผิวหน้า (z ≥ 0) ที่ x ของแถว: ซีลข้างแบน = DOYPACK_FIN, ช่วงพองเป็นเลนส์
 // หน้าตัดช่วงพอง (0..1) ที่ u = x/ai: เลนส์ขอบคม (ตะเข็บ) — ช่วงไหล่ถุงมีจุกที่ฟิล์มแบนล้อม (flat > 0)
