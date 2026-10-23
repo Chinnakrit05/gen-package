@@ -410,26 +410,27 @@ describe('pouch: ถุงมีจุก (spout pouch)', () => {
 
   it('3D: ปากค้ำเปิดด้วยเรือจุก (ไม่บีบแบน) — แถวบนสุดกว้างเท่าเรือ หนาเท่าเรือ', () => {
     const top = rows[rows.length - 1]
-    expect(top.y).toBeCloseTo(PH, 9)
+    expect(top.y).toBeCloseTo(doypackFold(p) + doypackRimH(p.gusset), 9) // ครึ่งก้นพับเป็นฐาน + แถบซีลก้น
     expect(top.ai).toBeCloseTo(sm.bw / 2, 6)
     expect(top.b).toBeCloseTo(DOYPACK_FIN + sm.r * 0.9, 6)
     expect(top.dly).toBeCloseTo(0, 9)
-    expect(rows[0].dly).toBeCloseTo(PH, 9)
+    expect(rows[0].dly).toBeCloseTo(doypackFold(p), 9) // ผิวหน้าจบที่แนวพับก้น
+    expect(doypackFold(p)).toBeCloseTo(PH - p.gusset / 2, 9)
   })
 
   it('3D: พองเต็มกว้างเกือบถึงบน (รวบเข้าหาจุกเฉพาะช่วงไหล่ใกล้ขอบบน)', () => {
     for (const r of rows.filter((q) => q.y > 10 && q.y < PH * 0.75)) expect(r.ai).toBeGreaterThan(Wi2 * 0.9)
   })
 
-  it('3D: ซีลข้างแยกหน้า-หลังเป็นรูป Λ เหนือก้น gusset แล้วแนบกันช่วงบน', () => {
-    expect(rows[0].e!).toBeGreaterThan(p.depth3D * 0.3)
-    expect(doypackZ(rows[0], rows[0].ai + 1)).toBeGreaterThan(DOYPACK_FIN + p.depth3D * 0.3)
-    for (const r of rows.filter((q) => q.y > PH * 0.3)) expect(r.e).toBe(0)
-    for (const r of rows) expect(r.b).toBeLessThanOrEqual(DOYPACK_FIN + p.depth3D + 1e-9)
+  it('3D: ซีลข้างแบนประกบตลอดความสูง (ก้นพับเป็นฐาน ไม่แยกเป็นรูป Λ) และไม่หนาเกินความลึกถุง', () => {
+    for (const r of rows) {
+      expect(doypackZ(r, r.ai + r.flat! + 1)).toBe(DOYPACK_FIN)
+      expect(r.b).toBeLessThanOrEqual(DOYPACK_FIN + p.depth3D + 1e-9)
+    }
   })
 
-  it('3D: มุมไดคัทมนตัดขอบแผงเฉพาะแถวบน/ล่าง ไม่กินช่วงพอง (≤ ซีลข้าง)', () => {
-    expect(rows[0].cut).toBeCloseTo(SPOUT_CORNER_R, 6)
+  it('3D: มุมไดคัทมนตัดขอบแผงเฉพาะแถวบน ไม่กินช่วงพอง (≤ ซีลข้าง) — มุมล่างอยู่ในครึ่งก้นที่พับเป็นฐาน', () => {
+    expect(rows[0].cut).toBe(0)
     expect(rows[rows.length - 1].cut).toBeCloseTo(SPOUT_CORNER_R, 6)
     expect(rows.find((r) => r.y > PH / 2)!.cut).toBe(0)
     expect(SPOUT_CORNER_R).toBeLessThanOrEqual(POUCH_SIDE_SEAL)
@@ -604,8 +605,12 @@ describe('pouch: ฐานถุงตั้ง (ครึ่งก้นปู�
     }
   })
 
-  it('ถุงมีจุกไม่พับครึ่งก้นเป็นฐาน (แนวพับ = ขอบล่างแผง)', () => {
-    const q = generatePouch({ W: 120, D: 60, H: 180 }, mat, { style: 'spout' })
-    expect(doypackFold(q)).toBe(q.label.height)
+  it('ถุงตั้ง/ก้น K/มีจุกพับครึ่งก้นเป็นฐาน; ซองแบนไม่มีก้น (แนวพับ = ขอบล่างแผง)', () => {
+    for (const style of ['stand', 'kseal', 'spout'] as const) {
+      const q = generatePouch({ W: 120, D: 60, H: 180 }, mat, { style })
+      expect(doypackFold(q)).toBeCloseTo(q.label.height - 30, 9)
+    }
+    const f = generatePouch({ W: 120, D: 60, H: 180 }, mat, { style: 'flat' })
+    expect(doypackFold(f)).toBe(f.label.height)
   })
 })

@@ -333,7 +333,7 @@ export function buildPouchGeometry(pouch: Pouch) {
       const M = 160
       // x ของผิวหน้าที่พิกัดฟิล์ม u (ซ้าย→ขวาเมื่อมองจากหน้า) — ช่วงพองกลับค่าจากความยาวโค้งเลนส์
       const xsOf = (r: DoypackRow) => {
-        const d = r.b - DOYPACK_FIN - (r.e ?? 0)
+        const d = r.b - DOYPACK_FIN
         const px: number[] = []
         const cum = [0]
         for (let i = 0; i <= M; i++) {
@@ -433,11 +433,8 @@ export function buildPouchGeometry(pouch: Pouch) {
         idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3)
       }
       const last = rows.length - 1
-      // จุดกลางขอบข้าง: ปกติอยู่บนขอบ (z=0); ช่วงซีลแยกเป็น Λ เหนือก้น gusset → จีบก้นพับเข้าเป็นร่อง V
-      const mid = (side: number, iv: number): [number, number, number] => {
-        const r = rows[iv]
-        return [side * (r.a - 1.2 * (r.e ?? 0)), r.y, 0]
-      }
+      // จุดกลางขอบข้าง (z = 0 ระหว่างฟิล์มหน้า-หลังที่ซีลประกบกัน)
+      const mid = (side: number, iv: number): [number, number, number] => [side * rows[iv].a, rows[iv].y, 0]
       for (let iv = 0; iv < last; iv++) {
         // ซ้าย: หน้า col 0 → กลาง → หลัง col สุดท้าย (x=−a ทั้งคู่); ขวา: หน้า col สุดท้าย → กลาง → หลัง col 0
         const d0 = rows[iv].dly
