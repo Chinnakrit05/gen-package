@@ -63,6 +63,7 @@ export interface Pouch {
   tearNotches: Vec2[][] // รอยบากฉีก (สามเหลี่ยม V พิกัดแผ่นคลี่) ที่ขอบแผง — dieline ตัดตามนี้, 3D เจาะผิวตามนี้ (alpha mask)
   // รูแขวน (วงกลมพิกัดแผ่นคลี่) — dieline ตัดเฉพาะ cut: true; 3D เจาะทุกวง (รวมชั้นหลังของถุงฟิล์มม้วนที่เจาะหลังขึ้นรูป)
   hangHoles: { x: number; y: number; r: number; cut: boolean }[]
+  valveAt?: { x: number; y: number; r: number } // วาล์วกาแฟ (พิกัดแผ่นคลี่) — dieline เป็น marker, 3D เป็นรอยนูนบนฟิล์ม
   hangHole: boolean // รูแขวน (euro-hole) ที่ริมซีลบน
   valve: boolean // วาล์วระบายแก๊ส (กาแฟ) บนหน้าถุง
   tinTie: boolean // ที่รัดปาก (tin-tie) ใกล้ปากถุง
@@ -340,10 +341,12 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     if (!two && !backSeam) hangHoles.push({ x: W + sideGusset + W / 2, y: hangHoleY(st), r: hr, cut: false })
     dims.push({ a: P(fcx - hr, 0), b: P(fcx + hr, 0), label: `รูแขวน ⌀${fmt(2 * hr)}` })
   }
+  let valveAt: Pouch['valveAt']
   if (valve) {
     // วาล์วระบายแก๊สกลางหน้าถุงส่วนบน — marker (welded ไม่ตัด) + ป้าย
     const vr = valveR(W)
     const vy = st + (1 - VALVE_V) * H
+    valveAt = { x: fcx, y: vy, r: vr }
     segments.push(crease(circlePath(fcx, vy, vr)))
     dims.push({ a: P(fcx - vr, vy - vr - 6), b: P(fcx + vr, vy - vr - 6), label: `วาล์ว ⌀${fmt(2 * vr)}` })
   }
@@ -400,6 +403,7 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     tearY,
     tearNotches,
     hangHoles,
+    ...(valveAt ? { valveAt } : {}),
     hangHole,
     valve,
     tinTie,

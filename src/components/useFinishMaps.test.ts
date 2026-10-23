@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { reliefDepth, heightToNormal } from './useFinishMaps'
-import { zipReliefProfile, ZIP_RELIEF_HALF } from './PouchViewer3D'
+import { valveReliefProfile, zipReliefProfile, ZIP_RELIEF_HALF } from './PouchViewer3D'
 
 // แผนที่ความสูงเทา (RGBA) ขนาด w×h จากฟังก์ชันระดับ 0..255
 const field = (w: number, h: number, f: (x: number, y: number) => number) => {
@@ -49,5 +49,16 @@ describe('reliefDepth: ปั๊มนูน/จมลาดเฉพาะด�
     expect(reliefDepth(255, 128)).toBeLessThan(1)
     expect(reliefDepth(255, 191)).toBeGreaterThan(40)
     expect(reliefDepth(255, 255)).toBeCloseTo(127, 5)
+  })
+})
+
+describe('valveReliefProfile: วาล์วกาแฟนูนบนฟิล์ม', () => {
+  it('นอกวาล์วเรียบ ขอบวงแหวนนูนกว่าร่องด้านใน แผ่นกลางนูน และมีปุ่ม 4 จุดเรียงกากบาท', () => {
+    expect(valveReliefProfile(1.2, 0)).toBe(0)
+    expect(valveReliefProfile(0.9, 0)).toBeGreaterThan(valveReliefProfile(0.8, 0)) // ขอบวงแหวน > ร่อง
+    expect(valveReliefProfile(0.15, 0.15)).toBeGreaterThan(0.25) // แผ่นกลาง
+    const dot = valveReliefProfile(0, -0.32)
+    expect(dot).toBeGreaterThan(valveReliefProfile(0.22, -0.22) + 0.2) // ปุ่มสูงกว่าแผ่นรอบ ๆ
+    for (const [u, v] of [[0.32, 0], [0, 0.32], [-0.32, 0]]) expect(valveReliefProfile(u, v)).toBeCloseTo(dot, 9)
   })
 })

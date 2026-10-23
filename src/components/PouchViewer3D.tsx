@@ -33,8 +33,6 @@ import {
   FLAT_SEAL,
   flatZ,
   flatAt,
-  valveR,
-  VALVE_V,
   TINTIE_INSET,
 } from '../core/pouch'
 import { drawDecoPreview, fillImageRect, type Deco, type FillImage } from '../core/artwork'
@@ -89,6 +87,55 @@ export function zipReliefProfile(dy: number): number {
   const plateau = 0.4 * (1 - smooth(1.9, 2.9, a))
   const ridge = 0.5 * Math.exp(-(((a - 1.3) / 0.75) ** 2))
   return Math.min(1, plateau + ridge)
+}
+// วาล์วกาแฟ = รอยนูนบนฟิล์มเอง (แบบถุงกาแฟจริง/ภาพอ้างอิง: ฝาวาล์วใต้ฟิล์มดันให้นูน) ไม่ใช่จานสีแยก → สี/ลายตามถุง
+// ρ = ระยะจากศูนย์กลาง ÷ รัศมีวาล์ว, (u, v) = พิกัดสัมพัทธ์ (÷ รัศมี): ขอบวงแหวนนูนบาง + ร่องตื้นด้านใน +
+// แผ่นกลางนูนโค้งเล็กน้อย + ปุ่ม 4 จุดเรียงกากบาท (รูระบายแก๊ส) — คืน 0..1 (0 = ผิวเรียบ)
+export function valveReliefProfile(u: number, v: number): number {
+  const rho = Math.hypot(u, v)
+  if (rho > 1.1) return 0
+  const smooth = (e0: number, e1: number, x: number) => {
+    const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)))
+    return t * t * (3 - 2 * t)
+  }
+  const ring = 0.75 * Math.exp(-(((rho - 0.9) / 0.07) ** 2))
+  const disc = (0.32 + 0.12 * (1 - rho * rho)) * (1 - smooth(0.66, 0.76, rho))
+  let dots = 0
+  for (const [cx, cy] of [[0, -0.32], [0.32, 0], [0, 0.32], [-0.32, 0]] as const) {
+    dots += 0.4 * Math.exp(-((Math.hypot(u - cx, v - cy) / 0.07) ** 2))
+  }
+  return Math.min(1, ring + disc + dots)
+}
+const valveRelief = (x: number, y: number, r: number) => ({
+  key: `valve:${x}:${y}:${r}`,
+  draw: (ctx: CanvasRenderingContext2D, s: number) => {
+    const x0 = Math.floor((x - 1.1 * r) * s)
+    const y0 = Math.floor((y - 1.1 * r) * s)
+    const n = Math.ceil(2.2 * r * s) + 1
+    const img = ctx.getImageData(x0, y0, n, n)
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const h = valveReliefProfile(((x0 + i + 0.5) / s - x) / r, ((y0 + j + 0.5) / s - y) / r)
+        if (h <= 0.002) continue
+        const k = (j * n + i) * 4
+        const g = Math.min(255, img.data[k] + 120 * h)
+        img.data[k] = img.data[k + 1] = img.data[k + 2] = g
+      }
+    }
+    ctx.putImageData(img, x0, y0)
+  },
+})
+// รวมรอยนูนของตัวถุง (ซิป + วาล์ว) เป็น relief เดียวของ useFinishMaps
+const pouchRelief = (pouch: Pouch) => {
+  const parts = [
+    ...(pouch.zipper && pouch.zipY !== undefined ? [zipRelief(pouch.zipY)] : []),
+    ...(pouch.valveAt ? [valveRelief(pouch.valveAt.x, pouch.valveAt.y, pouch.valveAt.r)] : []),
+  ]
+  if (!parts.length) return null
+  return {
+    key: parts.map((p) => p.key).join('|'),
+    draw: (ctx: CanvasRenderingContext2D, s: number, w: number) => parts.forEach((p) => p.draw(ctx, s, w)),
+  }
 }
 const zipRelief = (zipY: number) => ({
   key: `zip:${zipY}`,
@@ -837,8 +884,8 @@ function PouchModel({
     configure: (t) => {
       t.flipY = false // ต้องตรงกับ texture ลายของถุง
     },
-    // ซิปล็อก = รอยนูนบนฟิล์มเองตามแนวซิปบน dieline (ไม่ใช่แถบสีแยก) → สี/ลาย/texture เดียวกับถุงเสมอ
-    relief: pouch.zipper && pouch.zipY !== undefined ? zipRelief(pouch.zipY) : null,
+    // ซิปล็อก/วาล์วกาแฟ = รอยนูนบนฟิล์มเองตามตำแหน่งบน dieline (ไม่ใช่ชิ้นสีแยก) → สี/ลาย/texture เดียวกับถุงเสมอ
+    relief: pouchRelief(pouch),
   })
   const geo = usePouchGeometry(pouch)
   useEffect(() => () => geo.dispose(), [geo])
@@ -884,21 +931,11 @@ function PouchModel({
   const capR = spoutR * 1.35
   const knurls = 30
 
-  // วาล์วกาแฟ: จานกลมนูนบนหน้าถุงส่วนบน (z = ผิวหน้าที่ระดับ VALVE_V)
-  const valveZ = pouch.depth3D * pouchDepthFactor(VALVE_V, pouch.style)
-  const vR = valveR(pouch.W)
   // ที่รัดปาก: แถบบางพาดขวางหน้าใกล้ปาก
   const ttV = Math.min(0.97, Math.max(0.03, 1 - (TINTIE_INSET + 3) / pouch.H))
   const ttZ = pouch.depth3D * pouchDepthFactor(ttV, pouch.style)
   const ttW = pouch.W * pouchWidthFactor(ttV, pouch.style) * 0.9
-  // brick: จุดบนหน้า (y, ผิว z, มุมเอียงไหล่) ที่ระยะบน dieline เดียวกับ marker
-  const bValve = brick
-    ? brickAt(brick, (1 - VALVE_V) * pouch.H)
-    : doy || pil
-      ? doypackAt((doy ?? pil)!, pouch.frontRect.y + (1 - VALVE_V) * pouch.H)
-      : isFlat
-        ? flatAt(pouch, pouch.frontRect.y + (1 - VALVE_V) * pouch.H)
-        : null
+  // brick: จุดบนหน้า (y, ผิว z, มุมเอียงไหล่) ที่ระยะบน dieline เดียวกับ marker (วาล์วเป็นรอยนูนใน relief แล้ว)
   const bTie = brick
     ? brickAt(brick, TINTIE_INSET + 3)
     : doy || pil
@@ -979,20 +1016,6 @@ function PouchModel({
             )
           })}
         </group>
-      )}
-      {pouch.valve && (
-        // วาล์วกาแฟ: จานกลมนูนออกจากผิวหน้า (แกนตามแนวตั้งฉากผิว — บนไหล่ brick เอียงตาม)
-        <mesh
-          position={
-            bValve
-              ? [0, bValve.y + Math.sin(bValve.tilt), bValve.b + Math.cos(bValve.tilt)]
-              : [0, VALVE_V * pouch.H, valveZ + 1]
-          }
-          rotation={[Math.PI / 2 - (bValve?.tilt ?? 0), 0, 0]}
-        >
-          <cylinderGeometry args={[vR, vR, 3, 24]} />
-          <meshStandardMaterial color="#2f2c28" roughness={0.5} metalness={0.1} />
-        </mesh>
       )}
       {pouch.tinTie && (
         // ที่รัดปาก: แถบบางพาดขวางหน้าถุงใกล้ปาก (บนไหล่ brick เอียงตามผิว)
