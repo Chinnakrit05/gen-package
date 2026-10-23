@@ -11,7 +11,7 @@ import type { ProjectRepository } from '../modules/projects/projectRepository'
 import { ProjectService } from '../modules/projects/projectService'
 import { normalizeVercelRequestUrl } from '../entrypoints/vercel'
 import { HttpError } from './errors'
-import { billingFlags, createApiRouter, type HttpRequest, type HttpResponse } from './router'
+import { billingFlags, createApiRouter, isStorageQuotaEnabled, type HttpRequest, type HttpResponse } from './router'
 
 function request(method: string, url: string, authorization?: string): HttpRequest {
   return { method, url, headers: authorization ? { authorization } : {} }
@@ -557,6 +557,11 @@ describe('API router', () => {
       purchasesEnabled: enabled,
       openAccess: !enabled,
     })
+  })
+
+  // เจ้าของผลิตภัณฑ์ 23 ต.ค. 2026: โควตาพื้นที่เก็บงาน (Freemium 20 MB / Pro 1 GB) ทำไว้รอ แต่ยังไม่เปิดที่ไหนเลย
+  it.each(['test', 'development', 'staging', 'production'] as const)('keeps the storage quota off in %s', (appEnv) => {
+    expect(isStorageQuotaEnabled({ appEnv })).toBe(false)
   })
 
   it.each([

@@ -143,6 +143,7 @@ import { PaywallModal } from './components/PaywallModal'
 import { PricingPage } from './components/PricingPage'
 import { WATERMARK_ALPHA, WATERMARK_TEXT, previewWatermarked, watermarkTiles } from './core/watermark'
 import { deleteProjectConfirmText, designLicenseKnowledge, saveAsCopyConfirmText } from './core/designLicense'
+import { isStorageQuotaError, storageQuotaDetails, storageQuotaHint } from './core/storageQuota'
 import { rasterizeTrustedPreset } from './services/projects/trustedPresetRasterizer'
 import { rasterizeArtworkImages } from './services/projects/artworkRasterizer'
 import { PRESETS, PRESET_CATS, presetById, presetDataUrl, type Preset } from './core/presets'
@@ -1199,6 +1200,8 @@ export interface CloudProjectBridge {
   items: ProjectSummary[]
   online: boolean
   saveState: ProjectSaveState
+  // error ของการบันทึกล่าสุด (saveState 'error') — แยกข้อความพื้นที่เก็บงานเต็มจาก "บันทึกไม่สำเร็จ" (ไม่ส่ง = ข้อความเดิม)
+  saveError?: Error | null
   onProjectChange(project: Project): Promise<void>
   switchProject(current: Project, targetId: string): Promise<Project>
   // seed = งานตั้งต้นที่ App เตรียมไว้ (เช่นชิ้นงานใหม่จากการเปลี่ยนประเภทงาน) — ไม่ส่ง = งานเปล่าค่าเริ่มต้น
@@ -1230,7 +1233,7 @@ export interface CloudProjectBridge {
   devFulfilOrder(orderId: string): Promise<Order>
 }
 
-function cloudSaveLabel(state: ProjectSaveState): string {
+function cloudSaveLabel(state: ProjectSaveState, error?: Error | null): string {
   switch (state) {
     case 'loading': return 'กำลังโหลด…'
     case 'clean': return 'บันทึกแล้ว'
@@ -1238,7 +1241,8 @@ function cloudSaveLabel(state: ProjectSaveState): string {
     case 'saving': return 'กำลังบันทึก…'
     case 'offline': return 'ออฟไลน์ · เก็บ draft แล้ว'
     case 'conflict': return 'มีการแก้ไขจากอีกแท็บ'
-    case 'error': return 'บันทึกไม่สำเร็จ'
+    // โควตาพื้นที่เก็บงาน (ยังไม่เปิดใช้ — src/core/storageQuota.ts): draft ยังอยู่ในเครื่อง ลบงาน/รูปแล้วกดลองอีกครั้งได้
+    case 'error': return isStorageQuotaError(error) ? 'พื้นที่เก็บงานเต็ม' : 'บันทึกไม่สำเร็จ'
   }
 }
 
@@ -3377,11 +3381,13 @@ export default function App({
           <div className="cloud-save-wrap">
             <span
               className={`cloud-save-state ${projectOperationLabel ? 'saving' : cloud.saveState}`}
-              title={projectOperationLabel || 'สถานะบันทึก cloud'}
+              title={projectOperationLabel || (cloud.saveState === 'error' && isStorageQuotaError(cloud.saveError)
+                ? storageQuotaHint(storageQuotaDetails(cloud.saveError))
+                : 'สถานะบันทึก cloud')}
               role={projectOperationLabel ? 'status' : undefined}
               aria-live={projectOperationLabel ? 'polite' : undefined}
             >
-              {projectOperationLabel || cloudSaveLabel(cloud.saveState)}
+              {projectOperationLabel || cloudSaveLabel(cloud.saveState, cloud.saveError)}
             </span>
             {cloud.saveState === 'conflict' && (
               <>
