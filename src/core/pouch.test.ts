@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { POUCH_STANDARD } from './standardSize'
 import {
   brickAt,
   brickRows,
@@ -28,6 +29,8 @@ import {
   spoutMarker,
   SPOUT_CORNER_R,
   FLAT_SEAL,
+  KSEAL_REACH,
+  POUCH_STYLES,
   flatZ,
   flatAt,
   FLAT_HANG_HEADER,
@@ -505,5 +508,55 @@ describe('ซองแบน: ซีล 3 มม. + หัวซองเมื�
     // 3D: หัวซองแบนตลอดถึงแนวซีล แล้วค่อยพอง
     expect(flatZ(hung, 40, st - 0.5)).toBe(DOYPACK_FIN)
     expect(flatZ(hung, 40, st + 20)).toBeGreaterThan(DOYPACK_FIN)
+  })
+})
+
+describe('pouch: ถุงตั้งก้น K (stand up pouch, K-seal)', () => {
+  const W = 130
+  const D = 70
+  const H = 195
+  const p = generatePouch({ W, D, H }, mat, { style: 'kseal', zipper: true })
+  const st = p.frontRect.y
+  const fold = st + H
+  const PH = p.label.height
+  const reach = KSEAL_REACH * (D / 2)
+
+  it('อยู่ถัดจาก doypack ในรายการ และใช้แผงหน้า-หลังแยก ซีลข้าง/บนแบบถุงตั้ง ก้นครึ่งหนึ่งต่อแผง', () => {
+    expect(POUCH_STYLES[1].id).toBe('kseal')
+    expect(p.label.panels.map((q) => q.id)).toEqual(['front', 'back'])
+    expect(p.sideSeal).toBe(DOYPACK_SEAL)
+    expect(st).toBe(DOYPACK_TOP_SEAL)
+    expect(PH).toBeCloseTo(st + H + D / 2, 9)
+    expect(p.stands).toBe(true)
+  })
+
+  it('dieline: แนวพับก้นตรง (ไม่โค้งแบบ doypack) + ซีลมุมทแยงรูป K ลงถึงขอบล่างทั้งสองแผง', () => {
+    const ds = p.label.segments.filter((s) => s.kind === 'crease').map((s) => s.d)
+    expect(ds.some((d) => d.includes(' Q '))).toBe(false)
+    for (const x0 of [0, W]) {
+      const l = x0 + DOYPACK_SEAL
+      const r = x0 + W - DOYPACK_SEAL
+      expect(ds).toContain(`M ${l} ${fold} L ${r} ${fold}`)
+      expect(ds).toContain(`M ${l} ${fold} L ${l + reach} ${PH}`)
+      expect(ds).toContain(`M ${r} ${fold} L ${r - reach} ${PH}`)
+    }
+  })
+
+  it('3D: มุมก้นเหลี่ยม (ขอบนอกไม่ดึงเข้าแบบ doypack) ครีบแบนที่มุมฐานกว้างเท่าเส้นทแยง และไม่มีครีบเหนือแนวพับก้น', () => {
+    const rows = doypackRows(p)
+    const bottom = rows[0]
+    expect(bottom.y).toBe(0)
+    expect(bottom.kfin).toBeCloseTo(reach, 6)
+    expect(bottom.a - bottom.ai).toBeCloseTo(DOYPACK_SEAL + reach, 6) // แบนจากขอบ = ซีลข้าง + ครีบมุม
+    // doypack ดึงมุมล่างเข้า (มุมมน) — ก้น K ไม่ดึง: ขอบนอกที่ฐานกว้างเท่าแถวถัดขึ้นไป (ต่างกันแค่ตามความพอง)
+    const doy = doypackRows(generatePouch({ W, D, H }, mat, { style: 'stand', zipper: true }))
+    expect(bottom.a).toBeGreaterThan(doy[0].a + 1)
+    for (const r of rows) if (r.dly <= PH - D / 2 + 1e-9) expect(r.kfin ?? 0).toBe(0)
+    // ครีบแบน: ผิวช่วงครีบประกบกันที่ FIN (ไม่พอง)
+    expect(doypackZ(bottom, bottom.ai + bottom.kfin! / 2)).toBeCloseTo(DOYPACK_FIN, 9)
+  })
+
+  it('ขนาดมาตรฐานของรูปแบบนี้มีค่า และเก็บลงไฟล์งานได้', () => {
+    expect(POUCH_STANDARD.kseal.W).toBeGreaterThan(0)
   })
 })

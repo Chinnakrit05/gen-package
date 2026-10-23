@@ -14,9 +14,10 @@ export const isPouch = (m: Material) => !m.foldable && m.form === 'pouch'
 
 // รูปแบบถุง: stand = ถุงตั้งได้ (doypack), flat = ซองแบน 3 ด้าน, gusset = ซองข้างจีบ (brick),
 // box = ถุงก้นแบนตั้งเหลี่ยม (quad-seal), pillow = ซองหลังกลาง (fin seal), spout = ถุงมีจุก
-export type PouchStyle = 'stand' | 'flat' | 'gusset' | 'box' | 'pillow' | 'spout'
+export type PouchStyle = 'stand' | 'kseal' | 'flat' | 'gusset' | 'box' | 'pillow' | 'spout'
 export const POUCH_STYLES: { id: PouchStyle; nameTh: string; detail: string }[] = [
   { id: 'stand', nameTh: 'ถุงตั้งได้ (doypack)', detail: 'ก้นตั้งได้ จุเยอะ — กาแฟ ขนม ผงชง' },
+  { id: 'kseal', nameTh: 'ถุงตั้งก้น K (stand up pouch)', detail: 'ก้นตรงมุมเหลี่ยม ซีลมุมก้นทแยงรูป K — ขนม ของแห้ง ผงชง' },
   { id: 'flat', nameTh: 'ซองแบน 3 ด้าน', detail: 'แบนราบ ไม่มีก้น — ของเล็ก ตัวอย่าง มาส์ก ซองซอส' },
   { id: 'gusset', nameTh: 'ซองข้างจีบ (brick)', detail: 'ถุงกาแฟคลาสสิก ทรงแท่ง มีจีบพับสองข้าง' },
   { id: 'box', nameTh: 'ถุงก้นแบนตั้งเหลี่ยม', detail: 'quad-seal ตั้งเป็นทรงกล่อง — กาแฟพรีเมียม' },
@@ -30,6 +31,9 @@ export const FLAT_SEAL = 3 // ซีลรอบซองแบน 3 ด้า�
 // ซองแบนมีรูแขวน: ซีลบน 3 มม. ใส่รูไม่ได้ → ขยายเป็นหัวซองกว้างพอเจาะรู (รู ⌀8 + ขอบ 2 มม. บน-ล่าง)
 export const DOYPACK_SEAL = 3 // ซีลข้างถุงตั้ง (มม.)
 export const DOYPACK_TOP_SEAL = 5 // ซีลบนถุงตั้ง (มม.) — แคบสุดที่ยังให้รอยฉีกพ้นซีลก่อนถึงซิป
+// ถุงตั้งก้น K (K-seal): มุมก้นซีลทแยงจากแนวซีลข้างที่ระดับพับก้น ลงไปถึงขอบล่างแผง — ระยะเข้าแนวนอนที่ขอบล่าง
+// = สัดส่วนนี้ของครึ่งก้น (ชันกว่า 45° แบบถุงจริง) ใช้ทั้งเส้นบน dieline และครีบแบนที่มุมฐานใน 3D
+export const KSEAL_REACH = 0.4
 export const POUCH_FIN_SEAL = 8 // ครีบซีลหลังกลาง (fin seal) ของซองหลังกลาง — ลิ้นแต่ละข้างของแผ่น (มม.)
 export const BRICK_SEAL = 20 // แถบซีลบน/ล่างของซองข้างจีบ (มม.)
 export const POUCH_ZIP_INSET = 18 // ระยะจากปากบนลงมาถึงแนวซิปล็อก (มม.)
@@ -121,13 +125,14 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const spout = style === 'spout'
   // doypack (ถุงตั้ง/มีจุก): แผงหน้า-หลังแยกกัน แต่ละแผงมีซีลข้างสองด้าน + ซีลบน + ครึ่งก้น gusset
   // ที่ซีลโค้ง (round-bottom) — แบบงานพิมพ์ถุงตั้งจริง (ไม่ใช่ฟิล์มม้วนรอบมีรอยต่อหลัง)
-  const doy = style === 'stand' || spout
+  const kseal = style === 'kseal'
+  const doy = style === 'stand' || kseal || spout
   // ซองแบน 3 ด้าน: แผงหน้า+หลังแยกกันเหมือน doypack — ซีลซ้าย/ขวา/ล่างบนแผง (รูป ⊔) ปากบนเปิดไว้บรรจุแล้วซีลทีหลัง
   const two = doy || flat
   // ถุงที่ใช้ค่า D: stand/gusset/box/spout (ซองแบน/หลังกลางไม่มีก้น-จีบ)
   const gVal = flat || pillow ? 0 : Math.min(Math.max(D, 10), W)
   const sideGusset = gus || boxp ? gVal : 0 // จีบข้าง: ซองข้างจีบ + ถุงก้นแบน
-  const bottomGusset = style === 'stand' || boxp || spout ? gVal : 0 // ก้น gusset: ถุงตั้ง/ก้นแบน/มีจุก
+  const bottomGusset = style === 'stand' || kseal || boxp || spout ? gVal : 0 // ก้น gusset: ถุงตั้ง/ก้น K/ก้นแบน/มีจุก
   // ตั้งได้เมื่อมีก้น — ซองข้างจีบก็ตั้งได้ (ซีลก้นพับซ่อนใต้ฐานแบบถุงกาแฟ ดู brickShape)
   const stands = bottomGusset > 0 || gus
   // ถุงรอยต่อกลางหลัง (back-seam): หน้าเป็นผืนต่อเนื่องกลางแผ่น หลังแยกไปสองข้าง (ขอบนอกมากาวกันกลางหลัง)
@@ -143,9 +148,9 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const flatHeader = flat && hung ? FLAT_HANG_HEADER : FLAT_SEAL
   // ถุงตั้ง: ซีลบนแคบ 5 มม. (รอยฉีกยังพ้นซีลได้) — มีรูแขวน → หัวถุงกว้างพอเจาะรู
   const standTop = hung ? Math.max(DOYPACK_TOP_SEAL, FLAT_HANG_HEADER) : DOYPACK_TOP_SEAL
-  const st = gus ? BRICK_SEAL : flat ? flatHeader : style === 'stand' ? standTop : POUCH_TOP_SEAL
+  const st = gus ? BRICK_SEAL : flat ? flatHeader : style === 'stand' || kseal ? standTop : POUCH_TOP_SEAL
   const sb = gus ? BRICK_SEAL : flat ? FLAT_SEAL : pillow ? POUCH_TOP_SEAL : 0 // ไม่มีก้น → ใช้ริมซีลล่างแทน
-  const pss = flat ? FLAT_SEAL : style === 'stand' ? DOYPACK_SEAL : ss // ซีลข้างบนแผง (แบบแผงแยก)
+  const pss = flat ? FLAT_SEAL : style === 'stand' || kseal ? DOYPACK_SEAL : ss // ซีลข้างบนแผง (แบบแผงแยก)
   // doypack: แต่ละแผงยาวลงไปครึ่งก้น (ก้น gusset พับ W สอดระหว่างหน้า-หลัง สูง D/2)
   const filmH = st + H + (doy ? gVal / 2 : bottomGusset) + sb
   // ความกว้างพิมพ์ = หน้า + หลัง + จีบข้างสองด้าน (ไม่มีจีบ → 2W)
@@ -206,7 +211,14 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
         crease(`M ${l} 0 L ${l} ${filmH}`),
         crease(`M ${r} 0 L ${r} ${filmH}`),
         crease(`M ${l} ${st} L ${r} ${st}`),
-        crease(`M ${l} ${fold} Q ${x0 + W / 2} ${fold + 2 * sag} ${r} ${fold}`),
+        // ก้น K: แนวพับก้นตรง + ซีลมุมทแยงสองข้าง (รูป K กับซีลข้าง); doypack: ซีลก้นโค้ง (round-bottom)
+        ...(kseal
+          ? [
+              crease(`M ${l} ${fold} L ${r} ${fold}`),
+              crease(`M ${l} ${fold} L ${l + KSEAL_REACH * (gVal / 2)} ${filmH}`),
+              crease(`M ${r} ${fold} L ${r - KSEAL_REACH * (gVal / 2)} ${filmH}`),
+            ]
+          : [crease(`M ${l} ${fold} Q ${x0 + W / 2} ${fold + 2 * sag} ${r} ${fold}`)]),
         crease(`M ${x0} ${fold} L ${l} ${fold}`),
         crease(`M ${r} ${fold} L ${x0 + W} ${fold}`),
       )
@@ -413,7 +425,7 @@ export function pouchWidthFactor(v: number, style: PouchStyle = 'stand'): number
     return 1.0
   }
   // doypack: ปากซีลกว้างเต็ม (มุมก้นมนคิดเป็นมม. ใน doypackRows)
-  if (style === 'stand' || style === 'spout') return 1.0
+  if (style === 'stand' || style === 'kseal' || style === 'spout') return 1.0
   if (v < 0.06) return lerpS(0.9, 1.0, v / 0.06)
   if (v > 0.9) return lerpS(1.0, 0.82, (v - 0.9) / 0.1)
   return 1.0
@@ -429,14 +441,14 @@ export function pouchSection(theta: number, style: PouchStyle = 'stand'): { cx: 
     const e = 0.5
     return { cx: Math.sign(c) * Math.abs(c) ** e, cz: Math.sign(s) * Math.abs(s) ** e }
   }
-  if (style === 'stand' || style === 'spout') return { cx: c, cz: Math.sign(s) * lensZ(c) }
+  if (style === 'stand' || style === 'kseal' || style === 'spout') return { cx: c, cz: Math.sign(s) * lensZ(c) }
   return { cx: c, cz: s }
 }
 
 // พื้นที่หน้าตัด ÷ (ครึ่งกว้าง × ครึ่งลึก): วงรี π, เลนส์ 4·P/(P+1), สี่เหลี่ยมมน ~3.6
 export function pouchSectionArea(style: PouchStyle): number {
   if (style === 'gusset' || style === 'box') return 3.6
-  if (style === 'stand' || style === 'spout') return (4 * DOYPACK_LENS) / (DOYPACK_LENS + 1)
+  if (style === 'stand' || style === 'kseal' || style === 'spout') return (4 * DOYPACK_LENS) / (DOYPACK_LENS + 1)
   return Math.PI
 }
 
@@ -463,6 +475,7 @@ export interface DoypackRow {
   flat?: number // ฟิล์มแบนรอบช่วงพอง (ไหล่ที่รวบเข้าหาเรือจุก — ฟิล์มไม่หด จึงเหลือเป็นแผ่นแบน)
   rib?: number // ร่องเกลียวเรือจุกดันฟิล์มนูน (มม.) ที่แถวนี้ ภายในครึ่งกว้าง ribW
   ribW?: number
+  kfin?: number // ถุงตั้งก้น K: ครีบแบนที่มุมฐาน (ซีลทแยง) กว้างเท่านี้ด้านในซีลข้าง — ช่วงพองแคบลงเท่ากัน
 }
 
 // ความยาวโค้งหน้าเดียวของเลนส์ครึ่งกว้าง ai ลึก d
@@ -487,7 +500,12 @@ export const doypackCorner = (W: number, PH: number) => ({ rx: Math.min(W * 0.07
 // ช่วงพอง (พื้น → ปลายแหลมใต้ซิป) → ปากบีบแบน (ซิปแข็งหนีบปากไว้) → ซีลบน
 // ซีลข้างแบนกว้าง POUCH_SIDE_SEAL ตลอดความสูง ตรงเกือบดิ่ง (ดึงเข้าเล็กน้อยตามความพอง) มุมล่างมน
 export function doypackRows(
-  p: Pick<Pouch, 'W' | 'depth3D' | 'frontRect' | 'zipper' | 'zipY'> & { label: { height: number }; sideSeal?: number },
+  p: Pick<Pouch, 'W' | 'depth3D' | 'frontRect' | 'zipper' | 'zipY'> & {
+    label: { height: number }
+    sideSeal?: number
+    style?: PouchStyle
+    gusset?: number
+  },
   n = 56,
   nFin = 3,
 ): DoypackRow[] {
@@ -500,7 +518,9 @@ export function doypackRows(
     p.zipper && p.zipY !== undefined ? Math.max(Hi * 0.5, Math.min(Hi, PH - p.zipY - ZIP_HALF)) : Hi
   const ss = p.sideSeal ?? POUCH_SIDE_SEAL
   const Wi = W - 2 * ss
-  const { rx, ry } = doypackCorner(W, PH)
+  // ก้น K: มุมก้นเหลี่ยม (ซีลทแยงแข็ง ไม่ดึงมุมเข้าแบบซีลก้นโค้ง)
+  const kseal = p.style === 'kseal'
+  const { rx, ry } = kseal ? { rx: 0, ry: 0 } : doypackCorner(W, PH)
   const fOf = (y: number) => (y >= tipY ? 0 : pouchDepthFactor(y / tipY, 'stand'))
   const pull = (y: number) => {
     if (y >= ry) return 0
@@ -514,9 +534,15 @@ export function doypackRows(
   const cum = [0]
   for (let i = 1; i < ys.length; i++) cum.push(cum[i - 1] + Math.hypot(ys[i] - ys[i - 1], dOf(ys[i]) - dOf(ys[i - 1])))
   const total = cum[cum.length - 1] || 1
+  // ครีบมุมฐานของก้น K: ตามเส้นซีลทแยงบน dieline (จากแนวพับก้นลงถึงขอบล่างแผง เข้าด้านใน KSEAL_REACH·ครึ่งก้น)
+  const half = (p.gusset ?? 0) / 2
+  const finAt = (dly: number) =>
+    kseal && half > 0 ? KSEAL_REACH * half * Math.max(0, Math.min(1, (dly - (PH - half)) / half)) : 0
   const rows: DoypackRow[] = ys.map((y, i) => {
-    const ai = (Wi / 2) * (1 - DOYPACK_PULL * fOf(y)) - pull(y)
-    return { y, a: ai + ss, ai, b: DOYPACK_FIN + dOf(y), dly: PH - (cum[i] / total) * Hi }
+    const aiBody = (Wi / 2) * (1 - DOYPACK_PULL * fOf(y)) - pull(y)
+    const dly = PH - (cum[i] / total) * Hi
+    const kfin = finAt(dly)
+    return { y, a: aiBody + ss, ai: aiBody - kfin, b: DOYPACK_FIN + dOf(y), dly, ...(kseal ? { kfin } : {}) }
   })
   for (let i = 1; i <= nFin; i++) {
     const t = i / nFin

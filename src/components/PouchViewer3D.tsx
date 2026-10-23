@@ -316,7 +316,7 @@ export function buildPouchGeometry(pouch: Pouch) {
 
     // ───────── doypack (stand/spout): แผงหน้า-หลังแยก ซีลข้าง/ซีลบนแบน + ช่วงพองหน้าตัดเลนส์ ─────────
     // แต่ละแผงแม็พทั้งแผงของ dieline (รวมแถบซีล) → ลายบนซีลก็ขึ้น; ความกว้างช่วงพองแก้ให้ความยาวโค้ง = ฟิล์มจริง
-    if (style === 'stand' || style === 'spout') {
+    if (style === 'stand' || style === 'kseal' || style === 'spout') {
       const rows = style === 'spout' ? spoutRows(pouch) : doypackRows(pouch)
       const ss = pouch.sideSeal
       const Wi = W - 2 * ss
@@ -335,13 +335,15 @@ export function buildPouchGeometry(pouch: Pouch) {
           if (i) cum.push(cum[i - 1] + Math.hypot(x - px[i - 1], d * (sectionZ(r, x / r.ai) - sectionZ(r, px[i - 1] / r.ai))))
         }
         const L = cum[M] || 1
-        const flat = r.flat ?? 0
+        // ฟิล์มแบนรอบช่วงพอง: ไหล่ถุงมีจุก (flat) / ครีบมุมฐานก้น K (kfin)
+        const flat = (r.flat ?? 0) + (r.kfin ?? 0)
         const inner = r.ai + flat
         let j = 0
         return us.map((u0) => {
-          if (r.cut !== undefined) {
-            // ถุงมีจุก: ฟิล์มแม็พ 1:1 — ขอบที่มุมมนตัดทิ้ง (u < cut), ฟิล์มแบนรอบช่วงพอง (ไหล่รวบเข้าหาเรือ)
-            const u = Math.min(W - r.cut, Math.max(r.cut, u0))
+          if (r.cut !== undefined || r.kfin !== undefined) {
+            // ถุงมีจุก/ก้น K: ฟิล์มแม็พ 1:1 — ขอบที่มุมมนตัดทิ้ง (u < cut), ฟิล์มแบนรอบช่วงพอง
+            const cut = r.cut ?? 0
+            const u = Math.min(W - cut, Math.max(cut, u0))
             if (u <= ss) return -(inner + ss - u)
             if (u >= W - ss) return inner + (u - (W - ss))
             const sf = u - ss
@@ -771,7 +773,12 @@ function PouchModel({
   const brick = useMemo(() => (pouch.style === 'gusset' ? brickShape(pouch) : null), [pouch])
   // doypack: แถวโปรไฟล์ชุดเดียวกับผิว → ซิป/วาล์ว/tin-tie วางตามพิกัด dieline ผ่าน doypackAt
   const doy = useMemo(
-    () => (pouch.style === 'spout' ? spoutRows(pouch) : pouch.style === 'stand' ? doypackRows(pouch) : null),
+    () =>
+      pouch.style === 'spout'
+        ? spoutRows(pouch)
+        : pouch.style === 'stand' || pouch.style === 'kseal'
+          ? doypackRows(pouch)
+          : null,
     [pouch],
   )
   const pil = useMemo(() => (pouch.style === 'pillow' ? pillowRows(pouch) : null), [pouch])

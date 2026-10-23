@@ -96,7 +96,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ข้างจีบกาแฟ 250 ก. 80×210+60, ก้นแบน 125×195+65, ซองขนม 150×220, มีจุก 250 มล. 100×160+50) — ความจุเทียบด้วยสูตร capacity.ts
   ใน standardSize.test; ตั้งให้ตอนยังไม่เริ่มงาน (`isFreshWork`: ไม่มีลาย/รูปพื้น) เมื่อสลับประเภทงาน (`resetKindSize`), สลับวัสดุภาชนะ
   (`changeMaterial`) หรือสลับรูปแบบถุง (`changePouchStyle`) + ล้าง neckH/shoulderH/labelBox (`applyStdSize`); มีลายแล้วคงขนาดเดิม
-  (หลอดตั้งค่ามาตรฐานเสมอ); กล่องใช้ defaults ของ template (กล่องไปรษณีย์ไทย: mailer/0427 = เบอร์ A 20×14×6, rollover = B 25×17×9,
+  (หลอดตั้งค่ามาตรฐานเสมอ; ถุงตั้งก้น K 250 ก. 130×195+70); กล่องใช้ defaults ของ template (กล่องไปรษณีย์ไทย: mailer/0427 = เบอร์ A 20×14×6, rollover = B 25×17×9,
   RSC = C 30×20×11 ซม.; นามบัตร 90×55)
 - สลับประเภทงาน/รูปแบบบรรจุภัณฑ์/รูปแบบถุงเมื่อมีงานตกแต่งแล้ว (`hasDesignWork` ใน `src/core/designWork.ts` = มีลาย/รูปพื้น/สีพื้น
   แม้อย่างเดียว): `guardedSwitch(target, apply)` ใน App เปิด `SwitchGuardModal` "เริ่มชิ้นงานใหม่" (โฟกัสเริ่มที่ยกเลิก) — ไม่ลบงานเดิม:
@@ -238,7 +238,9 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   หน้าตัดวงรีเปลี่ยนตามความสูง (`pouchWidthFactor`/`pouchDepthFactor` เป็น pure ทดสอบได้: ก้นแบนตั้งได้
   พุงกลางป่อง ปากซีลแบน) + UV แม็พ frontRect/backRect ให้ลายอ่านไม่กลับด้านเมื่อมองจาก +Z (texture flipY=false)
   ความหมายขนาด: W = กว้างถุง, D = ลึกก้น (clamp ≤ W, ≥10; ซองแบนไม่ใช้ D), H = สูงลำตัว (template ถูกละเลย)
-  รูปแบบถุง `pouchStyle` (`POUCH_STYLES`) 6 แบบ: 'stand' doypack ก้นตั้ง / 'flat' ซองแบน 3 ด้าน (ไม่ใช้ D) /
+  รูปแบบถุง `pouchStyle` (`POUCH_STYLES`) 7 แบบ: 'stand' doypack ก้นตั้ง / 'kseal' ถุงตั้งก้น K (stand up pouch: เหมือน doypack ทุกอย่าง
+  แต่แนวพับก้นตรง + ซีลมุมก้นทแยงรูป K `KSEAL_REACH` บน dieline, 3D มุมก้นเหลี่ยม (ไม่มี `doypackCorner`) + ครีบแบน `DoypackRow.kfin`
+  ที่มุมฐานตามเส้นทแยง — viewer แม็พฟิล์มช่วงครีบ 1:1 แบบ flat ของถุงมีจุก; PROJECT_FILE_VERSION 21) / 'flat' ซองแบน 3 ด้าน (ไม่ใช้ D) /
   'gusset' ซองข้างจีบ brick (front+จีบ+back+จีบ, ทรงแท่ง) / 'box' ก้นแบนตั้งเหลี่ยม (จีบข้าง+ก้น gusset, ตั้งได้) /
   'pillow' ซองหลังกลาง (ไม่ใช้ D, fin seal กลางหลัง, พองนุ่ม) / 'spout' ถุงมีจุก (ก้นตั้งเหมือน stand + จุก 3D + marker บน dieline)
   — dieline คุมด้วย sideGusset (gusset/box) + bottomGusset (stand/box/spout) + sb (flat/gusset/pillow);
@@ -279,7 +281,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
-  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 20); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 21); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° ได้สันโค้งจาก `rollBeads` ใน fold.ts (ทรงกระบอกบาง รัศมี = ครึ่งระยะสองชั้น) — ตอนนี้ไม่มี template ใช้แล้ว
 - FEFCO 0427 ตามผัง dieline มาตรฐาน: ผนังข้างทบเป็นรอยพับคู่ (ผนัง → สัน กว้าง sp = 3t+0.2 = ผนัง+หู+ชั้นทบ → ชั้นทบ)
   ลิ้นปลายชั้นทบลงช่องบนฐานที่ sp − t/2; ฝาแคบกว่ากล่องข้างละ sp มีปีกข้างคางหมูพับลงด้านในชั้นทบ (stage 4 ก่อนฝาปิด 5),
