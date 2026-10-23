@@ -219,7 +219,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ฉลากกำหนดเอง `Project.labelBox` {y ขอบล่างจากก้น, h สูง, w ยาวรอบตัว} (เก็บเฉพาะคีย์ที่ตั้ง; เลือกรูปแบบฉลาก = ล้าง y/h):
   clamp บนลำตัวตรง (`Vessel.labelRange`); w ≥ เส้นรอบวง = พันรอบ+ทับกาว, น้อยกว่า = ฉลากแผ่นหน้าแผงเดียวไม่มีกาว →
   `Vessel.labelArc` (มุมหุ้ม) ให้ viewer สร้าง Cylinder ส่วนโค้งกึ่งกลางด้านหน้า; `labelBox.rot` องศา (0 หน้า, 180 หลัง → `Vessel.labelRot`
-  หมุน mesh ฉลาก); หลอดครีมไม่ใช้. ช่วงลำตัวตรงมาจาก `profileFor().straight` (ไม่ใช้เกณฑ์รัศมี — ขอบปากอาจกว้างเกือบเท่าตัว)
+  หมุน mesh ฉลาก — **ถอด UI ออกแล้ว** 23 ต.ค. 2026 และ App ตัดค่าที่เคยเก็บทิ้งก่อน generate (`labelNoRot`) ฉลากอยู่ด้านหน้าเสมอ; engine ยังรองรับ); หลอดครีมไม่ใช้. ช่วงลำตัวตรงมาจาก `profileFor().straight` (ไม่ใช้เกณฑ์รัศมี — ขอบปากอาจกว้างเกือบเท่าตัว)
   ปากขวดทุกชนิด (PET/แก้ว/อะลูมิเนียม) มีขอบปากวงแหวน (`SHAPES.ring`, สูง `mouthLip`) → `Vessel.mouth`; ฝาขวดเลือกได้
   `Project.capStyle` none/screw/flip/pump/cork/foil/crown (crown = ฝาจีบโลหะสูง ≤9 มม. จีบ 21; เลือกแล้วปากเป็น crown finish วงแหวนเตี้ย 2.5–5 มม. ผ่าน `VesselShape.capStyle` → `mouthLip` ฝาจึงครอบลงใต้วงแหวน; foil = แคปซูลฟอยล์หุ้มหัวจุก+คอ ไม่เลยโคนคอ + ก้านจุก `inner`; จุกก๊อกเสียบในคอ ลึกไม่เลย `mouth.neckY`, สีเริ่ม `defaultCapColor`) + `capColor` — `capShape(style, mouth)` (pure) คืน lathe + ชิ้นกล่องเล็ก, ภาพ 3D เท่านั้น
   (ไม่อยู่ใน dieline), ครอบลงต่ำกว่าวงแหวน; PROJECT_FILE_VERSION 14

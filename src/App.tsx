@@ -1838,9 +1838,12 @@ export default function App({
     setNeckH(v)
     setH(clamp(bodyH + v, 30, 300))
   }
+  // หมุนฉลากรอบขวด (`labelBox.rot`) ถอด UI ออกก่อน (ตัดสินใจ 23 ต.ค. 2026: ยังไม่จำเป็น) — ไม่ใช้ค่าที่เคยตั้งไว้ด้วย
+  // ฉลากจึงอยู่ด้านหน้าเสมอ ไม่ค้างมุมที่ผู้ใช้แก้คืนไม่ได้; engine (`Vessel.labelRot`) ยังรองรับไว้เผื่อเปิดกลับ
+  const labelNoRot = useMemo(() => (labelBox?.rot === undefined ? labelBox : { ...labelBox, rot: undefined }), [labelBox])
   const vessel = useMemo(
-    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, { neckH, shoulderH, shoulderStyle, label: labelBox, capStyle }) : null),
-    [W, D, H, handle, mat, labelStyle, neckH, shoulderH, shoulderStyle, labelBox, capStyle, kind],
+    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, { neckH, shoulderH, shoulderStyle, label: labelNoRot, capStyle }) : null),
+    [W, D, H, handle, mat, labelStyle, neckH, shoulderH, shoulderStyle, labelNoRot, capStyle, kind],
   )
   const pouch = useMemo(
     () =>
@@ -3836,30 +3839,6 @@ export default function App({
                         )
                       : t('ฉลากแผ่นหน้า (ไม่พันรอบ) จัดกึ่งกลางด้านหน้าขวด', 'Front label (not wrap-around), centred on the front')}
                   </p>
-                  <DimField
-                    label={t('หมุนฉลากรอบขวด', 'Rotate label')}
-                    unit="°"
-                    step={5}
-                    value={labelBox?.rot ?? 0}
-                    min={-180}
-                    max={180}
-                    disabled={aiBusy}
-                    onChange={(v) => setLabelBox((b) => ({ ...b, rot: v }))}
-                  />
-                  <div className="unit-toggle" role="group" aria-label={t('ด้านที่ติดฉลาก', 'Label side')}>
-                    {([[0, 'หน้า', 'Front'], [90, 'ข้าง', 'Side'], [180, 'หลัง', 'Back']] as const).map(([deg, th, en]) => (
-                      <button
-                        key={deg}
-                        type="button"
-                        className={Math.abs(labelBox?.rot ?? 0) === deg ? 'active' : ''}
-                        aria-pressed={Math.abs(labelBox?.rot ?? 0) === deg}
-                        disabled={aiBusy}
-                        onClick={() => setLabelBox((b) => ({ ...b, rot: deg }))}
-                      >
-                        {t(th, en)}
-                      </button>
-                    ))}
-                  </div>
                   {labelBox && (
                     <button type="button" className="link-btn" disabled={aiBusy} onClick={() => setLabelBox(undefined)}>
                       {t('กลับเป็นขนาดตามรูปแบบฉลาก', 'Reset to label style')}
