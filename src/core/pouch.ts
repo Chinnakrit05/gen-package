@@ -462,6 +462,9 @@ export const DOYPACK_FIN = 0.15 // ครึ่งความหนาแถบ
 export const SPOUT_CORNER_R = POUCH_SIDE_SEAL // มุมไดคัทมนของถุงมีจุก (≤ ซีลข้าง → ตัดเฉพาะเนื้อซีล ไม่กินช่วงพอง)
 export const SPOUT_SHOULDER = 0.2 // สัดส่วนความสูงช่วงไหล่ที่ฟิล์มรวบเข้าหาเรือจุก
 export const DOYPACK_BOTTOM_SAG = 0.7 // ซีลก้นโค้งลงกลางแผง = สัดส่วนของครึ่งก้น (round-bottom)
+// ถุงตั้ง (doypack): ช่วงพองเรียวเข้าหาก้น — ขอบช่วงพองห่างขอบถุงเพิ่มขึ้นเป็นเส้นตรงจาก 0 ใต้ซิป ถึงสัดส่วนนี้ของ W ที่พื้น
+// (ซีลก้นโค้งดึงฟิล์มมุมล่างให้แบน; ขอบนอกถุงยังตรงเกือบดิ่ง) — แบบถุงตั้งจริง/ภาพอ้างอิง
+export const DOYPACK_WEDGE = 0.11
 export const lensZ = (u: number) => Math.max(0, 1 - Math.min(1, Math.abs(u)) ** DOYPACK_LENS)
 
 export interface DoypackRow {
@@ -475,6 +478,7 @@ export interface DoypackRow {
   flat?: number // ฟิล์มแบนรอบช่วงพอง (ไหล่ที่รวบเข้าหาเรือจุก — ฟิล์มไม่หด จึงเหลือเป็นแผ่นแบน)
   rib?: number // ร่องเกลียวเรือจุกดันฟิล์มนูน (มม.) ที่แถวนี้ ภายในครึ่งกว้าง ribW
   ribW?: number
+  wedge?: number // ถุงตั้ง: ฟิล์มแบนข้างช่วงพอง (ระหว่างซีลข้างกับช่วงพอง) — ก้น gusset ดึงมุมล่าง ช่วงพองเรียวเข้าหาก้น
 }
 
 // ความยาวโค้งหน้าเดียวของเลนส์ครึ่งกว้าง ai ลึก d
@@ -535,10 +539,15 @@ export function doypackRows(
   const cum = [0]
   for (let i = 1; i < ys.length; i++) cum.push(cum[i - 1] + Math.hypot(ys[i] - ys[i - 1], dOf(ys[i]) - dOf(ys[i - 1])))
   const total = cum[cum.length - 1] || 1
+  // doypack: ช่วงพองเรียวเข้าหาก้น (ฟิล์มแบนเป็นลิ่มข้างช่วงพอง กว้าง 0 ใต้ซิป → DOYPACK_WEDGE·W ที่พื้น)
+  const wedgeAt = (y: number) => (p.style === 'stand' ? DOYPACK_WEDGE * W * Math.max(0, 1 - y / tipY) : 0)
   const rows: DoypackRow[] = ys.map((y, i) => {
     // ก้น K: ซีลข้างตรงดิ่งเต็มกว้างตลอดความสูง (ไม่ดึงเข้าตามความพอง) — มองหน้าเป็นสี่เหลี่ยม
-    const ai = (Wi / 2) * (1 - (kseal ? 0 : DOYPACK_PULL) * fOf(y)) - pull(y)
-    return { y, a: ai + ss, ai, b: DOYPACK_FIN + dOf(y), dly: fold - (cum[i] / total) * Hi }
+    const aiBody = (Wi / 2) * (1 - (kseal ? 0 : DOYPACK_PULL) * fOf(y)) - pull(y)
+    const wedge = Math.min(wedgeAt(y), aiBody * 0.5)
+    const row: DoypackRow = { y, a: aiBody + ss, ai: aiBody - wedge, b: DOYPACK_FIN + dOf(y), dly: fold - (cum[i] / total) * Hi }
+    if (p.style === 'stand') row.wedge = wedge
+    return row
   })
   for (let i = 1; i <= nFin; i++) {
     const t = i / nFin
