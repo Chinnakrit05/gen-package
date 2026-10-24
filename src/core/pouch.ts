@@ -63,6 +63,9 @@ export interface Pouch {
   tearNotches: Vec2[][] // รอยบากฉีก (สามเหลี่ยม V พิกัดแผ่นคลี่) ที่ขอบแผง — dieline ตัดตามนี้, 3D เจาะผิวตามนี้ (alpha mask)
   // รูแขวน (วงกลมพิกัดแผ่นคลี่) — dieline ตัดเฉพาะ cut: true; 3D เจาะทุกวง (รวมชั้นหลังของถุงฟิล์มม้วนที่เจาะหลังขึ้นรูป)
   hangHoles: { x: number; y: number; r: number; cut: boolean }[]
+  // ถุงจุกมุม: มุมบนที่มีจุก (มองจากหน้า) + ขาของมุมตัดเฉียง c (มม.) — ไม่มี = จุกกลางขอบบน
+  spoutCorner?: { side: SpoutCorner; c: number }
+  trims: Vec2[][] // ฟิล์มส่วนที่ไดคัททิ้ง (พิกัดแผ่นคลี่) ที่ทรง 3D ไม่ได้ตัดเอง — 3D เจาะด้วย alpha mask เดียวกับรอยบาก
   valveAt?: { x: number; y: number; r: number } // วาล์วกาแฟ (พิกัดแผ่นคลี่) — dieline เป็น marker, 3D เป็นรอยนูนบนฟิล์ม
   hangHole: boolean // รูแขวน (euro-hole) ที่ริมซีลบน
   valve: boolean // วาล์วระบายแก๊ส (กาแฟ) บนหน้าถุง
@@ -77,6 +80,77 @@ export interface PouchAddons {
   // ตำแหน่งซิป/รอยบาก (มม. จากขอบบนถุง) — ไม่ใส่ = ค่าเริ่มต้น/อัตโนมัติ; ใช้เมื่อเปิดซิปล็อก
   zipAt?: number
   tearAt?: number
+  spoutAt?: SpoutCorner // ถุงมีจุก: จุกที่มุมบนซ้าย/ขวา (มองจากหน้า) — ไม่ใส่ = กลางขอบบน
+}
+
+// ถุงจุกมุม (corner spout): มุมบนตัดเฉียง 45° ขายาว c ให้เรือจุก (กว้าง bw) วางกลางขอบเฉียง จุกชี้ออกทแยง 45°
+// แบบถุงน้ำ/ซอส/อาหารเด็กทั่วไป — แผงหลังกลับซ้าย-ขวา (มุมเดียวกันเมื่อประกบ)
+export type SpoutCorner = 'left' | 'right'
+export const SPOUT_CHAMFER_MARGIN = 4 // ปลายเรือถึงปลายขอบเฉียง (มม.)
+export const SPOUT_CHAMFER_FILLET = 3 // รัศมีมนที่ปลายขอบเฉียงทั้งสอง (มม.)
+export const SPOUT_DRAPE = 3 // ฟิล์มคลุมเลยขอบเรือก่อนแนบซีล (มม.)
+export const spoutChamfer = (W: number, st: number) =>
+  Math.min(0.45 * W, (spoutMarker(W, st).bw + 2 * SPOUT_CHAMFER_MARGIN) / Math.SQRT2)
+export const spoutBoatT = (W: number, st: number) => spoutMarker(W, st).r * 0.9 // ครึ่งความหนาเรือจุก
+// ระยะลึกสุดจากขอบบนที่เรือจุกมุมลงไปถึง (ปลายเรือที่มุมใน) — ซิป/รอยฉีกต้องอยู่ต่ำกว่านี้
+export const spoutCornerReach = (W: number, st: number) => {
+  const c = spoutChamfer(W, st)
+  const sm = spoutMarker(W, st)
+  return c / 2 + (sm.bh + sm.bw / 2) / Math.SQRT2
+}
+// ความนูนของฟิล์มที่คลุมเรือจุกมุม (มม. เหนือผิวซีล) ที่พิกัดฟิล์ม uf (จากขอบด้านที่มีจุก) / dl (จากขอบบน):
+// s = ตามแนวขอบเฉียง (0 = กลางเรือ), d = ลึกเข้าจากขอบเฉียง — เต็มความหนาเรือตลอดช่วงเรือ แล้วลาดลงหาผิวถุงที่ปลายเรือ
+export function spoutCornerBulge(W: number, st: number, c: number, uf: number, dl: number): number {
+  const sm = spoutMarker(W, st)
+  const hw = sm.bw / 2 + SPOUT_DRAPE
+  const s = (uf - dl) / Math.SQRT2
+  const d = (uf + dl - c) / Math.SQRT2
+  if (Math.abs(s) >= hw) return 0
+  const full = sm.bh * 0.6
+  const reach = sm.bh + 2 * SPOUT_DRAPE
+  if (d >= reach) return 0
+  const g = (1 - (s / hw) ** 2) ** 0.7
+  const h = d <= full ? 1 : 0.5 + 0.5 * Math.cos((Math.PI * (d - full)) / (reach - full))
+  return spoutBoatT(W, st) * g * h
+}
+
+// รูปหลายเหลี่ยมมุมมน (มุมนูนทุกมุม, เรียงตามเข็มนาฬิกาบนพิกัด y ลง) → จุด (ประมาณโค้ง) + path ไดคัท (A จริง)
+// map แปลงพิกัดท้องถิ่น → แผ่นคลี่; flip = map กลับด้าน (สะท้อน) → ทิศโค้ง SVG กลับ
+function filletPoly(verts: { x: number; y: number; r: number }[], map: (x: number, y: number) => Vec2, flip: boolean) {
+  const pts: Vec2[] = []
+  let d = ''
+  const n = verts.length
+  verts.forEach((v, i) => {
+    const a = verts[(i + n - 1) % n]
+    const b = verts[(i + 1) % n]
+    const ua = { x: a.x - v.x, y: a.y - v.y }
+    const ub = { x: b.x - v.x, y: b.y - v.y }
+    const la = Math.hypot(ua.x, ua.y)
+    const lb = Math.hypot(ub.x, ub.y)
+    ua.x /= la; ua.y /= la; ub.x /= lb; ub.y /= lb
+    const half = Math.acos(Math.max(-1, Math.min(1, ua.x * ub.x + ua.y * ub.y))) / 2
+    const t = v.r > 0 ? v.r / Math.tan(half) : 0
+    const t1 = { x: v.x + ua.x * t, y: v.y + ua.y * t }
+    const t2 = { x: v.x + ub.x * t, y: v.y + ub.y * t }
+    const m1 = map(t1.x, t1.y)
+    const m2 = map(t2.x, t2.y)
+    d += `${i ? 'L' : 'M'} ${m1.x} ${m1.y} `
+    if (v.r > 0) {
+      const bis = { x: ua.x + ub.x, y: ua.y + ub.y }
+      const bl = Math.hypot(bis.x, bis.y)
+      const cd = v.r / Math.sin(half)
+      const c = { x: v.x + (bis.x / bl) * cd, y: v.y + (bis.y / bl) * cd }
+      const a0 = Math.atan2(t1.y - c.y, t1.x - c.x)
+      let a1 = Math.atan2(t2.y - c.y, t2.x - c.x)
+      if (a1 < a0) a1 += 2 * Math.PI
+      for (let k = 0; k <= 4; k++) {
+        const ang = a0 + ((a1 - a0) * k) / 4
+        pts.push(map(c.x + v.r * Math.cos(ang), c.y + v.r * Math.sin(ang)))
+      }
+      d += `A ${v.r} ${v.r} 0 0 ${flip ? 0 : 1} ${m2.x} ${m2.y} `
+    } else pts.push(m1)
+  })
+  return { pts, d: d + 'Z' }
 }
 
 // ซิปล็อก + รอยบากฉีก (มม.): แนวซิปกว้างรวมปีก ~10 (±ZIP_HALF); รอยบากอัตโนมัติอยู่เหนือซิป TEAR_GAP
@@ -178,8 +252,30 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
 
   // แผ่นฟิล์มแบน: [หน้า][…จีบ…][หลัง][…จีบ…][ลิ้นทากาว ss]; แนวตั้ง = ริมบน + ลำตัว + ก้น/ริมล่าง
   // แยกลิ้นกาวเป็นแผงต่างหาก (ขอบร่วม x=Wp เป็นรอยต่อ ไม่ใช่ขอบนอก) เหมือน dieline ฉลาก
+  // ถุงจุกมุม: มุมบนด้านจุกตัดเฉียง (มองจากหน้า ซ้าย = แผงหน้าซ้าย / แผงหลังขวา เพราะหลังมองจากด้านหลัง)
+  const corner: SpoutCorner | undefined = spout ? opts.addons?.spoutAt : undefined
+  const cc = corner ? spoutChamfer(W, st) : 0
+  // พิกัดท้องถิ่นของแผง (u จากขอบด้านจุก) → แผ่นคลี่
+  const cornerOnRight = (x0: number) => (x0 === 0) === (corner === 'right')
+  const local = (x0: number) => (u: number, y: number) => P(cornerOnRight(x0) ? x0 + W - u : x0 + u, y)
+  const cornerPanel = (x0: number) =>
+    filletPoly(
+      [
+        { x: cc, y: 0, r: SPOUT_CHAMFER_FILLET },
+        { x: W, y: 0, r: SPOUT_CORNER_R },
+        { x: W, y: filmH, r: SPOUT_CORNER_R },
+        { x: 0, y: filmH, r: SPOUT_CORNER_R },
+        { x: 0, y: cc, r: SPOUT_CHAMFER_FILLET },
+      ],
+      local(x0),
+      cornerOnRight(x0),
+    )
   const panelRect = (x0: number) =>
-    spout ? roundedRectPts(x0, 0, x0 + W, filmH, SPOUT_CORNER_R) : rect(x0, 0, x0 + W, filmH)
+    corner
+      ? cornerPanel(x0).pts
+      : spout
+        ? roundedRectPts(x0, 0, x0 + W, filmH, SPOUT_CORNER_R)
+        : rect(x0, 0, x0 + W, filmH)
   const panels: Panel[] = two
     ? [
         { id: 'front', parentId: null, outline: panelRect(0), stage: 0 },
@@ -202,7 +298,9 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const circlePath = (cx: number, cy: number, r: number) =>
     `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`
   // ถุงมีจุก: แผงหน้า/หลังไดคัทมุมมน (รัศมี = ซีลข้าง) — ตัดแยกสองชิ้น ไม่ใช่สี่เหลี่ยมรวม
-  const segments: Segment[] = spout
+  const segments: Segment[] = corner
+    ? [0, W].map((x0) => cut(cornerPanel(x0).d))
+    : spout
     ? [0, W].map((x0) => cut(roundedRectPath(x0, 0, x0 + W, filmH, SPOUT_CORNER_R)))
     : [cut(`M 0 0 L ${width} 0 L ${width} ${filmH} L 0 ${filmH} Z`)]
   if (doy) {
@@ -214,10 +312,27 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     for (const x0 of [0, W]) {
       const l = x0 + pss
       const r = x0 + W - pss
+      if (corner) {
+        // จุกมุม: ซีลข้าง/ซีลบนฝั่งจุกเริ่มที่แนวซีลขนานขอบเฉียง (ห่างขอบเท่าซีลข้าง) — แนวนี้เชื่อมรอบเรือจุก
+        const L = local(x0)
+        const k = cc + pss * Math.SQRT2
+        const pa = L(pss, k - pss)
+        const pb = L(k - st, st)
+        const pt = (q: Vec2) => `${q.x} ${q.y}`
+        segments.push(
+          crease(`M ${pt(pa)} L ${pt(L(pss, filmH))}`),
+          crease(`M ${pt(L(W - pss, 0))} L ${pt(L(W - pss, filmH))}`),
+          crease(`M ${pt(pb)} L ${pt(L(W - pss, st))}`),
+          crease(`M ${pt(pa)} L ${pt(pb)}`),
+        )
+      } else {
+        segments.push(
+          crease(`M ${l} 0 L ${l} ${filmH}`),
+          crease(`M ${r} 0 L ${r} ${filmH}`),
+          crease(`M ${l} ${st} L ${r} ${st}`),
+        )
+      }
       segments.push(
-        crease(`M ${l} 0 L ${l} ${filmH}`),
-        crease(`M ${r} 0 L ${r} ${filmH}`),
-        crease(`M ${l} ${st} L ${r} ${st}`),
         // ก้น K: แนวพับก้นตรง + ซีลมุมทแยงสองข้าง (รูป K กับซีลข้าง); doypack: ซีลก้นโค้ง (round-bottom)
         ...(kseal
           ? [
@@ -313,7 +428,36 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     )
   }
 
-  if (spout) {
+  const trims: Vec2[][] = []
+  if (corner) {
+    // จุกมุม: เรือตั้งฉากกับขอบเฉียง กึ่งกลางขอบ (ท้องถิ่น: กลาง (c/2, c/2), ตามขอบ t = (1,−1)/√2, เข้าใน n = (1,1)/√2)
+    const { r: sr, bw, bh } = spoutMarker(W, st)
+    const hw = bw / 2
+    for (const x0 of [0, W]) {
+      const L = local(x0)
+      const q = (s: number, d: number) => {
+        const p = L(cc / 2 + (s + d) / Math.SQRT2, cc / 2 + (d - s) / Math.SQRT2)
+        return `${p.x} ${p.y}`
+      }
+      segments.push(
+        crease(`M ${q(-hw, 0)} L ${q(-hw, bh * 0.55)} Q ${q(-hw, bh)} ${q(0, bh)} Q ${q(hw, bh)} ${q(hw, bh * 0.55)} L ${q(hw, 0)}`),
+      )
+      // 3D: ฟิล์มมุมเฉียงที่ตัดทิ้ง + มุมบนอีกด้านที่มน (ทรง doypack ไม่ได้ตัดมุมเอง)
+      trims.push([L(-1, -1), L(cc, -1), L(cc, 0), L(0, cc), L(-1, cc)])
+      const R = SPOUT_CORNER_R
+      trims.push([
+        L(W + 1, -1),
+        L(W + 1, R),
+        ...Array.from({ length: 9 }, (_, k) => {
+          const a = (Math.PI / 2) * (k / 8)
+          return L(W - R + R * Math.cos(a), R - R * Math.sin(a))
+        }),
+        L(W - R, -1),
+      ])
+    }
+    const m = local(0)(cc / 2, cc / 2)
+    dims.push({ a: P(m.x - 1, m.y + 4), b: P(m.x + 1, m.y + 4), label: `จุกมุม ⌀${fmt(2 * sr)}` })
+  } else if (spout) {
     // จุกกลางขอบบน: แนวเชื่อม "เรือ" ของจุกบนทั้งสองแผง (เรือสอดระหว่างฟิล์มสองชั้นจากขอบบน) + ป้าย
     const { r: sr, bw, bh } = spoutMarker(W, st)
     for (const cx of [fcx, W + W / 2]) {
@@ -403,6 +547,8 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     tearY,
     tearNotches,
     hangHoles,
+    ...(corner ? { spoutCorner: { side: corner, c: cc } } : {}),
+    trims,
     ...(valveAt ? { valveAt } : {}),
     hangHole,
     valve,

@@ -106,6 +106,7 @@ import {
   ZIP_AT_MAX,
   type PouchStyle,
   type PouchAddons,
+  type SpoutCorner,
 } from './core/pouch'
 import { pouchZipIssues } from './core/pouchPreflight'
 import { boxVolumeMl, pouchVolumeMl, vesselVolumeMl, tubeVolumeMl, formatCapacity } from './core/capacity'
@@ -1167,6 +1168,7 @@ const samePouchAddons = (a: PouchAddons | undefined, b: PouchAddons | undefined)
   && Boolean(a?.tinTie) === Boolean(b?.tinTie)
   && a?.zipAt === b?.zipAt
   && a?.tearAt === b?.tearAt
+  && a?.spoutAt === b?.spoutAt
 
 // เทียบรูระบายอากาศ — ไม่เปิดทั้งคู่ = เท่ากัน (undefined = ปิด); เปิดทั้งคู่ค่อยเทียบค่า
 const sameVents = (a: VentConfig | undefined, b: VentConfig | undefined) => {
@@ -4543,6 +4545,37 @@ export default function App({
             )}
             {kind === 'pouch' && (
               <>
+                {pouchStyle === 'spout' && (
+                  // ถุงมีจุก: กลางขอบบน หรือจุกมุม (มุมบนตัดเฉียง จุกชี้ออก 45°)
+                  <div className="field" style={{ marginTop: 12 }}>
+                    <span className="field-head">{t('ตำแหน่งจุก', 'Spout position')}</span>
+                    <div className="unit-toggle" role="group" aria-label={t('ตำแหน่งจุก', 'Spout position')}>
+                      {(
+                        [
+                          ['left', t('ซ้ายบน', 'Top left')],
+                          [undefined, t('กลาง', 'Centre')],
+                          ['right', t('ขวาบน', 'Top right')],
+                        ] as [SpoutCorner | undefined, string][]
+                      ).map(([at, label]) => (
+                        <button
+                          key={at ?? 'center'}
+                          type="button"
+                          className={pouchAddons.spoutAt === at ? 'active' : ''}
+                          aria-pressed={pouchAddons.spoutAt === at}
+                          disabled={aiBusy}
+                          onClick={() =>
+                            setPouchAddons((a) => {
+                              const { spoutAt: _old, ...rest } = a
+                              return at ? { ...rest, spoutAt: at } : rest
+                            })
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <label className="check" style={{ marginTop: 12 }}>
                   <input
                     type="checkbox"

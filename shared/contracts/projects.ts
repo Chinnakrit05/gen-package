@@ -22,7 +22,7 @@ export interface CloudProjectDocumentV1 {
   capColor?: string
   pouchStyle?: string
   zipper?: boolean
-  pouchAddons?: Record<string, boolean | number>
+  pouchAddons?: Record<string, boolean | number | string>
   stickerCut?: Record<string, unknown>
   decos: Record<string, unknown>[]
   history: Record<string, unknown>[]
