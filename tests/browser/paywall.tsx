@@ -9,7 +9,7 @@
 import { StrictMode, useCallback, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { isProOnlyExport, type BillingCatalog, type Entitlements, type Order, type OrderKind } from '../../shared/contracts/billing'
-import type { ProjectSummary } from '../../shared/contracts/projects'
+import type { ProjectSummary, ProjectThumbnailImage, ThumbnailKind } from '../../shared/contracts/projects'
 import App, { type CloudProjectBridge, type EntitlementsStatus, type ProjectStoreSnapshot } from '../../src/App'
 import { PricingPage } from '../../src/components/PricingPage'
 import type { AiBoxSpec } from '../../src/core/ai'
@@ -34,6 +34,8 @@ interface FakeState {
   projects: Project[]
   entitlements: Entitlements
   orders: Map<string, Order>
+  // ภาพย่อแกลเลอรีที่ "อัปโหลด" แล้ว (จำลอง server)
+  thumbnails: Map<string, ProjectThumbnailImage & { kind: ThumbnailKind; label: string }>
 }
 
 function makeState(scenario: Scenario): FakeState {
@@ -47,6 +49,7 @@ function makeState(scenario: Scenario): FakeState {
   return {
     projects: [first, second],
     orders: new Map(),
+    thumbnails: new Map(),
     entitlements: {
       workspaceId: WORKSPACE,
       plan: pro ? 'pro' : 'free',
@@ -75,6 +78,9 @@ const summaries = (state: FakeState): ProjectSummary[] => state.projects.map((pr
   name: project.name,
   revision: 1,
   updatedAt: new Date(project.updatedAt).toISOString(),
+  thumbnail: state.thumbnails.has(project.id)
+    ? (({ version, kind, label }) => ({ version, kind, label }))(state.thumbnails.get(project.id)!)
+    : null,
 }))
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -109,6 +115,17 @@ function buildBridge(state: FakeState, flagsRef: { current: Flags }, bump: () =>
   }
   return {
     items: summaries(state),
+    workspaceId: WORKSPACE,
+    putThumbnail: async (projectId, input) => {
+      const version = new Date().toISOString()
+      state.thumbnails.set(projectId, { projectId, version, mimeType: input.mimeType, imageBase64: input.imageBase64, kind: input.kind, label: input.label })
+      return { projectId, version }
+    },
+    fetchThumbnails: async (projectIds) =>
+      projectIds.flatMap((id) => {
+        const t = state.thumbnails.get(id)
+        return t ? [{ projectId: t.projectId, version: t.version, mimeType: t.mimeType, imageBase64: t.imageBase64 }] : []
+      }),
     online: !flags.offline,
     saveState: flags.offline ? 'offline' : 'clean',
     entitlements: flags.planError ? null : snapshot(state, flags),

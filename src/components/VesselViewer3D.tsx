@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { useArtTexture } from './useArtTexture'
 import { Canvas } from '@react-three/fiber'
@@ -442,6 +442,7 @@ export function VesselViewer3D({
   watermark,
   capStyle,
   capColor,
+  extra,
 }: {
   vessel: Vessel
   mat: Material
@@ -454,6 +455,7 @@ export function VesselViewer3D({
   watermark?: string | null
   capStyle?: CapStyle
   capColor?: string | null
+  extra?: ReactNode // ของเสริมใน <Canvas> (เช่นตัวถ่ายภาพย่อแกลเลอรี)
 }) {
   // ตำแหน่งแรกจาก Canvas; สลับขวด↔หลอด/ขนาดต่างมากโดยไม่ถอดหน้า 3D → FitViewerCamera จัดกล้องใหม่
   // (เดิมค้างระยะ/มุมของภาชนะเดิมจนกดไปแท็บอื่นแล้วกลับมา)
@@ -470,6 +472,7 @@ export function VesselViewer3D({
       <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} watermark={watermark} capStyle={capStyle} capColor={capColor} />
       <OrbitControls makeDefault enableDamping />
       <FitViewerCamera fit={fit} />
+      {extra}
     </Canvas>
   )
 }

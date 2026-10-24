@@ -521,7 +521,7 @@ header h1 {
   display: grid;
   place-items: center;
   width: 100%;
-  height: 128px;
+  height: 148px;
   overflow: hidden;
   background: linear-gradient(160deg,
     color-mix(in srgb, var(--project-thumb-color, #8bb9c2) 32%, var(--surface-solid)),
@@ -551,6 +551,25 @@ header h1 {
 
 .project-gallery-thumb:has(img) .project-gallery-thumb-icon {
   display: none;
+}
+
+/* ภาพย่อ 3D ของงาน (ถ่ายบนพื้นขาว ตัดขอบตามโมเดลแล้ว) — แสดงทั้งชิ้นไม่ครอป */
+.project-gallery-thumb.shot {
+  background: #ffffff;
+}
+
+.project-gallery-thumb.shot img {
+  object-fit: contain;
+}
+
+/* viewer ซ่อนนอกจอสำหรับถ่ายภาพย่อแกลเลอรี (mount เฉพาะตอนถ่าย) */
+.thumb-stage {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 480px;
+  height: 480px;
+  pointer-events: none;
 }
 
 .project-gallery-card-body {

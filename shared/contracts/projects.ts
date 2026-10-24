@@ -47,6 +47,41 @@ export interface ProjectSummary {
   name: string
   revision: number
   updatedAt: string
+  // ภาพย่อ 3D ล่าสุดของงาน (ไม่มี = ยังไม่เคยถ่าย) — ตัวรูปขอแยกผ่าน POST /projects/thumbnails ตาม version
+  thumbnail?: ProjectThumbnailMeta | null
+}
+
+// ภาพย่อ 3D ในแกลเลอรีงาน — ชนิดงาน/ชื่อชนิดมากับภาพย่อ เพราะรายการงานบน cloud ไม่มีเนื้องาน
+export const THUMBNAIL_KINDS = ['box', 'vessel', 'pouch', 'card'] as const
+export type ThumbnailKind = (typeof THUMBNAIL_KINDS)[number]
+export const THUMBNAIL_MIME_TYPES = ['image/webp', 'image/jpeg'] as const
+export type ThumbnailMime = (typeof THUMBNAIL_MIME_TYPES)[number]
+export const THUMBNAIL_MAX_BYTES = 65536
+export const THUMBNAIL_BATCH_MAX = 24
+
+export interface ProjectThumbnailMeta {
+  version: string
+  kind: ThumbnailKind
+  label: string
+}
+
+export interface PutProjectThumbnailInput {
+  mimeType: ThumbnailMime
+  imageBase64: string
+  kind: ThumbnailKind
+  label: string
+}
+
+export interface ProjectThumbnailReceipt {
+  projectId: string
+  version: string
+}
+
+export interface ProjectThumbnailImage {
+  projectId: string
+  version: string
+  mimeType: ThumbnailMime
+  imageBase64: string
 }
 
 export interface ProjectCursor {

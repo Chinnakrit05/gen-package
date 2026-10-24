@@ -108,6 +108,16 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   (`src/core/newWork.ts` pure: freshProject + template/วัสดุ/รูปแบบถุงที่เลือก + ขนาดมาตรฐาน — ไม่มีการตั้งค่า/การตกแต่งของงานเก่า);
   cloud ส่งเป็น `seed` ของ `createProject(current, name, seed)`; ยังไม่มีงานตกแต่ง → `apply` สลับในงานนี้ทันทีตามเดิม;
   กดรายการที่เลือกอยู่แล้ว/สลับวัสดุในประเภทเดิม/สเปกจาก AI ไม่ผ่านด่านนี้
+- ภาพย่อ 3D ในแกลเลอรีงาน (`ProjectGallery` การ์ด): App ถ่ายงานที่เปิดอยู่หลังหยุดแก้ `THUMB_IDLE_MS` 4 วิ (ภาพย่อยังไม่ทัน `thumbIsFresh`)
+  ด้วย viewer ซ่อนนอกจอ `.thumb-stage` (พับเสร็จ fold=1 ไม่มีเส้นขนาด มุมกล้องเริ่มต้น + ลายน้ำเดียวกับพรีวิว) ผ่าน prop `extra` ใน `<Canvas>` ของทั้ง 3 viewer
+  → `ThumbnailCapture` รอฟอนต์/รูป + SETTLE แล้ว render พื้นโปร่งใส ตัดขอบตาม alpha (`alphaBounds`/`thumbPlacement` ใน core/thumbnail.ts)
+  วางบนพื้นขาว 480×300 → WebP (Safari → JPEG) ≤ 64 KiB; แคชเบราว์เซอร์ `ThumbnailCache` (IndexedDB `packit-thumbnails` แยกจากข้อมูลงาน,
+  scope 'local' / workspaceId); cloud: `PUT /api/v1/projects/:id/thumbnail` (base64 JSON, ตรวจ magic bytes) เก็บในตาราง
+  `app_private.project_thumbnails` (migration `20261024000800_project_thumbnails.sql` — ในฐานข้อมูลตรง ๆ ไม่ผ่าน asset pipeline/bucket
+  เพราะเขียนทับบ่อยและไม่ไหลเข้าไฟล์ผลิต; FK cascade ตาม projects) + รายการงานติด `ProjectSummary.thumbnail` {version, kind, label}
+  จาก RPC แยก `list_project_thumbnail_meta` (ไม่แก้ list_projects — server/DB ต่างรุ่นกันระหว่าง deploy ยังทำงาน; meta ล้ม = รายการปกติ)
+  → แกลเลอรีขอตัวรูปเฉพาะการ์ดที่แสดงและ version ไม่ตรงแคช (`thumbNeedsFetch`) ผ่าน `POST /api/v1/projects/thumbnails` ≤ 24 ต่อครั้ง;
+  งานเก่าได้ภาพย่อเมื่อเปิดครั้งแรก; ไม่มีภาพย่อ = ไอคอนตามชนิดงาน (cloud ใช้ kind/label จาก meta แทน "โปรเจกต์")
 - `src/core/imposition.ts` — คำนวณ yield ต่อแผ่น (pure): `computeImposition` วางกริด step&repeat เทียบชิ้นตั้ง/หมุน 90° เลือกจำนวนมากสุด + `sheetsNeeded` (ปัดขึ้น) + `SHEET_PRESETS` แผ่นมาตรฐานไทย; UI อยู่แท็บ "ส่งออก" ผูกกับช่องจำนวน (state ephemeral ไม่เก็บลง project)
 - `src/core/snap.ts` — logic ดูด artwork เข้าแนวขณะลาก (pure): `snapTargets` สร้างเส้นเป้าหมายจากกึ่งกลางแผ่น/ขอบ-กึ่งกลางแผง/ขอบ-กึ่งกลางชิ้นอื่น, `applySnap` ดูดขอบ-กึ่งกลางชิ้นเข้าเส้นใกล้สุดในระยะ threshold (แปลงจาก 6px ตามซูม); กด Alt ค้างระหว่างลาก = ปิด snap
 - `src/components/PromptBar.tsx` + `src/core/ai.ts` — AI layer ฝั่ง client; แนบรูปอ้างอิงได้ (ย่อเป็น JPEG ≤1024px ฝั่ง client → base64; backend api ส่งเป็น image block, backend cli เขียนไฟล์ tmp ให้ Claude เปิดอ่านเองแล้วลบทิ้ง)

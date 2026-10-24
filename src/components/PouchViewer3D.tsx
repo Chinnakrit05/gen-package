@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { useArtTexture } from './useArtTexture'
 import { Canvas } from '@react-three/fiber'
@@ -1095,6 +1095,7 @@ export function PouchViewer3D({
   dimVariant,
   lightMode,
   watermark,
+  extra,
 }: {
   pouch: Pouch
   mat: Material
@@ -1106,6 +1107,7 @@ export function PouchViewer3D({
   dimVariant?: 'lines' | 'badge'
   lightMode?: LightMode
   watermark?: string | null
+  extra?: ReactNode // ของเสริมใน <Canvas> (เช่นตัวถ่ายภาพย่อแกลเลอรี)
 }) {
   // ตำแหน่งแรกจาก Canvas (ถุงตั้ง/ก้น K หน้าตรง, แบบอื่นมุมเฉียง — ดู pouchCameraFit);
   // สลับรูปแบบถุง/ขนาดต่างมากโดยไม่ถอดหน้า 3D → FitViewerCamera จัดกล้องใหม่ตามมุมของรูปแบบใหม่
@@ -1122,6 +1124,7 @@ export function PouchViewer3D({
       <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} dimVariant={dimVariant} watermark={watermark} />
       <OrbitControls makeDefault enableDamping />
       <FitViewerCamera fit={fit} />
+      {extra}
     </Canvas>
   )
 }

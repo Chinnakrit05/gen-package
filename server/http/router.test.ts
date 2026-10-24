@@ -131,6 +131,9 @@ function repositoryStub(overrides: Partial<ProjectRepository> = {}): ProjectRepo
     importLegacy: async () => { throw new Error('must not be called') },
     save: async () => { throw new Error('must not be called') },
     remove: async () => { throw new Error('must not be called') },
+    putThumbnail: async () => { throw new Error('must not be called') },
+    thumbnailMeta: async () => new Map(),
+    thumbnails: async () => { throw new Error('must not be called') },
     ...overrides,
   }
 }

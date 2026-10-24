@@ -1,4 +1,4 @@
-import { Suspense, createContext, lazy, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { LogOut } from 'lucide-react'
 
@@ -136,7 +136,13 @@ import {
   type Project,
 } from './core/project'
 import { serializeProject, parseProjectFile, projectFileName } from './core/projectFile'
-import type { ProjectSummary } from '../shared/contracts/projects'
+import {
+  THUMBNAIL_BATCH_MAX,
+  type ProjectSummary,
+  type ProjectThumbnailImage,
+  type ProjectThumbnailReceipt,
+  type PutProjectThumbnailInput,
+} from '../shared/contracts/projects'
 import { isProOnlyExport, type Entitlements, type ExportAuthorization, type ExportFormat, type Order, type OrderKind } from '../shared/contracts/billing'
 import type { ProjectSaveState } from './services/projects/durableSaveQueue'
 import { ApiClientError } from './services/api/client'
@@ -175,7 +181,10 @@ import { CMYK_PROOF_PROFILE } from './core/cmykProofLut'
 import { AiTrigger, CopilotDrawer, type AiArtworkResult } from './components/CopilotDrawer'
 import { CopilotStage, type ArtworkSnapshot } from './components/CopilotStage'
 import { ColorField } from './components/ColorField'
-import { ProjectGallery } from './components/ProjectGallery'
+import { ProjectGallery, projectKind, projectTypeLabel } from './components/ProjectGallery'
+import { ThumbnailCapture, type ThumbnailShot } from './components/ThumbnailCapture'
+import { thumbIsFresh, thumbNeedsFetch } from './core/thumbnail'
+import { IndexedDbThumbStore, ThumbnailCache, base64ToBlob, blobToBase64 } from './services/thumbnails/thumbnailCache'
 import {
   IconImage,
   IconText,
@@ -1201,6 +1210,10 @@ export type EntitlementsStatus = 'loading' | 'ready' | 'error'
 
 export interface CloudProjectBridge {
   items: ProjectSummary[]
+  workspaceId: string
+  // ภาพย่อ 3D ของแกลเลอรีงาน — บันทึกทับของเดิม (คืน version) / โหลดตัวรูปตาม id (≤ THUMBNAIL_BATCH_MAX ต่อครั้ง)
+  putThumbnail(projectId: string, input: PutProjectThumbnailInput): Promise<ProjectThumbnailReceipt>
+  fetchThumbnails(projectIds: string[]): Promise<ProjectThumbnailImage[]>
   online: boolean
   saveState: ProjectSaveState
   onProjectChange(project: Project): Promise<void>
@@ -1233,6 +1246,9 @@ export interface CloudProjectBridge {
   createOrder(kind: OrderKind, projectId?: string): Promise<Order>
   devFulfilOrder(orderId: string): Promise<Order>
 }
+
+// หยุดแก้นานเท่านี้ก่อนถ่ายภาพย่อแกลเลอรี (mount viewer ซ่อน ~0.1–0.3 วิของ main thread — ไม่ถ่ายระหว่างลาก/พิมพ์)
+const THUMB_IDLE_MS = 4000
 
 function cloudSaveLabel(state: ProjectSaveState): string {
   switch (state) {
@@ -3256,6 +3272,110 @@ export default function App({
   // — กดขยายเป็นหน้าต่างใหญ่หรืออยู่แท็บออกแบบ (จอหลัก) ค่อยแสดง; โหมดแสงที่ตั้งไว้ยังมีผลเหมือนเดิม
   const pip3dCompact = sideTab !== 'design' && !expand3d
   const dims3dOn = showDims3d && !pip3dCompact ? dims3d : undefined
+  // ---- ภาพย่อ 3D ของแกลเลอรีงาน ----
+  // ถ่ายจากงานที่เปิดอยู่หลังหยุดแก้ THUMB_IDLE_MS: mount viewer ซ่อนนอกจอ (พับเสร็จ/มุมกล้องเริ่มต้น) แล้วถอดทันทีที่ถ่ายเสร็จ
+  // เก็บในแคชเบราว์เซอร์ (IndexedDB) + cloud อัปโหลดทับของเดิม — งานเก่าได้ภาพย่อเมื่อเปิดแล้วถูกถ่ายรอบแรก
+  const thumbScope = cloud ? cloud.workspaceId : 'local'
+  const thumbCache = useMemo(
+    () => new ThumbnailCache(thumbScope, typeof indexedDB === 'undefined' ? null : new IndexedDbThumbStore()),
+    [thumbScope],
+  )
+  useEffect(() => () => thumbCache.dispose(), [thumbCache])
+  const thumbTick = useSyncExternalStore(thumbCache.subscribe, thumbCache.version)
+  const [thumbJob, setThumbJob] = useState<{ id: string; source: number } | null>(null)
+  const thumbFailed = useRef<{ id: string; source: number } | null>(null)
+  const activeForThumb = projects.find((project) => project.id === activeId)
+  const activeCloudThumb = cloud?.items.find((item) => item.id === activeId)?.thumbnail?.version
+  useEffect(() => {
+    void thumbCache.load([activeId])
+  }, [thumbCache, activeId])
+  useEffect(() => {
+    if (!activeForThumb || thumbJob) return
+    const source = activeForThumb.updatedAt
+    if (thumbIsFresh(source, thumbCache.record(activeId), activeCloudThumb)) return
+    if (thumbFailed.current?.id === activeId && thumbFailed.current.source === source) return
+    const t = window.setTimeout(() => setThumbJob({ id: activeId, source }), THUMB_IDLE_MS)
+    return () => window.clearTimeout(t)
+    // thumbTick: แคชโหลดเสร็จ/เปลี่ยน → ตัดสินใหม่
+  }, [activeId, activeForThumb, activeCloudThumb, thumbJob, thumbCache, thumbTick])
+  const onThumbCaptured = (shot: ThumbnailShot | null) => {
+    const job = thumbJob
+    setThumbJob(null)
+    if (!job) return
+    const project = projects.find((p) => p.id === job.id)
+    if (!shot || !project) {
+      thumbFailed.current = job
+      return
+    }
+    const pk = projectKind(project)
+    const meta = { kind: pk === 'unknown' ? ('box' as const) : pk, label: projectTypeLabel(project).slice(0, 60) }
+    void (async () => {
+      await thumbCache.save({ projectId: job.id, version: String(job.source), sourceUpdatedAt: job.source, blob: shot.blob, ...meta })
+      if (!cloud?.online) return
+      try {
+        const receipt = await cloud.putThumbnail(job.id, { mimeType: shot.mimeType, imageBase64: await blobToBase64(shot.blob), ...meta })
+        // version ของ server แทนของเครื่องนี้ — เปิดแกลเลอรีครั้งหน้าไม่ต้องโหลดรูปเดิมซ้ำ
+        if (thumbCache.record(job.id)?.blob === shot.blob) {
+          await thumbCache.save({ projectId: job.id, version: receipt.version, sourceUpdatedAt: job.source, blob: shot.blob, ...meta })
+        }
+      } catch {
+        // งานยังไม่ขึ้น cloud/ออฟไลน์ — ถ่ายรอบหน้า (แก้งานครั้งถัดไป) จะอัปโหลดใหม่
+      }
+    })()
+  }
+  // แกลเลอรีเปิด: อ่านภาพย่อจากแคชเครื่องนี้ แล้ว (cloud) โหลดเฉพาะรูปที่ version ของ server ใหม่กว่าในแคช
+  const loadGalleryThumbs = useCallback(async (ids: string[]) => {
+    await thumbCache.load(ids)
+    if (!cloud?.online) return
+    const want = new Set(ids)
+    const stale = cloud.items.filter((item) =>
+      want.has(item.id) && !!item.thumbnail && thumbNeedsFetch(item.thumbnail.version, thumbCache.record(item.id)))
+    for (let i = 0; i < stale.length; i += THUMBNAIL_BATCH_MAX) {
+      const chunk = stale.slice(i, i + THUMBNAIL_BATCH_MAX)
+      try {
+        const images = await cloud.fetchThumbnails(chunk.map((item) => item.id))
+        for (const image of images) {
+          const meta = chunk.find((item) => item.id === image.projectId)?.thumbnail
+          await thumbCache.save({
+            projectId: image.projectId,
+            version: image.version,
+            blob: base64ToBlob(image.imageBase64, image.mimeType),
+            ...(meta ? { kind: meta.kind, label: meta.label } : {}),
+          })
+        }
+      } catch {
+        return // ออฟไลน์/server ล้ม — การ์ดแสดงไอคอนไปก่อน
+      }
+    }
+  }, [cloud, thumbCache])
+
+  const thumbCapture = <ThumbnailCapture decos={decos} fillImage={fillImage} onCapture={onThumbCaptured} />
+  const thumbnailStage = thumbJob && thumbJob.id === activeId && (
+    <div className="thumb-stage" aria-hidden="true">
+      <Suspense fallback={null}>
+        {kind === 'box' ? (
+          <Viewer3D
+            dieline={dieline}
+            mat={mat}
+            fold={1}
+            depth={template.foldDepth({ W, D, H }, mat)}
+            tilt={template.tilt}
+            spin={template.spin}
+            decos={decos}
+            fillColor={fillColor}
+            fillImage={fillImage}
+            watermark={watermark}
+            extra={thumbCapture}
+          />
+        ) : kind === 'vessel' && vessel ? (
+          <VesselViewer3D vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} watermark={watermark} capStyle={capStyle} capColor={capColor} extra={thumbCapture} />
+        ) : kind === 'pouch' && pouch ? (
+          <PouchViewer3D pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} watermark={watermark} extra={thumbCapture} />
+        ) : null}
+      </Suspense>
+    </div>
+  )
+
   const viewer3D = (
     <>
       <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
@@ -3385,6 +3505,9 @@ export default function App({
           onRename={renameProject}
           onDelete={deleteProject}
           licensedIds={cloud ? licensed : undefined}
+          thumbUrl={(id) => thumbCache.url(id)}
+          thumbTick={thumbTick}
+          onNeedThumbs={loadGalleryThumbs}
         />
         {cloud && (
           <div className="cloud-save-wrap">
@@ -6595,6 +6718,7 @@ export default function App({
           <CopilotStage onClose={() => setStageOpen(false)} viewer={viewer3D} snapshots={artSnapshots} currentId={artCurrentId} onPick={pickArtSnapshot} />
         )}
       </div>
+      {thumbnailStage}
       {nameModal && (
         <NameModal
           title={nameModal.title}

@@ -6,6 +6,10 @@ import type {
   LegacyImportInput,
   LegacyImportReceipt,
   ProjectPage,
+  ProjectThumbnailImage,
+  ProjectThumbnailMeta,
+  ProjectThumbnailReceipt,
+  PutProjectThumbnailInput,
   SaveProjectInput,
   SaveReceipt,
 } from '../../../shared/contracts/projects'
@@ -24,4 +28,8 @@ export interface ProjectRepository {
   importLegacy(actor: Actor, input: LegacyImportInput, hash: string): Promise<LegacyImportReceipt>
   save(actor: Actor, input: SaveProjectInput, hash: string): Promise<SaveReceipt>
   remove(actor: Actor, input: DeleteProjectInput, hash: string): Promise<DeleteReceipt>
+  // ภาพย่อ 3D (แกลเลอรี) — meta ต่อ id ของหน้ารายการ; ตัวรูปทีละชุด
+  putThumbnail(actor: Actor, projectId: string, input: PutProjectThumbnailInput): Promise<ProjectThumbnailReceipt>
+  thumbnailMeta(actor: Actor, workspaceId: string, projectIds: string[]): Promise<Map<string, ProjectThumbnailMeta>>
+  thumbnails(actor: Actor, workspaceId: string, projectIds: string[]): Promise<ProjectThumbnailImage[]>
 }

@@ -16,8 +16,10 @@ import {
   createProject as createRemoteProject,
   deleteProject as deleteRemoteProject,
   getProject,
+  getProjectThumbnails,
   importLegacyProject,
   listProjects,
+  putProjectThumbnail,
   saveProject,
 } from '../../services/api/projects'
 import {
@@ -438,6 +440,18 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
 
   const bridge = useMemo<CloudProjectBridge>(() => ({
     items,
+    workspaceId: props.workspaceId,
+    putThumbnail: async (projectId, input) => {
+      const receipt = await putProjectThumbnail(props.apiBaseUrl, tokenRef.current, projectId, input)
+      setItems((current) => current.map((item) => item.id === projectId
+        ? { ...item, thumbnail: { version: receipt.version, kind: input.kind, label: input.label } }
+        : item))
+      return receipt
+    },
+    fetchThumbnails: async (projectIds) => (await getProjectThumbnails(props.apiBaseUrl, tokenRef.current, {
+      workspaceId: props.workspaceId,
+      projectIds,
+    })).items,
     online,
     saveState,
     entitlements,

@@ -3,6 +3,13 @@ import { MATERIALS } from '../../../src/core/materials'
 import { TEMPLATES } from '../../../src/core/templates'
 import { FINISHES, type FinishKind } from '../../../src/core/finish'
 import { LETTER_SPACING_RANGE, TEXT_FX_KINDS, TEXT_FX_RANGE, type TextFxKind } from '../../../src/core/textFx'
+import {
+  THUMBNAIL_BATCH_MAX,
+  THUMBNAIL_KINDS,
+  THUMBNAIL_MAX_BYTES,
+  THUMBNAIL_MIME_TYPES,
+  type ThumbnailMime,
+} from '../../../shared/contracts/projects'
 
 const finite = z.number().finite()
 const coordinate = finite.min(-1_000_000).max(1_000_000)
@@ -363,4 +370,50 @@ export const projectListRowSchema = z.object({
   project_name: z.string().min(1).max(60),
   project_revision: safeRevisionSchema,
   project_updated_at: timestampSchema,
+}).strict()
+
+// --- ภาพย่อ 3D ของงาน (แกลเลอรี) ---
+// รูปเล็กที่ client ถ่ายจากโมเดล 3D — ตรวจขนาดและ magic bytes ตรงกับชนิดที่ประกาศ (แสดงผ่าน <img> เท่านั้น ไม่ไหลเข้าไฟล์ผลิต)
+const thumbnailMagic: Record<ThumbnailMime, (bytes: Buffer) => boolean> = {
+  'image/webp': (b) => b.length >= 12 && b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP',
+  'image/jpeg': (b) => b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+}
+
+export const putProjectThumbnailInputSchema = z.object({
+  mimeType: z.enum(THUMBNAIL_MIME_TYPES),
+  imageBase64: z.string().min(4).max(Math.ceil(THUMBNAIL_MAX_BYTES / 3) * 4).regex(/^[A-Za-z0-9+/]+={0,2}$/),
+  kind: z.enum(THUMBNAIL_KINDS),
+  label: z.string().trim().min(1).max(60),
+}).strict().superRefine((input, context) => {
+  const bytes = Buffer.from(input.imageBase64, 'base64')
+  if (bytes.length < 1 || bytes.length > THUMBNAIL_MAX_BYTES) {
+    context.addIssue({ code: 'custom', path: ['imageBase64'], message: `ภาพย่อต้องไม่เกิน ${THUMBNAIL_MAX_BYTES} ไบต์` })
+  } else if (!thumbnailMagic[input.mimeType](bytes)) {
+    context.addIssue({ code: 'custom', path: ['imageBase64'], message: 'ไฟล์ภาพย่อไม่ตรงกับชนิดที่ระบุ' })
+  }
+})
+
+export const projectThumbnailBatchSchema = z.object({
+  workspaceId: z.uuid(),
+  projectIds: z.array(z.uuid()).min(1).max(THUMBNAIL_BATCH_MAX)
+    .refine((ids) => new Set(ids).size === ids.length, 'projectIds ต้องไม่ซ้ำ'),
+}).strict()
+
+export const projectThumbnailReceiptSchema = z.object({
+  projectId: z.uuid(),
+  version: timestampSchema,
+}).strict()
+
+export const projectThumbnailMetaRowSchema = z.object({
+  project_id: z.uuid(),
+  thumbnail_version: timestampSchema,
+  kind: z.enum(THUMBNAIL_KINDS),
+  label: z.string().min(1).max(60),
+}).strict()
+
+export const projectThumbnailImageRowSchema = z.object({
+  project_id: z.uuid(),
+  thumbnail_version: timestampSchema,
+  mime_type: z.enum(THUMBNAIL_MIME_TYPES),
+  image_base64: z.string().min(1),
 }).strict()

@@ -45,6 +45,8 @@ import {
   operationIdSchema,
   projectIdSchema,
   projectListQuerySchema,
+  projectThumbnailBatchSchema,
+  putProjectThumbnailInputSchema,
   saveProjectInputSchema,
 } from '../modules/projects/validation'
 import { readJsonBody } from './body'
@@ -682,6 +684,57 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
           ? error
           : unexpectedError(requestId, 'POST /api/v1/billing/orders/:id/dev-fulfil', error,
             new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'จำลองการชำระเงินไม่สำเร็จ'))
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
+    // ภาพย่อ 3D ของแกลเลอรีงาน: ขอตัวรูปทีละชุด (client ขอเฉพาะที่ version ไม่ตรงแคช) — ต้องอยู่ก่อน /projects/:id
+    if (path === '/api/v1/projects/thumbnails') {
+      try {
+        if (req.method !== 'POST') {
+          res.setHeader('allow', 'POST')
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!sessionService || !projectService) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Supabase')
+        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId)
+        requireJsonContentType(req)
+        const input = parseOrThrow(projectThumbnailBatchSchema.safeParse(await readJsonBody(req)))
+        const items = await projectService.thumbnails(actor, input.workspaceId, input.projectIds)
+        sendJson(res, 200, { data: { items }, requestId }, requestId)
+      } catch (error) {
+        const httpError = error instanceof HttpError
+          ? error
+          : unexpectedError(requestId, 'POST /api/v1/projects/thumbnails', error,
+            new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'โหลดภาพย่อไม่สำเร็จ'))
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
+    const thumbnailMatch = /^\/api\/v1\/projects\/([^/]+)\/thumbnail$/.exec(path)
+    if (thumbnailMatch) {
+      try {
+        if (req.method !== 'PUT') {
+          res.setHeader('allow', 'PUT')
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!sessionService || !projectService) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Supabase')
+        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId)
+        const projectId = parseOrThrow(projectIdSchema.safeParse(thumbnailMatch[1]))
+        requireJsonContentType(req)
+        const input = parseOrThrow(putProjectThumbnailInputSchema.safeParse(await readJsonBody(req)))
+        const data = await projectService.putThumbnail(actor, projectId, input)
+        sendJson(res, 200, { data, requestId }, requestId)
+      } catch (error) {
+        const httpError = error instanceof HttpError
+          ? error
+          : unexpectedError(requestId, 'PUT /api/v1/projects/:id/thumbnail', error,
+            new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'บันทึกภาพย่อไม่สำเร็จ'))
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
       }
       return

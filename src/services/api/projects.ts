@@ -5,6 +5,9 @@ import type {
   LegacyImportInput,
   LegacyImportReceipt,
   ProjectPage,
+  ProjectThumbnailImage,
+  ProjectThumbnailReceipt,
+  PutProjectThumbnailInput,
   SaveProjectInput,
   SaveReceipt,
 } from '../../../shared/contracts/projects'
@@ -100,4 +103,39 @@ export function deleteProject(
       signal,
     },
   )
+}
+
+// ภาพย่อ 3D ของงาน (แกลเลอรี) — บันทึกทับของเดิม คืน version ใหม่
+export function putProjectThumbnail(
+  apiBaseUrl: string,
+  accessToken: string,
+  projectId: string,
+  input: PutProjectThumbnailInput,
+  signal?: AbortSignal,
+): Promise<ProjectThumbnailReceipt> {
+  return requestApi<ProjectThumbnailReceipt>(
+    `${apiBaseUrl}/projects/${encodeURIComponent(projectId)}/thumbnail`,
+    accessToken,
+    {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+      signal,
+    },
+  )
+}
+
+// ตัวรูปภาพย่อทีละชุด (≤ THUMBNAIL_BATCH_MAX) — งานที่ไม่มีภาพย่อไม่อยู่ในผลลัพธ์
+export function getProjectThumbnails(
+  apiBaseUrl: string,
+  accessToken: string,
+  input: { workspaceId: string; projectIds: string[] },
+  signal?: AbortSignal,
+): Promise<{ items: ProjectThumbnailImage[] }> {
+  return requestApi<{ items: ProjectThumbnailImage[] }>(`${apiBaseUrl}/projects/thumbnails`, accessToken, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+    signal,
+  })
 }
