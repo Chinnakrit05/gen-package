@@ -6,6 +6,7 @@ import type {
   CreateAssetUploadIntentInput,
   RenewAssetUploadInput,
 } from '../../../shared/contracts/assets'
+import type { StorageQuota } from '../billing/storageQuota'
 import type { Actor } from '../identity/actor'
 import { requestHash } from '../projects/canonical'
 import type { AssetRepository, InternalAsset } from './assetRepository'
@@ -36,9 +37,11 @@ function publicStatus(asset: InternalAsset): AssetStatus {
 }
 
 export class AssetService {
+  // quota = โควตาพื้นที่เก็บงาน ตรวจก่อนออกตั๋วอัปโหลด (null = ยังไม่เปิดใช้ — isStorageQuotaEnabled ใน server/http/router.ts)
   constructor(
     private readonly repository: AssetRepository,
     private readonly storage: ObjectStorage,
+    private readonly quota: StorageQuota | null = null,
   ) {}
 
   private async ticket(asset: InternalAsset): Promise<AssetUploadTicket> {
@@ -60,6 +63,14 @@ export class AssetService {
   }
 
   async createIntent(actor: Actor, input: CreateAssetUploadIntentInput): Promise<AssetUploadTicket> {
+    // รูปที่จะอัปโหลดยังไม่นับจนกว่างานที่บันทึกจะอ้างถึง — ตรวจตรงนี้ก่อนให้รู้ตัวตั้งแต่เพิ่มรูปที่ไม่มีที่ใส่แล้ว
+    await this.quota?.assert(actor, {
+      workspaceId: input.workspaceId,
+      projectId: null,
+      operationId: input.operationId,
+      document: null,
+      extraBytes: input.declaredSize,
+    })
     const hash = requestHash({ operationType: 'create-asset', ...input })
     const asset = await this.repository.createIntent(actor, {
       ...input,

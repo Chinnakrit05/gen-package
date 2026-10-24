@@ -7,7 +7,7 @@ import type { HealthData } from '../../shared/contracts/system'
 import type { DeleteProjectInput, SaveProjectInput } from '../../shared/contracts/projects'
 import { EXPORT_FORMATS, type ExportFormat } from '../../shared/contracts/billing'
 import { createSupabaseAssetService } from '../adapters/supabase/assetService'
-import { createSupabaseBillingRepository } from '../adapters/supabase/billingRepository'
+import { createSupabaseBillingRepository, createSupabaseStorageQuotaRepository } from '../adapters/supabase/billingRepository'
 import { createSupabaseProjectRepository } from '../adapters/supabase/projectRepository'
 import { createSupabaseSessionService } from '../adapters/supabase/sessionService'
 import type { ServerConfig } from '../config'
@@ -36,6 +36,7 @@ import {
   entitlementsQuerySchema,
   orderIdSchema,
 } from '../modules/billing/validation'
+import { StorageQuota } from '../modules/billing/storageQuota'
 import { decodeProjectCursor } from '../modules/projects/canonical'
 import { ProjectService } from '../modules/projects/projectService'
 import {
@@ -168,6 +169,14 @@ export function isOpenAccess(config: Pick<ServerConfig, 'appEnv'>): boolean {
   return !isPurchaseEnabled(config)
 }
 
+// โควตาพื้นที่เก็บงานบน cloud (เจ้าของผลิตภัณฑ์ตัดสินใจ 23 ต.ค. 2026: Freemium 20 MB / Pro 1 GB) — ทำไว้รอแล้วแต่
+// **ยังไม่เปิดใช้ทุก environment** (ช่วงพัฒนา); เปิดเมื่อพร้อม: apply supabase/migrations/20261023000800_storage_quota.sql
+// กับฐานข้อมูลของ environment นั้นก่อน (เปิดก่อนมี RPC = บันทึกงานล้มทั้งหมด) แล้วค่อยเปลี่ยนเงื่อนไขนี้
+// — รายการที่ต้องทำก่อนเปิดอยู่ใน docs/billing-freemium-pro.md §1
+export function isStorageQuotaEnabled(_config: Pick<ServerConfig, 'appEnv'>): boolean {
+  return false
+}
+
 // สวิตช์ของ BillingService ตาม config — ทางเดียวที่ createApiRouter ใช้
 // (router.test ตรวจ staging/production = ปิดการขาย/จำลองจ่าย และเปิด open access)
 export function billingFlags(config: Pick<ServerConfig, 'appEnv'>): BillingServiceOptions {
@@ -290,11 +299,14 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
   const sessionService = dependencies.sessionService === undefined
     ? config.supabase && createSupabaseSessionService(config.supabase)
     : dependencies.sessionService
+  const storageQuota = config.supabase && isStorageQuotaEnabled(config)
+    ? new StorageQuota(createSupabaseStorageQuotaRepository(config.supabase), { openAccess: isOpenAccess(config) })
+    : null
   const projectService = dependencies.projectService === undefined
-    ? config.supabase && new ProjectService(createSupabaseProjectRepository(config.supabase))
+    ? config.supabase && new ProjectService(createSupabaseProjectRepository(config.supabase), storageQuota)
     : dependencies.projectService
   const assetService = dependencies.assetService === undefined
-    ? config.supabase && createSupabaseAssetService(config.supabase)
+    ? config.supabase && createSupabaseAssetService(config.supabase, storageQuota)
     : dependencies.assetService
   const aiService = dependencies.aiService === undefined
     ? new AnthropicAiService(config.ai?.model)

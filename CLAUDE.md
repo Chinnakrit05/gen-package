@@ -191,6 +191,14 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   `POST /projects/:id/export-authorizations` (`ExportFormat`, `isProOnlyExport` ใน shared/contracts/billing.ts) → `BillingService.authorizeExport`
   ผ่านด่านสิทธิ์ปกติก่อน แล้ว plan ≠ pro → 402 `PRO_REQUIRED` (`details.price` = catalog.pro); UI ป้าย "Pro" บนปุ่ม SVG/AI, กดแล้วเปิด
   PaywallModal kind pro + `proOnly` (ไม่เสนอซื้อรายแบบ); ไฟล์ .ai = เนื้อหา PDF ชุดเดียวกับ "แบบพิมพ์ 1:1" (Illustrator เปิดแบบ PDF-compatible)
+- โควตาพื้นที่เก็บงานบน cloud (ตัดสินใจ 23 ต.ค. 2026: Freemium 20 MB / Pro 1 GB ต่อ workspace) — **ทำไว้รอแต่ยังไม่เปิดใช้ทุก environment**:
+  `isStorageQuotaEnabled` (`server/http/router.ts`) คืน false → `ProjectService`/`AssetService` ไม่ได้รับ `StorageQuota` (null = ทำงานเหมือนเดิม);
+  เปิดแล้ว `StorageQuota.assert` (`server/modules/billing/storageQuota.ts`) เรียก RPC `check_storage_quota` ก่อน create/save/import งาน
+  และก่อนออกตั๋วอัปโหลดรูป → ไม่ผ่าน = 402 `STORAGE_QUOTA_EXCEEDED` (migration `20261023000800_storage_quota.sql`: ตาราง `storage_quotas`
+  ปรับตัวเลขได้, `projects.document_bytes` จาก trigger); นับเอกสารงานที่ไม่ถูกลบ + รูปที่งานอ้าง (รูปซ้ำนับครั้งเดียว) ลบงานแล้วคืนทันที;
+  บันทึกที่ไม่เพิ่มพื้นที่ผ่านเสมอ (Pro หมดอายุแล้วเกินโควตาก็ยังแก้/ลดงานได้); client ขึ้น "พื้นที่เก็บงานเต็ม" (`src/core/storageQuota.ts`);
+  ก่อนเปิด: apply migration ก่อน (เปิดก่อนมี RPC = บันทึกงานล้มทั้งหมด) + ยกเพดานเดิม `storage_usage.quota_bytes` 250 MB
+  (นับรูปที่เคยอัปโหลดทั้งหมด ไม่ลดเมื่อลบ) — รายการเต็มใน docs/billing-freemium-pro.md §1
 - 402 สองรหัส: `PAYMENT_REQUIRED` (`POST /projects/:id/export-authorizations` ของแบบที่ยังไม่ซื้อและไม่ใช่ Pro, `details.price`) และ `AI_CREDITS_EXHAUSTED` (AI route, `details.credits/plan`); 409 `ALREADY_LICENSED` / `AI_REQUEST_IN_PROGRESS` / `ORDER_NOT_PAYABLE`; ปุ่มดาวน์โหลดบน cloud ต้องขอ authorization จาก server ก่อนสร้างไฟล์ทุกครั้ง (server ตัดสินสิทธิ์ ไม่ใช่ client)
 - AI บน cloud ใช้คีย์ของระบบ `ANTHROPIC_API_KEY` (+ `BOX_SPEC_MODEL`) ฝั่ง server เท่านั้น — client ไม่ส่งคีย์ (header BYOK `x-packit-anthropic-api-key` และ `AI_API_KEY_*` ถูกถอดแล้ว); ไม่มีคีย์ → 503 `CONFIGURATION_ERROR`; เครดิต 1 ต่อคำขอ ทั้ง box-spec และ artwork (`ai_requests.reserved_units` ล็อก 1 ด้วย constraint — คิดแพงกว่านี้ต้องมี migration) หักตอนจอง (`reserve_ai_credit`) คืนเมื่อ provider ล้ม (`settle failed`) ผลกลับมาแล้วไม่คืน; คำขอค้าง `reserved` ต่อ workspace ได้ไม่เกิน 2 (เกิน → 429 `AI_RATE_LIMITED`); settle เก็บ model/โทเคน/แนบรูปใน `ai_requests` — ดูต้นทุนด้วย `npm run ops:ai-usage:report` (cloud ผ่าน env `PACKIT_REPORT_DATABASE_URL`, ราคาส่งเป็น flag เอง); log server เป็น JSON บรรทัดเดียวผ่าน `server/logging.ts` (ตัดคีย์/token/อีเมลเสมอ — ห้าม `console.*` ข้อมูลดิบในเส้นทาง billing/AI)
 - โหมด local-demo (`dev:local`) ไม่มี paywall/ลายน้ำ (App ไม่ได้รับ prop `cloud` → `watermarkOn = false` และ `gatedDownload` ข้าม `authorizeExport`) และยังใช้ BYOK กับ legacy `/api/box-spec` ได้

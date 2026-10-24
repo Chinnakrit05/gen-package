@@ -79,6 +79,16 @@ export const aiSettlementResultSchema = z.object({
   credits: creditsSchema,
 }).strict()
 
+// ผลของ RPC check_storage_quota (supabase/migrations/20261023000800_storage_quota.sql) — หน่วยไบต์
+const byteCountSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
+export const storageQuotaResultSchema = z.object({
+  ok: z.boolean(),
+  plan: z.enum(['free', 'pro']),
+  limitBytes: byteCountSchema.min(1),
+  usedBytes: byteCountSchema,
+  projectedBytes: byteCountSchema,
+}).strict()
+
 export const orderResultSchema = z.object({
   id: z.uuid(),
   workspaceId: z.uuid(),

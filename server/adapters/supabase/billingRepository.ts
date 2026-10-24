@@ -13,6 +13,11 @@ import type {
   StoredEntitlements,
   StoredExportAuthorization,
 } from '../../modules/billing/billingService'
+import type {
+  StorageQuotaCheck,
+  StorageQuotaRepository,
+  StorageQuotaResult,
+} from '../../modules/billing/storageQuota'
 import {
   aiReservationResultSchema,
   aiSettlementResultSchema,
@@ -20,6 +25,7 @@ import {
   entitlementsResultSchema,
   exportAuthorizationResultSchema,
   orderResultSchema,
+  storageQuotaResultSchema,
 } from '../../modules/billing/validation'
 import type { Actor } from '../../modules/identity/actor'
 
@@ -126,7 +132,7 @@ export function settleUsageParams(usage: AiRequestUsage | undefined): Record<str
   }
 }
 
-export class SupabaseBillingRepository implements BillingRepository {
+export class SupabaseBillingRepository implements BillingRepository, StorageQuotaRepository {
   constructor(private readonly client: SupabaseClient) {}
 
   // map + log กรณี 5xx (รหัสที่ไม่รู้จัก) หนึ่งบรรทัด: requestId, RPC, รหัส, ข้อความจาก DB (ผ่าน redact)
@@ -268,11 +274,41 @@ export class SupabaseBillingRepository implements BillingRepository {
     if (!parsed.success) throw this.contractError('fulfil_order', actor, parsed.error)
     return { ...parsed.data, checkoutUrl: null }
   }
+
+  // โควตาพื้นที่เก็บงาน (ยังไม่เปิดใช้ — เรียกผ่าน StorageQuota เฉพาะเมื่อ isStorageQuotaEnabled)
+  async checkStorageQuota(actor: Actor, input: StorageQuotaCheck, openAccess: boolean): Promise<StorageQuotaResult> {
+    const { data, error } = await this.client.rpc('check_storage_quota', {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: input.workspaceId,
+      p_project_id: input.projectId,
+      p_operation_id: input.operationId,
+      p_document: input.document,
+      p_extra_bytes: input.extraBytes,
+      p_open_access: openAccess,
+    })
+    if (error) throw this.databaseError(error, 'check_storage_quota', actor, input.projectId ? { projectId: input.projectId } : {})
+    const parsed = storageQuotaResultSchema.safeParse(data)
+    if (!parsed.success) throw this.contractError('check_storage_quota', actor, parsed.error)
+    return parsed.data
+  }
 }
 
 export function createSupabaseBillingRepository(
   config: NonNullable<ServerConfig['supabase']>,
 ): BillingRepository {
+  const client = createClient(config.url, config.secretKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+  })
+  return new SupabaseBillingRepository(client)
+}
+
+export function createSupabaseStorageQuotaRepository(
+  config: NonNullable<ServerConfig['supabase']>,
+): StorageQuotaRepository {
   const client = createClient(config.url, config.secretKey, {
     auth: {
       autoRefreshToken: false,

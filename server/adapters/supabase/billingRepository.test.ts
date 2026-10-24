@@ -232,4 +232,44 @@ describe('SupabaseBillingRepository', () => {
     })
     expect(JSON.stringify(line)).not.toContain('value-not-logged')
   })
+
+  // โควตาพื้นที่เก็บงาน (ยังไม่เปิดใช้ — supabase/migrations/20261023000800_storage_quota.sql)
+  it('checks the storage quota with every RPC parameter and returns the parsed result', async () => {
+    const result = { ok: false, plan: 'free', limitBytes: 20971520, usedBytes: 20000000, projectedBytes: 21000000 }
+    const { client, calls } = fakeClient({ data: result })
+    const repository = new SupabaseBillingRepository(client)
+    const document = { decos: [] }
+
+    await expect(repository.checkStorageQuota(actor, {
+      workspaceId: null,
+      projectId,
+      operationId: aiRequestId,
+      document,
+      extraBytes: 0,
+    }, true)).resolves.toEqual(result)
+    expect(calls).toEqual([['check_storage_quota', {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: null,
+      p_project_id: projectId,
+      p_operation_id: aiRequestId,
+      p_document: document,
+      p_extra_bytes: 0,
+      p_open_access: true,
+    }]])
+  })
+
+  it('maps storage quota refusals and broken results like the other billing RPCs', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const notFound = new SupabaseBillingRepository(fakeClient({ error: p0001('PROJECT_NOT_FOUND') }).client)
+    await expect(notFound.checkStorageQuota(actor, {
+      workspaceId: null, projectId, operationId: aiRequestId, document: {}, extraBytes: 0,
+    }, false)).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' })
+    expect(error).not.toHaveBeenCalled()
+
+    const broken = new SupabaseBillingRepository(fakeClient({ data: { ok: true, plan: 'free', limitBytes: 0 } }).client)
+    await expect(broken.checkStorageQuota(actor, {
+      workspaceId, projectId: null, operationId: aiRequestId, document: null, extraBytes: 10,
+    }, false)).rejects.toMatchObject({ status: 503, code: 'DEPENDENCY_UNAVAILABLE' })
+    expect(logLines(error)[0]).toMatchObject({ event: 'billing_contract_error', route: 'rpc check_storage_quota' })
+  })
 })
