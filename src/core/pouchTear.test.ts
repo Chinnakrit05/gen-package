@@ -159,3 +159,17 @@ describe('รอยบาก V: ทะลุทุกชั้นที่ขอ
     expect(p.tearY! + 2.5).toBeLessThanOrEqual(p.frontRect.y)
   })
 })
+
+describe('รูแขวนทะลุทุกชั้น', () => {
+  it('ซองหลังกลาง: รูกลางหน้า + คร่อมรอยต่อกลางหลังทั้งสองปลายฟิล์ม (หลัง+ครีบ) — ไม่งั้นชั้นหลังปิดรู', () => {
+    const p = make('pillow', false, { hangHole: true })
+    const f0 = p.frontRect.x
+    const xs = p.hangHoles.map((h) => h.x).sort((a, b) => a - b)
+    expect(xs).toEqual([p.backRectL!.x, f0 + box.W / 2, f0 + 1.5 * box.W].sort((a, b) => a - b))
+    expect(p.hangHoles.filter((h) => h.cut)).toHaveLength(1) // dieline ตัดรูหน้า ชั้นอื่นเจาะหลังขึ้นรูป
+  })
+  it('ซองข้างจีบ: รูหน้า + รูหลังตรงกัน', () => {
+    const p = make('gusset', false, { hangHole: true })
+    expect(p.hangHoles.map((h) => h.x)).toEqual([box.W / 2, box.W + p.gusset + box.W / 2])
+  })
+})

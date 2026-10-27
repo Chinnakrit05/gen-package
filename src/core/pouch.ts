@@ -398,11 +398,11 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
       ]
     : pillow
       ? [
-          { a: 0, b: pf, x0: W / 2, dir: 1 }, // ครีบซีลกลางหลัง (พับแนบหลัง)
+          { a: 0, b: pf, x0: W / 2 + pf, dir: -1 }, // ครีบซีลกลางหลัง: สองลิ้นประกบกันแล้วพับแนบหลังไปทางเดียวกัน
           { a: pf, b: pf + W / 2, x0: W / 2, dir: -1 },
           { a: pf + W / 2, b: pf + 1.5 * W, x0: 0, dir: 1 },
           { a: pf + 1.5 * W, b: pf + 2 * W, x0: W, dir: -1 },
-          { a: pf + 2 * W, b: width, x0: W / 2, dir: -1 },
+          { a: pf + 2 * W, b: width, x0: W / 2, dir: 1 },
         ]
       : [
           { a: 0, b: W, x0: 0, dir: 1 },
@@ -610,8 +610,21 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
       segments.push(cut(circlePath(cx, hangHoleY(st), hr)))
       hangHoles.push({ x: cx, y: hangHoleY(st), r: hr, cut: true })
     }
-    // ถุงฟิล์มม้วน (แผ่นเดียว ไม่ใช่ซองหลังกลาง): ชั้นหลังทะลุด้วยตอนเจาะหลังขึ้นรูป — ให้ 3D เห็นรูทะลุทั้งสองชั้น
-    if (!two && !backSeam) hangHoles.push({ x: W + sideGusset + W / 2, y: hangHoleY(st), r: hr, cut: false })
+    // ถุงฟิล์มม้วน (แผ่นเดียว): ชั้นอื่นที่ซ้อนตรงรูทะลุด้วยตอนเจาะหลังขึ้นรูป — หาจากตำแหน่งจริงกลางถุง (X = W/2) ทุกช่วงฟิล์ม
+    // ซองหลังกลาง: กลางหลังคือรอยต่อ → รูคร่อมปลายฟิล์มทั้งสองข้าง (หลังซีกซ้าย+ครีบ / หลังซีกขวา+ครีบ) ไม่งั้นหลังปิดรูไว้
+    if (!two) {
+      const seen = new Set([Math.round(fcx * 1000)])
+      for (const r of foldRegions) {
+        const xa = r.x0
+        const xb = r.x0 + r.dir * (r.b - r.a)
+        if (W / 2 < Math.min(xa, xb) - 1e-6 || W / 2 > Math.max(xa, xb) + 1e-6) continue
+        const u = r.a + r.dir * (W / 2 - r.x0)
+        const key = Math.round(u * 1000)
+        if (seen.has(key)) continue
+        seen.add(key)
+        hangHoles.push({ x: u, y: hangHoleY(st), r: hr, cut: false })
+      }
+    }
     dims.push({ a: P(fcx - hr, 0), b: P(fcx + hr, 0), label: `รูแขวน ⌀${fmt(2 * hr)}` })
   }
   let valveAt: Pouch['valveAt']
