@@ -172,7 +172,7 @@ export function isOpenAccess(config: Pick<ServerConfig, 'appEnv'>): boolean {
 }
 
 // โควตาพื้นที่เก็บงานบน cloud (เจ้าของผลิตภัณฑ์ตัดสินใจ 23 ต.ค. 2026: Freemium 20 MB / Pro 1 GB) — ทำไว้รอแล้วแต่
-// **ยังไม่เปิดใช้ทุก environment** (ช่วงพัฒนา); เปิดเมื่อพร้อม: apply supabase/migrations/20261023000800_storage_quota.sql
+// **ยังไม่เปิดใช้ทุก environment** (ช่วงพัฒนา); เปิดเมื่อพร้อม: apply supabase/migrations/20261027000900_storage_quota.sql
 // กับฐานข้อมูลของ environment นั้นก่อน (เปิดก่อนมี RPC = บันทึกงานล้มทั้งหมด) แล้วค่อยเปลี่ยนเงื่อนไขนี้
 // — รายการที่ต้องทำก่อนเปิดอยู่ใน docs/billing-freemium-pro.md §1
 export function isStorageQuotaEnabled(_config: Pick<ServerConfig, 'appEnv'>): boolean {

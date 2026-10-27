@@ -3,7 +3,7 @@ import { HttpError } from '../../http/errors'
 import type { Actor } from '../identity/actor'
 
 // โควตาพื้นที่เก็บงานบน cloud ต่อ workspace (เจ้าของผลิตภัณฑ์ตัดสินใจ 23 ต.ค. 2026): Freemium 20 MB / Pro 1 GB
-// ตัวเลขและการนับอยู่ในฐานข้อมูล (RPC check_storage_quota ใน supabase/migrations/20261023000800_storage_quota.sql)
+// ตัวเลขและการนับอยู่ในฐานข้อมูล (RPC check_storage_quota ใน supabase/migrations/20261027000900_storage_quota.sql)
 // **ยังไม่เปิดใช้** — router สร้าง StorageQuota เฉพาะเมื่อ isStorageQuotaEnabled (server/http/router.ts) ซึ่งตอนนี้ปิดทุก environment
 // ProjectService/AssetService ที่ไม่ได้รับ StorageQuota (null) ทำงานเหมือนเดิมทุกอย่าง
 

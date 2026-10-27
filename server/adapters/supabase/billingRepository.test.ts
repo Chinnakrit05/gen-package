@@ -233,7 +233,7 @@ describe('SupabaseBillingRepository', () => {
     expect(JSON.stringify(line)).not.toContain('value-not-logged')
   })
 
-  // โควตาพื้นที่เก็บงาน (ยังไม่เปิดใช้ — supabase/migrations/20261023000800_storage_quota.sql)
+  // โควตาพื้นที่เก็บงาน (ยังไม่เปิดใช้ — supabase/migrations/20261027000900_storage_quota.sql)
   it('checks the storage quota with every RPC parameter and returns the parsed result', async () => {
     const result = { ok: false, plan: 'free', limitBytes: 20971520, usedBytes: 20000000, projectedBytes: 21000000 }
     const { client, calls } = fakeClient({ data: result })

@@ -56,6 +56,12 @@ function projectRepository(calls: string[]): ProjectRepository {
       calls.push('remove')
       return {} as never
     },
+    putThumbnail: async () => {
+      calls.push('putThumbnail')
+      return {} as never
+    },
+    thumbnailMeta: async () => new Map(),
+    thumbnails: async () => [],
   }
 }
 
@@ -109,7 +115,7 @@ describe('ProjectService + StorageQuota', () => {
     expect(calls).toEqual(['create', 'save', 'importLegacy'])
   })
 
-  it('writes nothing when the work does not fit; deleting is never checked', async () => {
+  it('writes nothing when the work does not fit; deleting and gallery thumbnails are never checked', async () => {
     const calls: string[] = []
     const { quota, checks } = quotaWith(full)
     const service = new ProjectService(projectRepository(calls), quota)
@@ -117,7 +123,9 @@ describe('ProjectService + StorageQuota', () => {
     await expect(service.save(actor, save)).rejects.toMatchObject({ code: 'STORAGE_QUOTA_EXCEEDED' })
     await expect(service.importLegacy(actor, legacy)).rejects.toMatchObject({ code: 'STORAGE_QUOTA_EXCEEDED' })
     await service.remove(actor, { projectId, operationId, expectedRevision: 3 })
-    expect(calls).toEqual(['remove'])
+    // ภาพย่อ 3D ≤ 64 KiB เป็นของระบบ (migration project_thumbnails) ไม่นับโควตา
+    await service.putThumbnail(actor, projectId, { mimeType: 'image/webp', imageBase64: 'AAAA', kind: 'box', label: 'กล่อง' })
+    expect(calls).toEqual(['remove', 'putThumbnail'])
     expect(checks).toHaveLength(3)
   })
 

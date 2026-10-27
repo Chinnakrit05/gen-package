@@ -204,7 +204,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - โควตาพื้นที่เก็บงานบน cloud (ตัดสินใจ 23 ต.ค. 2026: Freemium 20 MB / Pro 1 GB ต่อ workspace) — **ทำไว้รอแต่ยังไม่เปิดใช้ทุก environment**:
   `isStorageQuotaEnabled` (`server/http/router.ts`) คืน false → `ProjectService`/`AssetService` ไม่ได้รับ `StorageQuota` (null = ทำงานเหมือนเดิม);
   เปิดแล้ว `StorageQuota.assert` (`server/modules/billing/storageQuota.ts`) เรียก RPC `check_storage_quota` ก่อน create/save/import งาน
-  และก่อนออกตั๋วอัปโหลดรูป → ไม่ผ่าน = 402 `STORAGE_QUOTA_EXCEEDED` (migration `20261023000800_storage_quota.sql`: ตาราง `storage_quotas`
+  และก่อนออกตั๋วอัปโหลดรูป → ไม่ผ่าน = 402 `STORAGE_QUOTA_EXCEEDED` (migration `20261027000900_storage_quota.sql`: ตาราง `storage_quotas`
   ปรับตัวเลขได้, `projects.document_bytes` จาก trigger); นับเอกสารงานที่ไม่ถูกลบ + รูปที่งานอ้าง (รูปซ้ำนับครั้งเดียว) ลบงานแล้วคืนทันที;
   บันทึกที่ไม่เพิ่มพื้นที่ผ่านเสมอ (Pro หมดอายุแล้วเกินโควตาก็ยังแก้/ลดงานได้); client ขึ้น "พื้นที่เก็บงานเต็ม" (`src/core/storageQuota.ts`);
   ก่อนเปิด: apply migration ก่อน (เปิดก่อนมี RPC = บันทึกงานล้มทั้งหมด) + ยกเพดานเดิม `storage_usage.quota_bytes` 250 MB
