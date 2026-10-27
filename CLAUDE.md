@@ -108,6 +108,16 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   (`src/core/newWork.ts` pure: freshProject + template/วัสดุ/รูปแบบถุงที่เลือก + ขนาดมาตรฐาน — ไม่มีการตั้งค่า/การตกแต่งของงานเก่า);
   cloud ส่งเป็น `seed` ของ `createProject(current, name, seed)`; ยังไม่มีงานตกแต่ง → `apply` สลับในงานนี้ทันทีตามเดิม;
   กดรายการที่เลือกอยู่แล้ว/สลับวัสดุในประเภทเดิม/สเปกจาก AI ไม่ผ่านด่านนี้
+- ภาพย่อ 3D ในแกลเลอรีงาน (`ProjectGallery` การ์ด): App ถ่ายงานที่เปิดอยู่หลังหยุดแก้ `THUMB_IDLE_MS` 4 วิ (ภาพย่อยังไม่ทัน `thumbIsFresh`)
+  ด้วย viewer ซ่อนนอกจอ `.thumb-stage` (พับเสร็จ fold=1 ไม่มีเส้นขนาด มุมกล้องเริ่มต้น + ลายน้ำเดียวกับพรีวิว) ผ่าน prop `extra` ใน `<Canvas>` ของทั้ง 3 viewer
+  → `ThumbnailCapture` รอฟอนต์/รูป + SETTLE แล้ว render พื้นโปร่งใส ตัดขอบตาม alpha (`alphaBounds`/`thumbPlacement` ใน core/thumbnail.ts)
+  วางบนพื้นขาว 480×300 → WebP (Safari → JPEG) ≤ 64 KiB; แคชเบราว์เซอร์ `ThumbnailCache` (IndexedDB `packit-thumbnails` แยกจากข้อมูลงาน,
+  scope 'local' / workspaceId); cloud: `PUT /api/v1/projects/:id/thumbnail` (base64 JSON, ตรวจ magic bytes) เก็บในตาราง
+  `app_private.project_thumbnails` (migration `20261024000800_project_thumbnails.sql` — ในฐานข้อมูลตรง ๆ ไม่ผ่าน asset pipeline/bucket
+  เพราะเขียนทับบ่อยและไม่ไหลเข้าไฟล์ผลิต; FK cascade ตาม projects) + รายการงานติด `ProjectSummary.thumbnail` {version, kind, label}
+  จาก RPC แยก `list_project_thumbnail_meta` (ไม่แก้ list_projects — server/DB ต่างรุ่นกันระหว่าง deploy ยังทำงาน; meta ล้ม = รายการปกติ)
+  → แกลเลอรีขอตัวรูปเฉพาะการ์ดที่แสดงและ version ไม่ตรงแคช (`thumbNeedsFetch`) ผ่าน `POST /api/v1/projects/thumbnails` ≤ 24 ต่อครั้ง;
+  งานเก่าได้ภาพย่อเมื่อเปิดครั้งแรก; ไม่มีภาพย่อ = ไอคอนตามชนิดงาน (cloud ใช้ kind/label จาก meta แทน "โปรเจกต์")
 - `src/core/imposition.ts` — คำนวณ yield ต่อแผ่น (pure): `computeImposition` วางกริด step&repeat เทียบชิ้นตั้ง/หมุน 90° เลือกจำนวนมากสุด + `sheetsNeeded` (ปัดขึ้น) + `SHEET_PRESETS` แผ่นมาตรฐานไทย; UI อยู่แท็บ "ส่งออก" ผูกกับช่องจำนวน (state ephemeral ไม่เก็บลง project)
 - `src/core/snap.ts` — logic ดูด artwork เข้าแนวขณะลาก (pure): `snapTargets` สร้างเส้นเป้าหมายจากกึ่งกลางแผ่น/ขอบ-กึ่งกลางแผง/ขอบ-กึ่งกลางชิ้นอื่น, `applySnap` ดูดขอบ-กึ่งกลางชิ้นเข้าเส้นใกล้สุดในระยะ threshold (แปลงจาก 6px ตามซูม); กด Alt ค้างระหว่างลาก = ปิด snap
 - `src/components/PromptBar.tsx` + `src/core/ai.ts` — AI layer ฝั่ง client; แนบรูปอ้างอิงได้ (ย่อเป็น JPEG ≤1024px ฝั่ง client → base64; backend api ส่งเป็น image block, backend cli เขียนไฟล์ tmp ให้ Claude เปิดอ่านเองแล้วลบทิ้ง)
@@ -249,7 +259,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   (ใช้ร่วม 3D `rectBodyGeometry` + ความจุ `vesselVolumeMl(profile, rect)`); `circ` = เส้นรอบรูปจริง, `labelR` = circ/2π จึงใช้สูตรฉลากเดิมได้;
   ฉลากเลือกพันรอบ (รอยต่อกลางหลัง) / หน้าเดียว (`labelBox.w` ≈ 90% หน้าแบน) → `rectLabelGeometry` แถบตามเส้นรอบรูปเริ่มกึ่งกลางหน้า
   (ฉลากลอย 0.3 มม. → เดินตามสัดส่วนเส้นรอบรูปที่ลอย ไม่งั้นพันรอบเหลือช่องที่รอยต่อ; FrontSide ไม่ให้ด้านในโผล่ผ่านแก้วใส);
-  `roundedRectPoint` ที่ r = 0 ต้องคืน (0,0) — NaN ทำ normal ทั้งก้นเพี้ยนเป็นแถบดำ; สลับวัสดุอื่นล้าง rectDepth; PROJECT_FILE_VERSION 22
+  คอ/ขอบปาก/ปากกลมเสมอตั้งแต่โคนคอ `RectSection.yn` (= `mouth.neckY`; ส่ง y ให้ `rectSectionAt` — ขอบปากวงแหวนกว้างกว่าคอ ถ้าตัดสินจากรัศมีอย่างเดียวปากจะเหลี่ยมนิด ๆ); `roundedRectPoint` ที่ r = 0 ต้องคืน (0,0) — NaN ทำ normal ทั้งก้นเพี้ยนเป็นแถบดำ; สลับวัสดุอื่นล้าง rectDepth; PROJECT_FILE_VERSION 22
 - หลอดครีม (tube-laminate, path ภาชนะ): W = ⌀ท่อ — ลำตัวสร้างจาก `tubeSection` (pure, vessel.ts) หน้าตัดวงรีเส้นรอบวงคงที่ πW
   (กลมที่ไหล่ → แบนกว้าง πW/2 ที่ซีล, ด้านข้างหัวกระสุน 1−v^`TUBE_BULLET`) ใช้ร่วม 3D + ความจุ (`tubeVolumeMl`); ตั้งบนฝา flip-top
   กว้างเกือบเท่าท่อ (`tubeCapR`), ซีลบน `TUBE_SEAL` มีลอนกด; พิมพ์รอบตัวทั้งท่อ (ค่ามาตรฐาน = ไหล่ถึงใต้ซีล) UV ตามความยาวผิว เริ่มกลางหลัง
@@ -300,6 +310,12 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   (`spoutMarker` r/bw/bh ใช้ร่วม dieline/3D/ตรวจซิป); 3D ใช้ `spoutRows`: ปากไม่บีบแบนเพราะเรือค้ำ — ช่วงไหล่ `SPOUT_SHOULDER` รวบเข้าหาเรือ
   (ฟิล์มเหลือเป็นแผ่นแบน `flat` + หน้าตัดขอบลาด `sectionZ`), ก้นพับเป็นฐานพิมพ์ลายแบบถุงตั้ง (แถบซีลก้น + โดม, ซีลข้างแบนตลอด ไม่แยก Λ),
   มุมมนตัดฟิล์มเฉพาะแถวบน (`cut`, UV 1:1 ไม่บีบลาย — มุมล่างอยู่ในฐาน), ลอนเกลียวเรือใต้ฟิล์ม (`rib`); ฝา = คอ+เกลียว+ปีกรอง+ฝาหยัก
+  จุกมุม `pouchAddons.spoutAt` 'left'/'right' (มองจากหน้า; ไม่ใส่ = กลาง; PROJECT_FILE_VERSION 23): มุมบนตัดเฉียง 45° ขา `spoutChamfer`
+  (เรือกว้าง bw + `SPOUT_CHAMFER_MARGIN` สองข้าง) ปลายขอบเฉียงมน `SPOUT_CHAMFER_FILLET` (`filletPoly`), เรือตั้งฉากกลางขอบเฉียง,
+  ซีลข้าง/บนฝั่งจุกเริ่มที่แนวซีลขนานขอบเฉียง; แผงหลังมุมสะท้อน (หน้า-ซ้าย = หลัง-ขวาบนแผ่นคลี่) → `Pouch.spoutCorner {side, c}`;
+  3D ใช้ทรง doypack ปกติ (`doypackRows` แถวละเอียด `DOYPACK_CORNER_ROWS`, ไม่ใช่ `spoutRows`) + ฟิล์มนูนคลุมเรือ `spoutCornerBulge`
+  (max กับผิวเดิม) + มุมที่ตัดทิ้ง `Pouch.trims` เจาะด้วย mask เดียวกับรอยบาก (ขอบบนหนา 2·FIN จึงแม็พ UV ตามขอบบนจริง) + เรือหน้าตัดวงรี
+  และจุกเอียง 45° ที่กลางขอบเฉียง; ซิป/รอยฉีกต้องพ้น `spoutCornerReach`/มุมเฉียง (`zip-spout`/`tear-spout` ใน pouchPreflight)
   ซองหลังกลาง (pillow): ลิ้นครีบ `POUCH_FIN_SEAL` สองปลายแผ่นประกบกันเป็นครีบกลางหลัง; 3D ใช้ `pillowRows` (pure) หน้าตัดวงรีที่
   เส้นรอบรูป = 2W (ฟิล์มไม่ยืด → ข้างเว้าเข้าตรงที่พอง เหมือนซองขนม), ด้านข้างแหลมหาซีล 1−|2v−1|^`PILLOW_BULLET`, ซีลบน/ล่างแบน,
   ครีบซีลเป็นแถบแนบหลัง (UV = ลิ้นครีบขวา) — สันข้างเป็นรอยพับมน ไม่ใช่ซีล
@@ -312,6 +328,15 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   ซิปใน 3D = รอยปั๊มนูนบนฟิล์มเอง (`zipReliefProfile` แถบนูน+สันคู่ ข้ามทั้งแผ่นที่แนว zipY ผ่าน `useFinishMaps` relief) ไม่ใช่แถบสีแยก
   → สี/ลาย/texture ตามถุงเสมอ; สันซิปต้องกว้างพอ (σ ≥ ~0.75 มม.) ไม่งั้นมองเฉียงเป็นจุดหยัก
   ผ่าน `pouchZipLayout` ชุดเดียวทั้ง dieline/3D; หลักผลิตตรวจใน `pouchPreflight.ts` (รอยบากพ้นซีล → เหนือซิป → ซิปไม่ทับวาล์ว/จุก/ก้นจีบ)
+  ซิปล็อกกับรอยฉีกเป็นออปชันแยกกัน: `Project.zipper` = ซิปอย่างเดียว, `pouchAddons.tear` 'none'/'notch'/'zigzag' (`resolveTear`: ไม่ใส่ = มีซิป→notch
+  แบบเดิมของ "ซิปล็อก + รอยฉีก", ไม่มีซิป→none; ถุงมีจุกไม่มี zigzag; App ตรึงค่า tear ก่อนสลับซิปให้รอยฉีกไม่เปลี่ยนตาม; PROJECT_FILE_VERSION 24);
+  รอยบากไม่มีซิปอยู่ใต้ซีลบน `tearAtDefault`; ขอบฟันปลา = เส้นตัดขอบบนเป็นคลื่นสามเหลี่ยม (`ZIGZAG_PITCH` 4, ลึก `zigzagDepth` ≤ 2 และ ≤ ครึ่งซีลบน,
+  เว้นรูแขวน) คำนวณจาก **ตำแหน่งจริงในถุงที่ขึ้นรูป** (`zigzagEdge` + `ZigRegion`: หลังกลับด้าน, จีบพับแบนในซีล, หลังสองซีกของ pillow, ลิ้นกาว)
+  ให้ฟันทุกชั้นทับกันเหมือนไดคัทตัดทะลุทีเดียว — แบ่งฟันอิสระต่อช่วงฟิล์มแล้วชั้นซ้อนเหลื่อมกันเป็นขอบมั่วใน 3D (เทสต์ `pouchTear.test`);
+  ร่องเข้า `Pouch.trims` → 3D เจาะด้วย mask; brick มุมบนเหลี่ยมเมื่อเป็นฟันปลา (มุมมนทำโดยหดแถวบน → ฟันเลื่อน)
+  รอยบาก V ใช้แผนที่ตำแหน่งจริงชุดเดียวกัน (`foldRegions`): บากที่ขอบข้างจริง X = 0/W ทุกชั้นที่ไปจบที่ขอบ (แผงแยก 4 บาก; ซองข้างจีบ 9 = หน้า/จีบสองชั้น/หลัง/ลิ้นกาว;
+  ซองหลังกลางที่สันพับ ไม่ใช่ปลายครีบ) — บากชั้นเดียวชั้นหลังปิดรอยไว้จนมองไม่เห็นใน 3D; ข้างพับไม่มีซีลข้าง (`notchInTopSeal`: gusset/pillow)
+  → บากในแนวซีลบน `tearInSealAt` (ใต้ซีลจะตัดทะลุเข้าถุง รั่ว — preflight `tear-fold`); ขอบซีลหนาของซองแบนแม็พ UV ตามขอบแผ่นคลี่ให้ mask เจาะ
   รอยบากฉีก V ลึก `tearNotchDepth` (70% ของซีลข้าง ≤ 4 มม. — จบในแถบซีล ไม่ตัดเข้าช่วงบรรจุ) เก็บเป็น `Pouch.tearNotches` (สามเหลี่ยมพิกัดแผ่นคลี่)
   → dieline ตัดตามนี้ และ 3D เจาะผิวด้วย alpha mask พิกัดแผ่นคลี่ (`pouchCutMaskCanvas` → alphaMap + alphaTest ทั้งสองวัสดุ) ใช้ได้ทุกรูปแบบถุง;
   รูแขวน `Pouch.hangHoles` ใช้ mask เดียวกัน (`cut` = ตัดบน dieline; ถุงฟิล์มม้วนเพิ่มรูชั้นหลังสำหรับ 3D เท่านั้น เพราะเจาะหลังขึ้นรูป);
@@ -319,7 +344,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   — schema cloud (`server/modules/projects/validation.ts`) เป็น strict: เพิ่มฟิลด์ที่เก็บต้องเพิ่มที่นั่นด้วย ไม่งั้นบันทึกขึ้น cloud ไม่ผ่าน
   ออปชันระดับ Project ของถุง (`pouchStyle`, `zipper`, `pouchAddons`) thread แบบเดียวกับ `labelStyle` ทุกจุด
   (snapshot/sameSnap/sync/openProject/parseProject/projectFile) — เก็บเฉพาะเมื่อ ≠ ค่าเริ่มต้น (addons เก็บเฉพาะคีย์ true);
-  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 22); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
+  เพิ่มฟิลด์ที่เก็บจึงขึ้น PROJECT_FILE_VERSION (ปัจจุบัน 24); ตั้งผ่าน UI หน้าออกแบบ ไม่ผ่าน AI
 - รอยพับ 180° ได้สันโค้งจาก `rollBeads` ใน fold.ts (ทรงกระบอกบาง รัศมี = ครึ่งระยะสองชั้น) — ตอนนี้ไม่มี template ใช้แล้ว
 - FEFCO 0427 ตามผัง dieline มาตรฐาน: ผนังข้างทบเป็นรอยพับคู่ (ผนัง → สัน กว้าง sp = 3t+0.2 = ผนัง+หู+ชั้นทบ → ชั้นทบ)
   ลิ้นปลายชั้นทบลงช่องบนฐานที่ sp − t/2; ฝาแคบกว่ากล่องข้างละ sp มีปีกข้างคางหมูพับลงด้านในชั้นทบ (stage 4 ก่อนฝาปิด 5),

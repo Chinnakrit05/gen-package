@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type Keyboard
 import { createPortal } from 'react-dom'
 import { ChevronDown, LayoutGrid, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 import type { Project } from '../core/project'
-import type { ProjectSummary } from '../../shared/contracts/projects'
+import type { ProjectSummary, ProjectThumbnailMeta } from '../../shared/contracts/projects'
 import { getMaterial, packKind } from '../core/materials'
 import { TEMPLATES } from '../core/templates'
 import { useT } from '../i18n'
@@ -15,6 +15,7 @@ export interface GalleryItem {
   name: string
   updatedAt: number
   detail?: Project
+  thumbnail?: ProjectThumbnailMeta // cloud: ชนิดงาน/ชื่อชนิดจากภาพย่อ (รายการงานไม่มีเนื้องาน)
 }
 
 const PAGE_SIZE = 48
@@ -32,6 +33,7 @@ export function galleryItems(items: readonly ProjectItem[], activeId: string, ac
       ? Math.max(timestamp(item), activeProject.updatedAt)
       : timestamp(item),
     detail: 'live' in item ? item : item.id === activeId ? activeProject : undefined,
+    thumbnail: 'live' in item ? undefined : item.thumbnail ?? undefined,
   })).sort((a, b) => b.updatedAt - a.updatedAt || a.name.localeCompare(b.name, 'th'))
 }
 
@@ -53,9 +55,13 @@ interface ProjectGalleryProps {
   onDelete: (id: string) => void
   // cloud: id ของแบบที่ซื้อแล้ว/ได้สิทธิ์ดาวน์โหลด → ป้าย "ซื้อแล้ว" บนการ์ดและปุ่มเลือกงาน
   licensedIds?: ReadonlySet<string>
+  // ภาพย่อ 3D ของงาน (object URL) — thumbTick เปลี่ยนเมื่อมีรูปใหม่ (ให้แกลเลอรี render ใหม่); onNeedThumbs ขอโหลดรูปของการ์ดที่แสดงอยู่
+  thumbUrl?: (id: string) => string | undefined
+  thumbTick?: number
+  onNeedThumbs?: (ids: string[]) => void
 }
 
-function projectKind(project?: Project): 'box' | 'vessel' | 'pouch' | 'card' | 'unknown' {
+export function projectKind(project?: Project): 'box' | 'vessel' | 'pouch' | 'card' | 'unknown' {
   if (!project) return 'unknown'
   if (project.live.template === 'card') return 'card'
   return packKind(getMaterial(project.live.materialId))
@@ -68,11 +74,19 @@ export function projectTypeLabel(project: Project): string {
   return TEMPLATES.find((template) => template.id === project.live.template)?.nameTh ?? 'กล่องพับ'
 }
 
-function ProjectThumb({ project }: { project?: Project }) {
-  const kind = projectKind(project)
+function ProjectThumb({ project, shot, metaKind }: { project?: Project; shot?: string; metaKind?: ProjectThumbnailMeta['kind'] }) {
+  const kind = project ? projectKind(project) : metaKind ?? 'unknown'
   const color = project?.fillColor ?? (project ? getMaterial(project.live.materialId).color : undefined)
   const style = color ? { '--project-thumb-color': color } as CSSProperties : undefined
   const Icon = kind === 'vessel' ? IconBottle : kind === 'pouch' ? IconPouch : kind === 'card' ? IconCard : kind === 'box' ? IconBox : Package
+  // ภาพย่อ 3D (บรรจุภัณฑ์ที่พับ/ขึ้นรูปแล้ว) — ยังไม่มี = ไอคอนตามชนิดงานบนสีงาน
+  if (shot) {
+    return (
+      <div className={`project-gallery-thumb shot ${kind}`}>
+        <img src={shot} alt="" draggable={false} />
+      </div>
+    )
+  }
   return (
     <div className={`project-gallery-thumb ${kind}`} style={style}>
       {project?.fillImage?.src && <img src={project.fillImage.src} alt="" loading="lazy" />}
@@ -83,7 +97,7 @@ function ProjectThumb({ project }: { project?: Project }) {
 
 export function ProjectGallery({
   items, activeId, activeProject, busy, createDisabled, deleteDisabled,
-  onCreate, onSwitch, onRename, onDelete, licensedIds,
+  onCreate, onSwitch, onRename, onDelete, licensedIds, thumbUrl, onNeedThumbs,
 }: ProjectGalleryProps) {
   const t = useT()
   const [open, setOpen] = useState(false)
@@ -96,6 +110,13 @@ export function ProjectGallery({
   const allItems = useMemo(() => galleryItems(items, activeId, activeProject), [items, activeId, activeProject])
   const current = allItems.find((item) => item.id === activeId)
   const filtered = useMemo(() => filterGalleryItems(allItems, query), [allItems, query])
+  // ขอภาพย่อเฉพาะการ์ดที่แสดงอยู่ตอนเปิดแกลเลอรี (เลื่อน/แสดงเพิ่ม/ค้นหา → ขอชุดใหม่)
+  const visibleKey = open ? filtered.slice(0, visibleCount).map((item) => item.id).join(',') : ''
+  useEffect(() => {
+    if (visibleKey) onNeedThumbs?.(visibleKey.split(','))
+    // onNeedThumbs เป็นฟังก์ชันจาก App (useCallback) — ผูกกับชุด id ที่แสดง
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleKey])
   const galleryWidth = Math.max(360, Math.min(4, allItems.length) * 264 + 44)
   // ป้ายแบบที่มีสิทธิ์ดาวน์โหลดไฟล์ผลิต (ซื้อรายแบบ หรือโหลดไว้ตอนเป็น Pro)
   const licensedTag = (
@@ -224,7 +245,7 @@ export function ProjectGallery({
               <div className="project-gallery-grid">
                 {filtered.slice(0, visibleCount).map((item) => {
                   const active = item.id === activeId
-                  const typeLabel = item.detail ? projectTypeLabel(item.detail) : undefined
+                  const typeLabel = item.detail ? projectTypeLabel(item.detail) : item.thumbnail?.label
                   return (
                     <article key={item.id} className={`project-gallery-card${active ? ' active' : ''}`}>
                       <button
@@ -234,7 +255,7 @@ export function ProjectGallery({
                         disabled={busy}
                         onClick={() => { close(); onSwitch(item.id) }}
                       >
-                        <ProjectThumb project={item.detail} />
+                        <ProjectThumb project={item.detail} shot={thumbUrl?.(item.id)} metaKind={item.thumbnail?.kind} />
                         {active && <span className="project-gallery-active-tag" aria-hidden="true">เปิดอยู่</span>}
                         {licensedIds?.has(item.id) && licensedTag}
                         <span className="project-gallery-card-body">

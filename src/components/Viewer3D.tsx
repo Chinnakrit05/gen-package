@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { useArtTexture } from './useArtTexture'
 import { useFinishMaps, finishMaterialProps, type FinishMaps } from './useFinishMaps'
@@ -294,6 +294,7 @@ interface ModelProps {
   lightMode?: LightMode
   // ลายน้ำพรีวิว (Freemium) ประทับบน texture ทั้งแผ่น — null/ไม่ส่ง = ไม่มี
   watermark?: string | null
+  extra?: ReactNode // ของเสริมใน <Canvas> (เช่นตัวถ่ายภาพย่อแกลเลอรี)
 }
 
 function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillColor, fillImage, dims, imperial, dimVariant, watermark }: ModelProps) {
@@ -508,6 +509,7 @@ export function Viewer3D(props: ModelProps) {
       {card ? <CardModel {...props} /> : <FoldedModel {...props} />}
       <OrbitControls makeDefault enableDamping />
       <FitCamera dieline={props.dieline} />
+      {props.extra}
     </Canvas>
   )
 }

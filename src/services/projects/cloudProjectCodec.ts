@@ -187,7 +187,7 @@ export async function dehydrateProject(input: DehydrateProjectInput): Promise<De
     ...(project.pouchStyle ? { pouchStyle: project.pouchStyle } : {}),
     ...(project.zipper !== undefined ? { zipper: project.zipper } : {}),
     ...(project.pouchAddons
-      ? { pouchAddons: structuredClone(project.pouchAddons) as unknown as Record<string, boolean | number> }
+      ? { pouchAddons: structuredClone(project.pouchAddons) as unknown as Record<string, boolean | number | string> }
       : {}),
     decos,
     history: structuredClone(project.history) as unknown as Record<string, unknown>[],

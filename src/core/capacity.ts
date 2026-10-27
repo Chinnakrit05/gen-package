@@ -40,13 +40,13 @@ export function pouchVolumeMl(W: number, H: number, depth3D: number, style: Pouc
 export function vesselVolumeMl(profile: Vec2[], rect?: RectSection): number {
   let v3 = 0
   if (rect) {
-    const area = (r: number) => {
-      const s = rectSectionAt(rect, r)
+    const area = (p: Vec2) => {
+      const s = rectSectionAt(rect, p.x, p.y)
       return roundedRectArea(s.a, s.b, s.rc)
     }
     for (let i = 1; i < profile.length; i++) {
       const dy = Math.abs(profile[i].y - profile[i - 1].y)
-      v3 += ((area(profile[i - 1].x) + area(profile[i].x)) / 2) * dy
+      v3 += ((area(profile[i - 1]) + area(profile[i])) / 2) * dy
     }
     return (v3 / 1000) * 0.8
   }

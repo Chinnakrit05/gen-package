@@ -140,6 +140,8 @@ function parsePouchAddons(v: unknown): PouchAddons | undefined {
   const tearAt = mm(o.tearAt)
   if (zipAt !== undefined) a.zipAt = zipAt
   if (tearAt !== undefined) a.tearAt = tearAt
+  if (o.spoutAt === 'left' || o.spoutAt === 'right') a.spoutAt = o.spoutAt
+  if (o.tear === 'none' || o.tear === 'notch' || o.tear === 'zigzag') a.tear = o.tear
   return Object.keys(a).length ? a : undefined
 }
 

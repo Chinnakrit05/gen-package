@@ -1,4 +1,4 @@
-import { Suspense, createContext, lazy, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { LogOut } from 'lucide-react'
 
@@ -106,6 +106,10 @@ import {
   ZIP_AT_MAX,
   type PouchStyle,
   type PouchAddons,
+  type SpoutCorner,
+  type TearStyle,
+  notchInTopSeal,
+  resolveTear,
 } from './core/pouch'
 import { pouchZipIssues } from './core/pouchPreflight'
 import { boxVolumeMl, pouchVolumeMl, vesselVolumeMl, tubeVolumeMl, formatCapacity } from './core/capacity'
@@ -135,7 +139,13 @@ import {
   type Project,
 } from './core/project'
 import { serializeProject, parseProjectFile, projectFileName } from './core/projectFile'
-import type { ProjectSummary } from '../shared/contracts/projects'
+import {
+  THUMBNAIL_BATCH_MAX,
+  type ProjectSummary,
+  type ProjectThumbnailImage,
+  type ProjectThumbnailReceipt,
+  type PutProjectThumbnailInput,
+} from '../shared/contracts/projects'
 import { isProOnlyExport, type Entitlements, type ExportAuthorization, type ExportFormat, type Order, type OrderKind } from '../shared/contracts/billing'
 import type { ProjectSaveState } from './services/projects/durableSaveQueue'
 import { ApiClientError } from './services/api/client'
@@ -175,7 +185,10 @@ import { CMYK_PROOF_PROFILE } from './core/cmykProofLut'
 import { AiTrigger, CopilotDrawer, type AiArtworkResult } from './components/CopilotDrawer'
 import { CopilotStage, type ArtworkSnapshot } from './components/CopilotStage'
 import { ColorField } from './components/ColorField'
-import { ProjectGallery } from './components/ProjectGallery'
+import { ProjectGallery, projectKind, projectTypeLabel } from './components/ProjectGallery'
+import { ThumbnailCapture, type ThumbnailShot } from './components/ThumbnailCapture'
+import { thumbIsFresh, thumbNeedsFetch } from './core/thumbnail'
+import { IndexedDbThumbStore, ThumbnailCache, base64ToBlob, blobToBase64 } from './services/thumbnails/thumbnailCache'
 import {
   IconImage,
   IconText,
@@ -1168,6 +1181,8 @@ const samePouchAddons = (a: PouchAddons | undefined, b: PouchAddons | undefined)
   && Boolean(a?.tinTie) === Boolean(b?.tinTie)
   && a?.zipAt === b?.zipAt
   && a?.tearAt === b?.tearAt
+  && a?.spoutAt === b?.spoutAt
+  && a?.tear === b?.tear
 
 // เทียบรูระบายอากาศ — ไม่เปิดทั้งคู่ = เท่ากัน (undefined = ปิด); เปิดทั้งคู่ค่อยเทียบค่า
 const sameVents = (a: VentConfig | undefined, b: VentConfig | undefined) => {
@@ -1200,6 +1215,10 @@ export type EntitlementsStatus = 'loading' | 'ready' | 'error'
 
 export interface CloudProjectBridge {
   items: ProjectSummary[]
+  workspaceId: string
+  // ภาพย่อ 3D ของแกลเลอรีงาน — บันทึกทับของเดิม (คืน version) / โหลดตัวรูปตาม id (≤ THUMBNAIL_BATCH_MAX ต่อครั้ง)
+  putThumbnail(projectId: string, input: PutProjectThumbnailInput): Promise<ProjectThumbnailReceipt>
+  fetchThumbnails(projectIds: string[]): Promise<ProjectThumbnailImage[]>
   online: boolean
   saveState: ProjectSaveState
   // error ของการบันทึกล่าสุด (saveState 'error') — แยกข้อความพื้นที่เก็บงานเต็มจาก "บันทึกไม่สำเร็จ" (ไม่ส่ง = ข้อความเดิม)
@@ -1234,6 +1253,9 @@ export interface CloudProjectBridge {
   createOrder(kind: OrderKind, projectId?: string): Promise<Order>
   devFulfilOrder(orderId: string): Promise<Order>
 }
+
+// หยุดแก้นานเท่านี้ก่อนถ่ายภาพย่อแกลเลอรี (mount viewer ซ่อน ~0.1–0.3 วิของ main thread — ไม่ถ่ายระหว่างลาก/พิมพ์)
+const THUMB_IDLE_MS = 4000
 
 function cloudSaveLabel(state: ProjectSaveState, error?: Error | null): string {
   switch (state) {
@@ -3258,6 +3280,110 @@ export default function App({
   // — กดขยายเป็นหน้าต่างใหญ่หรืออยู่แท็บออกแบบ (จอหลัก) ค่อยแสดง; โหมดแสงที่ตั้งไว้ยังมีผลเหมือนเดิม
   const pip3dCompact = sideTab !== 'design' && !expand3d
   const dims3dOn = showDims3d && !pip3dCompact ? dims3d : undefined
+  // ---- ภาพย่อ 3D ของแกลเลอรีงาน ----
+  // ถ่ายจากงานที่เปิดอยู่หลังหยุดแก้ THUMB_IDLE_MS: mount viewer ซ่อนนอกจอ (พับเสร็จ/มุมกล้องเริ่มต้น) แล้วถอดทันทีที่ถ่ายเสร็จ
+  // เก็บในแคชเบราว์เซอร์ (IndexedDB) + cloud อัปโหลดทับของเดิม — งานเก่าได้ภาพย่อเมื่อเปิดแล้วถูกถ่ายรอบแรก
+  const thumbScope = cloud ? cloud.workspaceId : 'local'
+  const thumbCache = useMemo(
+    () => new ThumbnailCache(thumbScope, typeof indexedDB === 'undefined' ? null : new IndexedDbThumbStore()),
+    [thumbScope],
+  )
+  useEffect(() => () => thumbCache.dispose(), [thumbCache])
+  const thumbTick = useSyncExternalStore(thumbCache.subscribe, thumbCache.version)
+  const [thumbJob, setThumbJob] = useState<{ id: string; source: number } | null>(null)
+  const thumbFailed = useRef<{ id: string; source: number } | null>(null)
+  const activeForThumb = projects.find((project) => project.id === activeId)
+  const activeCloudThumb = cloud?.items.find((item) => item.id === activeId)?.thumbnail?.version
+  useEffect(() => {
+    void thumbCache.load([activeId])
+  }, [thumbCache, activeId])
+  useEffect(() => {
+    if (!activeForThumb || thumbJob) return
+    const source = activeForThumb.updatedAt
+    if (thumbIsFresh(source, thumbCache.record(activeId), activeCloudThumb)) return
+    if (thumbFailed.current?.id === activeId && thumbFailed.current.source === source) return
+    const t = window.setTimeout(() => setThumbJob({ id: activeId, source }), THUMB_IDLE_MS)
+    return () => window.clearTimeout(t)
+    // thumbTick: แคชโหลดเสร็จ/เปลี่ยน → ตัดสินใหม่
+  }, [activeId, activeForThumb, activeCloudThumb, thumbJob, thumbCache, thumbTick])
+  const onThumbCaptured = (shot: ThumbnailShot | null) => {
+    const job = thumbJob
+    setThumbJob(null)
+    if (!job) return
+    const project = projects.find((p) => p.id === job.id)
+    if (!shot || !project) {
+      thumbFailed.current = job
+      return
+    }
+    const pk = projectKind(project)
+    const meta = { kind: pk === 'unknown' ? ('box' as const) : pk, label: projectTypeLabel(project).slice(0, 60) }
+    void (async () => {
+      await thumbCache.save({ projectId: job.id, version: String(job.source), sourceUpdatedAt: job.source, blob: shot.blob, ...meta })
+      if (!cloud?.online) return
+      try {
+        const receipt = await cloud.putThumbnail(job.id, { mimeType: shot.mimeType, imageBase64: await blobToBase64(shot.blob), ...meta })
+        // version ของ server แทนของเครื่องนี้ — เปิดแกลเลอรีครั้งหน้าไม่ต้องโหลดรูปเดิมซ้ำ
+        if (thumbCache.record(job.id)?.blob === shot.blob) {
+          await thumbCache.save({ projectId: job.id, version: receipt.version, sourceUpdatedAt: job.source, blob: shot.blob, ...meta })
+        }
+      } catch {
+        // งานยังไม่ขึ้น cloud/ออฟไลน์ — ถ่ายรอบหน้า (แก้งานครั้งถัดไป) จะอัปโหลดใหม่
+      }
+    })()
+  }
+  // แกลเลอรีเปิด: อ่านภาพย่อจากแคชเครื่องนี้ แล้ว (cloud) โหลดเฉพาะรูปที่ version ของ server ใหม่กว่าในแคช
+  const loadGalleryThumbs = useCallback(async (ids: string[]) => {
+    await thumbCache.load(ids)
+    if (!cloud?.online) return
+    const want = new Set(ids)
+    const stale = cloud.items.filter((item) =>
+      want.has(item.id) && !!item.thumbnail && thumbNeedsFetch(item.thumbnail.version, thumbCache.record(item.id)))
+    for (let i = 0; i < stale.length; i += THUMBNAIL_BATCH_MAX) {
+      const chunk = stale.slice(i, i + THUMBNAIL_BATCH_MAX)
+      try {
+        const images = await cloud.fetchThumbnails(chunk.map((item) => item.id))
+        for (const image of images) {
+          const meta = chunk.find((item) => item.id === image.projectId)?.thumbnail
+          await thumbCache.save({
+            projectId: image.projectId,
+            version: image.version,
+            blob: base64ToBlob(image.imageBase64, image.mimeType),
+            ...(meta ? { kind: meta.kind, label: meta.label } : {}),
+          })
+        }
+      } catch {
+        return // ออฟไลน์/server ล้ม — การ์ดแสดงไอคอนไปก่อน
+      }
+    }
+  }, [cloud, thumbCache])
+
+  const thumbCapture = <ThumbnailCapture decos={decos} fillImage={fillImage} onCapture={onThumbCaptured} />
+  const thumbnailStage = thumbJob && thumbJob.id === activeId && (
+    <div className="thumb-stage" aria-hidden="true">
+      <Suspense fallback={null}>
+        {kind === 'box' ? (
+          <Viewer3D
+            dieline={dieline}
+            mat={mat}
+            fold={1}
+            depth={template.foldDepth({ W, D, H }, mat)}
+            tilt={template.tilt}
+            spin={template.spin}
+            decos={decos}
+            fillColor={fillColor}
+            fillImage={fillImage}
+            watermark={watermark}
+            extra={thumbCapture}
+          />
+        ) : kind === 'vessel' && vessel ? (
+          <VesselViewer3D vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} watermark={watermark} capStyle={capStyle} capColor={capColor} extra={thumbCapture} />
+        ) : kind === 'pouch' && pouch ? (
+          <PouchViewer3D pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} watermark={watermark} extra={thumbCapture} />
+        ) : null}
+      </Suspense>
+    </div>
+  )
+
   const viewer3D = (
     <>
       <Suspense fallback={<div className="viewer-loading">กำลังโหลดมุมมอง 3 มิติ…</div>}>
@@ -3387,6 +3513,9 @@ export default function App({
           onRename={renameProject}
           onDelete={deleteProject}
           licensedIds={cloud ? licensed : undefined}
+          thumbUrl={(id) => thumbCache.url(id)}
+          thumbTick={thumbTick}
+          onNeedThumbs={loadGalleryThumbs}
         />
         {cloud && (
           <div className="cloud-save-wrap">
@@ -4549,16 +4678,52 @@ export default function App({
             )}
             {kind === 'pouch' && (
               <>
+                {pouchStyle === 'spout' && (
+                  // ถุงมีจุก: กลางขอบบน หรือจุกมุม (มุมบนตัดเฉียง จุกชี้ออก 45°)
+                  <div className="field" style={{ marginTop: 12 }}>
+                    <span className="field-head">{t('ตำแหน่งจุก', 'Spout position')}</span>
+                    <div className="unit-toggle" role="group" aria-label={t('ตำแหน่งจุก', 'Spout position')}>
+                      {(
+                        [
+                          ['left', t('ซ้ายบน', 'Top left')],
+                          [undefined, t('กลาง', 'Centre')],
+                          ['right', t('ขวาบน', 'Top right')],
+                        ] as [SpoutCorner | undefined, string][]
+                      ).map(([at, label]) => (
+                        <button
+                          key={at ?? 'center'}
+                          type="button"
+                          className={pouchAddons.spoutAt === at ? 'active' : ''}
+                          aria-pressed={pouchAddons.spoutAt === at}
+                          disabled={aiBusy}
+                          onClick={() =>
+                            setPouchAddons((a) => {
+                              const { spoutAt: _old, ...rest } = a
+                              return at ? { ...rest, spoutAt: at } : rest
+                            })
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <label className="check" style={{ marginTop: 12 }}>
                   <input
                     type="checkbox"
                     checked={zipper}
                     disabled={aiBusy}
-                    onChange={(e) => setZipper(e.target.checked)}
+                    onChange={(e) => {
+                      const on = e.target.checked
+                      // แยกจากรอยฉีกแล้ว: คงรอยฉีกที่ใช้อยู่ไว้ตามเดิม (ค่าเริ่มต้นของรอยฉีกผูกกับซิป จึงตรึงค่าก่อนสลับ)
+                      setPouchAddons((a) => (a.tear === undefined ? { ...a, tear: resolveTear(zipper, a, pouchStyle) } : a))
+                      setZipper(on)
+                    }}
                   />
-                  {t('ซิปล็อก + รอยฉีก (เปิด-ปิดซ้ำได้)', 'Zip-lock + tear notch (reclosable)')}
+                  {t('ซิปล็อก (เปิด-ปิดซ้ำได้)', 'Zip-lock (reclosable)')}
                 </label>
-                {zipper && pouch?.zipY !== undefined && pouch.tearY !== undefined && (
+                {zipper && pouch?.zipY !== undefined && (
                   <div className="zip-pos" style={{ margin: '6px 0 4px 24px' }}>
                     <DimField
                       imperial={imperial}
@@ -4569,6 +4734,44 @@ export default function App({
                       disabled={aiBusy}
                       onChange={(v) => setPouchAddons((a) => ({ ...a, zipAt: v }))}
                     />
+                  </div>
+                )}
+                {pouch && (
+                  // รอยฉีกเปิดถุง — แยกจากซิป: บาก V ที่ซีลข้าง หรือขอบบนฟันปลา (ถุงมีจุกไม่มีขอบฟันปลา)
+                  <div className="field" style={{ marginTop: 10 }}>
+                    <span className="field-head">{t('รอยฉีก', 'Tear opening')}</span>
+                    <div className="unit-toggle" role="group" aria-label={t('รอยฉีก', 'Tear opening')}>
+                      {(
+                        [
+                          ['none', t('ไม่มี', 'None')],
+                          ['notch', t('บาก V', 'V-notch')],
+                          ...(pouchStyle === 'spout' ? [] : [['zigzag', t('ฟันปลา', 'Zigzag edge')]]),
+                        ] as [TearStyle, string][]
+                      ).map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className={pouch.tear === id ? 'active' : ''}
+                          aria-pressed={pouch.tear === id}
+                          disabled={aiBusy}
+                          onClick={() => setPouchAddons((a) => ({ ...a, tear: id }))}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {pouch?.tear === 'zigzag' && (
+                  <p className="hint" style={{ margin: '4px 0 0 0' }}>
+                    {t(
+                      'ขอบบนไดคัทเป็นฟันปลาตลอดแนว — ฉีกเปิดได้ทุกจุดตามขอบบน (ฟันละ 4 มม. ร่องลึกไม่เกินครึ่งซีลบน)',
+                      'The top edge is die-cut as a zigzag — the bag tears open anywhere along the top (4 mm teeth, no deeper than half the top seal)',
+                    )}
+                  </p>
+                )}
+                {pouch?.tear === 'notch' && pouch.tearY !== undefined && (
+                  <div className="zip-pos" style={{ margin: '6px 0 4px 24px' }}>
                     <label className="check" style={{ marginTop: 6 }}>
                       <input
                         type="checkbox"
@@ -4581,7 +4784,11 @@ export default function App({
                           })
                         }
                       />
-                      {t(`วางรอยฉีกอัตโนมัติ (เหนือซิป ${TEAR_GAP} มม.)`, `Place tear notch automatically (${TEAR_GAP} mm above zipper)`)}
+                      {notchInTopSeal(pouchStyle)
+                        ? t('วางรอยฉีกอัตโนมัติ (ในแนวซีลบน — ข้างถุงเป็นรอยพับ บากต่ำกว่าซีลจะรั่ว)', 'Place tear notch automatically (within the top seal — folded sides would leak below it)')
+                        : zipper
+                          ? t(`วางรอยฉีกอัตโนมัติ (เหนือซิป ${TEAR_GAP} มม.)`, `Place tear notch automatically (${TEAR_GAP} mm above zipper)`)
+                          : t('วางรอยฉีกอัตโนมัติ (ใต้ซีลบน)', 'Place tear notch automatically (below the top seal)')}
                     </label>
                     {pouchAddons.tearAt !== undefined && (
                       <DimField
@@ -4594,6 +4801,10 @@ export default function App({
                         onChange={(v) => setPouchAddons((a) => ({ ...a, tearAt: v }))}
                       />
                     )}
+                  </div>
+                )}
+                {pouch && (zipper || pouch.tear === 'notch') && (
+                  <div className="zip-pos" style={{ margin: '2px 0 4px 24px' }}>
                     {(pouchAddons.zipAt !== undefined || pouchAddons.tearAt !== undefined) && (
                       <button
                         type="button"
@@ -6568,6 +6779,7 @@ export default function App({
           <CopilotStage onClose={() => setStageOpen(false)} viewer={viewer3D} snapshots={artSnapshots} currentId={artCurrentId} onPick={pickArtSnapshot} />
         )}
       </div>
+      {thumbnailStage}
       {nameModal && (
         <NameModal
           title={nameModal.title}

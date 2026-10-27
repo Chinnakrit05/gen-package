@@ -57,12 +57,16 @@ export interface Pouch {
   backSeam: boolean
   backRectL?: { x: number; y: number; w: number; h: number }
   sideSeal: number // ซีลข้างบนแผง (แผงแยก: doypack/ซองแบน) หรือลิ้นกาว (มม.)
-  zipper: boolean // มีซิปล็อก + รอยฉีกไหม
+  zipper: boolean // มีซิปล็อกไหม (แยกจากรอยฉีก)
   zipY?: number // พิกัดแผ่นคลี่ y ของแนวซิป (เมื่อ zipper=true) — ใช้วางแถบซิปใน 3D
-  tearY?: number // พิกัดแผ่นคลี่ y ของรอยบากฉีก (เมื่อ zipper=true)
+  tear: TearStyle // รอยฉีกเปิดถุง: ไม่มี / บาก V ที่ซีลข้าง / ขอบบนฟันปลา
+  tearY?: number // พิกัดแผ่นคลี่ y ของรอยบากฉีก (เมื่อ tear = 'notch')
   tearNotches: Vec2[][] // รอยบากฉีก (สามเหลี่ยม V พิกัดแผ่นคลี่) ที่ขอบแผง — dieline ตัดตามนี้, 3D เจาะผิวตามนี้ (alpha mask)
   // รูแขวน (วงกลมพิกัดแผ่นคลี่) — dieline ตัดเฉพาะ cut: true; 3D เจาะทุกวง (รวมชั้นหลังของถุงฟิล์มม้วนที่เจาะหลังขึ้นรูป)
   hangHoles: { x: number; y: number; r: number; cut: boolean }[]
+  // ถุงจุกมุม: มุมบนที่มีจุก (มองจากหน้า) + ขาของมุมตัดเฉียง c (มม.) — ไม่มี = จุกกลางขอบบน
+  spoutCorner?: { side: SpoutCorner; c: number }
+  trims: Vec2[][] // ฟิล์มส่วนที่ไดคัททิ้ง (พิกัดแผ่นคลี่) ที่ทรง 3D ไม่ได้ตัดเอง — 3D เจาะด้วย alpha mask เดียวกับรอยบาก
   valveAt?: { x: number; y: number; r: number } // วาล์วกาแฟ (พิกัดแผ่นคลี่) — dieline เป็น marker, 3D เป็นรอยนูนบนฟิล์ม
   hangHole: boolean // รูแขวน (euro-hole) ที่ริมซีลบน
   valve: boolean // วาล์วระบายแก๊ส (กาแฟ) บนหน้าถุง
@@ -77,6 +81,78 @@ export interface PouchAddons {
   // ตำแหน่งซิป/รอยบาก (มม. จากขอบบนถุง) — ไม่ใส่ = ค่าเริ่มต้น/อัตโนมัติ; ใช้เมื่อเปิดซิปล็อก
   zipAt?: number
   tearAt?: number
+  tear?: TearStyle // ไม่ใส่ = มีซิปได้รอยบาก V (แบบเดิมของ "ซิปล็อก + รอยฉีก"), ไม่มีซิปไม่มีรอยฉีก
+  spoutAt?: SpoutCorner // ถุงมีจุก: จุกที่มุมบนซ้าย/ขวา (มองจากหน้า) — ไม่ใส่ = กลางขอบบน
+}
+
+// ถุงจุกมุม (corner spout): มุมบนตัดเฉียง 45° ขายาว c ให้เรือจุก (กว้าง bw) วางกลางขอบเฉียง จุกชี้ออกทแยง 45°
+// แบบถุงน้ำ/ซอส/อาหารเด็กทั่วไป — แผงหลังกลับซ้าย-ขวา (มุมเดียวกันเมื่อประกบ)
+export type SpoutCorner = 'left' | 'right'
+export const SPOUT_CHAMFER_MARGIN = 4 // ปลายเรือถึงปลายขอบเฉียง (มม.)
+export const SPOUT_CHAMFER_FILLET = 3 // รัศมีมนที่ปลายขอบเฉียงทั้งสอง (มม.)
+export const SPOUT_DRAPE = 3 // ฟิล์มคลุมเลยขอบเรือก่อนแนบซีล (มม.)
+export const spoutChamfer = (W: number, st: number) =>
+  Math.min(0.45 * W, (spoutMarker(W, st).bw + 2 * SPOUT_CHAMFER_MARGIN) / Math.SQRT2)
+export const spoutBoatT = (W: number, st: number) => spoutMarker(W, st).r * 0.9 // ครึ่งความหนาเรือจุก
+// ระยะลึกสุดจากขอบบนที่เรือจุกมุมลงไปถึง (ปลายเรือที่มุมใน) — ซิป/รอยฉีกต้องอยู่ต่ำกว่านี้
+export const spoutCornerReach = (W: number, st: number) => {
+  const c = spoutChamfer(W, st)
+  const sm = spoutMarker(W, st)
+  return c / 2 + (sm.bh + sm.bw / 2) / Math.SQRT2
+}
+// ความนูนของฟิล์มที่คลุมเรือจุกมุม (มม. เหนือผิวซีล) ที่พิกัดฟิล์ม uf (จากขอบด้านที่มีจุก) / dl (จากขอบบน):
+// s = ตามแนวขอบเฉียง (0 = กลางเรือ), d = ลึกเข้าจากขอบเฉียง — เต็มความหนาเรือตลอดช่วงเรือ แล้วลาดลงหาผิวถุงที่ปลายเรือ
+export function spoutCornerBulge(W: number, st: number, c: number, uf: number, dl: number): number {
+  const sm = spoutMarker(W, st)
+  const hw = sm.bw / 2 + SPOUT_DRAPE
+  const s = (uf - dl) / Math.SQRT2
+  const d = (uf + dl - c) / Math.SQRT2
+  if (Math.abs(s) >= hw) return 0
+  const full = sm.bh * 0.6
+  const reach = sm.bh + 2 * SPOUT_DRAPE
+  if (d >= reach) return 0
+  const g = (1 - (s / hw) ** 2) ** 0.7
+  const h = d <= full ? 1 : 0.5 + 0.5 * Math.cos((Math.PI * (d - full)) / (reach - full))
+  return spoutBoatT(W, st) * g * h
+}
+
+// รูปหลายเหลี่ยมมุมมน (มุมนูนทุกมุม, เรียงตามเข็มนาฬิกาบนพิกัด y ลง) → จุด (ประมาณโค้ง) + path ไดคัท (A จริง)
+// map แปลงพิกัดท้องถิ่น → แผ่นคลี่; flip = map กลับด้าน (สะท้อน) → ทิศโค้ง SVG กลับ
+function filletPoly(verts: { x: number; y: number; r: number }[], map: (x: number, y: number) => Vec2, flip: boolean) {
+  const pts: Vec2[] = []
+  let d = ''
+  const n = verts.length
+  verts.forEach((v, i) => {
+    const a = verts[(i + n - 1) % n]
+    const b = verts[(i + 1) % n]
+    const ua = { x: a.x - v.x, y: a.y - v.y }
+    const ub = { x: b.x - v.x, y: b.y - v.y }
+    const la = Math.hypot(ua.x, ua.y)
+    const lb = Math.hypot(ub.x, ub.y)
+    ua.x /= la; ua.y /= la; ub.x /= lb; ub.y /= lb
+    const half = Math.acos(Math.max(-1, Math.min(1, ua.x * ub.x + ua.y * ub.y))) / 2
+    const t = v.r > 0 ? v.r / Math.tan(half) : 0
+    const t1 = { x: v.x + ua.x * t, y: v.y + ua.y * t }
+    const t2 = { x: v.x + ub.x * t, y: v.y + ub.y * t }
+    const m1 = map(t1.x, t1.y)
+    const m2 = map(t2.x, t2.y)
+    d += `${i ? 'L' : 'M'} ${m1.x} ${m1.y} `
+    if (v.r > 0) {
+      const bis = { x: ua.x + ub.x, y: ua.y + ub.y }
+      const bl = Math.hypot(bis.x, bis.y)
+      const cd = v.r / Math.sin(half)
+      const c = { x: v.x + (bis.x / bl) * cd, y: v.y + (bis.y / bl) * cd }
+      const a0 = Math.atan2(t1.y - c.y, t1.x - c.x)
+      let a1 = Math.atan2(t2.y - c.y, t2.x - c.x)
+      if (a1 < a0) a1 += 2 * Math.PI
+      for (let k = 0; k <= 4; k++) {
+        const ang = a0 + ((a1 - a0) * k) / 4
+        pts.push(map(c.x + v.r * Math.cos(ang), c.y + v.r * Math.sin(ang)))
+      }
+      d += `A ${v.r} ${v.r} 0 0 ${flip ? 0 : 1} ${m2.x} ${m2.y} `
+    } else pts.push(m1)
+  })
+  return { pts, d: d + 'Z' }
 }
 
 // ซิปล็อก + รอยบากฉีก (มม.): แนวซิปกว้างรวมปีก ~10 (±ZIP_HALF); รอยบากอัตโนมัติอยู่เหนือซิป TEAR_GAP
@@ -92,6 +168,84 @@ export const zipAtDefault = (st: number, H: number) => st + Math.min(POUCH_ZIP_I
 // รอยบากอัตโนมัติ: เหนือซิป TEAR_GAP; ถ้าซิปชิดซีลจนไม่พอ → กึ่งกลางระหว่างซีลกับซิป
 export const tearAtAuto = (st: number, zipY: number) =>
   zipY - TEAR_GAP >= st + TEAR_SEAL_GAP ? zipY - TEAR_GAP : (st + zipY) / 2
+
+// รอยฉีกเปิดถุง (แยกจากซิปล็อก): 'notch' = บาก V ที่ซีลข้างสองด้าน (ฉีกตามแนวเดียว),
+// 'zigzag' = ขอบบนฟันปลา (pinked edge — ฉีกเริ่มได้ทุกจุดตามขอบบน แบบซองขนม/ซองซอส), 'none' = ไม่มี
+export type TearStyle = 'none' | 'notch' | 'zigzag'
+export const TEAR_STYLES: readonly TearStyle[] = ['none', 'notch', 'zigzag']
+// ถุงมีจุกไม่มีขอบฟันปลา (ขอบบนเป็นที่เชื่อมจุก/มุมเฉียง) — เลือกไว้ = ไม่มี
+export const resolveTear = (zipper: boolean, addons: PouchAddons = {}, style?: PouchStyle): TearStyle => {
+  const t = addons.tear ?? (zipper ? 'notch' : 'none')
+  return t === 'zigzag' && style === 'spout' ? 'none' : t
+}
+// ข้างถุงเป็นรอยพับ ไม่มีซีลข้าง (ซองข้างจีบ/ซองหลังกลาง): บากใต้ซีลบนจะตัดทะลุเข้าถุง (รั่ว) — บากในแนวซีลบน
+// ใกล้ขอบล่างของซีล ให้แนวฉีกเริ่มในซีลแล้ววิ่งลงเปิดปากถุง
+export const notchInTopSeal = (style?: PouchStyle) => style === 'gusset' || style === 'pillow'
+export const tearInSealAt = (st: number) => st - Math.max(TEAR_NOTCH_H + 1, st * 0.35)
+// รอยบากเมื่อไม่มีซิป: ใต้ซีลบน (พ้นซีล TEAR_SEAL_GAP + เผื่อ) ไม่ต่ำเกินสามส่วนของลำตัว
+export const tearAtDefault = (st: number, H: number) => st + Math.min(TEAR_SEAL_GAP + 5, H * 0.3)
+// ขอบฟันปลา: ฟันละ ZIGZAG_PITCH มม. ร่องลึก ≤ 2 มม. และไม่เกินครึ่งซีลบน (ซีลยังกว้างพอปิดสนิท)
+export const ZIGZAG_PITCH = 4
+export const zigzagDepth = (st: number) => Math.min(2, st * 0.5)
+// ขอบบนฟันปลาจาก x0 → x1: ยอดฟันอยู่ที่ขอบแผ่น (y = 0) ร่องลึก d, จำนวนฟันเต็ม ปลายทั้งสองเป็นยอด —
+// path ต่อจากจุด (x0, 0) + ร่องสามเหลี่ยมที่ตัดทิ้ง (ให้ 3D เจาะด้วย mask เดียวกับรอยบาก)
+export function zigzagTop(
+  x0: number,
+  x1: number,
+  d: number,
+  pitch = ZIGZAG_PITCH,
+  count?: number, // บังคับจำนวนฟัน (ครึ่งหลังของซองหลังกลางต้องได้ครึ่งหนึ่งของหน้าพอดี)
+): { path: string; gaps: Vec2[][] } {
+  const n = count ?? Math.max(1, Math.round((x1 - x0) / pitch))
+  const p = (x1 - x0) / n
+  let path = ''
+  const gaps: Vec2[][] = []
+  for (let k = 0; k < n; k++) {
+    const a = x0 + k * p
+    const b = a + p
+    path += ` L ${a + p / 2} ${d} L ${b} 0`
+    gaps.push([P(a, 0), P(b, 0), P(a + p / 2, d)])
+  }
+  return { path, gaps }
+}
+
+// ขอบฟันปลาตามตำแหน่งจริงในถุงที่ขึ้นรูป: ช่วงฟิล์ม [a, b] อยู่ที่ X = x0 + dir·(u − a) ตามแนวกว้างถุง
+// ความลึกร่อง = คลื่นสามเหลี่ยมของ X (ยอดที่ X = k·p) — ชั้นที่ซ้อนกันได้ฟันตรงกัน เหมือนไดคัทตัดทะลุทีเดียว
+export interface ZigRegion {
+  a: number
+  b: number
+  x0: number
+  dir: 1 | -1
+}
+const triWave = (x: number, p: number) => 2 * Math.abs(x / p - Math.round(x / p)) // 0 = ยอด, 1 = ร่อง
+export function zigzagEdge(regions: ZigRegion[], d: number, p = ZIGZAG_PITCH): { path: string; gaps: Vec2[][] } {
+  const pts: Vec2[] = []
+  for (const r of regions) {
+    const X = (u: number) => r.x0 + r.dir * (u - r.a)
+    // จุดหักของคลื่น (X = ครึ่งระยะฟันเต็ม) ภายในช่วง + ปลายช่วง
+    const xa = X(r.a)
+    const xb = X(r.b)
+    const lo = Math.min(xa, xb)
+    const hi = Math.max(xa, xb)
+    const us = [r.a, r.b]
+    for (let k = Math.ceil((2 * lo) / p); (k * p) / 2 <= hi + 1e-9; k++) {
+      const u = r.a + r.dir * ((k * p) / 2 - r.x0)
+      if (u > r.a + 1e-9 && u < r.b - 1e-9) us.push(u)
+    }
+    us.sort((m, n) => m - n)
+    for (const u of us) {
+      const q = P(u, d * triWave(X(u), p))
+      const last = pts[pts.length - 1]
+      if (!last || Math.abs(last.x - q.x) > 1e-9 || Math.abs(last.y - q.y) > 1e-9) pts.push(q)
+    }
+  }
+  const gaps: Vec2[][] = []
+  for (let i = 1; i < pts.length; i++) {
+    const [m, n] = [pts[i - 1], pts[i]]
+    if (m.y > 1e-9 || n.y > 1e-9) gaps.push([P(m.x, 0), P(n.x, 0), n, m])
+  }
+  return { path: pts.map((q) => ` L ${q.x} ${q.y}`).join(''), gaps }
+}
 
 // ตำแหน่งจริงบน dieline (จำกัดให้วาดได้: ซิปอยู่ในลำตัว, รอยบากอยู่บนแผ่น) — ความถูกต้องเชิงผลิตตรวจใน pouchPreflight
 export function pouchZipLayout(st: number, H: number, addons: PouchAddons = {}): { zipY: number; tearY: number } {
@@ -174,12 +328,45 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   // แนวซิป/รอยบาก: ผู้ใช้กำหนดได้ (มม. จากขอบบน) ไม่งั้นซิปใต้ปากบน 18 มม. (ไม่ต่ำเกินครึ่งลำตัว)
   const zl = zipper ? pouchZipLayout(st, H, opts.addons) : undefined
   const zipY = zl?.zipY
-  const tearY = zl?.tearY
+  // รอยฉีกแยกจากซิป: มีซิป → รอยบากเหนือซิปตามเดิม; ไม่มีซิป → ใต้ซีลบน
+  const tear = resolveTear(zipper, opts.addons, style)
+  // ข้างถุงเป็นรอยพับ (ซองข้างจีบ/ซองหลังกลาง): บากต่ำกว่าซีลบนจะตัดทะลุเข้าถุง → วางในแนวซีลบน
+  const foldedSides = notchInTopSeal(style)
+  const tearY =
+    tear !== 'notch'
+      ? undefined
+      : foldedSides
+        ? Math.min(st + H - 3, Math.max(3, opts.addons?.tearAt ?? tearInSealAt(st)))
+        : zl
+          ? zl.tearY
+          : Math.min(st + H - 3, Math.max(3, opts.addons?.tearAt ?? tearAtDefault(st, H)))
 
   // แผ่นฟิล์มแบน: [หน้า][…จีบ…][หลัง][…จีบ…][ลิ้นทากาว ss]; แนวตั้ง = ริมบน + ลำตัว + ก้น/ริมล่าง
   // แยกลิ้นกาวเป็นแผงต่างหาก (ขอบร่วม x=Wp เป็นรอยต่อ ไม่ใช่ขอบนอก) เหมือน dieline ฉลาก
+  // ถุงจุกมุม: มุมบนด้านจุกตัดเฉียง (มองจากหน้า ซ้าย = แผงหน้าซ้าย / แผงหลังขวา เพราะหลังมองจากด้านหลัง)
+  const corner: SpoutCorner | undefined = spout ? opts.addons?.spoutAt : undefined
+  const cc = corner ? spoutChamfer(W, st) : 0
+  // พิกัดท้องถิ่นของแผง (u จากขอบด้านจุก) → แผ่นคลี่
+  const cornerOnRight = (x0: number) => (x0 === 0) === (corner === 'right')
+  const local = (x0: number) => (u: number, y: number) => P(cornerOnRight(x0) ? x0 + W - u : x0 + u, y)
+  const cornerPanel = (x0: number) =>
+    filletPoly(
+      [
+        { x: cc, y: 0, r: SPOUT_CHAMFER_FILLET },
+        { x: W, y: 0, r: SPOUT_CORNER_R },
+        { x: W, y: filmH, r: SPOUT_CORNER_R },
+        { x: 0, y: filmH, r: SPOUT_CORNER_R },
+        { x: 0, y: cc, r: SPOUT_CHAMFER_FILLET },
+      ],
+      local(x0),
+      cornerOnRight(x0),
+    )
   const panelRect = (x0: number) =>
-    spout ? roundedRectPts(x0, 0, x0 + W, filmH, SPOUT_CORNER_R) : rect(x0, 0, x0 + W, filmH)
+    corner
+      ? cornerPanel(x0).pts
+      : spout
+        ? roundedRectPts(x0, 0, x0 + W, filmH, SPOUT_CORNER_R)
+        : rect(x0, 0, x0 + W, filmH)
   const panels: Panel[] = two
     ? [
         { id: 'front', parentId: null, outline: panelRect(0), stage: 0 },
@@ -201,10 +388,50 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const vfold = (x: number) => crease(`M ${x} 0 L ${x} ${filmH}`)
   const circlePath = (cx: number, cy: number, r: number) =>
     `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`
+  // ตำแหน่งจริงตามแนวกว้างของแต่ละช่วงฟิล์มในถุงที่ขึ้นรูป (X = x0 + dir·(u − a)) — ไดคัทหลังซีลตัดทะลุทุกชั้นที่ตำแหน่งเดียวกัน
+  // ใช้ทั้งขอบฟันปลาและรอยบาก (หลังกลับด้าน, จีบพับแบนในซีล, หลังสองซีกของซองหลังกลาง, ลิ้นกาวทับขอบหน้า)
+  const g = sideGusset
+  const regions: ZigRegion[] = two
+    ? [
+        { a: 0, b: W, x0: 0, dir: 1 },
+        { a: W, b: 2 * W, x0: W, dir: -1 }, // หลัง: มองจากหน้ากลับซ้าย-ขวา
+      ]
+    : pillow
+      ? [
+          { a: 0, b: pf, x0: W / 2, dir: 1 }, // ครีบซีลกลางหลัง (พับแนบหลัง)
+          { a: pf, b: pf + W / 2, x0: W / 2, dir: -1 },
+          { a: pf + W / 2, b: pf + 1.5 * W, x0: 0, dir: 1 },
+          { a: pf + 1.5 * W, b: pf + 2 * W, x0: W, dir: -1 },
+          { a: pf + 2 * W, b: width, x0: W / 2, dir: -1 },
+        ]
+      : [
+          { a: 0, b: W, x0: 0, dir: 1 },
+          { a: W, b: W + g / 2, x0: W, dir: -1 }, // จีบข้างขวาพับแบนเข้าในซีลบน
+          { a: W + g / 2, b: W + g, x0: W - g / 2, dir: 1 },
+          { a: W + g, b: 2 * W + g, x0: W, dir: -1 },
+          { a: 2 * W + g, b: 2 * W + 1.5 * g, x0: 0, dir: 1 }, // จีบข้างซ้าย
+          { a: 2 * W + 1.5 * g, b: Wp, x0: g / 2, dir: -1 },
+          { a: Wp, b: width, x0: 0, dir: 1 }, // ลิ้นกาวทับขอบซ้ายของหน้า
+        ]
+  const foldRegions = regions.filter((r) => r.b - r.a > 1e-6)
+  // ขอบบนฟันปลา: แทนขอบบนของเส้นตัดรอบแผ่น — ร่องที่ตัดทิ้งเข้า trims ให้ 3D
+  const zigGaps: Vec2[][] = []
+  const topEdge = (() => {
+    if (tear !== 'zigzag') return ` L ${width} 0`
+    const hy = hung ? hangHoleY(st) - HANG_HOLE_R - 1 : Infinity // ร่องฟันไม่กินถึงรูแขวน
+    const d = Math.max(0.8, Math.min(zigzagDepth(st), hy))
+    // ระยะฟันลงตัวพอดีกับกว้างหน้า — ขอบถุงสองข้างเป็นยอดฟัน
+    const p = W / Math.max(1, Math.round(W / ZIGZAG_PITCH))
+    const z = zigzagEdge(foldRegions, d, p)
+    zigGaps.push(...z.gaps)
+    return z.path
+  })()
   // ถุงมีจุก: แผงหน้า/หลังไดคัทมุมมน (รัศมี = ซีลข้าง) — ตัดแยกสองชิ้น ไม่ใช่สี่เหลี่ยมรวม
-  const segments: Segment[] = spout
+  const segments: Segment[] = corner
+    ? [0, W].map((x0) => cut(cornerPanel(x0).d))
+    : spout
     ? [0, W].map((x0) => cut(roundedRectPath(x0, 0, x0 + W, filmH, SPOUT_CORNER_R)))
-    : [cut(`M 0 0 L ${width} 0 L ${width} ${filmH} L 0 ${filmH} Z`)]
+    : [cut(`M 0 0${topEdge} L ${width} ${filmH} L 0 ${filmH} Z`)]
   if (doy) {
     // ต่อแผง [x0, x0+W]: เส้นซีลข้างสองด้านตลอดความสูง, ซีลบนระหว่างซีลข้าง,
     // ซีลก้นโค้ง (จากแนวบนของ gusset ที่ซีลข้าง โค้งลงกลางแผง) + แนวพับ gusset ช่วงซีลข้าง
@@ -214,10 +441,27 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     for (const x0 of [0, W]) {
       const l = x0 + pss
       const r = x0 + W - pss
+      if (corner) {
+        // จุกมุม: ซีลข้าง/ซีลบนฝั่งจุกเริ่มที่แนวซีลขนานขอบเฉียง (ห่างขอบเท่าซีลข้าง) — แนวนี้เชื่อมรอบเรือจุก
+        const L = local(x0)
+        const k = cc + pss * Math.SQRT2
+        const pa = L(pss, k - pss)
+        const pb = L(k - st, st)
+        const pt = (q: Vec2) => `${q.x} ${q.y}`
+        segments.push(
+          crease(`M ${pt(pa)} L ${pt(L(pss, filmH))}`),
+          crease(`M ${pt(L(W - pss, 0))} L ${pt(L(W - pss, filmH))}`),
+          crease(`M ${pt(pb)} L ${pt(L(W - pss, st))}`),
+          crease(`M ${pt(pa)} L ${pt(pb)}`),
+        )
+      } else {
+        segments.push(
+          crease(`M ${l} 0 L ${l} ${filmH}`),
+          crease(`M ${r} 0 L ${r} ${filmH}`),
+          crease(`M ${l} ${st} L ${r} ${st}`),
+        )
+      }
       segments.push(
-        crease(`M ${l} 0 L ${l} ${filmH}`),
-        crease(`M ${r} 0 L ${r} ${filmH}`),
-        crease(`M ${l} ${st} L ${r} ${st}`),
         // ก้น K: แนวพับก้นตรง + ซีลมุมทแยงสองข้าง (รูป K กับซีลข้าง); doypack: ซีลก้นโค้ง (round-bottom)
         ...(kseal
           ? [
@@ -313,7 +557,36 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     )
   }
 
-  if (spout) {
+  const trims: Vec2[][] = []
+  if (corner) {
+    // จุกมุม: เรือตั้งฉากกับขอบเฉียง กึ่งกลางขอบ (ท้องถิ่น: กลาง (c/2, c/2), ตามขอบ t = (1,−1)/√2, เข้าใน n = (1,1)/√2)
+    const { r: sr, bw, bh } = spoutMarker(W, st)
+    const hw = bw / 2
+    for (const x0 of [0, W]) {
+      const L = local(x0)
+      const q = (s: number, d: number) => {
+        const p = L(cc / 2 + (s + d) / Math.SQRT2, cc / 2 + (d - s) / Math.SQRT2)
+        return `${p.x} ${p.y}`
+      }
+      segments.push(
+        crease(`M ${q(-hw, 0)} L ${q(-hw, bh * 0.55)} Q ${q(-hw, bh)} ${q(0, bh)} Q ${q(hw, bh)} ${q(hw, bh * 0.55)} L ${q(hw, 0)}`),
+      )
+      // 3D: ฟิล์มมุมเฉียงที่ตัดทิ้ง + มุมบนอีกด้านที่มน (ทรง doypack ไม่ได้ตัดมุมเอง)
+      trims.push([L(-1, -1), L(cc, -1), L(cc, 0), L(0, cc), L(-1, cc)])
+      const R = SPOUT_CORNER_R
+      trims.push([
+        L(W + 1, -1),
+        L(W + 1, R),
+        ...Array.from({ length: 9 }, (_, k) => {
+          const a = (Math.PI / 2) * (k / 8)
+          return L(W - R + R * Math.cos(a), R - R * Math.sin(a))
+        }),
+        L(W - R, -1),
+      ])
+    }
+    const m = local(0)(cc / 2, cc / 2)
+    dims.push({ a: P(m.x - 1, m.y + 4), b: P(m.x + 1, m.y + 4), label: `จุกมุม ⌀${fmt(2 * sr)}` })
+  } else if (spout) {
     // จุกกลางขอบบน: แนวเชื่อม "เรือ" ของจุกบนทั้งสองแผง (เรือสอดระหว่างฟิล์มสองชั้นจากขอบบน) + ป้าย
     const { r: sr, bw, bh } = spoutMarker(W, st)
     for (const cx of [fcx, W + W / 2]) {
@@ -358,27 +631,33 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   }
 
   const tearNotches: Vec2[][] = []
-  if (zipper && zipY !== undefined && tearY !== undefined) {
-    // แนวซิปล็อกพาดขวางหน้า+หลัง + รอยฉีก (V) ที่ขอบซีลสองข้าง เหนือซิปเพื่อฉีกเปิดแล้วเหลือซิปไว้ปิดซ้ำ
+  if (zipper && zipY !== undefined) {
+    // แนวซิปล็อกพาดขวางหน้า+หลัง (แผงแยก: ระหว่างซีลข้างของแต่ละแผง)
+    if (two) for (const x0 of [0, W]) segments.push(crease(`M ${x0 + pss} ${zipY} L ${x0 + W - pss} ${zipY}`))
+    else segments.push(crease(`M 0 ${zipY} L ${Wp} ${zipY}`))
+    dims.push(
+      { a: P(0, zipY), b: P(Wp, zipY), label: `ซิปล็อก ${fmt(zipY)} (จากขอบบน)` },
+      { a: P(-12, 0), b: P(-12, zipY), label: `ซิป ${fmt(zipY)}` },
+    )
+  }
+  if (tear === 'zigzag') dims.push({ a: P(0, -6), b: P(width, -6), label: 'ขอบฟันปลา (รอยฉีก)' })
+  if (tearY !== undefined) {
+    // รอยฉีก (V) ที่ขอบซีลสองข้าง — มีซิปอยู่เหนือซิปเพื่อฉีกเปิดแล้วเหลือซิปไว้ปิดซ้ำ
     const nz = tearNotchDepth(two ? pss : ss) // ลึกไม่เกินแถบซีลข้าง
     const notch = (x: number, dir: 1 | -1) => {
       const tri = [P(x, tearY - TEAR_NOTCH_H), P(x + dir * nz, tearY), P(x, tearY + TEAR_NOTCH_H)]
       tearNotches.push(tri)
       return cut(`M ${tri[0].x} ${tri[0].y} L ${tri[1].x} ${tri[1].y} L ${tri[2].x} ${tri[2].y}`)
     }
-    if (two) {
-      // แนวซิปต่อแผงระหว่างซีลข้าง; รอยฉีกบากที่ซีลข้างทั้งสองด้านของทั้งสองแผง (ฉีกทะลุสองชั้น)
-      for (const x0 of [0, W]) segments.push(crease(`M ${x0 + pss} ${zipY} L ${x0 + W - pss} ${zipY}`))
-      segments.push(notch(0, 1), notch(W, -1), notch(W, 1), notch(2 * W, -1))
-    } else {
-      segments.push(crease(`M 0 ${zipY} L ${Wp} ${zipY}`))
-      segments.push(notch(0, 1)) // ขอบซ้าย (ริมกาว)
-      segments.push(notch(width, -1)) // ขอบขวา
+    // บากที่ขอบข้างจริงของถุงสองด้าน (X = 0, X = W) ทะลุทุกชั้นที่อยู่ตรงขอบนั้น: แผงแยก = หน้า/หลัง 4 บาก,
+    // ข้างพับ = ปลายช่วงฟิล์มทุกช่วงที่ไปจบที่ขอบ (หน้า/จีบ/หลัง/ลิ้นกาว) — ต้องครบทุกชั้น บากแค่ชั้นนอก ชั้นข้างหลังจะปิดรอยไว้
+    for (const r of foldRegions) {
+      for (const [u, inward] of [[r.a, 1], [r.b, -1]] as const) {
+        const X = r.x0 + r.dir * (u - r.a)
+        if (Math.abs(X) < 1e-6 || Math.abs(X - W) < 1e-6) segments.push(notch(u, inward))
+      }
     }
-    dims.push(
-      { a: P(0, zipY), b: P(Wp, zipY), label: `ซิปล็อก ${fmt(zipY)} · รอยฉีก ${fmt(tearY)} (จากขอบบน)` },
-      { a: P(-12, 0), b: P(-12, zipY), label: `ซิป ${fmt(zipY)}` },
-    )
+    dims.push({ a: P(width + 4, tearY), b: P(width + 10, tearY), label: `รอยฉีก ${fmt(tearY)} (จากขอบบน)` })
   }
 
   return {
@@ -400,9 +679,12 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     sideSeal: pss,
     zipper,
     zipY,
+    tear,
     tearY,
     tearNotches,
     hangHoles,
+    ...(corner ? { spoutCorner: { side: corner, c: cc } } : {}),
+    trims: [...trims, ...zigGaps],
     ...(valveAt ? { valveAt } : {}),
     hangHole,
     valve,
@@ -786,7 +1068,7 @@ export interface BrickShape {
 
 const brickB = (b0: number, finHalf: number, u: number) => finHalf + (b0 - finHalf) * (1 - Math.max(0, Math.min(1, u)) ** BRICK_BULLET)
 
-export function brickShape(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect' | 'zipY'>): BrickShape {
+export function brickShape(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect' | 'zipY'> & { tear?: TearStyle }): BrickShape {
   const a = p.W / 2
   const b0 = p.depth3D
   const finHalf = 0.35 // ซีลเป็นฟิล์มบาง ความหนาไม่เพิ่มตามขนาดถุง
@@ -833,7 +1115,8 @@ export function brickShape(p: Pick<Pouch, 'W' | 'H' | 'depth3D' | 'frontRect' | 
     wallL: samples[N].s,
     bodyH,
     finH,
-    cornerR: Math.max(0, Math.min(BRICK_CORNER_R, finH * 0.6, a * 0.3)),
+    // ขอบฟันปลา: มุมเหลี่ยม — มุมมนทำโดยหดแถวบนสุดเข้า ฟันทุกชั้นจะเลื่อนไม่ตรงกัน (ขอบบนเป็นฟันไปจนสุดขอบอยู่แล้ว)
+    cornerR: p.tear === 'zigzag' ? 0 : Math.max(0, Math.min(BRICK_CORNER_R, finH * 0.6, a * 0.3)),
     topY: bodyH + flatL + finH,
     samples,
   }

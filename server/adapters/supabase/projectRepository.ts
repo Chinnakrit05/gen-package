@@ -7,6 +7,10 @@ import type {
   LegacyImportInput,
   LegacyImportReceipt,
   ProjectPage,
+  ProjectThumbnailImage,
+  ProjectThumbnailMeta,
+  ProjectThumbnailReceipt,
+  PutProjectThumbnailInput,
   SaveProjectInput,
   SaveReceipt,
 } from '../../../shared/contracts/projects'
@@ -20,6 +24,9 @@ import {
   deleteReceiptSchema,
   legacyImportReceiptSchema,
   projectListRowSchema,
+  projectThumbnailImageRowSchema,
+  projectThumbnailMetaRowSchema,
+  projectThumbnailReceiptSchema,
   saveReceiptSchema,
 } from '../../modules/projects/validation'
 
@@ -48,8 +55,14 @@ function mapDatabaseError(error: PostgrestError): HttpError {
   if (error.message.includes('APP_USER_NOT_ACTIVE')) {
     return new HttpError(403, 'USER_NOT_ACTIVE', 'บัญชีนี้ไม่พร้อมใช้งาน')
   }
+  if (error.message.includes('THUMBNAIL_INVALID') || error.message.includes('THUMBNAIL_LIMIT_INVALID')) {
+    return new HttpError(422, 'VALIDATION_ERROR', 'ข้อมูลภาพย่อไม่ถูกต้อง')
+  }
   return new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'ฐานข้อมูลโปรเจกต์ไม่พร้อมใช้งาน')
 }
+
+// version ของภาพย่อเป็นเวลาบันทึก — ทำเป็น ISO รูปเดียวกันทุกทาง (jsonb/แถวตาราง) ให้ client เทียบกับแคชได้ตรง
+const thumbnailVersion = (value: string) => new Date(value).toISOString()
 
 function providerContractError(): HttpError {
   return new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'ฐานข้อมูลคืนข้อมูลโปรเจกต์ไม่ถูกต้อง')
@@ -160,6 +173,53 @@ export class SupabaseProjectRepository implements ProjectRepository {
     const parsed = deleteReceiptSchema.safeParse(data)
     if (!parsed.success) throw providerContractError()
     return parsed.data
+  }
+
+  async putThumbnail(actor: Actor, projectId: string, input: PutProjectThumbnailInput): Promise<ProjectThumbnailReceipt> {
+    const { data, error } = await this.client.rpc('put_project_thumbnail', {
+      p_actor_user_id: actor.userId,
+      p_project_id: projectId,
+      p_mime_type: input.mimeType,
+      p_image_base64: input.imageBase64,
+      p_kind: input.kind,
+      p_label: input.label,
+    })
+    if (error) throw mapDatabaseError(error)
+    const parsed = projectThumbnailReceiptSchema.safeParse(data)
+    if (!parsed.success) throw providerContractError()
+    return { ...parsed.data, version: thumbnailVersion(parsed.data.version) }
+  }
+
+  async thumbnailMeta(actor: Actor, workspaceId: string, projectIds: string[]): Promise<Map<string, ProjectThumbnailMeta>> {
+    const { data, error } = await this.client.rpc('list_project_thumbnail_meta', {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId,
+      p_project_ids: projectIds,
+    })
+    if (error) throw mapDatabaseError(error)
+    const parsed = projectThumbnailMetaRowSchema.array().safeParse(data)
+    if (!parsed.success) throw providerContractError()
+    return new Map(parsed.data.map((row) => [
+      row.project_id,
+      { version: thumbnailVersion(row.thumbnail_version), kind: row.kind, label: row.label },
+    ]))
+  }
+
+  async thumbnails(actor: Actor, workspaceId: string, projectIds: string[]): Promise<ProjectThumbnailImage[]> {
+    const { data, error } = await this.client.rpc('get_project_thumbnails', {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId,
+      p_project_ids: projectIds,
+    })
+    if (error) throw mapDatabaseError(error)
+    const parsed = projectThumbnailImageRowSchema.array().safeParse(data)
+    if (!parsed.success) throw providerContractError()
+    return parsed.data.map((row) => ({
+      projectId: row.project_id,
+      version: thumbnailVersion(row.thumbnail_version),
+      mimeType: row.mime_type,
+      imageBase64: row.image_base64,
+    }))
   }
 }
 
