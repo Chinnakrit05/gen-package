@@ -80,7 +80,8 @@ export interface RectSection {
   b: number // ครึ่งลึก (แกน z ด้านหน้า +z) ที่ลำตัว
   rc: number // รัศมีมุมมนที่ลำตัว
   R: number // รัศมีโปรไฟล์ที่ลำตัว (= W/2) — อ้างอิงไล่หน้าตัดตามโปรไฟล์
-  rn: number // รัศมีคอ — หน้าตัดเป็นวงกลมตั้งแต่ระดับนี้ขึ้นไป
+  rn: number // รัศมีคอ — ไล่หน้าตัดจากลำตัว (R) ถึงคอ (rn)
+  yn?: number // ความสูงโคนคอ — ตั้งแต่ระดับนี้ขึ้นไป (คอ/ขอบปาก/ปาก) กลมเสมอ แม้รัศมีขอบปากจะกว้างกว่าคอ
 }
 export const RECT_BOTTLE_MATS = ['glass', 'pet-bottle']
 export const canRectBottle = (matId: string) => RECT_BOTTLE_MATS.includes(matId)
@@ -89,8 +90,9 @@ export const RECT_DEPTH_MAX = 250
 export const rectDepthMin = (D: number) => Math.max(20, Math.min(Math.max(D / 2, 5) * 2 + 4, 250)) // ลึกพอให้คอผ่าน
 export const defaultRectDepth = (W: number, D: number) => Math.max(rectDepthMin(D), Math.round(W * 0.6))
 // หน้าตัดที่ระดับซึ่งโปรไฟล์ขวดกลมมีรัศมี r: ลำตัว (r = R) = สี่เหลี่ยมมุมมนเต็ม, คอ (r ≤ rn) = วงกลมรัศมี r
-export function rectSectionAt(s: RectSection, r: number): { a: number; b: number; rc: number } {
-  if (r <= s.rn + 1e-9) return { a: r, b: r, rc: r }
+// y = ความสูงของจุดบนโปรไฟล์ (ไม่ส่ง = ตัดสินจากรัศมีอย่างเดียว)
+export function rectSectionAt(s: RectSection, r: number, y?: number): { a: number; b: number; rc: number } {
+  if (r <= s.rn + 1e-9 || (y !== undefined && s.yn !== undefined && y >= s.yn - 1e-9)) return { a: r, b: r, rc: r }
   const t = Math.min(1, (r - s.rn) / Math.max(1e-9, s.R - s.rn))
   const a = s.rn + (s.a - s.rn) * t
   const b = s.rn + (s.b - s.rn) * t
@@ -531,7 +533,8 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
     shape.rectDepth !== undefined && canRectBottle(mat.id)
       ? (() => {
           const b = Math.min(RECT_DEPTH_MAX, Math.max(rectDepthMin(D), shape.rectDepth)) / 2
-          return { a: R, b, rc: RECT_CORNER * Math.min(R, b), R, rn }
+          // ขอบปากวงแหวนกว้างกว่าคอ — ถ้าไล่ตามรัศมีอย่างเดียวจะได้ปากเหลี่ยมนิด ๆ จึงล็อกกลมตั้งแต่โคนคอ
+          return { a: R, b, rc: RECT_CORNER * Math.min(R, b), R, rn, ...(mouth ? { yn: mouth.neckY } : {}) }
         })()
       : undefined
 

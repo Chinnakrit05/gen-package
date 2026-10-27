@@ -117,3 +117,19 @@ describe('บันทึก/นำเข้า rectDepth', () => {
     expect(back.ok && back.project.rectDepth).toBe(41.5)
   })
 })
+
+describe('ขวดเหลี่ยม: คอ/ปากกลมเสมอ', () => {
+  for (const id of ['glass', 'pet-bottle'] as const) {
+    it(`${id}: ทุกจุดของโปรไฟล์ตั้งแต่โคนคอขึ้นไป (รวมขอบปากวงแหวนที่กว้างกว่าคอ) หน้าตัดเป็นวงกลม`, () => {
+      const v = generateVessel(box, getMaterial(id), 'body', { rectDepth: 40 })
+      const rs = v.rect!
+      expect(rs.yn).toBe(v.mouth!.neckY)
+      const neck = v.profile.filter((p) => p.y >= rs.yn!)
+      expect(neck.some((p) => p.x > rs.rn)).toBe(true) // มีขอบปากที่กว้างกว่าคอจริง (เคสที่เคยเหลี่ยม)
+      for (const p of neck) expect(rectSectionAt(rs, p.x, p.y)).toEqual({ a: p.x, b: p.x, rc: p.x })
+      // ลำตัวยังเหลี่ยม
+      const body = rectSectionAt(rs, rs.R, (v.labelY0 + v.labelY1) / 2)
+      expect(body.a).not.toBe(body.b)
+    })
+  }
+})

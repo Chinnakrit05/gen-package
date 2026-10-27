@@ -86,7 +86,7 @@ export function rectBodyGeometry(profile: { x: number; y: number }[], rs: RectSe
   const pos: number[] = []
   const idx: number[] = []
   for (const p of profile) {
-    const s = rectSectionAt(rs, p.x)
+    const s = rectSectionAt(rs, p.x, p.y)
     const per = roundedRectPerimeter(s.a, s.b, s.rc)
     for (let k = 0; k <= N; k++) {
       const [x, z] = roundedRectPoint(s.a, s.b, s.rc, per / 2 + (per * k) / N)
