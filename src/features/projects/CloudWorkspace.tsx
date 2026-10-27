@@ -74,6 +74,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
   const [workspace, setWorkspace] = useState<WorkspaceState>({ status: 'loading' })
   const [items, setItems] = useState<ProjectSummary[]>([])
   const [saveState, setSaveState] = useState<ProjectSaveState>('loading')
+  const [saveError, setSaveError] = useState<Error | null>(null)
   const [online, setOnline] = useState(() => navigator.onLine)
   const [migration, setMigration] = useState<LegacyMigrationJournal | null>(null)
   const [migrationBusy, setMigrationBusy] = useState(false)
@@ -281,6 +282,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     const unsubscribe = controller.subscribe((state) => {
       if (!active || state.status !== 'ready') return
       setSaveState(state.save.state)
+      setSaveError(state.save.error)
       setItems((current) => current.map((item) => item.id === state.project.id
         ? { ...item, name: state.project.name, revision: state.save.baseRevision }
         : item))
@@ -454,6 +456,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     })).items,
     online,
     saveState,
+    saveError,
     entitlements,
     entitlementsStatus,
     refreshEntitlements: () => refreshEntitlements(),
@@ -599,7 +602,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
         throw error
       }
     },
-  }), [clientId, controller, createFromEditor, entitlements, entitlementsStatus, items, mutations, online, props.apiBaseUrl, props.workspaceId, refreshEntitlements, refreshItems, saveState, scope, setEntitlementsStatus, store, subscribeRemoteProject])
+  }), [clientId, controller, createFromEditor, entitlements, entitlementsStatus, items, mutations, online, props.apiBaseUrl, props.workspaceId, refreshEntitlements, refreshItems, saveError, saveState, scope, setEntitlementsStatus, store, subscribeRemoteProject])
 
   if (workspace.status === 'loading') {
     return <LoadingStage title="กำลังเปิดงาน" message="กำลังโหลดโปรเจกต์และฉบับร่างล่าสุด…" />

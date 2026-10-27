@@ -9,6 +9,7 @@ import type {
   InternalAsset,
 } from '../../modules/assets/assetRepository'
 import { AssetService } from '../../modules/assets/assetService'
+import type { StorageQuota } from '../../modules/billing/storageQuota'
 import {
   StorageObjectMissingError,
   type ObjectStorage,
@@ -259,9 +260,10 @@ class SupabaseObjectStorage implements ObjectStorage {
 
 export function createSupabaseAssetService(
   config: NonNullable<ServerConfig['supabase']>,
+  quota: StorageQuota | null = null,
 ): AssetService {
   const client = createClient(config.url, config.secretKey, {
     auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
   })
-  return new AssetService(new SupabaseAssetRepository(client), new SupabaseObjectStorage(client))
+  return new AssetService(new SupabaseAssetRepository(client), new SupabaseObjectStorage(client), quota)
 }

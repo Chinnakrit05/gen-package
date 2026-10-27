@@ -22,6 +22,7 @@ export const API_ERROR_CODES = [
   'PURCHASE_UNAVAILABLE', // 503 — ยังไม่เปิดขาย (ยังไม่มีผู้ให้บริการชำระเงิน) ดู Entitlements.purchasesEnabled
   'REVISION_CONFLICT',
   'SESSION_INVALID',
+  'STORAGE_QUOTA_EXCEEDED', // 402 — พื้นที่เก็บงานบน cloud เต็มตามแพ็กเกจ (ยังไม่เปิดใช้) ดู docs/billing-freemium-pro.md
   'USER_NOT_ACTIVE',
   'UNSUPPORTED_MEDIA_TYPE',
   'VALIDATION_ERROR',
