@@ -108,6 +108,7 @@ import {
   type PouchAddons,
   type SpoutCorner,
   type TearStyle,
+  notchInTopSeal,
   resolveTear,
 } from './core/pouch'
 import { pouchZipIssues } from './core/pouchPreflight'
@@ -4777,9 +4778,11 @@ export default function App({
                           })
                         }
                       />
-                      {zipper
-                        ? t(`วางรอยฉีกอัตโนมัติ (เหนือซิป ${TEAR_GAP} มม.)`, `Place tear notch automatically (${TEAR_GAP} mm above zipper)`)
-                        : t('วางรอยฉีกอัตโนมัติ (ใต้ซีลบน)', 'Place tear notch automatically (below the top seal)')}
+                      {notchInTopSeal(pouchStyle)
+                        ? t('วางรอยฉีกอัตโนมัติ (ในแนวซีลบน — ข้างถุงเป็นรอยพับ บากต่ำกว่าซีลจะรั่ว)', 'Place tear notch automatically (within the top seal — folded sides would leak below it)')
+                        : zipper
+                          ? t(`วางรอยฉีกอัตโนมัติ (เหนือซิป ${TEAR_GAP} มม.)`, `Place tear notch automatically (${TEAR_GAP} mm above zipper)`)
+                          : t('วางรอยฉีกอัตโนมัติ (ใต้ซีลบน)', 'Place tear notch automatically (below the top seal)')}
                     </label>
                     {pouchAddons.tearAt !== undefined && (
                       <DimField

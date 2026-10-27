@@ -7,6 +7,7 @@ import {
   TEAR_NOTCH_H,
   ZIP_HALF,
   hangHoleY,
+  notchInTopSeal,
   spoutCornerReach,
   spoutMarker,
   valveR,
@@ -28,6 +29,7 @@ export type PouchIssueCode =
   | 'zip-tintie'
   | 'zip-spout'
   | 'tear-spout'
+  | 'tear-fold'
 
 export interface PouchIssue {
   code: PouchIssueCode
@@ -49,9 +51,20 @@ export function pouchZipIssues(p: Pouch): PouchIssue[] {
   const add = (code: PouchIssueCode, level: PouchIssue['level'], th: string, en: string) =>
     out.push({ code, level, th, en })
 
+  // ข้างถุงเป็นรอยพับ (ไม่มีซีลข้าง): รอยบากต้องอยู่ในซีลบน — ต่ำกว่านั้นตัดทะลุเข้าถุง
+  const folded = notchInTopSeal(p.style)
   // รอยบาก vs ซีลบน
   if (tearY === undefined) {
     // ไม่มีรอยบาก
+  } else if (folded) {
+    if (tearY + TEAR_NOTCH_H > st) {
+      add(
+        'tear-fold',
+        'error',
+        `ข้างถุงแบบนี้เป็นรอยพับ ไม่มีซีลข้าง — รอยบากต่ำกว่าซีลบน (${f(st)} มม.) จะตัดทะลุเข้าถุงจนรั่ว ต้องอยู่ในแนวซีลบน`,
+        `This pouch has folded sides (no side seal) — a notch below the top seal (${f(st)} mm) cuts into the bag and leaks; keep it within the top seal`,
+      )
+    }
   } else if (tearY <= st) {
     add(
       'tear-in-seal',
@@ -90,8 +103,8 @@ export function pouchZipIssues(p: Pouch): PouchIssue[] {
 
   // ซิปชิดซีลจนไม่มีที่ให้รอยบาก (ต้องมี: ซีล + ระยะพ้นซีล + ระยะเหนือปีกซิป) — เฉพาะเมื่อมีรอยบาก
   const zipMin = st + TEAR_SEAL_GAP + TEAR_GAP
-  if (tearY === undefined) {
-    // ซิปอย่างเดียว: ต้องพ้นซีลบน
+  if (tearY === undefined || folded) {
+    // ซิปอย่างเดียว (หรือรอยบากอยู่ในซีลบน): ซิปแค่ต้องพ้นซีลบน
     if (zipY - ZIP_HALF <= st) {
       add(
         'zip-near-seal',

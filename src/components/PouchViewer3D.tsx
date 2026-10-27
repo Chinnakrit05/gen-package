@@ -575,19 +575,25 @@ export function buildPouchGeometry(pouch: Pouch) {
       }
       const sideCount = idx.length
       // ขอบซีลรอบ 4 ด้าน (หนา 2·FIN) — หน้า col k คู่กับหลัง col (cols−1−k) ที่ x เดียวกัน
-      const quad = (a: number[], b: number[], c: number[], d: number[]) => {
+      // UV = ตำแหน่งขอบบนแผ่นคลี่ของหน้า (u, v ต่อจุด) ให้ mask รอยบาก/ขอบฟันปลาเจาะขอบหนาด้วย — ไม่งั้นแถบขอบ
+      // ยังปิดปากรอยบากไว้ เห็นเป็นรูเล็ก ๆ ในซีลแทนรอยบากเปิดที่ขอบ
+      const quad = (a: number[], b: number[], c: number[], d: number[], uvs: [number, number][]) => {
         const i0 = pos.length / 3
         pos.push(...a, ...b, ...c, ...d)
-        for (let k = 0; k < 4; k++) uv.push(0, 0)
+        for (const [u, v] of uvs) uv.push(u / dw, v / dh)
         idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3)
       }
       const lastJ = vs.length - 1
       for (let j = 0; j < lastJ; j++) {
-        quad(P(1, j, 0), P(-1, j, cols - 1), P(-1, j + 1, cols - 1), P(1, j + 1, 0))
-        quad(P(1, j, cols - 1), P(-1, j, 0), P(-1, j + 1, 0), P(1, j + 1, cols - 1))
+        const [v0, v1] = [vs[j], vs[j + 1]]
+        quad(P(1, j, 0), P(-1, j, cols - 1), P(-1, j + 1, cols - 1), P(1, j + 1, 0), [[0, v0], [0, v0], [0, v1], [0, v1]])
+        quad(P(1, j, cols - 1), P(-1, j, 0), P(-1, j + 1, 0), P(1, j + 1, cols - 1), [[W, v0], [W, v0], [W, v1], [W, v1]])
       }
       for (let k = 0; k < cols - 1; k++) {
-        for (const j of [0, lastJ]) quad(P(1, j, k), P(1, j, k + 1), P(-1, j, cols - 2 - k), P(-1, j, cols - 1 - k))
+        for (const j of [0, lastJ]) {
+          const v = vs[j]
+          quad(P(1, j, k), P(1, j, k + 1), P(-1, j, cols - 2 - k), P(-1, j, cols - 1 - k), [[us[k], v], [us[k + 1], v], [us[k + 1], v], [us[k], v]])
+        }
       }
       const geoF = new THREE.BufferGeometry()
       geoF.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))

@@ -125,3 +125,37 @@ describe('ขอบฟันปลา: ฟันทุกชั้นตรง�
     }
   })
 })
+
+describe('รอยบาก V: ทะลุทุกชั้นที่ขอบข้างจริงของถุง', () => {
+  // จุดยอดบากที่ขอบ (ตำแหน่ง u ของปากบาก) ของแต่ละสามเหลี่ยม
+  const mouths = (p: ReturnType<typeof make>) => p.tearNotches.map((t) => t[0].x).sort((a, b) => a - b)
+
+  it('ซองแบน/ถุงตั้ง: แผงหน้า-หลังสองข้าง = 4 บาก ใต้ซีลบน', () => {
+    for (const style of ['flat', 'stand'] as const) {
+      const p = make(style, false, { tear: 'notch' })
+      expect(mouths(p)).toEqual([0, box.W, box.W, 2 * box.W])
+      expect(p.tearY!).toBeGreaterThan(p.frontRect.y)
+    }
+  })
+
+  it('ซองข้างจีบ: บากทุกชั้นที่ขอบพับ (หน้า/จีบสองชั้น/หลัง/ลิ้นกาว) และอยู่ในแนวซีลบน (ข้างพับใต้ซีลจะรั่ว)', () => {
+    const p = make('gusset', false, { tear: 'notch' })
+    const { W } = box
+    const g = p.gusset
+    const Wp = 2 * W + 2 * g
+    expect(mouths(p)).toEqual([0, W, W, W + g, W + g, 2 * W + g, 2 * W + g, Wp, Wp].sort((a, b) => a - b))
+    expect(p.tearY! + 2.5).toBeLessThanOrEqual(p.frontRect.y)
+    expect(pouchZipIssues(p)).toEqual([])
+    // ผู้ใช้เลื่อนลงใต้ซีล → error รั่ว
+    const low = make('gusset', false, { tear: 'notch', tearAt: p.frontRect.y + 10 })
+    expect(pouchZipIssues(low).map((i) => i.code)).toContain('tear-fold')
+  })
+
+  it('ซองหลังกลาง: บากที่สันพับสองข้าง ทั้งหน้าและหลัง ในแนวซีลบน (ไม่ใช่ปลายครีบกลางหลัง)', () => {
+    const p = make('pillow', false, { tear: 'notch' })
+    const f0 = p.frontRect.x
+    const { W } = box
+    expect(mouths(p)).toEqual([f0, f0, f0 + W, f0 + W])
+    expect(p.tearY! + 2.5).toBeLessThanOrEqual(p.frontRect.y)
+  })
+})
