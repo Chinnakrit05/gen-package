@@ -3,7 +3,9 @@
 //   artwork = ออกแบบหน้าตาบน template ปัจจุบัน (src/core/aiArtwork + /api/ai-artwork) — local dev ก่อน (cloud ยังไม่มี)
 // ผลลัพธ์ทุกแบบถูก "วางลงงานทันที" (undo ได้) แล้วโชว์เป็นการ์ดในบทสนทนา; ผล artwork เก็บเป็น snapshot ให้เปิดดู/สลับบนเวที 3D
 import { useEffect, useRef, useState } from 'react'
+import { AI_MODEL_CHOICES, aiModelLabel, isAiModelChoice, type AiModelChoice, type AiUsageReport } from '../../shared/contracts/aiModels'
 import { requestArtworkPlan, requestBoxSpec, type AiBoxSpec, type ArtworkImageInput, type ArtworkRequestInput, type CurrentSpec } from '../core/ai'
+import { approxThb, formatUsd, modelPriceLabel, usageRows } from '../core/aiUsage'
 import { compileArtworkPlan, labelFrontZone, panelBoxes, parseArtworkPlan, type ArtIssue } from '../core/aiArtwork'
 import { loadImageFile, loadTextFont, measureText, type Deco, type FillImage } from '../core/artwork'
 import type { Dieline } from '../core/types'
@@ -20,6 +22,10 @@ export interface AiArtworkResult {
   mode: 'replace' | 'append'
   explanation: string
   warnings: ArtIssue[]
+  // ช่วงพัฒนา: รุ่นที่ตอบ + โทเคน/ค่าใช้จ่าย + เวลา ให้เวที 3D เทียบแบบจากหลายรุ่นได้
+  model?: string
+  usage?: AiUsageReport | null
+  seconds?: number
 }
 
 // บริบทของโหมด artwork — App ส่งมาเมื่อใช้ได้ (local); null = ยังไม่เปิดบน cloud
@@ -62,11 +68,21 @@ const ART_PHASES: { at: number; th: string; en: string }[] = [
   { at: 140, th: 'ตรวจระยะขอบและวางลงแผ่นคลี่', en: 'Checking margins and placing on the sheet' },
 ]
 const ART_EXPECTED_S = 160
+// รุ่นที่เลือกล่าสุด (จำต่อเบราว์เซอร์ — เปิดแผงใหม่ไม่ต้องเลือกซ้ำ); อ่าน/เขียนไม่ได้ (โหมดส่วนตัว) = เริ่มที่ Opus
+const MODEL_KEY = 'packit-ai-model'
+function loadModelChoice(): AiModelChoice {
+  try {
+    const v = localStorage.getItem(MODEL_KEY)
+    return isAiModelChoice(v) ? v : AI_MODEL_CHOICES[0].id
+  } catch {
+    return AI_MODEL_CHOICES[0].id
+  }
+}
 
 type Msg =
   | { id: string; role: 'user'; text: string; mode: CopilotMode; images: RefImage[]; logo: RefImage | null }
   | { id: string; role: 'ai'; kind: 'spec'; spec: AiBoxSpec; label: string }
-  | { id: string; role: 'ai'; kind: 'artwork'; snapshotId: string; explanation: string; count: number; warnings: ArtIssue[]; placeholders: string[]; model: string; mock: boolean }
+  | { id: string; role: 'ai'; kind: 'artwork'; snapshotId: string; explanation: string; count: number; warnings: ArtIssue[]; placeholders: string[]; model: string; mock: boolean; usage: AiUsageReport | null; seconds: number }
   | { id: string; role: 'ai'; kind: 'error'; text: string }
   | { id: string; role: 'ai'; kind: 'cancelled' }
 
@@ -87,6 +103,8 @@ export interface CopilotDrawerProps {
   blockedReason?: string
   onBlocked?: () => void
   onError?: (code: string, message: string) => void
+  // ช่วงพัฒนา: โชว์ตัวเลือกรุ่น AI (Opus/Sonnet/Haiku) + โทเคน/ค่าใช้จ่ายจริงหลังทำเสร็จ — cloud ตาม Entitlements.aiModelChoice
+  modelChoice?: boolean
 }
 
 let seq = 0
@@ -118,6 +136,7 @@ export function CopilotDrawer({
   blockedReason,
   onBlocked,
   onError,
+  modelChoice = false,
 }: CopilotDrawerProps) {
   const t = useT()
   const [mode, setMode] = useState<CopilotMode>(SPEC_MODE_COMING_SOON || (artwork && hasDesign) ? 'artwork' : 'spec')
@@ -125,6 +144,7 @@ export function CopilotDrawer({
   const [refs, setRefs] = useState<RefImage[]>([])
   const [logo, setLogo] = useState<{ ref: RefImage; asset: { src: string; aspect: number } } | null>(null)
   const [artMode, setArtMode] = useState<'replace' | 'append'>('replace')
+  const [aiModel, setAiModel] = useState<AiModelChoice>(loadModelChoice)
   const [apiKey, setApiKey] = useState('')
   const [keyOpen, setKeyOpen] = useState(false)
   const [messages, setMessages] = useState<Msg[]>([])
@@ -154,6 +174,14 @@ export function CopilotDrawer({
   }, [open])
 
   const push = (m: Msg) => setMessages((ms) => [...ms, m])
+  const pickModel = (id: AiModelChoice) => {
+    setAiModel(id)
+    try {
+      localStorage.setItem(MODEL_KEY, id)
+    } catch {
+      // เก็บไม่ได้ (โหมดส่วนตัว) ก็ใช้ได้ในแท็บนี้
+    }
+  }
   const setLoading = (v: boolean) => {
     onLoadingChange(v)
   }
@@ -194,7 +222,7 @@ export function CopilotDrawer({
     push({ id: nextId(), role: 'ai', kind: 'spec', spec, label })
   }
 
-  const runArtwork = async (prompt: string, signal: AbortSignal) => {
+  const runArtwork = async (prompt: string, signal: AbortSignal, startedAt: number) => {
     if (!artwork) throw new Error(t('ยังไม่มีแบบให้ออกแบบหน้าตา', 'There is no design to decorate yet'))
     const panels = panelBoxes(artwork.dieline)
     const images: ArtworkImageInput[] = [
@@ -215,6 +243,7 @@ export function CopilotDrawer({
       existing: artMode === 'replace' ? 0 : artwork.existingCount,
       images,
       ...(front ? { front } : {}),
+      ...(modelChoice ? { model: aiModel } : {}),
     }
     const request = artwork.request ?? requestArtworkPlan
     const res = await request(input, allowApiKey && apiKey.trim() ? apiKey.trim() : undefined, signal)
@@ -237,10 +266,12 @@ export function CopilotDrawer({
         warnings = [...warnings, { severity: 'warning', code: 'raster-failed', message: t(`แปลงรูป ${prepared.dropped} ชิ้นเป็นภาพสำหรับ cloud ไม่สำเร็จ จึงตัดออก`, `${prepared.dropped} image(s) could not be converted for cloud and were removed`) }]
       }
     }
-    artwork.onApply({ decos, fillColor: compiled.fillColor, fillImage, mode: artMode, explanation: parsed.plan.explanation, warnings })
+    const usage = res.usage ?? null
+    const seconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+    artwork.onApply({ decos, fillColor: compiled.fillColor, fillImage, mode: artMode, explanation: parsed.plan.explanation, warnings, model: res.model, usage, seconds })
     push({
       id: nextId(), role: 'ai', kind: 'artwork', snapshotId: '', explanation: parsed.plan.explanation, count: decos.length,
-      warnings, placeholders: placeholderFields(decos), model: res.model, mock: res.mock,
+      warnings, placeholders: placeholderFields(decos), model: res.model, mock: res.mock, usage, seconds,
     })
   }
 
@@ -257,11 +288,12 @@ export function CopilotDrawer({
     setText('')
     const ac = new AbortController()
     abortRef.current = ac
-    setBusy({ mode: runMode, startedAt: Date.now() })
-    setNow(Date.now())
+    const startedAt = Date.now()
+    setBusy({ mode: runMode, startedAt })
+    setNow(startedAt)
     setLoading(true)
     try {
-      if (runMode === 'artwork') await runArtwork(p, ac.signal)
+      if (runMode === 'artwork') await runArtwork(p, ac.signal, startedAt)
       else await runSpec(p, withCurrent, label)
       setRefs([])
     } catch (e) {
@@ -441,8 +473,28 @@ export function CopilotDrawer({
               <div className="cp-card">
                 <div className="cp-card-head">
                   <strong>{t(`วางลายแล้ว ${m.count} ชิ้น`, `Placed ${m.count} elements`)}</strong>
-                  <span>{m.mock ? t('โหมดจำลอง', 'mock mode') : m.model} · {t('วางในงานแล้ว · Ctrl+Z ย้อนได้', 'applied to the job · Ctrl+Z to undo')}</span>
+                  <span>{m.mock ? t('โหมดจำลอง', 'mock mode') : aiModelLabel(m.model)} · {t('วางในงานแล้ว · Ctrl+Z ย้อนได้', 'applied to the job · Ctrl+Z to undo')}</span>
                 </div>
+                {m.usage ? (
+                  <div className="cp-usage" aria-label={t('โทเคนและค่าใช้จ่ายของแบบนี้', 'Tokens and cost of this design')}>
+                    <div className="cp-usage-head">
+                      <strong>{aiModelLabel(m.usage.model)}</strong>
+                      <span className="cp-usage-cost">
+                        {m.usage.costUsd === null
+                          ? t('ไม่ทราบราคารุ่นนี้', 'Unknown price for this model')
+                          : `${formatUsd(m.usage.costUsd)} · ${t(`≈ ${approxThb(m.usage.costUsd)} บาท`, `≈ ${approxThb(m.usage.costUsd)} THB`)}`}
+                      </span>
+                      <span className="cp-usage-time">{t(`${m.seconds} วิ`, `${m.seconds}s`)}</span>
+                    </div>
+                    <dl>
+                      {usageRows(m.usage).map((r) => (
+                        <div key={r.en}><dt>{t(r.th, r.en)}</dt><dd>{r.value}</dd></div>
+                      ))}
+                    </dl>
+                  </div>
+                ) : modelChoice && !m.mock ? (
+                  <div className="cp-note">{t('ไม่มีข้อมูลโทเคน — เรียกผ่าน Claude CLI ไม่ใช่ API (ใส่คีย์เพื่อดูค่าใช้จ่ายจริง)', 'No token data — this ran through the Claude CLI, not the API (add a key to see the real cost)')}</div>
+                ) : null}
                 <p className="cp-reason">{m.explanation}</p>
                 {m.placeholders.length > 0 && (
                   <div className="cp-fill">
@@ -526,6 +578,27 @@ export function CopilotDrawer({
                 <button type="button" aria-label={t('เอาโลโก้ออก', 'Remove logo')} onClick={() => setLogo(null)}>×</button>
               </span>
             )}
+          </div>
+        )}
+        {artworkOn && modelChoice && (
+          <div className="cp-models" role="radiogroup" aria-label={t('รุ่น AI (ทดสอบช่วงพัฒนา)', 'AI model (dev testing)')}>
+            <span className="cp-models-k">{t('รุ่น AI', 'Model')}</span>
+            {AI_MODEL_CHOICES.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                role="radio"
+                aria-checked={aiModel === c.id}
+                className={`cp-model${aiModel === c.id ? ' on' : ''}`}
+                disabled={!!busy}
+                aria-label={t(`${c.label} (${modelPriceLabel(c.id)} ต่อ 1 ล้านโทเคน)`, `${c.label} (${modelPriceLabel(c.id)} per 1M tokens)`)}
+                title={t(`ราคา input / output ต่อ 1 ล้านโทเคน: ${modelPriceLabel(c.id)}`, `Input / output price per 1M tokens: ${modelPriceLabel(c.id)}`)}
+                onClick={() => pickModel(c.id)}
+              >
+                <strong>{c.label}</strong>
+                <em>{modelPriceLabel(c.id)}</em>
+              </button>
+            ))}
           </div>
         )}
         {artworkOn && (

@@ -53,6 +53,22 @@ describe('apiAskWithUsage', () => {
     expect(sdk.create).not.toHaveBeenCalled()
   })
 
+  it('สรุปโทเคน + ค่าใช้จ่ายต่อคำขอตามรุ่นที่ตอบจริง (รวมคำขอที่ถูกปฏิเสธ เพราะคิดเงินแล้ว)', async () => {
+    const reply55 = (model: string, usage: Record<string, number>, stop_reason = 'end_turn') =>
+      ({ model, stop_reason, content: [{ type: 'text', text: '{"a":1}' }], usage })
+    const { ask, report } = apiAskWithUsage('sk-test', 'claude-haiku-5-5', { timeoutMs: 240_000, maxRetries: 0 })
+    expect(report()).toBeNull()
+    sdk.create.mockResolvedValueOnce(reply55('claude-haiku-5-5', { input_tokens: 1000, output_tokens: 10_000, cache_creation_input_tokens: 9000 }))
+    await ask([{ role: 'user', content: 'x' }])
+    expect(report()).toEqual({
+      model: 'claude-haiku-5-5', requests: 1, inputTokens: 1000, outputTokens: 10_000, cacheReadTokens: 0, cacheCreationTokens: 9000,
+      costUsd: expect.closeTo((1000 * 0.1 + 9000 * 0.1 * 1.25 + 10_000 * 0.5) / 1e6, 10),
+    })
+    sdk.create.mockResolvedValueOnce(reply55('claude-haiku-5-5', { input_tokens: 500, output_tokens: 20, cache_read_input_tokens: 9000 }, 'refusal'))
+    await expect(ask([{ role: 'user', content: 'y' }])).rejects.toMatchObject({ reason: 'refusal' })
+    expect(report()).toMatchObject({ requests: 2, inputTokens: 1500, outputTokens: 10_020, cacheReadTokens: 9000 })
+  })
+
   it('ไม่เริ่มรอบใหม่เมื่อเวลาที่เหลือน้อยกว่าขั้นต่ำ, แยก refusal / max_tokens เป็น error และคืน raw null เมื่อไม่มี JSON', async () => {
     const tight = apiAskWithUsage('sk-test', 'claude-test', { timeoutMs: 240_000, maxRetries: 0, deadlineMs: Date.now() + 10_000 })
     await expect(tight.ask([])).rejects.toBeInstanceOf(ArtworkDeadlineError)

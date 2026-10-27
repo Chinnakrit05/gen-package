@@ -1,6 +1,8 @@
 // เวที 3D: โอเวอร์เลย์เต็มจอพื้นมืด ให้กล่องเป็นพระเอก — ดูผลงานที่ AI ออกแบบ สลับระหว่างแบบที่เคยได้ในรอบนี้
 // (snapshot ของ decos/สีพื้น/รูปพื้น) แล้วกลับไปแก้ต่อใน blueprint; viewer คือ JSX มุมมอง 3D ชุดเดียวกับหน้าหลัก
 import { useEffect, type ReactNode } from 'react'
+import { aiModelLabel, type AiUsageReport } from '../../shared/contracts/aiModels'
+import { approxThb, formatTokens, formatUsd } from '../core/aiUsage'
 import type { Deco, FillImage } from '../core/artwork'
 import { useT } from '../i18n'
 
@@ -12,6 +14,16 @@ export interface ArtworkSnapshot {
   fillImage: FillImage | null
   explanation: string
   at: number
+  // ช่วงพัฒนา: รุ่นที่ตอบ + โทเคน/ค่าใช้จ่าย + เวลา — ไทล์บอกราคาต่อแบบ ให้เทียบรุ่นบนเวทีเดียวกันได้
+  model?: string
+  usage?: AiUsageReport | null
+  seconds?: number
+}
+
+// "Haiku 5.5 · $0.0067" (ไม่มีข้อมูลโทเคน = ชื่อรุ่นอย่างเดียว)
+export function snapshotCostLine(s: ArtworkSnapshot): string | null {
+  if (s.usage) return `${aiModelLabel(s.usage.model)} · ${s.usage.costUsd === null ? '?' : formatUsd(s.usage.costUsd)}`
+  return s.model && s.model !== 'mock' ? aiModelLabel(s.model) : null
 }
 
 interface Props {
@@ -70,12 +82,21 @@ export function CopilotStage({ onClose, viewer, snapshots, currentId, onPick }: 
           <span className="stage-card-k">{t('แนวคิด', 'Concept')} · {current.label}</span>
           <p>{current.explanation || t('(AI ไม่ได้อธิบาย)', '(no explanation)')}</p>
           <span className="stage-card-k">{t(`${current.decos.length} ชิ้นงาน`, `${current.decos.length} elements`)}</span>
+          {current.usage && (
+            <span className="stage-card-usage">
+              {aiModelLabel(current.usage.model)}
+              {current.usage.costUsd !== null && ` · ${formatUsd(current.usage.costUsd)} (${t(`≈ ${approxThb(current.usage.costUsd)} บาท`, `≈ ${approxThb(current.usage.costUsd)} THB`)})`}
+              {` · ${t(`output ${formatTokens(current.usage.outputTokens)} โทเคน`, `${formatTokens(current.usage.outputTokens)} output tokens`)}`}
+              {current.seconds ? ` · ${t(`${current.seconds} วิ`, `${current.seconds}s`)}` : ''}
+            </span>
+          )}
         </aside>
       )}
       {snapshots.length > 0 && (
         <div className="stage-tiles" role="listbox" aria-label={t('แบบที่ AI ออกแบบ', 'AI designs')}>
           {snapshots.map((s) => {
             const on = s.id === current?.id
+            const cost = snapshotCostLine(s)
             return (
               <button key={s.id} type="button" role="option" aria-selected={on} className={`stage-tile${on ? ' on' : ''}`} onClick={() => onPick(s.id)}>
                 <span className="stage-swatches" aria-hidden="true">
@@ -83,6 +104,7 @@ export function CopilotStage({ onClose, viewer, snapshots, currentId, onPick }: 
                 </span>
                 <span className="stage-tile-body">
                   <strong>{s.label}</strong>
+                  {cost && <span className="stage-tile-cost">{cost}</span>}
                   <em>{on ? t('อยู่บนเวที', 'On stage') : t('ดูบนเวที', 'Show on stage')}</em>
                 </span>
               </button>

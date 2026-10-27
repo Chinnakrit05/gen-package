@@ -35,6 +35,15 @@ describe('parseArtworkRequest', () => {
     expect(req.images[1].assetId).toBe('mylogo')
   })
 
+  it('รับรุ่นที่เลือกทดสอบเฉพาะ 3 รุ่นในรายการ ค่าอื่นเมิน (ผลลัพธ์บอกรุ่นที่ตอบจริงอยู่แล้ว)', () => {
+    const pick = (model: unknown) => parseArtworkRequest({ ...base(), model } as unknown as Record<string, unknown>).model
+    expect(pick('claude-haiku-5-5')).toBe('claude-haiku-5-5')
+    expect(pick('claude-sonnet-5-5')).toBe('claude-sonnet-5-5')
+    expect(pick('claude-opus-4-8')).toBeUndefined()
+    expect(pick(42)).toBeUndefined()
+    expect('model' in parseArtworkRequest(base() as unknown as Record<string, unknown>)).toBe(false)
+  })
+
   it('ปฏิเสธ prompt ว่าง แผงผิดรูป และรูปเกินจำนวน', () => {
     expect(() => parseArtworkRequest({ ...base(), prompt: ' ' } as unknown as Record<string, unknown>)).toThrow('prompt')
     expect(() => parseArtworkRequest({ ...base(), panels: [{ id: 'front', x0: 10, y0: 0, x1: 5, y1: 10 }] } as unknown as Record<string, unknown>)).toThrow('panel')

@@ -70,6 +70,20 @@ describe('CopilotDrawer', () => {
     expect(none).toMatch(/class="primary cp-send" disabled=""/)
   })
 
+  it('shows the dev-only model picker (Opus/Sonnet/Haiku with prices) only when modelChoice is on', () => {
+    const artwork = { dieline: { width: 100, height: 100 }, kind: 'box', template: 'tuck-end', materialId: 'carton-300', box: { W: 70, D: 25, H: 96 }, fillColor: null, existingCount: 0, onApply: vi.fn() } as unknown as CopilotArtworkContext
+    const on = renderToStaticMarkup(createElement(CopilotDrawer, { ...base, artwork, modelChoice: true }))
+    expect(on).toContain('role="radiogroup" aria-label="รุ่น AI (ทดสอบช่วงพัฒนา)"')
+    for (const [label, price] of [['Opus 5.5', '$4 / $20'], ['Sonnet 5.5', '$2 / $10'], ['Haiku 5.5', '$0.1 / $0.5']]) {
+      expect(on).toContain(`<strong>${label}</strong><em>${price}</em>`)
+    }
+    // เริ่มที่ Opus (รุ่นของ server ตอนนี้) — localStorage ไม่มีใน node จึงตกค่าเริ่มต้น
+    expect(on).toMatch(/aria-checked="true" class="cp-model on"[^>]*><strong>Opus 5\.5<\/strong>/)
+    const off = renderToStaticMarkup(createElement(CopilotDrawer, { ...base, artwork }))
+    expect(off).not.toContain('cp-models')
+    expect(off).not.toContain('Haiku 5.5')
+  })
+
   it('offers the API key row only when allowApiKey (local-demo) is on, and shows the paywall banner when blocked', () => {
     const local = renderToStaticMarkup(createElement(CopilotDrawer, { ...base, artwork: null, allowApiKey: true }))
     expect(local).toContain('คีย์')

@@ -143,6 +143,16 @@ Log ฝั่ง server (`server/logging.ts`): JSON บรรทัดเดี�
 | `claude-sonnet-5-5` | 2 / 10 | adaptive `effort: "low"` (ค่าเริ่มต้นของ API = high) | `fallbacks: "default"` — ส่งต่อเฉพาะหมวด `cyber`/`frontier_llm` (ไป Sonnet 5); `bio`/`reasoning_extraction`/`general_harms` ไม่ส่งต่อ | ราคาครึ่งหนึ่งของ Opus 5.5 |
 | `claude-haiku-5-5` | 0.10 / 0.50 (prompt ≤ 100K โทเคน) | adaptive `effort: "low"` (ค่าเริ่มต้นของ API = medium) | ไม่มี server-side fallback — refusal = ล้ม คืนเครดิต | ถูกสุด (≈ 1/50 ของ Opus 4.8 ต่อโทเคน) และเร็วสุด แต่ต้องวัดว่าคำนวณ layout/fit check ได้ดีพอ |
 
+**ทดสอบเทียบรุ่นช่วงพัฒนา (ตัดสินใจ 27 ต.ค. 2026)**: หน้าสั่ง AI (Copilot โหมดออกแบบหน้าตา) มีตัวเลือก Opus 5.5 / Sonnet 5.5 / Haiku 5.5
+พร้อมราคาต่อ 1M โทเคน และหลังทำเสร็จการ์ดผลลัพธ์ + ไทล์บนเวที 3D แสดงโทเคนจริง (input / cache อ่าน / cache เขียน / output รวมที่คิด / จำนวนคำขอ)
+ค่าใช้จ่ายเป็น USD และประมาณเป็นบาท (34 บาท/USD) และเวลาที่ใช้ — ส่งพรอมต์เดียวกันสามรุ่นแล้วเทียบแบบบนเวทีเดียวกันได้
+- เปิดเฉพาะ `appEnv` ที่ไม่ใช่ production (`isAiModelChoiceEnabled` ใน `server/http/router.ts` → `Entitlements.aiModelChoice`) — production ไม่โชว์ตัวเลือก
+  ใช้ `BOX_SPEC_MODEL` เสมอแม้ client ส่ง `model` มา และไม่ส่งค่าใช้จ่ายให้ผู้ใช้; local dev เปิดเสมอ (ใส่คีย์ในช่อง "คีย์" = เรียก API จริงพร้อมค่าใช้จ่าย,
+  CLI/จำลองไม่มีข้อมูลโทเคน); เครดิตยังหัก 1 ต่อคำขอทุกรุ่น
+- ค่าใช้จ่ายคิดฝั่ง server ต่อคำขอจาก `usage` ที่ API คืน ตามรุ่นที่ตอบจริง (`addAiUsage` ใน `shared/contracts/aiModels.ts` — ราคาทุกรุ่นอยู่ไฟล์นี้ที่เดียว;
+  เขียน cache 1.25 เท่าของ input เพราะใช้ TTL 5 นาที; Haiku 5.5 prompt เกิน 100K โทเคนคิด $0.50/$2.50) รวมคำขอที่ถูกปฏิเสธ/ถูกตัด (คิดเงินแล้ว);
+  รุ่นที่ไม่มีในตารางราคา = แสดง "ไม่ทราบราคารุ่นนี้" ไม่เดา; `ai_requests.model` ยังเก็บรุ่นที่ตอบจริงให้ `ops:ai-usage:report`
+
 ข้อแลกเปลี่ยน:
 
 - **ต้นทุนต่อเครดิตเทียบจากราคาต่อโทเคนอย่างเดียวไม่ได้**: system prompt ภาษาไทย (~12K ตัวอักษร) ถูกส่งทุกคำขอจึงเป็นก้อนใหญ่ของ input, รูปแนบเพิ่ม input, และรุ่นตระกูล 5 คิดก่อนตอบ — โทเคน thinking คิดเงินเป็น output และรวมอยู่ใน `output_tokens` ที่เก็บใน `ai_requests` แล้ว (ทาง Opus 4.8 ไม่มี) จำนวนโทเคนของข้อความเดียวกันยังต่างกันตามรุ่นได้ — ให้วัดจริงด้วย `npm run ops:ai-usage:report` ใส่ราคาของรุ่นนั้นเป็น flag

@@ -559,6 +559,8 @@ describe('API router', () => {
       devFulfilEnabled: enabled,
       purchasesEnabled: enabled,
       openAccess: !enabled,
+      // ช่วงพัฒนา (27 ต.ค. 2026): เลือกรุ่น AI + ดูค่าใช้จ่ายได้ทุกที่ยกเว้น production
+      aiModelChoice: appEnv !== 'production',
     })
   })
 
@@ -1185,6 +1187,40 @@ describe('API router — AI artwork', () => {
       ['provider', serverAiKey],
       ['settle', aiRequestId, 'succeeded', { hasImage: true, model: aiModel, ...artworkUsage }],
     ])
+  })
+
+  // ช่วงพัฒนา: staging ใช้รุ่นที่ผู้ทดสอบเลือกและส่งโทเคน/ค่าใช้จ่ายกลับ; production ใช้รุ่นของ server และไม่ส่งค่าใช้จ่าย
+  it.each([
+    ['staging', 'claude-haiku-5-5', true],
+    ['production', undefined, false],
+  ] as const)('in %s passes the chosen model %s to the provider and returns usage: %s', async (appEnv, expectedModel, withUsage) => {
+    const report = { model: 'claude-haiku-5-5', requests: 1, ...artworkUsage, costUsd: 0.0033 }
+    const models: unknown[] = []
+    const configuredRouter = billingRouter(billingRepositoryStub({
+      ensureOpenAccess: async () => openEntitlements,
+      reserveAiCredit: async () => ({ requestId: aiRequestId, credits: 99 }),
+      settleAiRequest: async () => ({ credits: 99 }),
+    }), {
+      appEnv,
+      ai: { anthropicApiKey: serverAiKey, model: 'm' },
+      aiService: {
+        generateBoxSpec: async () => { throw new Error('must not be called') },
+        generateArtwork: async (_apiKey, input, model) => {
+          models.push(model)
+          expect(input.model).toBe('claude-haiku-5-5')
+          return { result: artworkResult, model: 'claude-haiku-5-5', usage: artworkUsage, report }
+        },
+      },
+    })
+    const target = response()
+    await configuredRouter(artworkRequest({ ...artworkBody, model: 'claude-haiku-5-5' }), target.res)
+
+    expect(target.res.statusCode).toBe(200)
+    expect(models).toEqual([expectedModel])
+    const data = (target.readBody() as { data: Record<string, unknown> }).data
+    expect(data.credits).toBe(99)
+    if (withUsage) expect(data.usage).toEqual(report)
+    else expect(data).not.toHaveProperty('usage')
   })
 
   it('refunds the credit and answers 502 when the artwork provider fails', async () => {

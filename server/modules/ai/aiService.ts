@@ -15,6 +15,7 @@ import {
   type ArtworkRequest,
   type ArtworkResult,
 } from '../../aiArtwork'
+import type { AiUsageReport } from '../../../shared/contracts/aiModels'
 import { DEFAULT_AI_MODEL } from '../../config'
 import { errorMessageForLog } from '../../logging'
 
@@ -39,11 +40,13 @@ export interface AiArtworkOutput {
   result: ArtworkResult
   model: string
   usage: AiUsage | null // รวมทุกรอบ (รอบแรก + รอบแก้)
+  report?: AiUsageReport | null // โทเคน + ค่าใช้จ่ายต่อรุ่นที่ตอบจริง — router ส่งให้ client เฉพาะช่วงพัฒนา
 }
 
 export interface AiService {
   generateBoxSpec(apiKey: string, input: AiBoxSpecInput): Promise<AiBoxSpecOutput>
-  generateArtwork(apiKey: string, input: AiArtworkInput): Promise<AiArtworkOutput>
+  // model = รุ่นที่ผู้ทดสอบเลือก (ช่วงพัฒนา) — ไม่ส่ง = รุ่นของ server (BOX_SPEC_MODEL)
+  generateArtwork(apiKey: string, input: AiArtworkInput, model?: string): Promise<AiArtworkOutput>
 }
 
 // refusal = โมเดลตอบ stop_reason "refusal" (ส่งซ้ำแบบเดิมก็ไม่ผ่าน ต้องปรับคำขอ) — คืนเครดิตเหมือน provider ล้ม
@@ -90,8 +93,8 @@ export class AnthropicAiService implements AiService {
   }
 
   // ออกแบบหน้าตาบน template ที่เลือก: วงรอบ designArtwork เดิม (parse → ตรวจแผง → รอบแก้ ≤ 1) ใต้งบเวลารวม + สะสม usage ทุกรอบ
-  async generateArtwork(apiKey: string, input: AiArtworkInput): Promise<AiArtworkOutput> {
-    const { ask, usage } = apiAskWithUsage(apiKey, this.model, {
+  async generateArtwork(apiKey: string, input: AiArtworkInput, model = this.model): Promise<AiArtworkOutput> {
+    const { ask, usage, report } = apiAskWithUsage(apiKey, model, {
       timeoutMs: this.artworkLimits.timeoutMs,
       maxRetries: this.artworkLimits.maxRetries,
       deadlineMs: Date.now() + this.artworkLimits.budgetMs,
@@ -100,7 +103,7 @@ export class AnthropicAiService implements AiService {
       const result = await designArtwork(ask, input)
       // ตอบกลับมาแต่ไม่มีแบบให้ใช้เลย (ผิด schema ทุกรอบ) — นับเป็น provider ล้ม (คืนเครดิต) เหมือน box-spec ที่ไม่มีสเปก
       if (!result.plan) throw new AiProviderError('provider', new Error(result.issues[0]?.message ?? 'no usable plan'))
-      return { result, model: result.model || this.model, usage: usage() }
+      return { result, model: result.model || model, usage: usage(), report: report() }
     } catch (error) {
       if (error instanceof AiProviderError) throw error
       if (error instanceof ArtworkResponseError) throw new AiProviderError(error.reason === 'refusal' ? 'refusal' : 'provider', error)

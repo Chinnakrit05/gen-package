@@ -32,6 +32,9 @@ export interface Entitlements {
   // ช่วงเปิดให้ใช้ฟรี (ตัดสินใจ 15 ต.ค. 2026): ทุก workspace ได้รอบ Pro ฟรีที่ต่อเองทุกรอบ — plan เป็น 'pro' อยู่แล้ว
   // flag นี้มีไว้ให้ client บอกผู้ใช้ว่าเป็น Pro ฟรี และไม่ติดลายน้ำเลย; server เปิดเมื่อยังไม่เปิดขาย (isOpenAccess)
   openAccess: boolean
+  // ช่วงพัฒนา: ให้เลือกรุ่น AI (Opus/Sonnet/Haiku) ในหน้าสั่ง AI และโชว์โทเคน/ค่าใช้จ่ายจริงหลังทำเสร็จ —
+  // server ใส่ true เฉพาะ development/test/staging (isAiModelChoiceEnabled); production ไม่ส่งและไม่ใช้รุ่นที่ client เลือก
+  aiModelChoice?: boolean
 }
 
 export type LicenseSource = 'purchase' | 'pro' | 'admin'
