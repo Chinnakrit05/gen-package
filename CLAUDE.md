@@ -181,6 +181,11 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   โชว์ลำดับงานตามเวลา (โดยประมาณ — server ไม่สตรีม) + ยกเลิกด้วย AbortController; ผล artwork แต่ละรอบเก็บเป็น `ArtworkSnapshot` ใน App
   (`artSnapshots`) ให้ **เวที 3D** (`CopilotStage.tsx` โอเวอร์เลย์ z 290 ใช้ `viewer3D` JSX ชุดเดียวกับหน้าหลัก) สลับดู/เลือกแบบ (`pickArtSnapshot`);
   `src/components/refImage.ts` = ตัวย่อรูปอ้างอิง
+- ทดสอบเทียบรุ่นช่วงพัฒนา (27 ต.ค. 2026): Copilot มีตัวเลือก Opus/Sonnet/Haiku 5.5 (`AI_MODEL_CHOICES` + ราคาใน `shared/contracts/aiModels.ts`
+  ที่เดียว, จำรุ่นใน localStorage `packit-ai-model`) ส่งเป็น `model` ในคำขอ artwork → server คิดค่าใช้จ่ายต่อคำขอตามรุ่นที่ตอบจริง
+  (`apiAskWithUsage` → `report()` / `addAiUsage`) ส่งกลับเป็น `usage` → การ์ดผลลัพธ์ + ไทล์เวที 3D แสดงโทเคน/ค่าใช้จ่าย/เวลา (`src/core/aiUsage.ts`);
+  cloud เปิดตาม `Entitlements.aiModelChoice` (`isAiModelChoiceEnabled` = appEnv ≠ production — production เมิน `model` และไม่ส่งค่าใช้จ่าย),
+  local เปิดเสมอ (มีข้อมูลโทเคนเฉพาะเมื่อใส่คีย์ = backend api); เครดิตยัง 1 ต่อคำขอทุกรุ่น — docs/billing-freemium-pro.md §6
 - เทสต์: `src/core/aiArtwork.test.ts` (schema keyword ban, parse, sanitizer, compile), `server/aiArtwork.test.ts` (วงรอบด้วย ask ปลอม, mock)
 
 ## Env / AI backend

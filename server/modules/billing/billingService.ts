@@ -74,6 +74,8 @@ export interface BillingServiceOptions {
   purchasesEnabled: boolean
   // ทุก workspace ใช้งานได้เหมือน Pro (รอบ Pro ฟรี) แทน paywall — ดู isOpenAccess ใน server/http/router.ts
   openAccess: boolean
+  // ช่วงพัฒนา: บอก client ให้โชว์ตัวเลือกรุ่น AI + ค่าใช้จ่าย — ดู isAiModelChoiceEnabled ใน server/http/router.ts
+  aiModelChoice?: boolean
 }
 
 export class BillingService {
@@ -88,6 +90,7 @@ export class BillingService {
       devFulfilAvailable: this.options.devFulfilEnabled,
       purchasesEnabled: this.options.purchasesEnabled,
       openAccess: this.options.openAccess,
+      ...(this.options.aiModelChoice ? { aiModelChoice: true } : {}),
     }
   }
 

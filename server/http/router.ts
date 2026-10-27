@@ -179,6 +179,13 @@ export function isStorageQuotaEnabled(_config: Pick<ServerConfig, 'appEnv'>): bo
   return false
 }
 
+// ช่วงพัฒนา (ตัดสินใจ 27 ต.ค. 2026): ให้เลือกรุ่น AI ทดสอบงานออกแบบลาย (Opus/Sonnet/Haiku) และส่งโทเคน/ค่าใช้จ่ายจริงกลับให้ดู —
+// เปิดทุก environment ยกเว้น production (staging = packit-design.vercel.app ที่ใช้ทดสอบด้วยคีย์จริง); production ใช้รุ่นของ server
+// (BOX_SPEC_MODEL) เสมอและไม่ส่งค่าใช้จ่ายให้ผู้ใช้ — เครดิตยังหัก 1 ต่อคำขอทุกรุ่น
+export function isAiModelChoiceEnabled(config: Pick<ServerConfig, 'appEnv'>): boolean {
+  return config.appEnv !== 'production'
+}
+
 // สวิตช์ของ BillingService ตาม config — ทางเดียวที่ createApiRouter ใช้
 // (router.test ตรวจ staging/production = ปิดการขาย/จำลองจ่าย และเปิด open access)
 export function billingFlags(config: Pick<ServerConfig, 'appEnv'>): BillingServiceOptions {
@@ -186,6 +193,7 @@ export function billingFlags(config: Pick<ServerConfig, 'appEnv'>): BillingServi
     devFulfilEnabled: isDevFulfilEnvironment(config),
     purchasesEnabled: isPurchaseEnabled(config),
     openAccess: isOpenAccess(config),
+    aiModelChoice: isAiModelChoiceEnabled(config),
   }
 }
 
@@ -408,14 +416,17 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
           throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่าคีย์ AI')
         }
 
-        const { value: result, credits } = await chargedAiCall(
+        // รุ่นที่ผู้ทดสอบเลือก + สรุปโทเคน/ค่าใช้จ่าย เฉพาะช่วงพัฒนา — production ใช้รุ่นของ server และไม่ส่งค่าใช้จ่าย
+        const modelChoice = isAiModelChoiceEnabled(config)
+        const { value, credits } = await chargedAiCall(
           { billingService, actor, workspaceId: input.workspaceId, operationId: input.operationId, requestId, route: AI_ARTWORK_ROUTE, hasImage: request.images.length > 0 },
           async () => {
-            const generated = await aiService.generateArtwork(serverAi.anthropicApiKey, request)
-            return { value: generated.result, model: generated.model, usage: generated.usage }
+            const generated = await aiService.generateArtwork(serverAi.anthropicApiKey, request, modelChoice ? request.model : undefined)
+            return { value: generated, model: generated.model, usage: generated.usage }
           },
         )
-        sendJson(res, 200, { data: { ...result, credits }, requestId }, requestId)
+        const usage = modelChoice && value.report ? { usage: value.report } : {}
+        sendJson(res, 200, { data: { ...value.result, ...usage, credits }, requestId }, requestId)
       } catch (error) {
         const httpError = aiRouteError(error, requestId, AI_ARTWORK_ROUTE)
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)

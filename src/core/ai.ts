@@ -1,3 +1,5 @@
+import type { AiModelChoice, AiUsageReport } from '../../shared/contracts/aiModels'
+
 export interface AiBoxSpec {
   template: string
   materialId: string
@@ -54,6 +56,7 @@ export interface ArtworkRequestInput {
   existing: number
   images: ArtworkImageInput[]
   front?: { panel: string; x0: number; x1: number } | null // ภาชนะทรงกระบอก: ด้านหน้าที่อ่านได้ตรง (labelFrontZone)
+  model?: AiModelChoice // ช่วงพัฒนา: รุ่นที่เลือกทดสอบ (server ใช้เฉพาะ local dev / staging — production เมิน)
 }
 
 export interface ArtworkIssue {
@@ -71,6 +74,7 @@ export interface ArtworkResponse {
   rounds: { attempt: number; ok: boolean; issues: ArtworkIssue[] }[]
   model: string
   mock: boolean
+  usage?: AiUsageReport | null // ช่วงพัฒนา: โทเคนจริง + ค่าใช้จ่ายรวมทุกรอบ (backend api เท่านั้น)
 }
 
 export async function requestArtworkPlan(input: ArtworkRequestInput, anthropicApiKey?: string, signal?: AbortSignal): Promise<ArtworkResponse> {

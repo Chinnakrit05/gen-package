@@ -24,6 +24,7 @@ import {
   type PanelBox,
 } from '../src/core/aiArtwork'
 import { FONTS } from '../src/core/artwork'
+import { addAiUsage, isAiModelChoice, type AiModelChoice, type AiUsageReport } from '../shared/contracts/aiModels'
 import { getMaterial, MATERIALS } from '../src/core/materials'
 import { PRESETS } from '../src/core/presets'
 import {
@@ -69,6 +70,8 @@ export interface ArtworkRequest {
   existing: number // จำนวนชิ้นงานเดิม (0 = งานว่าง)
   images: ArtworkImage[]
   front?: ArtFrontZone | null // ภาชนะทรงกระบอก: ช่วงด้านหน้าที่อ่านได้ตรง (client คำนวณจาก labelFrontZone)
+  // รุ่นที่ผู้ทดสอบเลือก (ช่วงพัฒนา) — route เป็นคนตัดสินว่าจะใช้หรือไม่ (cloud: isAiModelChoiceEnabled; production ไม่ใช้)
+  model?: AiModelChoice
 }
 
 export interface ArtworkRound {
@@ -85,6 +88,8 @@ export interface ArtworkResult {
   rounds: ArtworkRound[]
   model: string
   mock: boolean
+  // โทเคนจริง + ค่าใช้จ่ายรวมทุกรอบ (เฉพาะ backend api ช่วงพัฒนา — CLI/จำลองไม่มี)
+  usage?: AiUsageReport | null
 }
 
 // raw = JSON ที่แกะได้ (null = คำตอบไม่มี JSON object → designArtwork ส่งกลับให้แก้เป็นรอบถัดไป), text = คำตอบดิบไว้เล่นซ้ำในรอบแก้
@@ -251,10 +256,11 @@ export function apiAskWithUsage(
   apiKey: string,
   model: string,
   limits: ApiAskLimits = { timeoutMs: 240_000, maxRetries: 1 },
-): { ask: AskArtwork; usage: () => ClaudeUsage | null } {
+): { ask: AskArtwork; usage: () => ClaudeUsage | null; report: () => AiUsageReport | null } {
   const client = new Anthropic({ apiKey, timeout: limits.timeoutMs, maxRetries: limits.maxRetries })
   const options = artworkModelOptions(model)
   let total: ClaudeUsage | null = null
+  let report: AiUsageReport | null = null
   const ask: AskArtwork = async (messages) => {
     let timeout = limits.timeoutMs
     if (limits.deadlineMs !== undefined) {
@@ -282,22 +288,26 @@ export function apiAskWithUsage(
         )
       : await client.messages.create(params, { timeout })
     const u = msg.usage
-    total = {
-      inputTokens: (total?.inputTokens ?? 0) + u.input_tokens,
-      outputTokens: (total?.outputTokens ?? 0) + u.output_tokens,
-      cacheReadTokens: (total?.cacheReadTokens ?? 0) + (u.cache_read_input_tokens ?? 0),
-      cacheCreationTokens: (total?.cacheCreationTokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
+    const call = {
+      inputTokens: u.input_tokens,
+      outputTokens: u.output_tokens,
+      cacheReadTokens: u.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: u.cache_creation_input_tokens ?? 0,
     }
+    total = {
+      inputTokens: (total?.inputTokens ?? 0) + call.inputTokens,
+      outputTokens: (total?.outputTokens ?? 0) + call.outputTokens,
+      cacheReadTokens: (total?.cacheReadTokens ?? 0) + call.cacheReadTokens,
+      cacheCreationTokens: (total?.cacheCreationTokens ?? 0) + call.cacheCreationTokens,
+    }
+    // คำขอที่ถูกปฏิเสธ/ถูกตัดก็ถูกคิดเงินแล้ว — นับก่อนโยน error
+    report = addAiUsage(report, msg.model, call)
     if (msg.stop_reason === 'refusal') throw new ArtworkResponseError('refusal', 'โมเดลปฏิเสธคำขอ ลองปรับคำอธิบายหรือรูปที่แนบ')
     if (msg.stop_reason === 'max_tokens') throw new ArtworkResponseError('max_tokens', 'แบบที่ออกแบบยาวเกินไป ถูกตัดก่อนจบ — ลองขอให้เรียบง่ายลง')
     const text = msg.content.map((b) => (b.type === 'text' ? b.text : '')).join('')
     return { raw: extractJson(text), model: msg.model, text }
   }
-  return { ask, usage: () => total }
-}
-
-export function apiAsk(apiKey: string, model: string): AskArtwork {
-  return apiAskWithUsage(apiKey, model).ask
+  return { ask, usage: () => total, report: () => report }
 }
 
 // schema ของงานศิลป์ส่งเป็น "ข้อความใน prompt" ทั้ง API และ CLI — ส่งเป็น structured outputs (output_config.format) ไม่ได้:
@@ -420,7 +430,13 @@ export function parseArtworkRequest(body: Record<string, unknown>): ArtworkReque
     const x0 = num(f.x0, 0, 5000), x1 = num(f.x1, 0, 5000)
     if (target && x0 !== null && x1 !== null && x1 > x0 && x1 <= target.w + 0.5) front = { panel: target.id, x0, x1 }
   }
-  return { prompt, kind, template, materialId, box: { W, D, H }, sheet: { w: sw, h: sh }, panels, fillColor, existing, images, ...(front ? { front } : {}) }
+  // รุ่นที่เลือกทดสอบ: รับเฉพาะรุ่นในรายการ (ค่าอื่นเมิน — ผลลัพธ์บอกรุ่นที่ตอบจริงเสมอ)
+  const model = isAiModelChoice(body.model) ? body.model : undefined
+  return {
+    prompt, kind, template, materialId, box: { W, D, H }, sheet: { w: sw, h: sh }, panels, fillColor, existing, images,
+    ...(front ? { front } : {}),
+    ...(model ? { model } : {}),
+  }
 }
 
 export async function handleAiArtwork(req: IncomingMessage, res: ServerResponse, env: Record<string, string | undefined>): Promise<void> {
@@ -456,17 +472,20 @@ export async function handleAiArtwork(req: IncomingMessage, res: ServerResponse,
   }
   const backend = requestApiKey ? 'api' : env.BOX_SPEC_BACKEND
   const apiKey = requestApiKey ?? env.ANTHROPIC_API_KEY
-  const model = env.BOX_SPEC_MODEL || DEFAULT_AI_MODEL
+  // local dev: รุ่นที่เลือกในหน้าสั่ง AI มาก่อน env (ทดสอบเทียบรุ่น)
+  const model = request.model ?? (env.BOX_SPEC_MODEL || DEFAULT_AI_MODEL)
   try {
     let ask: AskArtwork | null = null
+    let report: (() => AiUsageReport | null) | null = null
     if (backend === 'api' || (!backend && apiKey)) {
       if (!apiKey) {
         send(res, 500, { error: 'BOX_SPEC_BACKEND=api แต่ไม่ได้ตั้ง ANTHROPIC_API_KEY' })
         return
       }
-      ask = apiAsk(apiKey, model)
+      ;({ ask, report } = apiAskWithUsage(apiKey, model))
     } else if ((backend === 'cli' || !backend) && (await hasClaudeCli())) {
-      ask = cliAsk(env.BOX_SPEC_MODEL, env.CLAUDE_CODE_OAUTH_TOKEN, request.images)
+      // CLI ไม่รายงานโทเคนของ API (นับรวม overhead ของ Claude Code) จึงไม่มีสรุปค่าใช้จ่าย
+      ask = cliAsk(request.model ?? env.BOX_SPEC_MODEL, env.CLAUDE_CODE_OAUTH_TOKEN, request.images)
     } else if (backend === 'cli') {
       send(res, 500, { error: 'BOX_SPEC_BACKEND=cli แต่ไม่พบคำสั่ง claude ในเครื่อง' })
       return
@@ -478,7 +497,8 @@ export async function handleAiArtwork(req: IncomingMessage, res: ServerResponse,
       send(res, 200, result)
       return
     }
-    send(res, 200, await designArtwork(ask, request))
+    const result = await designArtwork(ask, request)
+    send(res, 200, { ...result, usage: report?.() ?? null })
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) send(res, 502, { error: 'Anthropic API key ไม่ถูกต้อง' })
     else if (err instanceof Anthropic.RateLimitError) send(res, 429, { error: 'เรียกถี่เกินไป รอสักครู่แล้วลองใหม่' })

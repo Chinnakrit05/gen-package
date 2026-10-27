@@ -1669,7 +1669,10 @@ export default function App({
     setFillColor(nextFill)
     setFillImage(nextFillImage)
     const id = `art-${Date.now().toString(36)}`
-    setArtSnapshots((s) => [...s, { id, label: `แบบ ${s.length + 1}`, decos: nextDecos, fillColor: nextFill, fillImage: nextFillImage, explanation: r.explanation, at: Date.now() }])
+    setArtSnapshots((s) => [...s, {
+      id, label: `แบบ ${s.length + 1}`, decos: nextDecos, fillColor: nextFill, fillImage: nextFillImage, explanation: r.explanation, at: Date.now(),
+      model: r.model, usage: r.usage, seconds: r.seconds,
+    }])
     setArtCurrentId(id)
   }
   const pickArtSnapshot = (id: string) => {
@@ -6765,6 +6768,8 @@ export default function App({
             credits={cloud && entitlementsStatus === 'ready' ? gateCredits : undefined}
             blockedReason={aiBlockedReason}
             onBlocked={() => setPricingOpen(true)}
+            // ช่วงพัฒนา: เลือกรุ่น AI + ดูโทเคน/ค่าใช้จ่าย — local เปิดเสมอ, cloud ตามที่ server บอก (production ปิด)
+            modelChoice={cloud ? entitlements?.aiModelChoice === true : true}
             onError={(code) => {
               // server บอกว่าเครดิตหมด (ฝั่ง client อาจยังเห็นเครดิตค้าง) — ซิงก์สิทธิ์แล้วให้ดูแพ็กเกจ ไม่ใช่ paywall รายแบบ
               if (code === 'AI_CREDITS_EXHAUSTED' && cloud) {

@@ -5276,6 +5276,25 @@ aside .art-actions .file-pick:only-child {
 .cp-attach.logo img { object-fit: contain; border: 2px solid var(--accent); }
 .cp-attach em { position: absolute; left: 0; right: 0; bottom: -14px; font-size: 9px; font-style: normal; text-align: center; color: var(--accent); font-weight: 600; }
 .cp-attach button { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: none; background: var(--text); color: var(--surface); font-size: 11px; line-height: 1; cursor: pointer; }
+/* ช่วงพัฒนา: ตัวเลือกรุ่น AI (Opus/Sonnet/Haiku) + กล่องโทเคน/ค่าใช้จ่ายบนการ์ดผลลัพธ์ */
+.cp-models { display: flex; align-items: stretch; gap: 6px; }
+.cp-models-k { align-self: center; font-size: 11px; font-weight: 600; color: var(--text-3); white-space: nowrap; }
+.cp-model { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 6px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.cp-model strong { font-size: 12px; }
+.cp-model em { font-size: 10px; font-style: normal; color: var(--text-3); white-space: nowrap; }
+.cp-model.on { border: 2px solid var(--accent); padding: 4px 5px; }
+.cp-model.on em { color: var(--accent); }
+.cp-model:disabled { opacity: .55; cursor: default; }
+.cp-usage { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 10px; background: rgba(23, 103, 122, .08); border: 1px solid rgba(23, 103, 122, .22); font-size: 12px; }
+/* ธีมมืด: ทึบเกือบทั้งกล่อง — จอแคบแผง Copilot ลอยทับภาพ 3D ผ่านกระจก ถ้าโปร่งตัวเลขจะจมไปกับลายข้างหลัง */
+:root[data-theme='dark'] .cp-usage { background: rgba(14, 40, 48, .94); border-color: rgba(92, 192, 207, .35); }
+.cp-usage-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cp-usage-cost { font-weight: 700; color: var(--accent); }
+.cp-usage-time { margin-left: auto; color: var(--text-3); }
+.cp-usage dl { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 12px; }
+.cp-usage dl div { display: flex; justify-content: space-between; gap: 8px; }
+.cp-usage dt { color: var(--text-3); }
+.cp-usage dd { margin: 0; font-variant-numeric: tabular-nums; }
 .cp-chiprow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cp-chiprow button { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 11px; cursor: pointer; }
 .cp-switch { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-3); margin-left: auto; }
@@ -5313,6 +5332,8 @@ aside .art-actions .file-pick:only-child {
 .stage-tile-body { display: flex; flex-direction: column; gap: 3px; }
 .stage-tile-body strong { font-size: 13px; }
 .stage-tile-body em { font-size: 11px; font-style: normal; color: #9ee0ea; }
+.stage-tile-cost { font-size: 11px; color: #f4c27a; font-variant-numeric: tabular-nums; }
+.stage-card-usage { font-size: 12px; color: #f4c27a; line-height: 1.5; }
 .stage-bar { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); width: min(760px, calc(100vw - 44px)); box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 20px; border-radius: 999px; background: rgba(16,34,42,.85); border: 1px solid rgba(255,255,255,.14); backdrop-filter: blur(12px); font-size: 12px; color: #c7d7da; }
 /* จอกลาง: แผง Copilot แคบลงให้พื้นที่ออกแบบเหลือ ≥ ~560px; จอแคบกว่า 1200: ลอยทับแทนการเบียด main */
 @media (max-width: 1439px) {
