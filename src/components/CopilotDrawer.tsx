@@ -667,7 +667,7 @@ export function CopilotDrawer({
 }
 
 // ปุ่ม "สั่ง AI" บน header (เปิด/ปิดแผง Copilot) — ถูกบล็อก (เครดิต 0): ยังกดได้ แต่พาไปหน้าแพ็กเกจแทน
-export function AiTrigger({ open, onToggle, credits, blockedReason, onBlocked }: { open: boolean; onToggle: () => void; credits?: number | null; blockedReason?: string; onBlocked?: () => void }) {
+export function AiTrigger({ open, onToggle, credits, blockedReason, onBlocked, icon }: { icon?: string; open: boolean; onToggle: () => void; credits?: number | null; blockedReason?: string; onBlocked?: () => void }) {
   const t = useT()
   const creditsLabel = credits === undefined || credits === null ? null : t(`เครดิต AI: ${credits}`, `AI credits: ${credits}`)
   const fabTitle = t('สั่ง AI สร้าง/แก้กล่องด้วยข้อความ', 'Ask AI to create or edit the box')
@@ -687,7 +687,7 @@ export function AiTrigger({ open, onToggle, credits, blockedReason, onBlocked }:
         onToggle()
       }}
     >
-      <span aria-hidden="true">✨</span> {t('สั่ง AI', 'Ask AI')}
+      <span aria-hidden="true">{icon ? <img src={icon} alt="" /> : '✨'}</span> {t('สั่ง AI', 'Ask AI')}
       {creditsLabel && !blocked && <span className="pb-credits">{creditsLabel}</span>}
       {blocked && (
         <>

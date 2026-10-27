@@ -51,6 +51,8 @@ export interface TextEl extends BaseEl {
   size: number // ความสูงฟอนต์ (มม.)
   w: number // ความกว้างที่วัดได้ = บรรทัดที่กว้างสุด — คำนวณใหม่เมื่อ text/size/font/weight เปลี่ยน
   font?: string // id ฟอนต์ (ดู FONTS) — ไม่ใส่ = 'noto'
+  italic?: boolean
+  underline?: boolean
   weight?: number // น้ำหนัก 400/700 — ไม่ใส่ = 400
   align?: 'left' | 'center' | 'right' // จัดชิดหลายบรรทัด — ไม่ใส่ = 'left'
   lh?: number // ตัวคูณระยะบรรทัด — ไม่ใส่ = LINE (1.25)
@@ -78,8 +80,8 @@ export const FONTS: { id: string; nameTh: string; css: string }[] = [
 ]
 export const fontCss = (id?: string) => (FONTS.find((f) => f.id === id) ?? FONTS[0]).css
 // สตริง font สำหรับ canvas/measure: "<weight> <px>px <family>, sans-serif"
-export const textFont = (e: { size: number; font?: string; weight?: number }, s = 1) =>
-  `${e.weight ?? 400} ${e.size * s}px ${fontCss(e.font)}, sans-serif`
+export const textFont = (e: { size: number; font?: string; weight?: number; italic?: boolean }, s = 1) =>
+  `${e.italic ? 'italic ' : ''}${e.weight ?? 400} ${e.size * s}px ${fontCss(e.font)}, sans-serif`
 
 // รูปทรงพื้นฐาน — สี่เหลี่ยม/วงรี/เส้น สำหรับทำแถบสี กรอบ เส้นแบ่ง
 // rect,ellipse ใช้ fill (พื้น) + stroke/strokeW (เส้นขอบ); line ใช้ stroke/strokeW (h = ความหนาเส้น)
@@ -237,11 +239,11 @@ export const graphemes = (s: string): string[] => (segmenter ? Array.from(segmen
 export const textSpacing = (e: { size: number; ls?: number }): number => ((e.ls ?? 0) * e.size) / 100
 
 // ความกว้างบรรทัดหนึ่ง (มม.): ไม่เว้นระยะ = วัดทั้งบรรทัด (มี kerning); เว้นระยะ = ผลรวมกลุ่มอักษร + ระยะระหว่างกลุ่ม
-export function textLineWidth(e: { size: number; font?: string; weight?: number; ls?: number }, line: string): number {
+export function textLineWidth(e: { size: number; font?: string; weight?: number; italic?: boolean; ls?: number }, line: string): number {
   const sp = textSpacing(e)
-  if (!sp) return measureText(line, e.size, e.font, e.weight)
+  if (!sp) return measureText(line, e.size, e.font, e.weight, e.italic)
   const gs = graphemes(line)
-  const sum = gs.reduce((a, g) => a + measureRaw(g, e.size, e.font, e.weight), 0)
+  const sum = gs.reduce((a, g) => a + measureRaw(g, e.size, e.font, e.weight, e.italic), 0)
   return Math.max(1, sum + sp * Math.max(0, gs.length - 1))
 }
 
@@ -253,7 +255,7 @@ const curvedString = (e: TextEl) => textLinesOf(e).join(' ') // โค้งใ�
 // คืนตำแหน่ง+มุมหมุน+ความกว้างของแต่ละกลุ่มอักษร (มม./องศา) — ระยะห่างตัวอักษรนับรวมในความยาวโค้ง
 export function curvedGlyphs(e: TextEl): { ch: string; x: number; y: number; rot: number; w: number }[] {
   const chars = graphemes(curvedString(e))
-  const widths = chars.map((c) => measureRaw(c, e.size, e.font, e.weight))
+  const widths = chars.map((c) => measureRaw(c, e.size, e.font, e.weight, e.italic))
   const sp = textSpacing(e)
   const total = widths.reduce((a, b) => a + b, 0) + sp * Math.max(0, chars.length - 1) || 1
   const theta = (Math.max(-300, Math.min(300, e.curve!)) * Math.PI) / 180
@@ -306,7 +308,7 @@ export function textRuns(e: TextEl): TextRun[] {
       return
     }
     const gs = graphemes(ln)
-    const ws = gs.map((g) => measureRaw(g, e.size, e.font, e.weight))
+    const ws = gs.map((g) => measureRaw(g, e.size, e.font, e.weight, e.italic))
     const lw = ws.reduce((a, b) => a + b, 0) + sp * Math.max(0, gs.length - 1)
     let x = align === 'left' ? -e.w / 2 : align === 'right' ? e.w / 2 - lw : -lw / 2
     gs.forEach((g, k) => {
@@ -396,7 +398,7 @@ function textPaintSVG(e: TextEl, runs: TextRun[], p: TextPaint, extra: string, p
   const c = elCenter(e)
   const font =
     `font-size="${e.size}" font-weight="${e.weight ?? 400}" font-family="${fontCss(e.font)}, sans-serif"` +
-    ` dominant-baseline="central"`
+    ` dominant-baseline="central"${e.italic ? ' font-style="italic"' : ''}${e.underline ? ' text-decoration="underline"' : ''}`
   const strokeA = (k?: number) =>
     p.stroke ? ` stroke="${paintOf(p.stroke, k)}" stroke-width="${fmt(p.strokeW ?? 0)}" stroke-linejoin="round"` : ''
   if (runs.some((r) => r.rot)) {
@@ -537,6 +539,11 @@ export function drawText2D(ctx: CanvasRenderingContext2D, e: TextEl, s: number) 
       each((str, px, py, k) => {
         ctx.strokeStyle = paintOf(col, k)
         ctx.strokeText(str, px, py)
+        if (e.underline) {
+          const width = ctx.measureText(str).width
+          const start = ctx.textAlign === 'center' ? px - width / 2 : ctx.textAlign === 'right' ? px - width : px
+          ctx.strokeRect(start, py + e.size * s * .4, width, Math.max(.2, e.size * .055) * s)
+        }
       })
     }
     if (p.fill) {
@@ -544,6 +551,11 @@ export function drawText2D(ctx: CanvasRenderingContext2D, e: TextEl, s: number) 
       each((str, px, py, k) => {
         ctx.fillStyle = paintOf(col, k)
         ctx.fillText(str, px, py)
+        if (e.underline) {
+          const width = ctx.measureText(str).width
+          const start = ctx.textAlign === 'center' ? px - width / 2 : ctx.textAlign === 'right' ? px - width : px
+          ctx.fillRect(start, py + e.size * s * .4, width, Math.max(.2, e.size * .055) * s)
+        }
       })
     }
     ctx.restore()
@@ -586,18 +598,18 @@ export function drawText2D(ctx: CanvasRenderingContext2D, e: TextEl, s: number) 
 // วัดความกว้างข้อความด้วย canvas (ในหน่วย px = มม. เพราะวัดที่สเกล 1:1)
 // ใช้ฟอนต์/น้ำหนักเดียวกับที่ render จริง ไม่งั้น bbox/จุดกึ่งกลาง/snap ของข้อความจะเพี้ยน
 let measureCtx: CanvasRenderingContext2D | null = null
-export function measureText(text: string, size: number, font?: string, weight?: number): number {
+export function measureText(text: string, size: number, font?: string, weight?: number, italic?: boolean): number {
   if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')
   if (!measureCtx) return Math.max(1, (text.length || 1) * size * 0.6)
-  measureCtx.font = textFont({ size, font, weight })
+  measureCtx.font = textFont({ size, font, weight, italic })
   return Math.max(1, measureCtx.measureText(text || ' ').width)
 }
 // ความกว้างจริงไม่ปัดขั้นต่ำ — ใช้วัดทีละกลุ่มอักษร (อักษรแคบ/ช่องว่างกว้างไม่ถึง 1 มม. ได้)
-function measureRaw(text: string, size: number, font?: string, weight?: number): number {
+function measureRaw(text: string, size: number, font?: string, weight?: number, italic?: boolean): number {
   if (!text) return 0
   if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')
   if (!measureCtx) return text.length * size * 0.6
-  measureCtx.font = textFont({ size, font, weight })
+  measureCtx.font = textFont({ size, font, weight, italic })
   return measureCtx.measureText(text).width
 }
 
@@ -2071,7 +2083,7 @@ export function parseDeco(v: unknown): Deco | null {
     const wRaw = Number(o.w)
     const w = Number.isFinite(wRaw) && wRaw > 0
       ? wRaw
-      : finiteOr(Math.max(...text.split('\n').map((ln) => textLineWidth({ size, font, weight, ls: lsOk }, ln))), size * 4)
+      : finiteOr(Math.max(...text.split('\n').map((ln) => textLineWidth({ size, font, weight, italic: o.italic === true, ls: lsOk }, ln))), size * 4)
     const strokeColor = typeof o.strokeColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.strokeColor) ? o.strokeColor : undefined
     const strokeW = strokeColor && Number(o.strokeW) > 0 ? clampNum(Number(o.strokeW), 0, 10) : undefined
     // เอฟเฟกต์: งานเก่าที่มีแค่ shadow: true → เงาค่าเริ่มต้น (หน้าตาเดิม)
@@ -2085,6 +2097,8 @@ export function parseDeco(v: unknown): Deco | null {
       w,
       ...(font ? { font } : {}),
       ...(weight ? { weight } : {}),
+      ...(o.italic === true ? { italic: true } : {}),
+      ...(o.underline === true ? { underline: true } : {}),
       ...(align ? { align } : {}),
       ...(lh ? { lh } : {}),
       ...(strokeColor && strokeW ? { strokeColor, strokeW } : {}),

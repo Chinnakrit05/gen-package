@@ -6,6 +6,7 @@ import type { ProjectSummary, ProjectThumbnailMeta } from '../../shared/contract
 import { getMaterial, packKind } from '../core/materials'
 import { TEMPLATES } from '../core/templates'
 import { useT } from '../i18n'
+import * as studioAssets from './editor-v2/assets'
 import { IconBottle, IconBox, IconCard, IconPouch } from './icons'
 
 type ProjectItem = Project | ProjectSummary
@@ -43,6 +44,7 @@ export function filterGalleryItems(items: readonly GalleryItem[], query: string)
 }
 
 interface ProjectGalleryProps {
+  variant?: 'classic' | 'studio'
   items: readonly ProjectItem[]
   activeId: string
   activeProject?: Project
@@ -96,7 +98,7 @@ function ProjectThumb({ project, shot, metaKind }: { project?: Project; shot?: s
 }
 
 export function ProjectGallery({
-  items, activeId, activeProject, busy, createDisabled, deleteDisabled,
+  variant = 'classic', items, activeId, activeProject, busy, createDisabled, deleteDisabled,
   onCreate, onSwitch, onRename, onDelete, licensedIds, thumbUrl, onNeedThumbs,
 }: ProjectGalleryProps) {
   const t = useT()
@@ -173,7 +175,7 @@ export function ProjectGallery({
   }
 
   return (
-    <nav className="projects" aria-label="งานที่บันทึกไว้">
+    <nav className={`projects${variant === 'studio' ? ' v2-projects' : ''}`} aria-label="งานที่บันทึกไว้">
       <button
         ref={triggerRef}
         className="project-gallery-trigger"
@@ -191,7 +193,7 @@ export function ProjectGallery({
           }
         }}
       >
-        <span className="project-gallery-trigger-icon"><LayoutGrid size={18} aria-hidden="true" /></span>
+        <span className="project-gallery-trigger-icon">{variant === 'studio' ? <img src={studioAssets.imgIconButton8} alt="" /> : <LayoutGrid size={18} aria-hidden="true" />}</span>
         <span className="project-gallery-trigger-copy">
           <strong>{current?.name ?? 'งาน'}</strong>
           {current && licensedIds?.has(current.id) && licensedTag}
@@ -199,8 +201,9 @@ export function ProjectGallery({
         <span className="project-gallery-count">{allItems.length} งาน</span>
         <ChevronDown className="project-gallery-chevron" size={17} aria-hidden="true" />
       </button>
+      {variant === 'studio' && <button type="button" className="v2-project-name" onClick={onRename} disabled={busy} title={t('ตั้งชื่องาน', 'Rename project')}>{current?.name ?? t('ชื่อชิ้นงาน', 'Project name')}</button>}
       <button className="proj-new" disabled={createDisabled} onClick={onCreate} title="สร้างงานใหม่">
-        <Plus size={17} aria-hidden="true" /><span>สร้างงาน</span>
+        {variant === 'studio' ? <img src={studioAssets.imgIconButton9} alt="" /> : <Plus size={17} aria-hidden="true" />}<span>{variant === 'studio' ? t('สร้างงานใหม่', 'New project') : 'สร้างงาน'}</span>
       </button>
       {open && createPortal(
         <div className="project-gallery-backdrop" onMouseDown={(event) => {

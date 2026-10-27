@@ -1,6 +1,12 @@
 import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { LogOut } from 'lucide-react'
+import { EditorVersionSwitch, EDITOR_VERSION_KEY, loadEditorVersion, type EditorVersion } from './components/editor-v2/EditorVersionSwitch'
+import { EditorRail, ElementLibrary, type EditorTool } from './components/editor-v2/EditorSidebar'
+import { EditorToolbar } from './components/editor-v2/EditorToolbar'
+import * as studioAssets from './components/editor-v2/assets'
+import { makeLibraryShape } from './core/editorElements'
+import './components/editor-v2/editor-v2.css'
 
 // true เมื่อ DimField อยู่ในแถบปรับแต่งด้านบน (Canva-style) → เปลี่ยนสไลเดอร์เป็นปุ่ม+dropdown อัตโนมัติ
 const TopBarCtx = createContext(false)
@@ -1813,12 +1819,33 @@ export default function App({
   const [showDims, setShowDims] = useState(initialStore.showDims)
   const [showGuides, setShowGuides] = useState(false)
   const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
-  const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>('design')
+  const [editorVersion, setEditorVersion] = useState(loadEditorVersion)
+  const isV2 = editorVersion === 'v2'
+  const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>(() => editorVersion === 'v2' ? 'artwork' : 'design')
+  const [v2Tool, setV2Tool] = useState<EditorTool>('elements')
+  const [v2Advanced, setV2Advanced] = useState(false)
+  const [v2PanelClosed, setV2PanelClosed] = useState(false)
+  const changeEditorVersion = (version: EditorVersion) => {
+    if (version === editorVersion) return
+    setEditorVersion(version)
+    setV2Advanced(false)
+    setV2PanelClosed(false)
+    if (version === 'v2') { setSideTab('artwork'); setV2Tool('elements') }
+    try { localStorage.setItem(EDITOR_VERSION_KEY, version) } catch { /* usable without storage */ }
+  }
+  const chooseV2Tool = (tool: EditorTool) => {
+    setV2Tool(tool)
+    setV2PanelClosed(false)
+    setSideTab(tool === 'model' ? 'design' : tool === 'export' ? 'export' : 'artwork')
+    if (tool === 'layers') setGroups(g => ({ ...g, layers: true }))
+    if (tool === 'templates') setGroups(g => ({ ...g, lib: true }))
+  }
   const asideRef = useRef<HTMLElement>(null)
   const headerRef = useRef<HTMLElement>(null)
   // สลับขั้นตอน + เลื่อน sidebar ขึ้นบนสุด (จะได้ไม่ต้องเลื่อนหาแท็บเอง)
   const goStep = (tab: 'design' | 'artwork' | 'export') => {
     setSideTab(tab)
+    if (isV2) { setV2Tool(tab === 'design' ? 'model' : tab === 'export' ? 'export' : 'elements'); setV2PanelClosed(false) }
     requestAnimationFrame(() => {
       const el = asideRef.current
       if (!el) return
@@ -2935,7 +2962,8 @@ export default function App({
 
   const addShape = (shape: ShapeKind) => {
     if (!dieline) return
-    const el = makeShapeEl(dieline, shape)
+    const base = makeShapeEl(dieline, shape)
+    const el = isV2 ? { ...base, ...(shape === 'line' ? { stroke: '#00a896' } : { fill: '#00a896' }) } : base
     setDecos((ds) => [...ds, el])
     setSelectedIds([el.id])
   }
@@ -3501,10 +3529,11 @@ export default function App({
 
   return (
     <LangCtx.Provider value={lang}>
-    <div className="app">
+    <div className={`app${isV2 ? ' editor-v2' : ''}${isV2 && v2PanelClosed ? ' v2-panel-closed' : ''}`} data-editor-version={editorVersion}>
       <header ref={headerRef} className={cloud ? 'with-plan' : undefined}>
-        <h1>PackIt</h1>
+        <h1>{isV2 && <img src={studioAssets.imgGroup} alt="" />}PackIt</h1>
         <ProjectGallery
+          variant={isV2 ? 'studio' : 'classic'}
           items={cloud?.items ?? projects}
           activeId={activeId}
           activeProject={projects.find((project) => project.id === activeId)}
@@ -3618,7 +3647,9 @@ export default function App({
             {t('กำลังโหลดแพ็กเกจ…', 'Loading plan…')}
           </button>
         ))}
+        {isV2 && !cloud && <span className="v2-local-save">{t('บันทึกในเครื่องอัตโนมัติ', 'Saved on this device')}</span>}
         <AiTrigger
+          icon={isV2 ? studioAssets.imgLucideSparkle : undefined}
           open={copilotOpen}
           onToggle={() => setCopilotOpen((v) => !v)}
           credits={cloud && entitlementsStatus === 'ready' ? gateCredits : undefined}
@@ -3631,7 +3662,7 @@ export default function App({
           aria-label="Toggle language / สลับภาษา"
           onClick={() => setLang((l) => (l === 'en' ? 'th' : 'en'))}
         >
-          {lang === 'en' ? 'ไทย' : 'EN'}
+          {isV2 ? (lang === 'en' ? 'EN' : 'ไทย') : (lang === 'en' ? 'ไทย' : 'EN')}{isV2 && <img src={studioAssets.imgSectionDefaultIconDropdownStateNormal} alt="" />}
         </button>
         <button
           className="theme-btn"
@@ -3640,7 +3671,7 @@ export default function App({
           aria-pressed={dark}
           onClick={() => setDark((d) => !d)}
         >
-          {dark ? '☀' : '☾'}
+          {isV2 && !dark ? <img src={studioAssets.imgIconButton10} alt="" /> : dark ? '☀' : '☾'}
         </button>
         {onLogout && (
           <button
@@ -3659,11 +3690,12 @@ export default function App({
               }).finally(() => setProjectOperation(null))
             }}
           >
-            <LogOut size={16} aria-hidden="true" />
+            <>{isV2 ? <img src={studioAssets.imgIconButton11} alt="" /> : <LogOut size={16} aria-hidden="true" />}</>
             <span>{t('ออกจากระบบ','Sign out')}</span>
           </button>
         )}
-        {renderStepTabs('mobile-tabbar')}
+        <EditorVersionSwitch value={editorVersion} onChange={changeEditorVersion} />
+        {!isV2 && renderStepTabs('mobile-tabbar')}
         {projectOperationLabel && (
           <div className="project-progress" role="progressbar" aria-label={projectOperationLabel}>
             <span className="project-progress-beat" />
@@ -3673,8 +3705,27 @@ export default function App({
         )}
       </header>
       <div className="body">
-        <aside ref={asideRef}>
-          {renderStepTabs('aside-tabbar')}
+        {isV2 && <EditorRail active={sideTab === 'design' ? 'model' : sideTab === 'export' ? 'export' : v2Tool} onSelect={chooseV2Tool} />}
+        <aside ref={asideRef} className={isV2 ? 'v2-panel' : undefined} data-tool={isV2 ? v2Tool : undefined}>
+          {!isV2 && renderStepTabs('aside-tabbar')}
+          {isV2 && <button type="button" className="v2-panel-close" aria-label={t('ซ่อนแผงเครื่องมือ', 'Hide tools panel')} onClick={() => setV2PanelClosed(true)}>×</button>}
+          {isV2 && sideTab === 'design' && <div className="v2-size-host" ref={setSizeFloatEl} />}
+          {isV2 && sideTab === 'artwork' && <>
+            {v2Tool === 'elements' && <ElementLibrary disabled={aiBusy || projectBusy} onShape={addShape} onNutrition={addNutrition} onNext={() => chooseV2Tool('export')}
+              onFreeShape={kind => { const deco = makeLibraryShape(dieline, kind); if (deco) { setDecos(ds => [...ds, deco]); setSelectedIds([deco.id]) } }} />}
+            {v2Tool === 'text' && <div className="v2-insertion-panel">
+              <h2>{t('ตัวอักษร', 'Text')}</h2><p className="hint">{t('เพิ่มข้อความ แล้วคลิกบนแบบเพื่อพิมพ์', 'Add text, then click it on the canvas to edit.')}</p>
+              <button type="button" className="v2-add-text" disabled={aiBusy || projectBusy} onClick={addText}>{t('+ เพิ่มข้อความ', '+ Add text')}</button>
+              {FONTS.map(f => <button type="button" className="v2-font-sample" key={f.id} disabled={aiBusy || projectBusy} style={{ fontFamily: f.css }} onClick={() => { const el = withTextW({ ...makeTextEl(dieline, t('ข้อความของคุณ', 'Your text')), font: f.id }); setDecos(ds => [...ds, el]); setSelectedIds([el.id]) }}>{f.nameTh}<span style={{ fontFamily: f.css }}>{t('สร้างสรรค์ในแบบคุณ', 'Make it yours')}</span></button>)}
+            </div>}
+            {v2Tool === 'images' && <div className="v2-insertion-panel">
+              <h2>{t('เพิ่มรูป', 'Images')}</h2><label className="v2-upload"><img src={studioAssets.imgIconButton4} alt="" /><strong>{t('อัปโหลดรูปภาพ', 'Upload an image')}</strong><span>{cloud ? 'PNG, JPG' : 'PNG, JPG, SVG'}</span><input type="file" aria-label={t('อัปโหลดรูปภาพ', 'Upload an image')} accept={cloud ? 'image/png,image/jpeg' : 'image/*,.svg'} disabled={aiBusy || projectBusy || (cloud !== undefined && !cloud.online)} onChange={e => { void addImage(e.target.files?.[0]); e.target.value = '' }} /></label>
+              <button type="button" className="v2-panel-link" onClick={() => chooseV2Tool('background')}>{t('สีและรูปพื้นหลังแพ็กเกจ', 'Package background')}</button>
+              <div className="v2-image-library">{decos.filter(d => d.type === 'image').map(d => d.type === 'image' && <button type="button" key={d.id} aria-label={t('เลือกรูปบนแบบ', 'Select image on canvas')} onClick={() => setSelectedIds([d.id])}><img src={d.src} alt="" /></button>)}</div>
+            </div>}
+            {v2Tool === 'background' && <div ref={setBgFloatEl} className="v2-background-host" />}
+            {v2Tool === 'account' && <div className="v2-insertion-panel"><h2>{t('พื้นที่ทำงาน', 'Workspace')}</h2><p>{cloud ? t('พื้นที่ทำงานบนคลาวด์', 'Cloud workspace') : t('ทำงานบนเครื่องนี้', 'On this device')}</p><p className="hint">{cloud ? cloudSaveLabel(cloud.saveState, cloud.saveError) : t('งานบันทึกอัตโนมัติในเบราว์เซอร์นี้ สำรองงานได้ในเมนูส่งออก', 'Projects are saved in this browser. Back up your work from Export & files.')}</p>{cloud && <button type="button" onClick={() => setPricingOpen(true)}>{t('แพ็กเกจและเครดิต', 'Plan & credits')}</button>}<button type="button" onClick={() => chooseV2Tool('export')}>{t('สำรองและส่งออกงาน', 'Back up & export')}</button></div>}
+          </>}
 
           {sideTab === 'design' && (
           <>
@@ -5023,7 +5074,7 @@ export default function App({
                 bgFloatEl,
               )}
 
-              {!cloud && dieline && (
+              {!isV2 && !cloud && dieline && (
                 <Group title={t('ออกแบบหน้าตาด้วย AI', 'Design artwork with AI')} open={groups.ai} onToggle={() => toggleGroup('ai')}>
                   <p className="hint" style={{ margin: 0 }}>
                     {t('พิมพ์บอก Copilot (ปุ่ม "สั่ง AI" บน header) แล้วเลือกโหมด "ออกแบบหน้าตาบนแบบนี้" แนบรูปอ้างอิงและโลโก้ได้', 'Open Copilot ("Ask AI" in the header) and choose "Design artwork on this box"; you can attach references and a logo')}
@@ -5034,7 +5085,7 @@ export default function App({
                 </Group>
               )}
 
-              <Group title={t('เพิ่มองค์ประกอบ', 'Add element')} open={groups.add} onToggle={() => toggleGroup('add')}>
+              {!isV2 && <Group title={t('เพิ่มองค์ประกอบ', 'Add element')} open={groups.add} onToggle={() => toggleGroup('add')}>
                 <div className="art-actions">
                   <label className="file-pick inline">
                     <input
@@ -5088,9 +5139,9 @@ export default function App({
                     <IconNutrition /> {t('ตารางโภชนาการ (อย.)', 'Nutrition facts')}
                   </button>
                 </div>
-              </Group>
+              </Group>}
 
-              <Group title={t('ไลบรารีลาย', 'Pattern library')} open={groups.lib} onToggle={() => toggleGroup('lib')}>
+              {(!isV2 || v2Tool === 'templates') && <Group title={t('ไลบรารีลาย', 'Pattern library')} open={groups.lib} onToggle={() => toggleGroup('lib')}>
                 <div className="preset-lib">
                   <div className="preset-head">
                     <span className="preset-title">สีลาย</span>
@@ -5123,9 +5174,9 @@ export default function App({
                     </div>
                   ))}
                 </div>
-              </Group>
+              </Group>}
 
-              <Group title={t('เลเยอร์', 'Layers')} open={groups.layers} onToggle={() => toggleGroup('layers')} badge={decos.length}>
+              {(!isV2 || v2Tool === 'layers') && <Group title={t('เลเยอร์', 'Layers')} open={groups.layers} onToggle={() => toggleGroup('layers')} badge={decos.length}>
                 {decos.length === 0 && <p className="hint">ยังไม่มีองค์ประกอบ — เพิ่มได้จากกลุ่มด้านบน</p>}
                 {decos.length > 0 && (
                   <ul className="deco-list">
@@ -5325,14 +5376,14 @@ export default function App({
                     )}
                   </div>
                 )}
-              </Group>
+              </Group>}
 
-              {!selected && !multi && (
+              {!isV2 && !selected && !multi && (
                 <Group title={t('ปรับแต่งที่เลือก', 'Selection')} open={groups.props} onToggle={() => toggleGroup('props')}>
                   <p className="hint">เลือกชิ้นบนเลเยอร์หรือ blueprint เพื่อปรับแต่ง (แถบปรับแต่งจะโผล่ด้านบน)</p>
                 </Group>
               )}
-              {(selected || multi) &&
+              {(selected || multi) && (!isV2 || v2Advanced) &&
                 decoBar &&
                 createPortal(
                   <TopBarCtx.Provider value={true}>
@@ -6283,6 +6334,7 @@ export default function App({
                   decoBar,
                 )}
 
+              {!isV2 && <>
               <p className="hint">
                 ลายจะถูกใส่ลงไฟล์ .svg (vector) และ .pdf (300 dpi) แล้ว — ไม่ใส่ใน .dxf เพราะเป็นไฟล์มีดตัด
               </p>
@@ -6298,6 +6350,7 @@ export default function App({
                   </button>
                 </div>
               </div>
+              </>}
           </>
           )}
 
@@ -6592,7 +6645,7 @@ export default function App({
         </aside>
 
         <main>
-          {history.length > 0 && (
+          {!isV2 && history.length > 0 && (
             <div className="versions card" aria-label="ประวัติเวอร์ชัน">
               <button
                 className="ver-nav"
@@ -6630,7 +6683,7 @@ export default function App({
               </button>
             </div>
           )}
-          {currentAi && (
+          {!isV2 && currentAi && (
             <div className="assume card" aria-label="สิ่งที่ AI สันนิษฐาน">
               <span className="hint">สิ่งที่ AI สันนิษฐานในเวอร์ชันนี้ (ตรวจ/แก้ก่อนส่งโรงงาน):</span>
               <ul>
@@ -6659,14 +6712,16 @@ export default function App({
                   {foldBar}
                   <div className="viewer-3d">{viewer3D}</div>
                 </div>
-                <FloatModule kind="size" hostRef={setSizeFloatEl} />
+                {!isV2 && <FloatModule kind="size" hostRef={setSizeFloatEl} />}
               </>
             ) : (
             <>
             {/* host แถบเครื่องมือ (Canva) — ลอยทับบน dieline (portal มาลงที่นี่เมื่อเลือกชิ้น) */}
+            {isV2 && sideTab === 'artwork' && <EditorToolbar selected={selected ?? undefined} count={selectedIds.length} disabled={aiBusy || projectBusy} advanced={v2Advanced} onAdvanced={() => { setV2Advanced(v => !v); if (!selectedIds.length) chooseV2Tool('layers') }} onPatch={patchSelected} onDuplicate={duplicateSelected} onLock={toggleLockedSelected} onDelete={removeSelected} onLayers={() => chooseV2Tool('layers')} />}
             <div className="deco-topbar-host" ref={setDecoBar} />
             <div className="blueprint card">
               <DielineSVG
+                studio={isV2}
                 dieline={dieline}
                 showDims={showDims}
                 decos={proofed.decos}
@@ -6695,7 +6750,7 @@ export default function App({
                 canUndo={!aiBusy && undoStack.length > 0}
                 canRedo={!aiBusy && redoStack.length > 0}
                 imperial={imperial}
-                toolsExtra={proofToggle}
+                toolsExtra={isV2 ? <button type="button" className="v2-proof" title={t('ดูสีแบบพิมพ์ CMYK', 'Print color preview')} aria-label={t('ดูสีแบบพิมพ์ CMYK', 'Print color preview')} aria-pressed={softProof} onClick={() => setSoftProof(v => !v)}><img src={studioAssets.imgProperty1Default} alt="" /></button> : proofToggle}
                 lowResDpi={lowResMap}
                 fillLowDpi={fillLowDpi}
                 clearFilm={isSticker && !!mat.clear}
@@ -6725,11 +6780,11 @@ export default function App({
             {!(pip3dMin && !expand3d) && (
             <div className={`viewer-pip card${expand3d ? ' expanded' : ''}`}>
               <div className="pip-bar">
-                <span className="pip-title">มุมมอง 3D</span>
+                <span className="pip-title">{isV2 ? t('มุมมอง 3 มิติ', '3D preview') : 'มุมมอง 3D'}</span>
                 <span className="pip-actions">
                   {!expand3d && (
                     <button className="pip-expand" title="ซ่อนมุมมอง" aria-label="ซ่อนมุมมอง 3D" onClick={() => setPip3dMin(true)}>
-                      –
+                      {isV2 ? <img src={studioAssets.imgIconButton19} alt="" /> : '–'}
                     </button>
                   )}
                   <button
@@ -6738,7 +6793,7 @@ export default function App({
                     aria-label={expand3d ? 'ย่อมุมมอง 3D' : 'ขยายมุมมอง 3D'}
                     onClick={() => setExpand3d((v) => !v)}
                   >
-                    {expand3d ? '✕' : '⤢'}
+                    {expand3d ? '✕' : isV2 ? <img src={studioAssets.imgIconButton20} alt="" /> : '⤢'}
                   </button>
                 </span>
               </div>
@@ -6747,7 +6802,7 @@ export default function App({
             </div>
             )}
             {/* โมดูลพื้นหลังแพ็กเกจ ลอยขวา (เฉพาะแท็บตกแต่ง) */}
-            {sideTab === 'artwork' && <FloatModule kind="bg" hostRef={setBgFloatEl} />}
+            {sideTab === 'artwork' && !isV2 && <FloatModule kind="bg" hostRef={setBgFloatEl} />}
             </>
             )}
           </div>

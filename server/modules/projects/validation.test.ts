@@ -64,6 +64,10 @@ describe('cloud project validation', () => {
       decos: [{ id: 't1', type: 'text', text: 'สวัสดี', color: '#222222', size: 10, w: 30, x: 0, y: 0, rot: 0, ...over }],
     })
     for (const f of FONTS) expect(cloudProjectDocumentSchema.safeParse(text({ font: f.id })).success, f.id).toBe(true)
+    const styled = cloudProjectDocumentSchema.parse(text({ italic: true, underline: true }))
+    expect(styled.decos[0]).toMatchObject({ italic: true, underline: true })
+    expect(cloudProjectDocumentSchema.safeParse(text({ italic: 'true' })).success).toBe(false)
+    expect(cloudProjectDocumentSchema.safeParse(text({ underline: 1 })).success).toBe(false)
     for (const k of TEXT_FX_KINDS) expect(cloudProjectDocumentSchema.safeParse(text({ fx: { kind: k.id } })).success, k.id).toBe(true)
     expect(cloudProjectDocumentSchema.safeParse(text({
       fx: { kind: 'double', color: '#ffffff', color2: '#000000', width: 8, width2: 4 }, ls: -5, grad: { from: '#111111', to: '#222222', angle: 10 },

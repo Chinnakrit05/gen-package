@@ -22,6 +22,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
 - `src/core/types.ts` — Dieline, Panel (outline + hinge + stage + zOffset), Material, DimMark
 - `src/core/project.ts` — โมเดล Project (งานหนึ่งชิ้น) + ตัว parse/validate ที่ localStorage และการนำเข้าไฟล์ใช้ร่วมกัน (ย้ายออกจาก App.tsx เพื่อไม่ให้ App เป็น dependency ของ projectFile)
 - `src/core/projectFile.ts` — ส่งออก/นำเข้างานเป็น `.genpkg.json` (envelope: app/schemaVersion/exportedAt); นำเข้าแล้ว id ใหม่เสมอ (กันชน) + เตือนเมื่อ parse ซ่อมค่า (clamp ขนาด/ตัด history); schema ใหม่กว่า → ปฏิเสธ; เพิ่มฟิลด์ที่เก็บต้องขึ้น PROJECT_FILE_VERSION
+- `src/components/editor-v2/` — หน้าตา V2 ตาม Figma Example Responsive (269:2125; desktop 257:1491; iPad 277:3437), assets อ่าน/ดาวน์โหลดจาก Figma เท่านั้น; CSS scope `.editor-v2`, สลับใน App โดยไม่ remount หรือแยกข้อมูลชิ้นงาน, จำด้วย `packit-editor-version` (default V1). TextEl.italic/underline รองรับ SVG/canvas/parser/cloud validation และ PROJECT_FILE_VERSION 25; `editorElements.ts` สร้างหัวใจ/กากบาท/ลูกศรเป็น PathEl เดิม
 - `src/core/materials.ts` — material registry: ความหนา t, foldable, สี — วัสดุกำหนดระยะเผื่อใน dieline ไม่ใช่แค่หน้าตา
 - `src/core/templates/index.ts` — template registry (BoxTemplate: defaults, tilt, supportsHandle, foldDepth, generate) — เพิ่มแบบกล่องใหม่ที่นี่
 - feature รูหิ้ว: `Panel.holes` (polygon rings → THREE.Shape.holes) + `obroundPts/obroundPath` ใน shared.ts; เพิ่ม feature ใหม่ต้องอัปเดต "ความสามารถของระบบ" ใน system prompt ของ server/boxSpec.ts ด้วย ไม่งั้น AI จะอ้างว่าทำได้ทั้งที่ engine ไม่มี

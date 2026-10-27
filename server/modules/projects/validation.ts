@@ -87,6 +87,8 @@ const textSchema = z.object({
   w: positiveSize,
   font: z.enum(TEXT_FONT_IDS).optional(),
   weight: z.union([z.literal(400), z.literal(700)]).optional(),
+  italic: z.boolean().optional(),
+  underline: z.boolean().optional(),
   align: z.enum(['left', 'center', 'right']).optional(),
   lh: finite.min(0.5).max(5).optional(),
   strokeColor: color.optional(),

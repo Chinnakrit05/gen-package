@@ -6,6 +6,7 @@ import type { Guides } from '../core/guides'
 import { dimTextSize } from '../core/templates/shared'
 import { WATERMARK_ALPHA, watermarkTiles } from '../core/watermark'
 import { useT } from '../i18n'
+import * as studioAssets from './editor-v2/assets'
 import { finishDef } from '../core/finish'
 import { holoColor } from '../core/paperSurface'
 
@@ -428,7 +429,9 @@ export const DielineSVG = memo(function DielineSVG({
   clearFilm = false,
   stock,
   watermark = null,
+  studio = false,
 }: {
+  studio?: boolean
   dieline: Dieline
   showDims: boolean
   imperial?: boolean
@@ -1211,10 +1214,7 @@ export const DielineSVG = memo(function DielineSVG({
     }
   })()
 
-  return (
-    <div className="bp-canvas">
-    {editable && (
-      <div className={`bp-tools${selectedIds.length > 0 ? ' below-topbar' : ''}`}>
+  const canvasTools = <>
         <button
           type="button"
           className="bp-tool"
@@ -1250,6 +1250,13 @@ export const DielineSVG = memo(function DielineSVG({
         <button type="button" className="bp-tool" title={t('เพิ่มเส้นไกด์นอน','Add horizontal guide')} aria-label={t('เพิ่มเส้นไกด์นอน','Add horizontal guide')} onClick={() => addGuide('y')}>
           －＋
         </button>
+  </>
+
+  return (
+    <div className="bp-canvas">
+    {editable && !studio && (
+      <div className={`bp-tools${selectedIds.length > 0 ? ' below-topbar' : ''}`}>
+        {canvasTools}
         {(onUndo || onRedo) && <span className="bp-tools-sep" />}
         {onUndo && (
           <button type="button" className="bp-tool" title={t('เลิกทำ (Ctrl+Z)','Undo (Ctrl+Z)')} aria-label={t('เลิกทำ','Undo')} aria-disabled={!canUndo} onClick={onUndo}>
@@ -1266,6 +1273,15 @@ export const DielineSVG = memo(function DielineSVG({
       </div>
     )}
     {!editable && toolsExtra && <div className="bp-tools">{toolsExtra}</div>}
+    {editable && studio && <>
+      <div className="v2-canvas-actions">
+        <div className="v2-history-actions">
+          <button type="button" title={t('เลิกทำ', 'Undo')} aria-label={t('เลิกทำ', 'Undo')} disabled={!canUndo} onClick={onUndo}><img src={studioAssets.imgIconButton17} alt="" /></button>
+          <button type="button" title={t('ทำซ้ำ', 'Redo')} aria-label={t('ทำซ้ำ', 'Redo')} disabled={!canRedo} onClick={onRedo}><img src={studioAssets.imgIconButton18} alt="" /></button>
+        </div>{toolsExtra}
+      </div>
+      <details className="v2-view-tools"><summary title={t('เครื่องมือมุมมอง', 'View tools')} aria-label={t('เครื่องมือมุมมอง', 'View tools')}><img src={studioAssets.imgIconButton} alt="" /></summary><div>{canvasTools}<button type="button" className="bp-tool" aria-label={t('เปิด-ปิดกริด', 'Toggle grid')} aria-pressed={showGrid} onClick={() => setShowGrid(g => !g)}>▦ {t('กริด', 'Grid')}</button></div></details>
+    </>}
     <svg
       ref={svgRef}
       className={`dieline-svg${zoom > 1 ? ' zoomed' : ''}${spacePan ? ' grabbable' : ''}${penMode ? ' pen' : ''}`}
@@ -1830,7 +1846,7 @@ export const DielineSVG = memo(function DielineSVG({
     )}
     {editable && (
       <div className="zoom-toolbar">
-        <button
+        {!studio && <button
           type="button"
           className="grid-toggle"
           title={showGrid ? t('ซ่อนกริด','Hide grid') : t('แสดงกริด','Show grid')}
@@ -1840,15 +1856,16 @@ export const DielineSVG = memo(function DielineSVG({
         >
           ▦
         </button>
-        <span className="zoom-sep" />
+        }
+        {!studio && <span className="zoom-sep" />}
         <button type="button" title={t('ซูมออก','Zoom out')} aria-label={t('ซูมออก','Zoom out')} disabled={zoom <= 1} onClick={() => zoomAt(1 / 1.3, viewCx, viewCy)}>
-          −
+          {studio ? <img src={studioAssets.imgSectionDefaultIconMinusStateNormal} alt="" /> : '−'}
         </button>
         <button type="button" title={t('พอดีจอ (ซูม: Ctrl/⌘ + ล้อเมาส์)','Fit to screen (zoom: Ctrl/⌘ + wheel)')} aria-label={t('พอดีจอ','Fit to screen')} onClick={fit}>
           {Math.round(zoom * 100)}%
         </button>
         <button type="button" title={t('ซูมเข้า','Zoom in')} aria-label={t('ซูมเข้า','Zoom in')} disabled={zoom >= MAXZOOM} onClick={() => zoomAt(1.3, viewCx, viewCy)}>
-          ＋
+          {studio ? <img src={studioAssets.imgSectionDefaultIconPlusStateNormal} alt="" /> : '＋'}
         </button>
       </div>
     )}
@@ -1902,6 +1919,8 @@ export const DielineSVG = memo(function DielineSVG({
           color: editText.color,
           textAlign: editText.align ?? 'left',
           fontWeight: editText.weight ?? 400,
+          fontStyle: editText.italic ? 'italic' : undefined,
+          textDecoration: editText.underline ? 'underline' : undefined,
         }}
       />
     )}

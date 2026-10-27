@@ -23,6 +23,19 @@ function sampleProject(): Project {
   return p
 }
 
+it('round-trips V2 text styling without losing artwork in older project files', () => {
+  const p = sampleProject()
+  p.decos = [{ ...p.decos[0], type: 'text', text: 'PackIt', color: '#154049', size: 8, w: 30, italic: true, underline: true }]
+  const result = parseProjectFile(serializeProject(p))
+  expect(result.ok).toBe(true)
+  if (result.ok) expect(result.project.decos[0]).toMatchObject({ italic: true, underline: true, text: 'PackIt' })
+  const legacy = JSON.parse(serializeProject(sampleProject()))
+  legacy.schemaVersion = 24
+  const oldResult = parseProjectFile(JSON.stringify(legacy))
+  expect(oldResult.ok).toBe(true)
+  if (oldResult.ok) expect(oldResult.project.decos[0]).toMatchObject({ text: 'ORGANIC' })
+})
+
 describe('projectFile: round-trip', () => {
   it('serialize → parse คืนค่าครบทุกฟิลด์ที่ผู้ใช้แก้', () => {
     const p = sampleProject()

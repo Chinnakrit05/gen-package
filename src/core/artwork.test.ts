@@ -21,6 +21,7 @@ import {
   imgPAR,
   imageMaskSVG,
   textFont,
+  drawText2D,
   flipTransform,
   gradVec,
   gradientSVGString,
@@ -79,6 +80,30 @@ beforeAll(() => {
 
 const dieline = () =>
   TEMPLATES[0].generate({ W: 80, D: 50, H: 120, handle: false }, getMaterial('carton-300'))
+
+describe('V2 text styling', () => {
+  const styled: TextEl = { id: 'styled', type: 'text', text: 'PackIt', x: 0, y: 0, rot: 0, size: 8, w: 30, color: '#154049', italic: true, underline: true }
+  it('uses italic and underline in the blueprint and SVG export', () => {
+    expect(textFont(styled)).toMatch(/^italic 400 8px /)
+    expect(textInnerSVG(styled)).toContain('font-style="italic"')
+    expect(textInnerSVG(styled)).toContain('text-decoration="underline"')
+    expect(parseDeco(styled)).toMatchObject({ italic: true, underline: true })
+  })
+  it('also draws the underline in the 3D texture and raster export', () => {
+    const fillRect = vi.fn()
+    const ctx = { save: vi.fn(), restore: vi.fn(), fillText: vi.fn(), fillRect, measureText: () => ({ width: 72 }), font: '', textAlign: '' } as unknown as CanvasRenderingContext2D
+    drawText2D(ctx, styled, 3)
+    expect(ctx.font).toMatch(/^italic 400 24px /)
+    expect(fillRect).toHaveBeenCalledTimes(1)
+    expect(fillRect.mock.calls[0][2]).toBe(72)
+  })
+  it('keeps the underline when a hollow text effect removes the fill', () => {
+    const strokeRect = vi.fn()
+    const ctx = { save: vi.fn(), restore: vi.fn(), strokeText: vi.fn(), strokeRect, measureText: () => ({ width: 72 }), font: '', textAlign: '' } as unknown as CanvasRenderingContext2D
+    drawText2D(ctx, { ...styled, fx: { kind: 'hollow' } }, 3)
+    expect(strokeRect).toHaveBeenCalledTimes(1)
+  })
+})
 
 describe('sheetUV: สูตร map แผ่นคลี่ → texture (จุดที่พลิกแกน)', () => {
   // พลาดตรงนี้เมื่อไหร่ ลายบนกล่อง 3D จะกลับหัวหรือเลื่อนไปคนละแผง
