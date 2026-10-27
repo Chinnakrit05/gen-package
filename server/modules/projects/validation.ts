@@ -239,6 +239,7 @@ export const cloudProjectDocumentSchema = z.object({
     zipAt: finite.min(0).max(1000).optional(),
     tearAt: finite.min(0).max(1000).optional(),
     spoutAt: z.enum(['left', 'right']).optional(),
+    tear: z.enum(['none', 'notch', 'zigzag']).optional(),
   }).strict().optional(),
   stickerCut: z.object({
     shape: z.enum(['rect', 'square', 'ellipse', 'hexagon', 'star', 'heart', 'contour']),

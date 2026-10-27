@@ -107,6 +107,8 @@ import {
   type PouchStyle,
   type PouchAddons,
   type SpoutCorner,
+  type TearStyle,
+  resolveTear,
 } from './core/pouch'
 import { pouchZipIssues } from './core/pouchPreflight'
 import { boxVolumeMl, pouchVolumeMl, vesselVolumeMl, tubeVolumeMl, formatCapacity } from './core/capacity'
@@ -1178,6 +1180,7 @@ const samePouchAddons = (a: PouchAddons | undefined, b: PouchAddons | undefined)
   && a?.zipAt === b?.zipAt
   && a?.tearAt === b?.tearAt
   && a?.spoutAt === b?.spoutAt
+  && a?.tear === b?.tear
 
 // เทียบรูระบายอากาศ — ไม่เปิดทั้งคู่ = เท่ากัน (undefined = ปิด); เปิดทั้งคู่ค่อยเทียบค่า
 const sameVents = (a: VentConfig | undefined, b: VentConfig | undefined) => {
@@ -4704,11 +4707,16 @@ export default function App({
                     type="checkbox"
                     checked={zipper}
                     disabled={aiBusy}
-                    onChange={(e) => setZipper(e.target.checked)}
+                    onChange={(e) => {
+                      const on = e.target.checked
+                      // แยกจากรอยฉีกแล้ว: คงรอยฉีกที่ใช้อยู่ไว้ตามเดิม (ค่าเริ่มต้นของรอยฉีกผูกกับซิป จึงตรึงค่าก่อนสลับ)
+                      setPouchAddons((a) => (a.tear === undefined ? { ...a, tear: resolveTear(zipper, a, pouchStyle) } : a))
+                      setZipper(on)
+                    }}
                   />
-                  {t('ซิปล็อก + รอยฉีก (เปิด-ปิดซ้ำได้)', 'Zip-lock + tear notch (reclosable)')}
+                  {t('ซิปล็อก (เปิด-ปิดซ้ำได้)', 'Zip-lock (reclosable)')}
                 </label>
-                {zipper && pouch?.zipY !== undefined && pouch.tearY !== undefined && (
+                {zipper && pouch?.zipY !== undefined && (
                   <div className="zip-pos" style={{ margin: '6px 0 4px 24px' }}>
                     <DimField
                       imperial={imperial}
@@ -4719,6 +4727,44 @@ export default function App({
                       disabled={aiBusy}
                       onChange={(v) => setPouchAddons((a) => ({ ...a, zipAt: v }))}
                     />
+                  </div>
+                )}
+                {pouch && (
+                  // รอยฉีกเปิดถุง — แยกจากซิป: บาก V ที่ซีลข้าง หรือขอบบนฟันปลา (ถุงมีจุกไม่มีขอบฟันปลา)
+                  <div className="field" style={{ marginTop: 10 }}>
+                    <span className="field-head">{t('รอยฉีก', 'Tear opening')}</span>
+                    <div className="unit-toggle" role="group" aria-label={t('รอยฉีก', 'Tear opening')}>
+                      {(
+                        [
+                          ['none', t('ไม่มี', 'None')],
+                          ['notch', t('บาก V', 'V-notch')],
+                          ...(pouchStyle === 'spout' ? [] : [['zigzag', t('ฟันปลา', 'Zigzag edge')]]),
+                        ] as [TearStyle, string][]
+                      ).map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className={pouch.tear === id ? 'active' : ''}
+                          aria-pressed={pouch.tear === id}
+                          disabled={aiBusy}
+                          onClick={() => setPouchAddons((a) => ({ ...a, tear: id }))}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {pouch?.tear === 'zigzag' && (
+                  <p className="hint" style={{ margin: '4px 0 0 0' }}>
+                    {t(
+                      'ขอบบนไดคัทเป็นฟันปลาตลอดแนว — ฉีกเปิดได้ทุกจุดตามขอบบน (ฟันละ 4 มม. ร่องลึกไม่เกินครึ่งซีลบน)',
+                      'The top edge is die-cut as a zigzag — the bag tears open anywhere along the top (4 mm teeth, no deeper than half the top seal)',
+                    )}
+                  </p>
+                )}
+                {pouch?.tear === 'notch' && pouch.tearY !== undefined && (
+                  <div className="zip-pos" style={{ margin: '6px 0 4px 24px' }}>
                     <label className="check" style={{ marginTop: 6 }}>
                       <input
                         type="checkbox"
@@ -4731,7 +4777,9 @@ export default function App({
                           })
                         }
                       />
-                      {t(`วางรอยฉีกอัตโนมัติ (เหนือซิป ${TEAR_GAP} มม.)`, `Place tear notch automatically (${TEAR_GAP} mm above zipper)`)}
+                      {zipper
+                        ? t(`วางรอยฉีกอัตโนมัติ (เหนือซิป ${TEAR_GAP} มม.)`, `Place tear notch automatically (${TEAR_GAP} mm above zipper)`)
+                        : t('วางรอยฉีกอัตโนมัติ (ใต้ซีลบน)', 'Place tear notch automatically (below the top seal)')}
                     </label>
                     {pouchAddons.tearAt !== undefined && (
                       <DimField
@@ -4744,6 +4792,10 @@ export default function App({
                         onChange={(v) => setPouchAddons((a) => ({ ...a, tearAt: v }))}
                       />
                     )}
+                  </div>
+                )}
+                {pouch && (zipper || pouch.tear === 'notch') && (
+                  <div className="zip-pos" style={{ margin: '2px 0 4px 24px' }}>
                     {(pouchAddons.zipAt !== undefined || pouchAddons.tearAt !== undefined) && (
                       <button
                         type="button"

@@ -39,16 +39,20 @@ export interface PouchIssue {
 const f = (v: number) => String(Math.round(v * 10) / 10)
 const overlap = (a0: number, a1: number, b0: number, b1: number) => a0 < b1 && b0 < a1
 
+// ซิปล็อกกับรอยบากเป็นออปชันแยกกัน — ตรวจเฉพาะส่วนที่เปิด (ขอบฟันปลาอยู่ในซีลบนเสมอ ไม่มีตำแหน่งให้ตรวจ)
 export function pouchZipIssues(p: Pouch): PouchIssue[] {
-  if (!p.zipper || p.zipY === undefined || p.tearY === undefined) return []
   const st = p.frontRect.y
-  const { zipY, tearY, H } = p
+  const { H } = p
+  const zipY = p.zipper ? p.zipY : undefined
+  const tearY = p.tear === 'notch' ? p.tearY : undefined
   const out: PouchIssue[] = []
   const add = (code: PouchIssueCode, level: PouchIssue['level'], th: string, en: string) =>
     out.push({ code, level, th, en })
 
   // รอยบาก vs ซีลบน
-  if (tearY <= st) {
+  if (tearY === undefined) {
+    // ไม่มีรอยบาก
+  } else if (tearY <= st) {
     add(
       'tear-in-seal',
       'error',
@@ -63,9 +67,40 @@ export function pouchZipIssues(p: Pouch): PouchIssue[] {
       `Tear notch is very close to the top seal (keep ≥${TEAR_SEAL_GAP} mm below it) — the bag may not open cleanly`,
     )
   }
-  // ซิปชิดซีลจนไม่มีที่ให้รอยบาก (ต้องมี: ซีล + ระยะพ้นซีล + ระยะเหนือปีกซิป)
+  if (tearY !== undefined && p.hangHole) {
+    const hy = hangHoleY(st)
+    if (tearY - 2.5 < hy + HANG_HOLE_R + 1) {
+      add(
+        'zip-hang',
+        'error',
+        'รอยฉีกทับรูแขวน — รูแขวนต้องอยู่ในหัวถุงเหนือรอยฉีก',
+        'Tear notch overlaps the hang hole — the hole must sit in the header above the tear',
+      )
+    }
+  }
+  if (tearY !== undefined && p.spoutCorner && tearY - TEAR_NOTCH_H < p.spoutCorner.c + p.sideSeal) {
+    add(
+      'tear-spout',
+      'error',
+      `รอยฉีกอยู่ในมุมที่ตัดเฉียงของจุก (ต้องต่ำกว่า ${f(p.spoutCorner.c + p.sideSeal + TEAR_NOTCH_H)} มม.) — เลื่อนรอยฉีกลง`,
+      `Tear notch falls in the spout's cut corner (must be below ${f(p.spoutCorner.c + p.sideSeal + TEAR_NOTCH_H)} mm) — move it down`,
+    )
+  }
+  if (zipY === undefined) return out
+
+  // ซิปชิดซีลจนไม่มีที่ให้รอยบาก (ต้องมี: ซีล + ระยะพ้นซีล + ระยะเหนือปีกซิป) — เฉพาะเมื่อมีรอยบาก
   const zipMin = st + TEAR_SEAL_GAP + TEAR_GAP
-  if (zipY - ZIP_HALF <= st + TEAR_SEAL_GAP) {
+  if (tearY === undefined) {
+    // ซิปอย่างเดียว: ต้องพ้นซีลบน
+    if (zipY - ZIP_HALF <= st) {
+      add(
+        'zip-near-seal',
+        'error',
+        'ซิปทับแนวซีลบน — เลื่อนซิปลงให้พ้นซีล',
+        'Zipper overlaps the top seal — move it below the seal',
+      )
+    }
+  } else if (zipY - ZIP_HALF <= st + TEAR_SEAL_GAP) {
     add(
       'zip-near-seal',
       'error',
@@ -110,12 +145,12 @@ export function pouchZipIssues(p: Pouch): PouchIssue[] {
   const zip1 = zipY + ZIP_HALF
   if (p.hangHole) {
     const hy = hangHoleY(st)
-    if (overlap(zip0, zip1, hy - HANG_HOLE_R - 1, hy + HANG_HOLE_R + 1) || tearY - 2.5 < hy + HANG_HOLE_R + 1) {
+    if (overlap(zip0, zip1, hy - HANG_HOLE_R - 1, hy + HANG_HOLE_R + 1)) {
       add(
         'zip-hang',
         'error',
-        'ซิป/รอยฉีกทับรูแขวน — รูแขวนต้องอยู่ในหัวถุงเหนือรอยฉีก',
-        'Zipper/tear notch overlaps the hang hole — the hole must sit in the header above the tear',
+        'ซิปทับรูแขวน — รูแขวนต้องอยู่ในหัวถุงเหนือซิป',
+        'Zipper overlaps the hang hole — the hole must sit in the header above the zipper',
       )
     }
   }
@@ -158,14 +193,6 @@ export function pouchZipIssues(p: Pouch): PouchIssue[] {
         'error',
         `ซิปทับตำแหน่งเชื่อมจุกมุม (จุกลงลึก ~${f(reach)} มม. จากขอบบน) — เลื่อนซิปลงให้พ้นจุก`,
         `Zipper overlaps the corner spout fitment (reaches ~${f(reach)} mm from the top) — move it below the spout`,
-      )
-    }
-    if (tearY - TEAR_NOTCH_H < p.spoutCorner.c + p.sideSeal) {
-      add(
-        'tear-spout',
-        'error',
-        `รอยฉีกอยู่ในมุมที่ตัดเฉียงของจุก (ต้องต่ำกว่า ${f(p.spoutCorner.c + p.sideSeal + TEAR_NOTCH_H)} มม.) — เลื่อนรอยฉีกลง`,
-        `Tear notch falls in the spout's cut corner (must be below ${f(p.spoutCorner.c + p.sideSeal + TEAR_NOTCH_H)} mm) — move it down`,
       )
     }
   } else if (p.spout) {
