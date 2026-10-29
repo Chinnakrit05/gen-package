@@ -4828,10 +4828,15 @@ export default function App({
                   )}
                   {pouch?.tear === 'zigzag' && (
                     <p className="hint" style={{ margin: '4px 0 0 0' }}>
-                      {t(
-                        'ขอบบนไดคัทเป็นฟันปลาตลอดแนว — ฉีกเปิดได้ทุกจุดตามขอบบน (ฟันละ 4 มม. ร่องลึกไม่เกินครึ่งซีลบน)',
-                        'The top edge is die-cut as a zigzag — the bag tears open anywhere along the top (4 mm teeth, no deeper than half the top seal)',
-                      )}
+                      {pouchStyle === 'flat' || pouchStyle === 'pillow'
+                        ? t(
+                            'ขอบบนและขอบล่างไดคัทเป็นฟันปลาตลอดแนว — ฉีกเปิดได้ทุกจุดทั้งสองขอบ (ฟันละ 4 มม. ร่องลึกไม่เกินครึ่งซีล)',
+                            'The top and bottom edges are die-cut as a zigzag — the bag tears open anywhere along either edge (4 mm teeth, no deeper than half the seal)',
+                          )
+                        : t(
+                            'ขอบบนไดคัทเป็นฟันปลาตลอดแนว — ฉีกเปิดได้ทุกจุดตามขอบบน (ฟันละ 4 มม. ร่องลึกไม่เกินครึ่งซีลบน)',
+                            'The top edge is die-cut as a zigzag — the bag tears open anywhere along the top (4 mm teeth, no deeper than half the top seal)',
+                          )}
                     </p>
                   )}
                   {pouch?.tear === 'notch' && pouch.tearY !== undefined && (

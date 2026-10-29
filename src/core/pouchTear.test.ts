@@ -173,3 +173,40 @@ describe('รูแขวนทะลุทุกชั้น', () => {
     expect(p.hangHoles.map((h) => h.x)).toEqual([box.W / 2, box.W + p.gusset + box.W / 2])
   })
 })
+
+describe('ขอบฟันปลาบน-ล่าง (ซองแบน 3 ด้าน / ซองหลังกลาง)', () => {
+  // จุดของเส้นตัดรอบแผ่นที่อยู่ในแถบซีลล่าง (ความลึกร่องวัดจากขอบล่าง)
+  const bottomPts = (p: ReturnType<typeof make>) => {
+    const outer = p.label.segments.find((s) => s.kind === 'cut')!.d
+    const H = p.label.height
+    return [...outer.matchAll(/L ([\d.e-]+) ([\d.e-]+)/g)]
+      .map((m) => [Number(m[1]), H - Number(m[2])] as const)
+      .filter(([, d]) => d >= -1e-9 && d < 5)
+  }
+  for (const style of ['flat', 'pillow'] as const) {
+    it(`${style}: ขอบล่างเป็นฟันปลาด้วย ลึกไม่เกินครึ่งซีลล่าง ฟันตรงกับขอบบน (ตำแหน่งจริงชุดเดียวกัน)`, () => {
+      const p = make(style, false, { tear: 'zigzag' })
+      const sb = p.label.height - p.frontRect.y - box.H
+      const pts = bottomPts(p)
+      expect(pts.length).toBeGreaterThan(20)
+      const deepest = Math.max(...pts.map(([, d]) => d))
+      expect(deepest).toBeGreaterThan(0)
+      expect(deepest).toBeLessThanOrEqual(Math.min(2, sb / 2) + 1e-9)
+      // ร่องล่างเข้า trims ให้ 3D เจาะ (จำนวนเท่าร่องบน)
+      const low = p.trims.filter((t) => t.some((q) => q.y > p.label.height / 2))
+      const high = p.trims.filter((t) => t.every((q) => q.y < p.label.height / 2))
+      expect(low.length).toBe(high.length)
+      // ยอดฟันล่างอยู่ตำแหน่งเดียวกับยอดฟันบน
+      const peaks = (arr: readonly (readonly [number, number])[]) => arr.filter(([, d]) => d < 1e-9).map(([x]) => x.toFixed(3)).sort()
+      const top = p.label.segments.find((s) => s.kind === 'cut')!.d
+      const topPts = [...top.matchAll(/L ([\d.e-]+) ([\d.e-]+)/g)].map((m) => [Number(m[1]), Number(m[2])] as const).filter(([, y]) => y < 3)
+      expect(peaks(pts)).toEqual(peaks(topPts))
+    })
+  }
+  it('ถุงตั้ง/ซองข้างจีบ: ฟันปลาเฉพาะขอบบน (ก้นพับ/ซีลก้นไม่ใช่ขอบฉีก)', () => {
+    for (const style of ['stand', 'gusset'] as const) {
+      const p = make(style, false, { tear: 'zigzag' })
+      expect(p.trims.every((t) => t.every((q) => q.y < p.label.height / 2))).toBe(true)
+    }
+  })
+})
