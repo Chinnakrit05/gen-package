@@ -94,12 +94,6 @@ export const SPOUT_DRAPE = 3 // ฟิล์มคลุมเลยขอบเ
 export const spoutChamfer = (W: number, st: number) =>
   Math.min(0.45 * W, (spoutMarker(W, st).bw + 2 * SPOUT_CHAMFER_MARGIN) / Math.SQRT2)
 export const spoutBoatT = (W: number, st: number) => spoutMarker(W, st).r * 0.9 // ครึ่งความหนาเรือจุก
-// ระยะลึกสุดจากขอบบนที่เรือจุกมุมลงไปถึง (ปลายเรือที่มุมใน) — ซิป/รอยฉีกต้องอยู่ต่ำกว่านี้
-export const spoutCornerReach = (W: number, st: number) => {
-  const c = spoutChamfer(W, st)
-  const sm = spoutMarker(W, st)
-  return c / 2 + (sm.bh + sm.bw / 2) / Math.SQRT2
-}
 // ความนูนของฟิล์มที่คลุมเรือจุกมุม (มม. เหนือผิวซีล) ที่พิกัดฟิล์ม uf (จากขอบด้านที่มีจุก) / dl (จากขอบบน):
 // s = ตามแนวขอบเฉียง (0 = กลางเรือ), d = ลึกเข้าจากขอบเฉียง — เต็มความหนาเรือตลอดช่วงเรือ แล้วลาดลงหาผิวถุงที่ปลายเรือ
 export function spoutCornerBulge(W: number, st: number, c: number, uf: number, dl: number): number {
@@ -278,12 +272,14 @@ export const valveR = (W: number) => Math.min(W, 90) * 0.11 // รัศมี�
 export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = {}): Pouch {
   const { W, D, H } = box
   const style = opts.style ?? 'stand'
-  const zipper = opts.zipper ?? false
+  const spout = style === 'spout'
+  // ถุงมีจุกเปิด-ปิดด้วยฝาจุก: ไม่มีซิป/รอยฉีก/รูแขวน/วาล์ว/ที่รัดปาก — ค่าที่เคยเก็บในงานไม่ถูกใช้ (คงไว้เผื่อสลับกลับรูปแบบอื่น)
+  const addons: PouchAddons = spout ? (opts.addons?.spoutAt ? { spoutAt: opts.addons.spoutAt } : {}) : (opts.addons ?? {})
+  const zipper = !spout && (opts.zipper ?? false)
   const flat = style === 'flat'
   const pillow = style === 'pillow'
   const gus = style === 'gusset'
   const boxp = style === 'box'
-  const spout = style === 'spout'
   // doypack (ถุงตั้ง/มีจุก): แผงหน้า-หลังแยกกัน แต่ละแผงมีซีลข้างสองด้าน + ซีลบน + ครึ่งก้น gusset
   // ที่ซีลโค้ง (round-bottom) — แบบงานพิมพ์ถุงตั้งจริง (ไม่ใช่ฟิล์มม้วนรอบมีรอยต่อหลัง)
   const kseal = style === 'kseal'
@@ -305,7 +301,7 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
   const fx = backSeam ? pf + W / 2 : 0 // จุดเริ่มพื้นที่พิมพ์หน้าบนแผ่นฟิล์ม
   const fcx = fx + W / 2 // จุดกึ่งกลางหน้า (ใช้วาง marker จุก/วาล์ว/รูแขวน)
   const ss = POUCH_SIDE_SEAL
-  const hung = opts.addons?.hangHole === true
+  const hung = addons.hangHole === true
   const flatHeader = flat && hung ? FLAT_HANG_HEADER : FLAT_SEAL
   // ถุงตั้ง: ซีลบนแคบ 5 มม. (รอยฉีกยังพ้นซีลได้) — มีรูแขวน → หัวถุงกว้างพอเจาะรู
   const standTop = hung ? Math.max(DOYPACK_TOP_SEAL, FLAT_HANG_HEADER) : DOYPACK_TOP_SEAL
@@ -326,25 +322,25 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
         ? gVal / 2
         : (gVal / 2) * POUCH_DEPTH_SCALE
   // แนวซิป/รอยบาก: ผู้ใช้กำหนดได้ (มม. จากขอบบน) ไม่งั้นซิปใต้ปากบน 18 มม. (ไม่ต่ำเกินครึ่งลำตัว)
-  const zl = zipper ? pouchZipLayout(st, H, opts.addons) : undefined
+  const zl = zipper ? pouchZipLayout(st, H, addons) : undefined
   const zipY = zl?.zipY
   // รอยฉีกแยกจากซิป: มีซิป → รอยบากเหนือซิปตามเดิม; ไม่มีซิป → ใต้ซีลบน
-  const tear = resolveTear(zipper, opts.addons, style)
+  const tear = resolveTear(zipper, addons, style)
   // ข้างถุงเป็นรอยพับ (ซองข้างจีบ/ซองหลังกลาง): บากต่ำกว่าซีลบนจะตัดทะลุเข้าถุง → วางในแนวซีลบน
   const foldedSides = notchInTopSeal(style)
   const tearY =
     tear !== 'notch'
       ? undefined
       : foldedSides
-        ? Math.min(st + H - 3, Math.max(3, opts.addons?.tearAt ?? tearInSealAt(st)))
+        ? Math.min(st + H - 3, Math.max(3, addons.tearAt ?? tearInSealAt(st)))
         : zl
           ? zl.tearY
-          : Math.min(st + H - 3, Math.max(3, opts.addons?.tearAt ?? tearAtDefault(st, H)))
+          : Math.min(st + H - 3, Math.max(3, addons.tearAt ?? tearAtDefault(st, H)))
 
   // แผ่นฟิล์มแบน: [หน้า][…จีบ…][หลัง][…จีบ…][ลิ้นทากาว ss]; แนวตั้ง = ริมบน + ลำตัว + ก้น/ริมล่าง
   // แยกลิ้นกาวเป็นแผงต่างหาก (ขอบร่วม x=Wp เป็นรอยต่อ ไม่ใช่ขอบนอก) เหมือน dieline ฉลาก
   // ถุงจุกมุม: มุมบนด้านจุกตัดเฉียง (มองจากหน้า ซ้าย = แผงหน้าซ้าย / แผงหลังขวา เพราะหลังมองจากด้านหลัง)
-  const corner: SpoutCorner | undefined = spout ? opts.addons?.spoutAt : undefined
+  const corner: SpoutCorner | undefined = spout ? addons.spoutAt : undefined
   const cc = corner ? spoutChamfer(W, st) : 0
   // พิกัดท้องถิ่นของแผง (u จากขอบด้านจุก) → แผ่นคลี่
   const cornerOnRight = (x0: number) => (x0 === 0) === (corner === 'right')
@@ -597,7 +593,6 @@ export function generatePouch(box: BoxParams, _mat: Material, opts: PouchOpts = 
     dims.push({ a: P(fcx - bw / 2, bh + 6), b: P(fcx + bw / 2, bh + 6), label: `จุก ⌀${fmt(2 * sr)}` })
   }
 
-  const addons = opts.addons ?? {}
   const hangHole = addons.hangHole === true
   const valve = addons.valve === true
   const tinTie = addons.tinTie === true

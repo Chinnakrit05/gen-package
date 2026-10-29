@@ -4,7 +4,6 @@ import {
   spoutBoatT,
   spoutChamfer,
   spoutCornerBulge,
-  spoutCornerReach,
   spoutMarker,
   type SpoutCorner,
 } from './pouch'
@@ -12,7 +11,7 @@ import { pouchZipIssues } from './pouchPreflight'
 import { getMaterial } from './materials'
 import { parseProject } from './project'
 
-// ถุงมีจุก: จุกมุมบนซ้าย/ขวา — มุมตัดเฉียง 45° แผงหลังสะท้อนซ้าย-ขวา, ฟิล์มนูนคลุมเรือ, ตรวจซิป/รอยฉีก
+// ถุงมีจุก: จุกมุมบนซ้าย/ขวา — มุมตัดเฉียง 45° แผงหลังสะท้อนซ้าย-ขวา, ฟิล์มนูนคลุมเรือ; ไม่มีออปชันเสริมของถุงอื่น
 const box = { W: 100, D: 50, H: 160, handle: false }
 const foil = getMaterial('pouch-foil')
 const make = (spoutAt?: SpoutCorner, zipper = false) =>
@@ -69,22 +68,25 @@ describe('ถุงจุกมุม: ฟิล์มคลุมเรือ (
   })
 })
 
-describe('ถุงจุกมุม: ตรวจซิป/รอยฉีก', () => {
-  it('ซิปตำแหน่งเริ่มต้นทับเรือจุกมุม → error; เลื่อนลงพ้นแล้วผ่าน', () => {
-    const p = make('left', true)
-    const codes = pouchZipIssues(p).map((i) => i.code)
-    expect(codes).toContain('zip-spout')
-    expect(codes).toContain('tear-spout')
-    const reach = spoutCornerReach(box.W, p.frontRect.y)
-    const low = generatePouch(box, foil, {
-      style: 'spout',
-      zipper: true,
-      addons: { spoutAt: 'left', zipAt: Math.ceil(reach + 15) },
+describe('ถุงมีจุก: ไม่มีซิป/รอยฉีก/รูแขวน/วาล์ว/ที่รัดปาก (เปิด-ปิดด้วยฝาจุก)', () => {
+  for (const spoutAt of [undefined, 'left'] as const) {
+    it(`จุก${spoutAt ? 'มุม' : 'กลาง'}: ค่าที่เคยเก็บในงานไม่ถูกใช้ — แบบพิมพ์/3D/ตรวจไฟล์สะอาด`, () => {
+      const p = generatePouch(box, foil, {
+        style: 'spout',
+        zipper: true,
+        addons: { spoutAt, tear: 'notch', hangHole: true, valve: true, tinTie: true, zipAt: 40, tearAt: 30 },
+      })
+      expect(p.zipper).toBe(false)
+      expect(p.zipY).toBeUndefined()
+      expect(p.tear).toBe('none')
+      expect(p.tearNotches).toHaveLength(0)
+      expect(p.hangHole || p.valve || p.tinTie).toBe(false)
+      expect(p.hangHoles).toHaveLength(0)
+      expect(p.valveAt).toBeUndefined()
+      expect(p.spoutCorner?.side).toBe(spoutAt)
+      expect(pouchZipIssues(p)).toEqual([])
     })
-    const lowCodes = pouchZipIssues(low).map((i) => i.code)
-    expect(lowCodes).not.toContain('zip-spout')
-    expect(lowCodes).not.toContain('tear-spout')
-  })
+  }
 })
 
 describe('บันทึก spoutAt', () => {

@@ -93,8 +93,6 @@ describe('pouchZipIssues', () => {
     expect(small.find((i) => i.code === 'zip-valve')?.level).toBe('warn')
     expect(codes({ tinTie: true })).toContain('zip-tintie')
     expect(codes({ tinTie: true, zipAt: 45 })).not.toContain('zip-tintie')
-    expect(codes({}, 'spout')).toContain('zip-spout')
-    expect(codes({ zipAt: 45 }, 'spout')).not.toContain('zip-spout')
   })
 
   it('รูแขวนอยู่ในหัวถุงเหนือรอยฉีก: ค่าเริ่มต้นผ่าน', () => {

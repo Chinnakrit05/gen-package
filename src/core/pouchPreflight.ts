@@ -8,8 +8,6 @@ import {
   ZIP_HALF,
   hangHoleY,
   notchInTopSeal,
-  spoutCornerReach,
-  spoutMarker,
   valveR,
   type Pouch,
 } from './pouch'
@@ -27,8 +25,6 @@ export type PouchIssueCode =
   | 'zip-hang'
   | 'zip-valve'
   | 'zip-tintie'
-  | 'zip-spout'
-  | 'tear-spout'
   | 'tear-fold'
 
 export interface PouchIssue {
@@ -90,14 +86,6 @@ export function pouchZipIssues(p: Pouch): PouchIssue[] {
         'Tear notch overlaps the hang hole — the hole must sit in the header above the tear',
       )
     }
-  }
-  if (tearY !== undefined && p.spoutCorner && tearY - TEAR_NOTCH_H < p.spoutCorner.c + p.sideSeal) {
-    add(
-      'tear-spout',
-      'error',
-      `รอยฉีกอยู่ในมุมที่ตัดเฉียงของจุก (ต้องต่ำกว่า ${f(p.spoutCorner.c + p.sideSeal + TEAR_NOTCH_H)} มม.) — เลื่อนรอยฉีกลง`,
-      `Tear notch falls in the spout's cut corner (must be below ${f(p.spoutCorner.c + p.sideSeal + TEAR_NOTCH_H)} mm) — move it down`,
-    )
   }
   if (zipY === undefined) return out
 
@@ -197,27 +185,6 @@ export function pouchZipIssues(p: Pouch): PouchIssue[] {
       )
     }
   }
-  if (p.spoutCorner) {
-    // จุกมุม: เรือลงลึกตามแนวทแยง — ซิปพาดเต็มกว้างจึงต้องพ้นปลายเรือ; รอยฉีกบากที่ขอบข้างต้องพ้นมุมที่ตัดเฉียง
-    const reach = spoutCornerReach(p.W, st)
-    if (overlap(zip0, zip1, 0, reach + 2)) {
-      add(
-        'zip-spout',
-        'error',
-        `ซิปทับตำแหน่งเชื่อมจุกมุม (จุกลงลึก ~${f(reach)} มม. จากขอบบน) — เลื่อนซิปลงให้พ้นจุก`,
-        `Zipper overlaps the corner spout fitment (reaches ~${f(reach)} mm from the top) — move it below the spout`,
-      )
-    }
-  } else if (p.spout) {
-    const s = spoutMarker(p.W, st)
-    if (overlap(zip0, zip1, 0, s.bh + 2)) {
-      add(
-        'zip-spout',
-        'error',
-        'ซิปทับตำแหน่งเชื่อมจุก — เลื่อนซิปลงให้พ้นจุก',
-        'Zipper overlaps the spout fitment — move it below the spout',
-      )
-    }
-  }
+  // ถุงมีจุกไม่มีซิป/รอยฉีก (generatePouch ไม่ใส่ให้) จึงไม่มีกติกาซิปทับจุก
   return out
 }
