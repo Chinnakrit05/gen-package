@@ -1,0 +1,174 @@
+{
+  "contractVersion": "b-phase0-r1",
+  "baseCommit": "fb55f36897aa47b235afdcf219c995a50a7c64e8",
+  "branch": "codex/marketplace-b-phase-1",
+  "runtime": "v24.10.0",
+  "scope": "Phase 0 B baseline audit; not Phase 1 integration acceptance",
+  "checks": {
+    "typecheck": {
+      "status": "PASS",
+      "command": "node_modules/typescript/bin/tsc --noEmit (Node 24)"
+    },
+    "unitTests": {
+      "status": "PASS",
+      "command": "vitest run server/http server/modules/projects server/adapters/supabase src/services/api src/services/auth src/services/projects",
+      "files": 24,
+      "passed": 208,
+      "failed": 0,
+      "skipped": 0
+    },
+    "fixtureValidation": {
+      "status": "PASS",
+      "scenarios": 31,
+      "validator": "Existing project Zod schemas, opaque cursor decode, retry equality, thumbnail versions and JPEG decode",
+      "command": "node docs/marketplace/fixtures/verify.mjs"
+    },
+    "realAuthAndPostgres": {
+      "status": "NOT_RUN",
+      "reason": "Docker started successfully; no gen-package stack exists; local default DB port 54322 is bound to another project (supabase_db_jasper). Tests were not run against that database or a remote service."
+    },
+    "browserIntegration": {
+      "status": "NOT_RUN",
+      "reason": "Awaiting A routes, UX and shared Phase 0 review"
+    },
+    "previewOAuth": {
+      "status": "NOT_RUN",
+      "reason": "Awaiting A route/callback review and integration environment"
+    },
+    "phase0PeerReview": {
+      "status": "WAITING",
+      "reason": "0-J1/0-J2 require review by A and B against the same artifact revision; no A artifact/review received in checkout or origin/main"
+    },
+    "localEnvironment": {
+      "status": "PARTIAL",
+      "docker": "Started successfully",
+      "packitLocalStack": "Not running",
+      "defaultDbPort": 54322,
+      "portOwner": "supabase_db_jasper",
+      "actions": "Read-only container inventory; no DB reset, migration, fixture insert or unrelated container stop"
+    }
+  },
+  "testFiles": [
+    {
+      "file": "server/http/body.test.ts",
+      "status": "passed",
+      "passed": 2
+    },
+    {
+      "file": "server/http/legacyAiGuard.test.ts",
+      "status": "passed",
+      "passed": 2
+    },
+    {
+      "file": "server/http/projectThumbnails.test.ts",
+      "status": "passed",
+      "passed": 6
+    },
+    {
+      "file": "server/http/router.test.ts",
+      "status": "passed",
+      "passed": 52
+    },
+    {
+      "file": "server/adapters/supabase/billingRepository.test.ts",
+      "status": "passed",
+      "passed": 34
+    },
+    {
+      "file": "server/modules/projects/canonical.test.ts",
+      "status": "passed",
+      "passed": 2
+    },
+    {
+      "file": "server/modules/projects/validation.test.ts",
+      "status": "passed",
+      "passed": 7
+    },
+    {
+      "file": "src/services/api/ai.test.ts",
+      "status": "passed",
+      "passed": 4
+    },
+    {
+      "file": "src/services/api/assets.test.ts",
+      "status": "passed",
+      "passed": 2
+    },
+    {
+      "file": "src/services/api/billing.test.ts",
+      "status": "passed",
+      "passed": 7
+    },
+    {
+      "file": "src/services/api/client.test.ts",
+      "status": "passed",
+      "passed": 6
+    },
+    {
+      "file": "src/services/api/projects.test.ts",
+      "status": "passed",
+      "passed": 3
+    },
+    {
+      "file": "src/services/api/session.test.ts",
+      "status": "passed",
+      "passed": 3
+    },
+    {
+      "file": "src/services/auth/startupLoading.test.ts",
+      "status": "passed",
+      "passed": 21
+    },
+    {
+      "file": "src/services/auth/supabaseAuth.test.ts",
+      "status": "passed",
+      "passed": 1
+    },
+    {
+      "file": "src/services/auth/workspaceBootstrap.test.ts",
+      "status": "passed",
+      "passed": 15
+    },
+    {
+      "file": "src/services/projects/artworkRasterizer.test.ts",
+      "status": "passed",
+      "passed": 3
+    },
+    {
+      "file": "src/services/projects/cloudProjectCodec.test.ts",
+      "status": "passed",
+      "passed": 5
+    },
+    {
+      "file": "src/services/projects/cloudProjectController.test.ts",
+      "status": "passed",
+      "passed": 3
+    },
+    {
+      "file": "src/services/projects/durableProjectMutations.test.ts",
+      "status": "passed",
+      "passed": 7
+    },
+    {
+      "file": "src/services/projects/durableSaveQueue.test.ts",
+      "status": "passed",
+      "passed": 10
+    },
+    {
+      "file": "src/services/projects/httpAssetTransfer.test.ts",
+      "status": "passed",
+      "passed": 1
+    },
+    {
+      "file": "src/services/projects/projectSyncChannel.test.ts",
+      "status": "passed",
+      "passed": 2
+    },
+    {
+      "file": "src/services/projects/trustedPresetRasterizer.test.ts",
+      "status": "passed",
+      "passed": 10
+    }
+  ],
+  "updatedOn": "2026-10-31"
+}
