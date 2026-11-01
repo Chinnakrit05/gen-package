@@ -1,0 +1,1090 @@
+{
+  "contractVersion": "b-phase0-r1",
+  "classification": "synthetic-development-data-only",
+  "notes": [
+    "No real users, sessions or authorization tokens. Each case is an independent scenario.",
+    "Not an authentication server or DB seed. Do not use fixtures as cloud authorization.",
+    "Permission outcomes describe intended actors; select cases explicitly in a test harness."
+  ],
+  "ids": {
+    "owner": "10000000-0000-4000-8000-000000000001",
+    "editor": "10000000-0000-4000-8000-000000000002",
+    "viewer": "10000000-0000-4000-8000-000000000003",
+    "outsider": "10000000-0000-4000-8000-000000000004",
+    "inactive": "10000000-0000-4000-8000-000000000005",
+    "personal": "20000000-0000-4000-8000-000000000001",
+    "other": "20000000-0000-4000-8000-000000000002",
+    "team": "20000000-0000-4000-8000-000000000003",
+    "missing": "30000000-0000-4000-8000-000000000999",
+    "createOperation": "40000000-0000-4000-8000-000000000001",
+    "saveOperation": "40000000-0000-4000-8000-000000000002",
+    "deleteOperation": "40000000-0000-4000-8000-000000000003"
+  },
+  "identities": {
+    "owner": {
+      "id": "10000000-0000-4000-8000-000000000001",
+      "displayName": "Fixture Owner",
+      "email": null
+    },
+    "editor": {
+      "id": "10000000-0000-4000-8000-000000000002",
+      "displayName": "Fixture Editor",
+      "email": null
+    },
+    "viewer": {
+      "id": "10000000-0000-4000-8000-000000000003",
+      "displayName": "Fixture Viewer",
+      "email": null
+    },
+    "outsider": {
+      "id": "10000000-0000-4000-8000-000000000004",
+      "displayName": "Fixture Outsider",
+      "email": null
+    },
+    "inactive": {
+      "id": "10000000-0000-4000-8000-000000000005",
+      "displayName": "Fixture Inactive",
+      "email": null
+    }
+  },
+  "memberships": [
+    {
+      "userId": "10000000-0000-4000-8000-000000000001",
+      "workspaceId": "20000000-0000-4000-8000-000000000001",
+      "role": "owner"
+    },
+    {
+      "userId": "10000000-0000-4000-8000-000000000001",
+      "workspaceId": "20000000-0000-4000-8000-000000000003",
+      "role": "owner"
+    },
+    {
+      "userId": "10000000-0000-4000-8000-000000000002",
+      "workspaceId": "20000000-0000-4000-8000-000000000003",
+      "role": "editor"
+    },
+    {
+      "userId": "10000000-0000-4000-8000-000000000003",
+      "workspaceId": "20000000-0000-4000-8000-000000000003",
+      "role": "viewer"
+    },
+    {
+      "userId": "10000000-0000-4000-8000-000000000004",
+      "workspaceId": "20000000-0000-4000-8000-000000000002",
+      "role": "owner"
+    },
+    {
+      "userId": "10000000-0000-4000-8000-000000000002",
+      "workspaceId": "20000000-0000-4000-8000-000000000004",
+      "role": "owner"
+    },
+    {
+      "userId": "10000000-0000-4000-8000-000000000003",
+      "workspaceId": "20000000-0000-4000-8000-000000000005",
+      "role": "owner"
+    }
+  ],
+  "cases": {
+    "bootstrap.owner": {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/session/bootstrap",
+        "body": {}
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "user": {
+            "id": "10000000-0000-4000-8000-000000000001",
+            "displayName": "Fixture Owner",
+            "email": null
+          },
+          "personalWorkspace": {
+            "id": "20000000-0000-4000-8000-000000000001",
+            "kind": "personal",
+            "name": "พื้นที่ส่วนตัว",
+            "role": "owner"
+          }
+        },
+        "requestId": "60000000-0000-4000-8000-000000000001"
+      }
+    },
+    "me.owner": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/me"
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "user": {
+            "id": "10000000-0000-4000-8000-000000000001",
+            "displayName": "Fixture Owner",
+            "email": null
+          },
+          "workspaces": [
+            {
+              "id": "20000000-0000-4000-8000-000000000001",
+              "kind": "personal",
+              "name": "พื้นที่ส่วนตัว",
+              "role": "owner"
+            },
+            {
+              "id": "20000000-0000-4000-8000-000000000003",
+              "kind": "team",
+              "name": "ทีมทดสอบสังเคราะห์",
+              "role": "owner"
+            }
+          ]
+        },
+        "requestId": "60000000-0000-4000-8000-000000000002"
+      }
+    },
+    "me.editor": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/me"
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "user": {
+            "id": "10000000-0000-4000-8000-000000000002",
+            "displayName": "Fixture Editor",
+            "email": null
+          },
+          "workspaces": [
+            {
+              "id": "20000000-0000-4000-8000-000000000004",
+              "kind": "personal",
+              "name": "พื้นที่ส่วนตัว editor",
+              "role": "owner"
+            },
+            {
+              "id": "20000000-0000-4000-8000-000000000003",
+              "kind": "team",
+              "name": "ทีมทดสอบสังเคราะห์",
+              "role": "editor"
+            }
+          ]
+        },
+        "requestId": "60000000-0000-4000-8000-000000000003"
+      }
+    },
+    "me.viewer": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/me"
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "user": {
+            "id": "10000000-0000-4000-8000-000000000003",
+            "displayName": "Fixture Viewer",
+            "email": null
+          },
+          "workspaces": [
+            {
+              "id": "20000000-0000-4000-8000-000000000005",
+              "kind": "personal",
+              "name": "พื้นที่ส่วนตัว viewer",
+              "role": "owner"
+            },
+            {
+              "id": "20000000-0000-4000-8000-000000000003",
+              "kind": "team",
+              "name": "ทีมทดสอบสังเคราะห์",
+              "role": "viewer"
+            }
+          ]
+        },
+        "requestId": "60000000-0000-4000-8000-000000000004"
+      }
+    },
+    "me.outsider": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/me"
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "user": {
+            "id": "10000000-0000-4000-8000-000000000004",
+            "displayName": "Fixture Outsider",
+            "email": null
+          },
+          "workspaces": [
+            {
+              "id": "20000000-0000-4000-8000-000000000002",
+              "kind": "personal",
+              "name": "พื้นที่คนนอก",
+              "role": "owner"
+            }
+          ]
+        },
+        "requestId": "60000000-0000-4000-8000-000000000005"
+      }
+    },
+    "projects.page1": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/projects?workspaceId=20000000-0000-4000-8000-000000000003&limit=24"
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "items": [
+            {
+              "id": "30000000-0000-4000-8000-000000000001",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 1",
+              "revision": 1,
+              "updatedAt": "2026-10-30T09:00:00.000Z",
+              "thumbnail": {
+                "version": "2026-10-30T09:00:00.000Z",
+                "kind": "box",
+                "label": "กล่องตัวอย่าง"
+              }
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000002",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 2",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:59:00.000Z",
+              "thumbnail": null
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000003",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 3",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:58:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000004",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 4",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:57:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000005",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 5",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:56:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000006",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 6",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:55:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000007",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 7",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:54:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000008",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 8",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:53:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000009",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 9",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:52:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000010",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 10",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:51:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000011",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 11",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:50:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000012",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 12",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:49:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000013",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 13",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:48:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000014",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 14",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:47:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000015",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 15",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:46:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000016",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 16",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:45:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000017",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 17",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:44:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000018",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 18",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:43:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000019",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 19",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:42:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000020",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 20",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:41:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000021",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 21",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:40:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000022",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 22",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:39:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000023",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 23",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:38:00.000Z"
+            },
+            {
+              "id": "30000000-0000-4000-8000-000000000024",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 24",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:37:00.000Z"
+            }
+          ],
+          "nextCursor": "eyJ1cGRhdGVkQXQiOiIyMDI2LTEwLTMwVDA4OjM3OjAwLjAwMFoiLCJpZCI6IjMwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAyNCJ9"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000006"
+      }
+    },
+    "projects.page2": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/projects?workspaceId=20000000-0000-4000-8000-000000000003&limit=24&cursor=eyJ1cGRhdGVkQXQiOiIyMDI2LTEwLTMwVDA4OjM3OjAwLjAwMFoiLCJpZCI6IjMwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAyNCJ9"
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "items": [
+            {
+              "id": "30000000-0000-4000-8000-000000000025",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 25",
+              "revision": 1,
+              "updatedAt": "2026-10-30T08:36:00.000Z"
+            }
+          ],
+          "nextCursor": null
+        },
+        "requestId": "60000000-0000-4000-8000-000000000007"
+      }
+    },
+    "projects.empty": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/projects?workspaceId=20000000-0000-4000-8000-000000000001&limit=24"
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "items": [],
+          "nextCursor": null
+        },
+        "requestId": "60000000-0000-4000-8000-000000000008"
+      }
+    },
+    "projects.detail": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/projects/30000000-0000-4000-8000-000000000001"
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "id": "30000000-0000-4000-8000-000000000001",
+          "workspaceId": "20000000-0000-4000-8000-000000000003",
+          "name": "งานตัวอย่าง 1",
+          "documentSchemaVersion": 1,
+          "document": {
+            "live": {
+              "template": "tuck-end",
+              "materialId": "carton-300",
+              "W": 80,
+              "D": 50,
+              "H": 120,
+              "handle": false
+            },
+            "qty": 500,
+            "fillColor": null,
+            "decos": [],
+            "history": [],
+            "histIdx": -1
+          },
+          "revision": 1,
+          "createdAt": "2026-10-30T09:00:00.000Z",
+          "updatedAt": "2026-10-30T09:00:00.000Z",
+          "assets": []
+        },
+        "requestId": "60000000-0000-4000-8000-000000000009"
+      }
+    },
+    "projects.create": {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/projects",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "workspaceId": "20000000-0000-4000-8000-000000000003",
+          "operationId": "40000000-0000-4000-8000-000000000001",
+          "name": "งานสร้างใหม่",
+          "documentSchemaVersion": 1,
+          "document": {
+            "live": {
+              "template": "tuck-end",
+              "materialId": "carton-300",
+              "W": 80,
+              "D": 50,
+              "H": 120,
+              "handle": false
+            },
+            "qty": 500,
+            "fillColor": null,
+            "decos": [],
+            "history": [],
+            "histIdx": -1
+          }
+        }
+      },
+      "status": 201,
+      "response": {
+        "data": {
+          "id": "30000000-0000-4000-8000-000000000026",
+          "workspaceId": "20000000-0000-4000-8000-000000000003",
+          "name": "งานสร้างใหม่",
+          "documentSchemaVersion": 1,
+          "document": {
+            "live": {
+              "template": "tuck-end",
+              "materialId": "carton-300",
+              "W": 80,
+              "D": 50,
+              "H": 120,
+              "handle": false
+            },
+            "qty": 500,
+            "fillColor": null,
+            "decos": [],
+            "history": [],
+            "histIdx": -1
+          },
+          "revision": 1,
+          "createdAt": "2026-10-30T09:00:00.000Z",
+          "updatedAt": "2026-10-30T09:00:00.000Z",
+          "assets": []
+        },
+        "requestId": "60000000-0000-4000-8000-000000000010"
+      }
+    },
+    "projects.create-retry": {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/projects",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "workspaceId": "20000000-0000-4000-8000-000000000003",
+          "operationId": "40000000-0000-4000-8000-000000000001",
+          "name": "งานสร้างใหม่",
+          "documentSchemaVersion": 1,
+          "document": {
+            "live": {
+              "template": "tuck-end",
+              "materialId": "carton-300",
+              "W": 80,
+              "D": 50,
+              "H": 120,
+              "handle": false
+            },
+            "qty": 500,
+            "fillColor": null,
+            "decos": [],
+            "history": [],
+            "histIdx": -1
+          }
+        }
+      },
+      "status": 201,
+      "response": {
+        "data": {
+          "id": "30000000-0000-4000-8000-000000000026",
+          "workspaceId": "20000000-0000-4000-8000-000000000003",
+          "name": "งานสร้างใหม่",
+          "documentSchemaVersion": 1,
+          "document": {
+            "live": {
+              "template": "tuck-end",
+              "materialId": "carton-300",
+              "W": 80,
+              "D": 50,
+              "H": 120,
+              "handle": false
+            },
+            "qty": 500,
+            "fillColor": null,
+            "decos": [],
+            "history": [],
+            "histIdx": -1
+          },
+          "revision": 1,
+          "createdAt": "2026-10-30T09:00:00.000Z",
+          "updatedAt": "2026-10-30T09:00:00.000Z",
+          "assets": []
+        },
+        "requestId": "60000000-0000-4000-8000-000000000011"
+      }
+    },
+    "projects.save": {
+      "request": {
+        "method": "PUT",
+        "path": "/api/v1/projects/30000000-0000-4000-8000-000000000001",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "operationId": "40000000-0000-4000-8000-000000000002",
+          "expectedRevision": 1,
+          "name": "งานแก้แล้ว",
+          "documentSchemaVersion": 1,
+          "document": {
+            "live": {
+              "template": "tuck-end",
+              "materialId": "carton-300",
+              "W": 80,
+              "D": 50,
+              "H": 120,
+              "handle": false
+            },
+            "qty": 1000,
+            "fillColor": null,
+            "decos": [],
+            "history": [],
+            "histIdx": -1
+          }
+        }
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "projectId": "30000000-0000-4000-8000-000000000001",
+          "revision": 2,
+          "updatedAt": "2026-10-30T09:05:00.000Z",
+          "operationId": "40000000-0000-4000-8000-000000000002"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000012"
+      }
+    },
+    "projects.save-retry": {
+      "request": {
+        "method": "PUT",
+        "path": "/api/v1/projects/30000000-0000-4000-8000-000000000001",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "operationId": "40000000-0000-4000-8000-000000000002",
+          "expectedRevision": 1,
+          "name": "งานแก้แล้ว",
+          "documentSchemaVersion": 1,
+          "document": {
+            "live": {
+              "template": "tuck-end",
+              "materialId": "carton-300",
+              "W": 80,
+              "D": 50,
+              "H": 120,
+              "handle": false
+            },
+            "qty": 1000,
+            "fillColor": null,
+            "decos": [],
+            "history": [],
+            "histIdx": -1
+          }
+        }
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "projectId": "30000000-0000-4000-8000-000000000001",
+          "revision": 2,
+          "updatedAt": "2026-10-30T09:05:00.000Z",
+          "operationId": "40000000-0000-4000-8000-000000000002"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000013"
+      }
+    },
+    "projects.delete": {
+      "request": {
+        "method": "DELETE",
+        "path": "/api/v1/projects/30000000-0000-4000-8000-000000000001",
+        "headers": {
+          "x-expected-revision": "2",
+          "idempotency-key": "40000000-0000-4000-8000-000000000003"
+        }
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "projectId": "30000000-0000-4000-8000-000000000001",
+          "revision": 3,
+          "deletedAt": "2026-10-30T09:10:00.000Z",
+          "operationId": "40000000-0000-4000-8000-000000000003"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000014"
+      }
+    },
+    "thumbnails.batch": {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/projects/thumbnails",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "workspaceId": "20000000-0000-4000-8000-000000000003",
+          "projectIds": [
+            "30000000-0000-4000-8000-000000000001",
+            "30000000-0000-4000-8000-000000000002",
+            "30000000-0000-4000-8000-000000000003"
+          ]
+        }
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "items": [
+            {
+              "projectId": "30000000-0000-4000-8000-000000000001",
+              "version": "2026-10-30T09:00:00.000Z",
+              "mimeType": "image/jpeg",
+              "imageBase64": "/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQT/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwChACkf/9k="
+            }
+          ]
+        },
+        "requestId": "60000000-0000-4000-8000-000000000015"
+      }
+    },
+    "thumbnails.empty": {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/projects/thumbnails",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "workspaceId": "20000000-0000-4000-8000-000000000003",
+          "projectIds": [
+            "30000000-0000-4000-8000-000000000002",
+            "30000000-0000-4000-8000-000000000999"
+          ]
+        }
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "items": []
+        },
+        "requestId": "60000000-0000-4000-8000-000000000016"
+      }
+    },
+    "thumbnails.put": {
+      "request": {
+        "method": "PUT",
+        "path": "/api/v1/projects/30000000-0000-4000-8000-000000000001/thumbnail",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "mimeType": "image/jpeg",
+          "imageBase64": "/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQT/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwChACkf/9k=",
+          "kind": "box",
+          "label": "กล่องตัวอย่าง"
+        }
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "projectId": "30000000-0000-4000-8000-000000000001",
+          "version": "2026-10-30T09:00:00.000Z"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000017"
+      }
+    },
+    "errors.no-auth": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/me"
+      },
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "AUTH_REQUIRED",
+          "message": "ต้องเข้าสู่ระบบก่อนใช้งาน"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000018"
+      }
+    },
+    "errors.session-invalid": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/me"
+      },
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "SESSION_INVALID",
+          "message": "Session หมดอายุหรือไม่ถูกต้อง"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000019"
+      }
+    },
+    "errors.user-inactive": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/me"
+      },
+      "status": 403,
+      "response": {
+        "error": {
+          "code": "USER_NOT_ACTIVE",
+          "message": "บัญชีนี้ไม่พร้อมใช้งาน"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000020"
+      }
+    },
+    "errors.project-not-found": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/projects/30000000-0000-4000-8000-000000000999"
+      },
+      "status": 404,
+      "response": {
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "ไม่พบโปรเจกต์นี้"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000021"
+      }
+    },
+    "errors.outsider-project": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/projects/30000000-0000-4000-8000-000000000001"
+      },
+      "status": 404,
+      "response": {
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "ไม่พบโปรเจกต์นี้"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000022"
+      }
+    },
+    "errors.viewer-write": {
+      "request": {
+        "method": "PUT",
+        "path": "/api/v1/projects/30000000-0000-4000-8000-000000000001",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "operationId": "40000000-0000-4000-8000-000000000002",
+          "expectedRevision": 1,
+          "name": "งานแก้แล้ว",
+          "documentSchemaVersion": 1,
+          "document": {
+            "live": {
+              "template": "tuck-end",
+              "materialId": "carton-300",
+              "W": 80,
+              "D": 50,
+              "H": 120,
+              "handle": false
+            },
+            "qty": 1000,
+            "fillColor": null,
+            "decos": [],
+            "history": [],
+            "histIdx": -1
+          }
+        }
+      },
+      "status": 404,
+      "response": {
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "ไม่พบโปรเจกต์นี้"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000023"
+      }
+    },
+    "errors.revision-conflict": {
+      "request": {
+        "method": "PUT",
+        "path": "/api/v1/projects/30000000-0000-4000-8000-000000000001",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "operationId": "40000000-0000-4000-8000-000000000004",
+          "expectedRevision": 1,
+          "name": "งานแก้แล้ว",
+          "documentSchemaVersion": 1,
+          "document": {
+            "live": {
+              "template": "tuck-end",
+              "materialId": "carton-300",
+              "W": 80,
+              "D": 50,
+              "H": 120,
+              "handle": false
+            },
+            "qty": 1000,
+            "fillColor": null,
+            "decos": [],
+            "history": [],
+            "histIdx": -1
+          }
+        }
+      },
+      "status": 409,
+      "response": {
+        "error": {
+          "code": "REVISION_CONFLICT",
+          "message": "งานนี้ถูกแก้ไขจากอีกหน้าต่าง",
+          "details": {
+            "currentRevision": 2
+          }
+        },
+        "requestId": "60000000-0000-4000-8000-000000000024"
+      }
+    },
+    "errors.idempotency-reused": {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/projects",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "workspaceId": "20000000-0000-4000-8000-000000000003",
+          "operationId": "40000000-0000-4000-8000-000000000001",
+          "name": "ชื่อเปลี่ยนใต้ key เดิม",
+          "documentSchemaVersion": 1,
+          "document": {
+            "live": {
+              "template": "tuck-end",
+              "materialId": "carton-300",
+              "W": 80,
+              "D": 50,
+              "H": 120,
+              "handle": false
+            },
+            "qty": 500,
+            "fillColor": null,
+            "decos": [],
+            "history": [],
+            "histIdx": -1
+          }
+        }
+      },
+      "status": 409,
+      "response": {
+        "error": {
+          "code": "IDEMPOTENCY_KEY_REUSED",
+          "message": "operationId นี้ถูกใช้กับข้อมูลอื่นแล้ว"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000025"
+      }
+    },
+    "errors.invalid-query": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/projects?workspaceId=20000000-0000-4000-8000-000000000003&limit=101"
+      },
+      "status": 422,
+      "response": {
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "ข้อมูลไม่ถูกต้อง"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000026"
+      }
+    },
+    "errors.dependency-unavailable": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/me"
+      },
+      "status": 503,
+      "response": {
+        "error": {
+          "code": "DEPENDENCY_UNAVAILABLE",
+          "message": "โหลดข้อมูลบัญชีไม่สำเร็จ"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000027"
+      }
+    },
+    "projects.page-thumbnail-updated": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/projects?workspaceId=20000000-0000-4000-8000-000000000003&limit=24"
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "items": [
+            {
+              "id": "30000000-0000-4000-8000-000000000001",
+              "workspaceId": "20000000-0000-4000-8000-000000000003",
+              "name": "งานตัวอย่าง 1",
+              "revision": 1,
+              "updatedAt": "2026-10-30T09:00:00.000Z",
+              "thumbnail": {
+                "version": "2026-10-30T09:15:00.000Z",
+                "kind": "box",
+                "label": "กล่องตัวอย่าง"
+              }
+            }
+          ],
+          "nextCursor": null
+        },
+        "requestId": "60000000-0000-4000-8000-000000000028"
+      }
+    },
+    "thumbnails.batch-new-version": {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/projects/thumbnails",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "workspaceId": "20000000-0000-4000-8000-000000000003",
+          "projectIds": [
+            "30000000-0000-4000-8000-000000000001",
+            "30000000-0000-4000-8000-000000000002",
+            "30000000-0000-4000-8000-000000000003"
+          ]
+        }
+      },
+      "status": 200,
+      "response": {
+        "data": {
+          "items": [
+            {
+              "projectId": "30000000-0000-4000-8000-000000000001",
+              "version": "2026-10-30T09:15:00.000Z",
+              "mimeType": "image/jpeg",
+              "imageBase64": "/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQT/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwChACkf/9k="
+            }
+          ]
+        },
+        "requestId": "60000000-0000-4000-8000-000000000029"
+      }
+    },
+    "errors.invalid-bearer": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/me",
+        "headers": {
+          "authorization": "Basic fixture-invalid-scheme"
+        }
+      },
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "SESSION_INVALID",
+          "message": "Authorization header ไม่ถูกต้อง"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000030"
+      }
+    },
+    "errors.outsider-workspace": {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/projects?workspaceId=20000000-0000-4000-8000-000000000003&limit=24"
+      },
+      "status": 404,
+      "response": {
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "ไม่พบโปรเจกต์นี้"
+        },
+        "requestId": "60000000-0000-4000-8000-000000000031"
+      }
+    }
+  }
+}
