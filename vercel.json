@@ -3,6 +3,10 @@
     {
       "source": "/api/v1/:path*",
       "destination": "/api/backend?apiPath=:path*"
+    },
+    {
+      "source": "/((?!api(?:/|$)|assets(?:/|$)|_vercel(?:/|$)|.*\\.).*)",
+      "destination": "/index.html"
     }
   ],
   "functions": {

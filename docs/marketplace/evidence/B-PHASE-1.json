@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-11-02",
+  "role": "B",
+  "branch": "codex/marketplace-b-phase-1",
+  "source": {
+    "baseCommit": "b6cb70876f396381a06c04f547011504eca9457b",
+    "changes": "Tested base commit plus files identified by sha256 below; delivery commit recorded in Git history. No new application API/DTO/migrations/frontend source",
+    "sha256": {
+      "vercel.json": "c451d523ba95ffeda533857c47a7f82f4c98f861b5532044a61ae68d5ff3baa7",
+      "server/entrypoints/deploymentRouting.test.ts": "683c66f9f91c1ec579b244fb020d0770157f74e047e7c85c9f1c5eb93849d083",
+      "tests/integration/editor.api.test.ts": "8735edb2a3e011e89ead264c91ad2eed1b73c26d23df3e49c9e351889746add2"
+    }
+  },
+  "phase0Gate": {
+    "status": "PASS",
+    "review": "b-review-a0-r2-r1",
+    "aArtifact": "A0-r2",
+    "bContract": "b-phase0-r1",
+    "aEvidence": "ROUTES-PHASE-1.md sections 0 and 7; PROGRESS-A.md at b6cb708",
+    "bEvidence": "REVIEW-A0-r2-B.md"
+  },
+  "environment": {
+    "runtime": "v24.10.0",
+    "supabaseCli": "2.117.0",
+    "appEnv": "test",
+    "localStackStateAfterChecks": "STOPPED_WITH_DATA_PRESERVED",
+    "project": "packit-marketplace-b",
+    "api": "http://127.0.0.1:55321",
+    "db": {
+      "host": "127.0.0.1",
+      "port": "55322"
+    },
+    "postgres_version": "17.6",
+    "fixtureCleanup": {
+      "app_users": 0,
+      "projects": 0,
+      "auth_users": 0
+    },
+    "migrations": [
+      "20260918000100",
+      "20260918000200",
+      "20260918000300",
+      "20260918000400",
+      "20260918000500",
+      "20261013000600",
+      "20261015000700",
+      "20261024000800",
+      "20261027000900"
+    ],
+    "remoteDatabaseUsed": false,
+    "deployed": false
+  },
+  "checks": {
+    "typecheck": {
+      "status": "PASS",
+      "command": "node node_modules/typescript/bin/tsc --noEmit"
+    },
+    "unit": {
+      "status": "PASS",
+      "files": 27,
+      "passed": 252,
+      "failed": 0,
+      "skipped": 0,
+      "testFiles": [
+        {
+          "file": "server/entrypoints/deploymentRouting.test.ts",
+          "passed": 35
+        },
+        {
+          "file": "server/entrypoints/vercel.test.ts",
+          "passed": 6
+        },
+        {
+          "file": "server/http/body.test.ts",
+          "passed": 2
+        },
+        {
+          "file": "server/http/legacyAiGuard.test.ts",
+          "passed": 2
+        },
+        {
+          "file": "server/http/projectThumbnails.test.ts",
+          "passed": 6
+        },
+        {
+          "file": "server/http/router.test.ts",
+          "passed": 52
+        },
+        {
+          "file": "server/adapters/supabase/billingRepository.test.ts",
+          "passed": 34
+        },
+        {
+          "file": "server/modules/assets/imageValidator.test.ts",
+          "passed": 3
+        },
+        {
+          "file": "server/modules/projects/canonical.test.ts",
+          "passed": 2
+        },
+        {
+          "file": "server/modules/projects/validation.test.ts",
+          "passed": 7
+        },
+        {
+          "file": "src/services/api/ai.test.ts",
+          "passed": 4
+        },
+        {
+          "file": "src/services/api/assets.test.ts",
+          "passed": 2
+        },
+        {
+          "file": "src/services/api/billing.test.ts",
+          "passed": 7
+        },
+        {
+          "file": "src/services/api/client.test.ts",
+          "passed": 6
+        },
+        {
+          "file": "src/services/api/projects.test.ts",
+          "passed": 3
+        },
+        {
+          "file": "src/services/api/session.test.ts",
+          "passed": 3
+        },
+        {
+          "file": "src/services/auth/startupLoading.test.ts",
+          "passed": 21
+        },
+        {
+          "file": "src/services/auth/supabaseAuth.test.ts",
+          "passed": 1
+        },
+        {
+          "file": "src/services/auth/workspaceBootstrap.test.ts",
+          "passed": 15
+        },
+        {
+          "file": "src/services/projects/artworkRasterizer.test.ts",
+          "passed": 3
+        },
+        {
+          "file": "src/services/projects/cloudProjectCodec.test.ts",
+          "passed": 5
+        },
+        {
+          "file": "src/services/projects/cloudProjectController.test.ts",
+          "passed": 3
+        },
+        {
+          "file": "src/services/projects/durableProjectMutations.test.ts",
+          "passed": 7
+        },
+        {
+          "file": "src/services/projects/durableSaveQueue.test.ts",
+          "passed": 10
+        },
+        {
+          "file": "src/services/projects/httpAssetTransfer.test.ts",
+          "passed": 1
+        },
+        {
+          "file": "src/services/projects/projectSyncChannel.test.ts",
+          "passed": 2
+        },
+        {
+          "file": "src/services/projects/trustedPresetRasterizer.test.ts",
+          "passed": 10
+        }
+      ]
+    },
+    "realLocalIntegration": {
+      "status": "PASS",
+      "files": 8,
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0,
+      "testFiles": [
+        {
+          "file": "tests/integration/assets.concurrent.test.ts",
+          "passed": 3
+        },
+        {
+          "file": "tests/integration/assets.lifecycle.test.ts",
+          "passed": 1
+        },
+        {
+          "file": "tests/integration/billing.lifecycle.test.ts",
+          "passed": 10
+        },
+        {
+          "file": "tests/integration/bootstrap.concurrent.test.ts",
+          "passed": 1
+        },
+        {
+          "file": "tests/integration/editor.api.test.ts",
+          "passed": 6
+        },
+        {
+          "file": "tests/integration/legacy.concurrent.test.ts",
+          "passed": 1
+        },
+        {
+          "file": "tests/integration/projects.concurrent.test.ts",
+          "passed": 2
+        },
+        {
+          "file": "tests/integration/session.bootstrap.test.ts",
+          "passed": 1
+        }
+      ]
+    },
+    "pgTAP": {
+      "status": "PASS",
+      "files": 9,
+      "assertions": 359,
+      "command": "supabase test db --workdir tmp/marketplace-b-local"
+    },
+    "fixtures": {
+      "status": "PASS",
+      "syntheticScenarios": 31,
+      "command": "node docs/marketplace/fixtures/verify.mjs"
+    },
+    "routing": {
+      "status": "PASS",
+      "validator": "@vercel/routing-utils",
+      "version": "6.6.1",
+      "validationError": null,
+      "scope": "Compiled config + 35 path cases; no deployed CDN or preview check"
+    },
+    "buildLocal": {
+      "status": "PASS",
+      "command": "npm run build:local",
+      "includes": [
+        "build:api",
+        "typecheck",
+        "vite local-demo"
+      ],
+      "existingLargeEditorChunkWarning": true
+    },
+    "buildCloudFixture": {
+      "status": "PASS",
+      "realCloudLogin": false,
+      "usesFakePublicConfig": true,
+      "existingLargeEditorChunkWarning": true
+    }
+  },
+  "generatedArtifacts": {
+    "scope": "Build-only regeneration from unchanged API source; tracked files restored to clean base",
+    "snapshotDirectory": "tmp/marketplace-b-phase1-generated",
+    "sha256": {
+      "backend.js": "7f628ece11ce02a70a030c3612c8345d21c562a2e154b9f6c8d4fc64151d8407",
+      "box-spec.js": "c6c20cc362850a5ca56bb2971b52f1d77dad44d1aa7760107035a41b1c6e7ef1"
+    }
+  },
+  "pending": [
+    {
+      "id": "1-A1..1-A6 / joint acceptance",
+      "status": "NOT_RUN",
+      "reason": "New router/gallery/Editor lifecycle not implemented on the fetched A commit; browser and context-isolation proof still required"
+    },
+    {
+      "id": "1-B3 preview",
+      "status": "NOT_RUN",
+      "reason": "No deployment or remote provider changes authorized/performed; real preview deep-link/OAuth/API checks still required"
+    }
+  ],
+  "phase1Complete": false,
+  "evidenceNotes": [
+    "Real local Auth uses temporary password sign-in accounts; this is not Google OAuth or staging evidence.",
+    "Integration fixture accounts/data were removed; no reusable passwords/tokens are recorded.",
+    "Raw logs/reports under tmp are local-only; source hashes identify the tested working tree."
+  ]
+}
