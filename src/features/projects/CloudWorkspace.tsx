@@ -26,6 +26,7 @@ import {
   IndexedDbLegacyMigrationStore,
   type LegacyMigrationJournal,
 } from '../../services/drafts/legacyMigrationStore'
+import { IndexedDbCreateIntentStore } from '../../services/drafts/createIntentStore'
 import { IndexedDbProjectMutationStore } from '../../services/drafts/projectMutationStore'
 import {
   getCloudDraftClientId,
@@ -43,6 +44,7 @@ import {
   replayDurableProjectMutations,
   type DurableProjectMutationOptions,
 } from '../../services/projects/durableProjectMutations'
+import { CreateIntentFailedError, CreateIntentSession } from '../../services/projects/createIntent'
 import { rasterizeTrustedPresets } from '../../services/projects/trustedPresetRasterizer'
 import { ProjectSyncChannel } from '../../services/projects/projectSyncChannel'
 import {
@@ -51,26 +53,49 @@ import {
   resumeLegacyMigration,
   setLegacyMigrationConsent,
 } from './legacyMigration'
+import { leaveEditor, type LeaveOutcome } from '../../app/leaveEditor'
+
+export type CloudWorkspaceTarget =
+  | { kind: 'project'; projectId: string }
+  | { kind: 'new'; intentId: string }
 
 interface CloudWorkspaceProps {
   apiBaseUrl: string
+  // ใช้เป็นสัญญาณว่า token ของบัญชีเดิมถูกต่ออายุ — ตัวที่ส่งจริงมาจาก getAccessToken เสมอ
   accessToken: string
+  getAccessToken(): string
   appUserId: string
   workspaceId: string
+  readOnly?: boolean
+  target: CloudWorkspaceTarget
   onLogout(): void | Promise<void>
+  // URL ตามงานที่เปิดอยู่ (ไม่ remount): onOpened = push, onAdopted = /editor/new → /editor/:id แบบ replace
+  onOpened(projectId: string): void
+  onAdopted(projectId: string): void
+  onExit(path: string): void
+  onWorkspaceMismatch(workspaceId: string): void
+  registerLeave(leave: (() => Promise<LeaveOutcome>) | null): void
 }
 
 type WorkspaceState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
+  | { status: 'not-found' }
+  | { status: 'deleted' }
+  | { status: 'offline-unavailable' }
   | { status: 'ready'; initialProject: Project }
 
 // รีเฟรชสิทธิ์อัตโนมัติตอนกลับมาที่แท็บ (focus/visibilitychange) ไม่เกินครั้งละ 30 วินาที
 const ENTITLEMENTS_AUTO_REFRESH_MS = 30_000
+// รายการงานในแกลเลอรีของ Editor: หน้าแรกหน้าเดียว (หน้ารายการเต็มอยู่ /app/projects) — ไม่วนโหลดทุกหน้า
+const EDITOR_GALLERY_LIMIT = 100
 
 export function CloudWorkspace(props: CloudWorkspaceProps) {
-  const tokenRef = useRef(props.accessToken)
-  tokenRef.current = props.accessToken
+  const getTokenRef = useRef(props.getAccessToken)
+  getTokenRef.current = props.getAccessToken
+  const token = useCallback(() => getTokenRef.current(), [])
+  const propsRef = useRef(props)
+  propsRef.current = props
   const [workspace, setWorkspace] = useState<WorkspaceState>({ status: 'loading' })
   const [items, setItems] = useState<ProjectSummary[]>([])
   const [saveState, setSaveState] = useState<ProjectSaveState>('loading')
@@ -91,26 +116,35 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
   }, [])
   const entitlementsRequest = useRef<Promise<Entitlements | null> | null>(null)
   const lastEntitlementsLoad = useRef(0)
-  const initialCreateOperationId = useRef(crypto.randomUUID())
   const scope = useMemo(() => ({ appUserId: props.appUserId, workspaceId: props.workspaceId }), [props.appUserId, props.workspaceId])
   const clientId = useMemo(() => getCloudDraftClientId(), [])
   const store = useMemo(() => new IndexedDbProjectDraftStore(), [])
   const migrationStore = useMemo(() => new IndexedDbLegacyMigrationStore(), [])
   const mutationStore = useMemo(() => new IndexedDbProjectMutationStore(), [])
+  const intentStore = useMemo(() => new IndexedDbCreateIntentStore(), [])
   const sync = useMemo(() => new ProjectSyncChannel(scope, clientId), [clientId, scope])
   const syncMounts = useRef(0)
   const remoteProjectListeners = useRef(new Set<(project: Project) => void>())
+  // /editor/new ที่ยังไม่มี server ID: การแก้เข้า intent แทน save queue (R3)
+  const intentRef = useRef<CreateIntentSession | null>(null)
+  // id ชั่วคราวของงานใหม่ → id จริง (App อาจยังส่งงานด้วย id เดิมในช่วง debounce หลังได้ id จริง)
+  const aliasRef = useRef<{ from: string; to: string } | null>(null)
+  // สถานะงานล่าสุดของ App (ไม่รอ debounce) + งานที่ส่งเข้า capture ล่าสุด — ใช้ตัดสินว่ามีการแก้ที่ยังไม่เก็บ
+  const flushRef = useRef<(() => Project | null) | null>(null)
+  const lastCapturedRef = useRef<Project | null>(null)
+  const capturing = useRef(0)
+  const mountEpoch = useRef(0)
 
   const transfer = useMemo<ProjectAssetTransfer>(() => ({
     upload: (input) => createHttpAssetTransfer({
       apiBaseUrl: props.apiBaseUrl,
-      accessToken: tokenRef.current,
+      accessToken: token(),
     }).upload(input),
     download: (assetIds, signal) => createHttpAssetTransfer({
       apiBaseUrl: props.apiBaseUrl,
-      accessToken: tokenRef.current,
+      accessToken: token(),
     }).download(assetIds, signal),
-  }), [props.apiBaseUrl])
+  }), [props.apiBaseUrl, token])
 
   const controller = useMemo(() => new CloudProjectController({
     scope,
@@ -118,50 +152,39 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     store,
     transfer,
     isOnline: () => navigator.onLine,
-    save: (input, signal) => saveProject(props.apiBaseUrl, tokenRef.current, input, signal),
+    save: (input, signal) => saveProject(props.apiBaseUrl, token(), input, signal),
     onSaved: (receipt) => sync.publish({
       kind: 'saved',
       projectId: receipt.projectId,
       revision: receipt.revision,
     }),
-  }), [clientId, props.apiBaseUrl, scope, store, sync, transfer])
+  }), [clientId, props.apiBaseUrl, scope, store, sync, token, transfer])
 
   const mutations = useMemo<DurableProjectMutationOptions>(() => ({
     scope,
     store: mutationStore,
     create: async (input) => {
-      const project = await createRemoteProject(props.apiBaseUrl, tokenRef.current, input)
+      const project = await createRemoteProject(props.apiBaseUrl, token(), input)
       sync.publish({ kind: 'created', projectId: project.id, revision: project.revision })
       return project
     },
     remove: async (input) => {
-      const receipt = await deleteRemoteProject(props.apiBaseUrl, tokenRef.current, input)
+      const receipt = await deleteRemoteProject(props.apiBaseUrl, token(), input)
       sync.publish({ kind: 'deleted', projectId: receipt.projectId, revision: receipt.revision })
       return receipt
     },
-  }), [mutationStore, props.apiBaseUrl, scope, sync])
+  }), [mutationStore, props.apiBaseUrl, scope, sync, token])
 
   const refreshItems = useCallback(async (signal?: AbortSignal) => {
-    const all: ProjectSummary[] = []
-    let cursor: string | undefined
-    do {
-      const page = await listProjects(props.apiBaseUrl, tokenRef.current, {
-        workspaceId: props.workspaceId,
-        cursor,
-        limit: 100,
-      }, signal)
-      all.push(...page.items)
-      cursor = page.nextCursor ?? undefined
-    } while (cursor)
-    setItems(all)
-    return all
-  }, [props.apiBaseUrl, props.workspaceId])
+    const page = await listProjects(props.apiBaseUrl, token(), {
+      workspaceId: props.workspaceId,
+      limit: EDITOR_GALLERY_LIMIT,
+    }, signal)
+    setItems(page.items)
+    return page.items
+  }, [props.apiBaseUrl, props.workspaceId, token])
 
-  const createFromEditor = useCallback(async (
-    project: Project,
-    operationId = crypto.randomUUID(),
-    signal?: AbortSignal,
-  ) => {
+  const dehydrateForCreate = useCallback(async (project: Project, signal?: AbortSignal) => {
     const sidecar = new ProjectAssetSidecar(scope)
     const prepared = await rasterizeTrustedPresets(project)
     const dehydrated = await dehydrateProject({
@@ -171,25 +194,97 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       transfer,
       signal,
     })
-    return executeDurableCreate(mutations, {
-      workspaceId: props.workspaceId,
-      operationId,
-      name: dehydrated.name,
-      documentSchemaVersion: 1,
-      document: dehydrated.document,
-    })
-  }, [mutations, props.workspaceId, scope, transfer])
+    return { name: dehydrated.name, documentSchemaVersion: 1 as const, document: dehydrated.document }
+  }, [props.workspaceId, scope, transfer])
+
+  const createFromEditor = useCallback(async (
+    project: Project,
+    operationId = crypto.randomUUID(),
+    signal?: AbortSignal,
+  ) => {
+    const payload = await dehydrateForCreate(project, signal)
+    return executeDurableCreate(mutations, { workspaceId: props.workspaceId, operationId, ...payload })
+  }, [dehydrateForCreate, mutations, props.workspaceId])
 
   const subscribeRemoteProject = useCallback((listener: (project: Project) => void) => {
     remoteProjectListeners.current.add(listener)
     return () => remoteProjectListeners.current.delete(listener)
   }, [])
 
+  const notifyApp = useCallback((project: Project) => {
+    for (const listener of remoteProjectListeners.current) listener(structuredClone(project))
+  }, [])
+
   const openCloudAndNotify = useCallback(async (cloud: CloudProject) => {
     const project = await controller.open(cloud)
-    for (const listener of remoteProjectListeners.current) listener(structuredClone(project))
+    notifyApp(project)
     return project
+  }, [controller, notifyApp])
+
+  // เก็บงานปัจจุบัน: งานใหม่ที่ยังไม่มี id จริงเข้า intent, งานที่มี id เข้า save queue — throw เมื่อเก็บไม่สำเร็จ
+  const captureCurrent = useCallback(async (input: Project) => {
+    const alias = aliasRef.current
+    const project = alias && input.id === alias.from ? { ...input, id: alias.to } : input
+    capturing.current += 1
+    try {
+      const intent = intentRef.current
+      if (intent) await intent.capture(project)
+      else await controller.capture(project)
+      lastCapturedRef.current = input
+    } finally {
+      capturing.current -= 1
+    }
   }, [controller])
+
+  // ได้ id จริงของ /editor/new แล้ว: เปิดงานจริง ย้ายการแก้หลังตรึง payload เข้า save queue แล้วค่อยลบ intent
+  const adoptIntent = useCallback(async (intent: CreateIntentSession, cloud: CloudProject) => {
+    const latest = flushRef.current?.()
+    if (latest) await intent.capture(latest).catch(() => undefined)
+    const localId = intent.current.latest.project.id
+    const opened = await controller.open(cloud)
+    const pending = intent.pendingAfterCreate()
+    let shown = opened
+    if (pending) {
+      await controller.capture(pending)
+      shown = pending
+    }
+    aliasRef.current = { from: localId, to: cloud.id }
+    intentRef.current = null
+    const state = controller.getState()
+    if (state.status === 'ready') {
+      setSaveState(state.save.state)
+      setSaveError(state.save.error)
+    }
+    notifyApp(shown)
+    lastCapturedRef.current = null
+    propsRef.current.onAdopted(cloud.id)
+    await intent.discard().catch(() => undefined)
+    void refreshItems().catch(() => undefined)
+  }, [controller, notifyApp, refreshItems])
+
+  const sendIntent = useCallback(async () => {
+    const intent = intentRef.current
+    if (!intent || !navigator.onLine) return
+    setSaveState('saving')
+    try {
+      const cloud = await intent.send({
+        prepare: (project) => dehydrateForCreate(project),
+        // ผูก operationId ของ intent นี้เท่านั้น — งานใหม่สองงานที่เนื้อหาเหมือนกันต้องไม่รวมเป็นงานเดียว
+        create: (input) => executeDurableCreate(mutations, input, { matchPendingPayload: false }),
+      })
+      if (intentRef.current === intent) await adoptIntent(intent, cloud)
+    } catch (error) {
+      if (intentRef.current !== intent) return
+      if (error instanceof CreateIntentFailedError) {
+        setSaveState('error')
+        setSaveError(error)
+      } else {
+        // เครือข่าย/บริการไม่พร้อม — ลองใหม่เมื่อกลับมาออนไลน์ด้วย operationId + payload เดิม
+        setSaveState(navigator.onLine ? 'error' : 'offline')
+        setSaveError(error instanceof Error ? error : null)
+      }
+    }
+  }, [adoptIntent, dehydrateForCreate, mutations])
 
   useEffect(() => {
     let active = true
@@ -197,7 +292,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     const unsubscribe = sync.subscribe((event) => {
       work = work.then(async () => {
         if (!active) return
-        const summaries = await refreshItems()
+        await refreshItems().catch(() => undefined)
         const state = controller.getState()
         if (state.status !== 'ready' || state.project.id !== event.projectId) return
         if (state.save.state !== 'clean') {
@@ -206,15 +301,13 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
             : 'งานนี้ถูกแก้ไขจากอีกแท็บ กรุณาโหลดเวอร์ชันล่าสุดหรือสร้างสำเนา')
           return
         }
-
-        let nextCloud: CloudProject
+        // ถูกลบจากอีกแท็บ: บอกผู้ใช้ ไม่แอบเปิดงานอื่นแทน
         if (event.kind === 'deleted') {
-          if (summaries.length === 0) nextCloud = await createFromEditor(freshProject(1))
-          else nextCloud = await getProject(props.apiBaseUrl, tokenRef.current, summaries[0].id)
-        } else {
-          if (event.revision <= state.save.baseRevision) return
-          nextCloud = await getProject(props.apiBaseUrl, tokenRef.current, event.projectId)
+          if (active) setWorkspace({ status: 'deleted' })
+          return
         }
+        if (event.revision <= state.save.baseRevision) return
+        const nextCloud = await getProject(props.apiBaseUrl, token(), event.projectId)
         if (active) await openCloudAndNotify(nextCloud)
       }).catch(() => {
         // A later sync event or ordinary project action retries from server state.
@@ -224,7 +317,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       active = false
       unsubscribe()
     }
-  }, [controller, createFromEditor, openCloudAndNotify, props.apiBaseUrl, refreshItems, sync])
+  }, [controller, openCloudAndNotify, props.apiBaseUrl, refreshItems, sync, token])
 
   useEffect(() => {
     syncMounts.current += 1
@@ -244,8 +337,8 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
         journal,
         store: migrationStore,
         transfer,
-        importProject: (input) => importLegacyProject(props.apiBaseUrl, tokenRef.current, input),
-        getProject: (projectId) => getProject(props.apiBaseUrl, tokenRef.current, projectId),
+        importProject: (input) => importLegacyProject(props.apiBaseUrl, token(), input),
+        getProject: (projectId) => getProject(props.apiBaseUrl, token(), projectId),
         onProgress: setMigration,
       })
       setMigration(completed)
@@ -255,7 +348,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     } finally {
       setMigrationBusy(false)
     }
-  }, [migrationStore, props.apiBaseUrl, refreshItems, transfer])
+  }, [migrationStore, props.apiBaseUrl, refreshItems, token, transfer])
 
   useEffect(() => {
     let active = true
@@ -276,11 +369,24 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     return () => { active = false }
   }, [executeMigration, migrationStore, scope])
 
+  const loadEntitlements = useCallback(async (signal: AbortSignal) => {
+    // สิทธิ์แพ็กเกจ/เครดิตก่อนตั้ง ready — โหลดไม่ได้ (ApiClientError/เครือข่าย) = null + 'error' แต่เปิดงานได้
+    lastEntitlementsLoad.current = Date.now()
+    const loaded = await getEntitlements(props.apiBaseUrl, token(), props.workspaceId, signal).catch(() => null)
+    setEntitlements(loaded)
+    setEntitlementsStatus(loaded ? 'ready' : 'error')
+  }, [props.apiBaseUrl, props.workspaceId, setEntitlementsStatus, token])
+
+  // เปิดงานตาม route: /editor/:id เปิด id นั้นเท่านั้น (ไม่พบ/ไม่มีสิทธิ์ = หน้าแจ้ง ไม่สร้าง/เปิดงานอื่นแทน)
+  // /editor/new เปิด intent ของ history entry นี้
   useEffect(() => {
     const abortController = new AbortController()
+    const { signal } = abortController
     let active = true
+    const epoch = ++mountEpoch.current
+    const target = propsRef.current.target
     const unsubscribe = controller.subscribe((state) => {
-      if (!active || state.status !== 'ready') return
+      if (!active || state.status !== 'ready' || intentRef.current) return
       setSaveState(state.save.state)
       setSaveError(state.save.error)
       setItems((current) => current.map((item) => item.id === state.project.id
@@ -289,53 +395,71 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     })
     void (async () => {
       try {
-        if (navigator.onLine) await replayDurableProjectMutations(mutations)
-        let summaries = await refreshItems(abortController.signal)
-        let cloud
-        if (summaries.length === 0) {
-          const starter = freshProject(1)
-          cloud = await createFromEditor(starter, initialCreateOperationId.current, abortController.signal)
-          summaries = await refreshItems(abortController.signal)
-        } else {
-          cloud = await getProject(props.apiBaseUrl, tokenRef.current, summaries[0].id, abortController.signal)
-        }
-        const project = await controller.open(cloud)
-        // สิทธิ์แพ็กเกจ/เครดิตก่อนตั้ง ready — โหลดไม่ได้ (ApiClientError/เครือข่าย) = null + 'error' แต่เปิดงานได้
-        lastEntitlementsLoad.current = Date.now()
-        const loadedEntitlements = await getEntitlements(
-          props.apiBaseUrl,
-          tokenRef.current,
-          props.workspaceId,
-          abortController.signal,
-        ).catch(() => null)
-        if (active) {
-          setEntitlements(loadedEntitlements)
-          setEntitlementsStatus(loadedEntitlements ? 'ready' : 'error')
-          setWorkspace({ status: 'ready', initialProject: project })
-        }
-      } catch (error) {
-        if (active && !abortController.signal.aborted && !navigator.onLine) {
-          const drafts = (await store.list(scope))
-            .filter((record) => record.clientId === clientId)
-            .sort((left, right) => right.updatedAt - left.updatedAt)
-          if (drafts.length) {
-            setItems(drafts.map((record) => ({
-              id: record.projectId,
-              workspaceId: scope.workspaceId,
-              name: record.latestDraft.project.name,
-              revision: record.baseRevision,
-              updatedAt: new Date(record.updatedAt).toISOString(),
-            })))
-            const project = await controller.open(cloudShellFromDraft(drafts[0]))
-            if (active) {
-              // เปิดแบบออฟไลน์: ยังไม่มีสิทธิ์จาก server — โหลดเมื่อกลับมาออนไลน์ (event online)
-              setEntitlementsStatus('error')
-              setWorkspace({ status: 'ready', initialProject: project })
-            }
+        if (navigator.onLine) await replayDurableProjectMutations(mutations).catch(() => undefined)
+        const listed = navigator.onLine ? refreshItems(signal).catch(() => [] as ProjectSummary[]) : Promise.resolve([] as ProjectSummary[])
+        if (target.kind === 'new') {
+          const count = (await listed).length
+          const intent = await CreateIntentSession.open(intentStore, scope, target.intentId, () => freshProject(count + 1))
+          if (!active) return
+          intentRef.current = intent
+          const record = intent.current
+          if (record.status === 'created' && record.result) {
+            // ได้ id จริงแล้วแต่ refresh ก่อน replace URL — ทำขั้นที่เหลือ ไม่ยิง POST ใหม่
+            await adoptIntent(intent, record.result)
+            await loadEntitlements(signal)
+            const adopted = controller.getState()
+            if (active) setWorkspace({ status: 'ready', initialProject: adopted.status === 'ready' ? adopted.project : record.latest.project })
             return
           }
+          await loadEntitlements(signal)
+          if (!active) return
+          setSaveState(record.status === 'failed' ? 'error' : navigator.onLine ? 'saving' : 'offline')
+          setWorkspace({ status: 'ready', initialProject: record.latest.project })
+          lastCapturedRef.current = null
+          void sendIntent()
+          return
         }
-        if (active && !abortController.signal.aborted) {
+        let cloud: CloudProject
+        try {
+          cloud = await getProject(props.apiBaseUrl, token(), target.projectId, signal)
+        } catch (error) {
+          if (signal.aborted || !active) return
+          if (error instanceof ApiClientError && error.status === 404) {
+            setWorkspace({ status: 'not-found' })
+            return
+          }
+          if (!navigator.onLine || (error instanceof ApiClientError && error.code === 'NETWORK_ERROR')) {
+            // ออฟไลน์: เปิดได้เฉพาะ draft ของ id นี้ในเครื่องนี้ ของบัญชี/workspace นี้
+            const draft = await store.get(projectDraftKey(scope, target.projectId, clientId))
+            if (!active) return
+            if (!draft) {
+              setWorkspace({ status: 'offline-unavailable' })
+              return
+            }
+            const project = await controller.open(cloudShellFromDraft(draft))
+            if (!active) return
+            // เปิดแบบออฟไลน์: ยังไม่มีสิทธิ์จาก server — โหลดเมื่อกลับมาออนไลน์ (event online)
+            setEntitlementsStatus('error')
+            setWorkspace({ status: 'ready', initialProject: project })
+            propsRef.current.onOpened(project.id)
+            return
+          }
+          throw error
+        }
+        // URL ของงานอ้าง id อย่างเดียว — workspace มาจากข้อมูลที่ server อนุญาต ไม่ย้ายงานตาม workspace ที่เลือกไว้
+        if (cloud.workspaceId !== props.workspaceId) {
+          propsRef.current.onWorkspaceMismatch(cloud.workspaceId)
+          if (active) setWorkspace({ status: 'not-found' })
+          return
+        }
+        const project = await controller.open(cloud)
+        await loadEntitlements(signal)
+        if (active) {
+          setWorkspace({ status: 'ready', initialProject: project })
+          propsRef.current.onOpened(project.id)
+        }
+      } catch (error) {
+        if (active && !signal.aborted) {
           setWorkspace({ status: 'error', message: error instanceof Error ? error.message : 'เปิดพื้นที่งานไม่สำเร็จ' })
         }
       }
@@ -344,9 +468,19 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       active = false
       abortController.abort()
       unsubscribe()
-      controller.dispose()
+      // ออกโดยไม่ผ่าน guard (session หลุด/บัญชีเปลี่ยน): เก็บการแก้ที่ยังรอ debounce ก่อนปิดคิว
+      const latest = flushRef.current?.()
+      if (latest && latest !== lastCapturedRef.current) {
+        // ปิดคิวหลังเก็บเสร็จ — เว้นแต่มีการเปิดรอบใหม่แล้ว (StrictMode/remount) ซึ่ง open() จัดการคิวเดิมเอง
+        void captureCurrent(latest).catch(() => undefined).finally(() => {
+          if (mountEpoch.current === epoch) controller.dispose()
+        })
+      } else {
+        controller.dispose()
+      }
+      intentRef.current = null
     }
-  }, [controller, createFromEditor, mutations, props.apiBaseUrl, props.workspaceId, refreshItems, setEntitlementsStatus])
+  }, [adoptIntent, captureCurrent, clientId, controller, intentStore, loadEntitlements, mutations, props.apiBaseUrl, props.workspaceId, refreshItems, scope, sendIntent, setEntitlementsStatus, store, token])
 
   useEffect(() => {
     const update = () => {
@@ -355,24 +489,14 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       controller.setOnline(next)
       if (next) {
         void (async () => {
-          const replayed = await replayDurableProjectMutations(mutations)
-          const summaries = await refreshItems()
-          const state = controller.getState()
-          if (state.status !== 'ready' || state.save.state !== 'clean') return
-          const replayedCreate = replayed.created.at(-1)
-          if (replayedCreate) {
-            await openCloudAndNotify(replayedCreate)
-            return
-          }
-          if (!summaries.some((item) => item.id === state.project.id)) {
-            const cloud = summaries.length
-              ? await getProject(props.apiBaseUrl, tokenRef.current, summaries[0].id)
-              : await createFromEditor(freshProject(1))
-            await openCloudAndNotify(cloud)
-          }
+          await replayDurableProjectMutations(mutations)
+          await refreshItems()
+          if (intentRef.current) await sendIntent()
         })().catch(() => {
           // Journal remains durable and is replayed on the next reconnect/reload.
         })
+      } else if (intentRef.current) {
+        setSaveState('offline')
       }
     }
     window.addEventListener('online', update)
@@ -381,11 +505,63 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       window.removeEventListener('online', update)
       window.removeEventListener('offline', update)
     }
-  }, [controller, createFromEditor, mutations, openCloudAndNotify, props.apiBaseUrl, refreshItems])
+  }, [controller, mutations, refreshItems, sendIntent])
 
   useEffect(() => {
     controller.setOnline(navigator.onLine)
   }, [controller, props.accessToken])
+
+  // ทุกทางออกของ Editor ใช้ลำดับเดียว (R4) — route เรียกผ่าน registerLeave
+  useEffect(() => {
+    const leave = async (): Promise<LeaveOutcome> => {
+      // ยังไม่ได้เปิดงาน (กำลังโหลด/ไม่พบ/ออฟไลน์เปิดไม่ได้) — ไม่มีอะไรต้องเก็บ
+      if (!flushRef.current && !intentRef.current && controller.getState().status !== 'ready') return { kind: 'synced' }
+      return leaveEditor<Project>({
+      latest: () => flushRef.current?.() ?? null,
+      capture: captureCurrent,
+      status: () => {
+        if (intentRef.current) return null
+        const state = controller.getState()
+        return state.status === 'ready' ? state.save : null
+      },
+      flush: () => controller.flush(),
+      })
+    }
+    propsRef.current.registerLeave(leave)
+    return () => propsRef.current.registerLeave(null)
+  }, [captureCurrent, controller])
+
+  // refresh/ปิดแท็บ (R5): เตือนเฉพาะตอนมีการแก้ที่ยังไม่เก็บลงเครื่อง/กำลังเขียน และเริ่มเก็บทันที;
+  // ซ่อนแท็บ/pagehide เริ่มเก็บแบบ best-effort — ร่างที่ capture แล้วอยู่ใน IndexedDB ไม่ต้องเตือน
+  useEffect(() => {
+    const uncaptured = () => {
+      const latest = flushRef.current?.()
+      return latest && latest !== lastCapturedRef.current ? latest : null
+    }
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      const latest = uncaptured()
+      if (latest) void captureCurrent(latest).catch(() => undefined)
+      if (latest || capturing.current > 0) {
+        event.preventDefault()
+        event.returnValue = ''
+      }
+    }
+    const onHide = () => {
+      const latest = uncaptured()
+      if (latest) void captureCurrent(latest).catch(() => undefined)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') onHide()
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    window.addEventListener('pagehide', onHide)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      window.removeEventListener('pagehide', onHide)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [captureCurrent])
 
   // โหลดสิทธิ์ใหม่ (เปิดหน้าแพ็กเกจ/paywall, หลังชำระ, กลับมาออนไลน์/กลับมาที่แท็บ, ปุ่มลองใหม่บนชิป) — คืน null เมื่อล้มเหลว
   // คำขอที่ซ้อนกันใช้ promise เดียว (หลายจุดเรียกพร้อมกันได้โดยไม่ยิงซ้ำ); ล้มเหลวขณะมีข้อมูลเดิม (ready) คงข้อมูลเดิมไว้
@@ -395,7 +571,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     if (pending) return fresh ? pending.then(() => refreshEntitlements()) : pending
     lastEntitlementsLoad.current = Date.now()
     if (entitlementsStatusRef.current !== 'ready') setEntitlementsStatus('loading')
-    const request = getEntitlements(props.apiBaseUrl, tokenRef.current, props.workspaceId).then(
+    const request = getEntitlements(props.apiBaseUrl, token(), props.workspaceId).then(
       (next) => {
         setEntitlements(next)
         setEntitlementsStatus('ready')
@@ -410,7 +586,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     })
     entitlementsRequest.current = request
     return request
-  }, [props.apiBaseUrl, props.workspaceId, setEntitlementsStatus])
+  }, [props.apiBaseUrl, props.workspaceId, setEntitlementsStatus, token])
 
   // รีเฟรชสิทธิ์อัตโนมัติหลังเปิดพื้นที่งานแล้ว: กลับมาออนไลน์ (ทุกครั้ง — รวมเปิดแบบออฟไลน์ที่ยังไม่เคยโหลด),
   // กลับมาที่แท็บ/หน้าต่าง (throttle 30 วิ — focus กับ visibilitychange มักมาคู่กัน)
@@ -440,17 +616,32 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     }
   }, [refreshEntitlements, workspaceReady])
 
+  // ออกจาก Editor ตามคำสั่งในแอป (สลับงาน/ลบงานที่เปิดอยู่) — App รอ promise นี้ไม่จบเพราะถูก unmount
+  const leaveTo = useCallback((path: string): Promise<never> => {
+    propsRef.current.onExit(path)
+    return new Promise<never>(() => undefined)
+  }, [])
+
+  const followOpened = useCallback((project: Project) => {
+    intentRef.current = null
+    // App เก็บ object ที่คืนนี้เป็นงานปัจจุบัน — ถือว่าเก็บแล้ว (controller.open บันทึกร่างแรกไว้)
+    lastCapturedRef.current = project
+    propsRef.current.onOpened(project.id)
+    return project
+  }, [])
+
   const bridge = useMemo<CloudProjectBridge>(() => ({
     items,
     workspaceId: props.workspaceId,
     putThumbnail: async (projectId, input) => {
-      const receipt = await putProjectThumbnail(props.apiBaseUrl, tokenRef.current, projectId, input)
+      if (intentRef.current) throw new Error('งานใหม่ยังไม่มี id บน Cloud — ถ่ายภาพย่อหลังสร้างงานแล้ว')
+      const receipt = await putProjectThumbnail(props.apiBaseUrl, token(), projectId, input)
       setItems((current) => current.map((item) => item.id === projectId
         ? { ...item, thumbnail: { version: receipt.version, kind: input.kind, label: input.label } }
         : item))
       return receipt
     },
-    fetchThumbnails: async (projectIds) => (await getProjectThumbnails(props.apiBaseUrl, tokenRef.current, {
+    fetchThumbnails: async (projectIds) => (await getProjectThumbnails(props.apiBaseUrl, token(), {
       workspaceId: props.workspaceId,
       projectIds,
     })).items,
@@ -461,45 +652,58 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     entitlementsStatus,
     refreshEntitlements: () => refreshEntitlements(),
     authorizeExport: async (projectId, format) => {
-      const authorization = await authorizeRemoteExport(props.apiBaseUrl, tokenRef.current, projectId, format)
+      const authorization = await authorizeRemoteExport(props.apiBaseUrl, token(), projectId, format)
       setEntitlements(authorization.entitlements)
       setEntitlementsStatus('ready')
       return authorization
     },
-    createOrder: (kind, projectId) => createRemoteOrder(props.apiBaseUrl, tokenRef.current, {
+    createOrder: (kind, projectId) => createRemoteOrder(props.apiBaseUrl, token(), {
       workspaceId: props.workspaceId,
       operationId: crypto.randomUUID(),
       kind,
       projectId,
     }),
     devFulfilOrder: async (orderId) => {
-      const order = await devFulfilRemoteOrder(props.apiBaseUrl, tokenRef.current, orderId)
+      const order = await devFulfilRemoteOrder(props.apiBaseUrl, token(), orderId)
       await refreshEntitlements(true)
       return order
     },
     onProjectChange: async (project) => {
-      setItems((current) => current.map((item) => item.id === project.id
-        ? { ...item, name: project.name, updatedAt: new Date(project.updatedAt).toISOString() }
-        : item))
-      await controller.capture(project)
-    },
-    switchProject: async (current, targetId) => {
-      if (!online) {
-        const draft = await store.get(projectDraftKey(scope, targetId, clientId))
-        if (!draft) throw new Error('งานนี้ยังไม่ได้เก็บไว้สำหรับเปิดแบบออฟไลน์')
-        return controller.switchProject(current, cloudShellFromDraft(draft))
+      if (!intentRef.current) {
+        setItems((current) => current.map((item) => item.id === project.id
+          ? { ...item, name: project.name, updatedAt: new Date(project.updatedAt).toISOString() }
+          : item))
       }
-      const cloud = await getProject(props.apiBaseUrl, tokenRef.current, targetId)
-      return controller.switchProject(current, cloud)
+      try {
+        await captureCurrent(project)
+      } catch (error) {
+        if (intentRef.current) {
+          setSaveState('error')
+          setSaveError(error instanceof Error ? error : null)
+        }
+        throw error
+      }
+    },
+    registerFlush: (flush) => {
+      flushRef.current = flush
+      return () => {
+        if (flushRef.current === flush) flushRef.current = null
+      }
+    },
+    // สลับงาน = นำทางไป /editor/:id (เปิดตาม URL เท่านั้น) หลังเก็บงานนี้ลงเครื่องแล้ว
+    switchProject: async (current, targetId) => {
+      await captureCurrent(current)
+      lastCapturedRef.current = flushRef.current?.() ?? current
+      return leaveTo(`/editor/${targetId}`)
     },
     createProject: async (current, name, seed) => {
-      await controller.capture(current)
+      await captureCurrent(current)
       const fresh = seed ? { ...seed } : freshProject(items.length + 1)
       fresh.name = name.slice(0, 60) || fresh.name
       const cloud = await createFromEditor(fresh)
       const opened = await controller.open(cloud)
       await refreshItems()
-      return opened
+      return followOpened(opened)
     },
     deleteProject: async (current, targetId) => {
       const target = items.find((item) => item.id === targetId)
@@ -517,15 +721,10 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
           operationId: crypto.randomUUID(),
           expectedRevision: state.save.baseRevision,
         })
-        let remaining = await refreshItems()
-        let nextCloud
-        if (remaining.length === 0) {
-          nextCloud = await createFromEditor(freshProject(1))
-          remaining = await refreshItems()
-        } else {
-          nextCloud = await getProject(props.apiBaseUrl, tokenRef.current, remaining[0].id)
-        }
-        return controller.open(nextCloud)
+        await controller.discardDraft()
+        lastCapturedRef.current = flushRef.current?.() ?? current
+        // ลบงานที่เปิดอยู่แล้วกลับหน้ารายการ — ไม่เปิดงานอื่น/สร้างงานใหม่แทน
+        return leaveTo('/app/projects')
       }
       await executeDurableDelete(mutations, {
         projectId: targetId,
@@ -536,15 +735,27 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       return current
     },
     importProject: async (current, imported) => {
-      await controller.capture(current)
+      await captureCurrent(current)
       const cloud = await createFromEditor(imported)
       const opened = await controller.open(cloud)
       await refreshItems()
-      return opened
+      return followOpened(opened)
     },
-    beforeLogout: async (current) => {
-      await controller.capture(current)
-      await controller.flush()
+    beforeLogout: async () => {
+      const outcome = await leaveEditor<Project>({
+        latest: () => flushRef.current?.() ?? null,
+        capture: captureCurrent,
+        status: () => {
+          if (intentRef.current) return null
+          const state = controller.getState()
+          return state.status === 'ready' ? state.save : null
+        },
+        flush: () => controller.flush(),
+      })
+      if (outcome.kind === 'capture-failed') {
+        throw new Error(`เก็บงานในเครื่องไม่สำเร็จ (${outcome.error.message}) — ส่งออกไฟล์ .genpkg.json สำรองไว้ก่อนออกจากระบบ`)
+      }
+      lastCapturedRef.current = flushRef.current?.() ?? null
     },
     resolveConflict: async (current, action) => {
       if (action === 'copy') {
@@ -552,20 +763,20 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
         const cloud = await createFromEditor(copy)
         const opened = await controller.open(cloud)
         await refreshItems()
-        return opened
+        return followOpened(opened)
       }
       await controller.discardDraft()
-      const cloud = await getProject(props.apiBaseUrl, tokenRef.current, current.id)
+      const cloud = await getProject(props.apiBaseUrl, token(), current.id)
       const opened = await controller.open(cloud)
       await refreshItems()
-      return opened
+      return followOpened(opened)
     },
-    retrySave: () => controller.retry(),
+    retrySave: () => (intentRef.current ? sendIntent() : controller.retry()),
     subscribeRemoteProject,
     // AI บน cloud: คีย์ของระบบฝั่ง server, หัก 1 เครดิต/คำขอ (operationId ใหม่ทุกครั้ง) — อัปเดตเครดิตจาก response
     requestAiSpec: async (prompt, current, imageBase64) => {
       try {
-        const { credits, ...spec } = await requestCloudBoxSpec(props.apiBaseUrl, tokenRef.current, {
+        const { credits, ...spec } = await requestCloudBoxSpec(props.apiBaseUrl, token(), {
           workspaceId: props.workspaceId,
           operationId: crypto.randomUUID(),
           prompt,
@@ -588,7 +799,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
       try {
         const { credits, ...result } = await requestCloudArtwork(
           props.apiBaseUrl,
-          tokenRef.current,
+          token(),
           { ...input, workspaceId: props.workspaceId, operationId: crypto.randomUUID() },
           signal,
         )
@@ -602,13 +813,40 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
         throw error
       }
     },
-  }), [clientId, controller, createFromEditor, entitlements, entitlementsStatus, items, mutations, online, props.apiBaseUrl, props.workspaceId, refreshEntitlements, refreshItems, saveError, saveState, scope, setEntitlementsStatus, store, subscribeRemoteProject])
+  }), [captureCurrent, controller, createFromEditor, entitlements, entitlementsStatus, followOpened, items, leaveTo, mutations, online, props.apiBaseUrl, props.workspaceId, refreshEntitlements, refreshItems, saveError, saveState, sendIntent, setEntitlementsStatus, subscribeRemoteProject, token])
 
   if (workspace.status === 'loading') {
     return <LoadingStage title="กำลังเปิดงาน" message="กำลังโหลดโปรเจกต์และฉบับร่างล่าสุด…" />
   }
+  if (workspace.status === 'not-found') {
+    return (
+      <WorkspaceStatus
+        title="ไม่พบงานนี้ หรือคุณไม่มีสิทธิ์เปิด"
+        message="งานอาจถูกลบ ลิงก์ไม่ถูกต้อง หรืออยู่ในพื้นที่งานที่บัญชีนี้ไม่ได้เป็นสมาชิก"
+        onBack={() => props.onExit('/app/projects')}
+      />
+    )
+  }
+  if (workspace.status === 'deleted') {
+    return (
+      <WorkspaceStatus
+        title="งานนี้ถูกลบแล้ว"
+        message="งานถูกลบจากอีกแท็บหรืออุปกรณ์อื่น"
+        onBack={() => props.onExit('/app/projects')}
+      />
+    )
+  }
+  if (workspace.status === 'offline-unavailable') {
+    return (
+      <WorkspaceStatus
+        title="ออฟไลน์ — ยังเปิดงานนี้ไม่ได้"
+        message="เครื่องนี้ยังไม่มีร่างของงานนี้ เชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง"
+        onBack={() => props.onExit('/app/projects')}
+      />
+    )
+  }
   if (workspace.status === 'error') {
-    return <WorkspaceStatus title="เปิดงานไม่ได้" message={workspace.message} />
+    return <WorkspaceStatus title="เปิดงานไม่ได้" message={workspace.message} onBack={() => props.onExit('/app/projects')} />
   }
 
   const initialStore: ProjectStoreSnapshot = {
@@ -618,6 +856,11 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
   }
   return (
     <>
+      {props.readOnly && (
+        <div className="readonly-banner" role="status">
+          พื้นที่งานนี้คุณดูได้อย่างเดียว — การแก้ไขจะไม่ถูกบันทึกขึ้น Cloud
+        </div>
+      )}
       <App
         onLogout={props.onLogout}
         migrateLegacy={false}
@@ -731,12 +974,13 @@ function migrationStatusLabel(status: LegacyMigrationJournal['items'][number]['s
   }
 }
 
-function WorkspaceStatus({ title, message }: { title: string; message: string }) {
+function WorkspaceStatus({ title, message, onBack }: { title: string; message: string; onBack?: () => void }) {
   return (
     <div className="login-screen">
       <div className="login-card">
         <h1 className="login-title">{title}</h1>
         <p className="login-sub">{message}</p>
+        {onBack && <button className="google-btn" onClick={onBack}>กลับไปที่งานของฉัน</button>}
       </div>
     </div>
   )

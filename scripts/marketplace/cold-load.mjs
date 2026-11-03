@@ -29,5 +29,5 @@ async function scenario(name, url, act) {
 await scenario('local: หน้า login (ยังไม่กดเริ่ม)', `${LOCAL}`)
 await scenario('local: กดเริ่มใช้งาน → Editor', `${LOCAL}`, async (p) => { await p.getByText('เริ่มใช้งานบนเครื่องนี้').click(); await p.waitForTimeout(3000) })
 await scenario('cloud fixture: หน้า login (ไม่มี session)', `${CLOUD}`)
-await scenario('cloud fixture: deep link /editor/x (ยังไม่มี router)', `${CLOUD}editor/00000000-0000-4000-8000-000000000000`)
+await scenario('cloud fixture: deep link /editor/x ไม่มี session', `${CLOUD}editor/00000000-0000-4000-8000-000000000000`)
 await browser.close()

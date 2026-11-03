@@ -1,8 +1,8 @@
 // หน้าเข้าสู่ระบบของ PackIt — โมเดิร์นมินิมอลตามธีมเดิม
 // local demo ใช้ callback จำลอง ส่วน cloud mode ส่งต่อให้ Supabase OAuth adapter
 
-// โลโก้กล่องทรงไอโซเมตริก สื่อถึงงานบรรจุภัณฑ์
-function PackItMark() {
+// โลโก้กล่องทรงไอโซเมตริก สื่อถึงงานบรรจุภัณฑ์ (หน้ารายการงานใช้ด้วย)
+export function PackItMark() {
   return (
     <svg
       width="30"

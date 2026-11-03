@@ -19,6 +19,7 @@ import { ApiClientError } from '../../src/services/api/client'
 import '@fontsource/noto-sans-thai/400.css'
 import '@fontsource/noto-sans-thai/700.css'
 import '@fontsource/prompt/400.css'
+import '../../src/shell.css'
 import '../../src/app.css'
 
 type Scenario = 'free' | 'free+licensed' | 'free+credits' | 'pro' | 'pro-no-credits' | 'open-access'

@@ -1,4 +1,4 @@
-import { StrictMode, Suspense, lazy, useEffect, useState } from 'react'
+import { StrictMode, Suspense, lazy, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 // ฟอนต์ไทย self-host (เลิกพึ่ง Google CDN) — โหลดพร้อม bundle ใช้งานได้แม้ออฟไลน์
 // และไฟล์ที่ rasterize (PDF/ใบสเปก) ได้เมตริก/รูปตัวอักษรตรงกับที่เห็นบนจอเสมอ
@@ -6,37 +6,20 @@ import '@fontsource/noto-sans-thai/400.css'
 import '@fontsource/noto-sans-thai/500.css'
 import '@fontsource/noto-sans-thai/600.css'
 import '@fontsource/noto-sans-thai/700.css'
-// ฟอนต์ไทยเสริมให้เลือก (แต่ละแบบ 400/700) — ต้องขึ้นทะเบียนใน FONTS ของ artwork.ts ด้วย
-import '@fontsource/sarabun/400.css'
-import '@fontsource/sarabun/700.css'
+// Prompt = ฟอนต์หัวข้อของ UI (หน้า login/รายการงานใช้ด้วย) — ฟอนต์ออกแบบอื่นอยู่ editorFonts.ts (chunk ของ Editor)
 import '@fontsource/prompt/400.css'
 import '@fontsource/prompt/700.css'
-import '@fontsource/kanit/400.css'
-import '@fontsource/kanit/700.css'
-import '@fontsource/bai-jamjuree/400.css'
-import '@fontsource/bai-jamjuree/700.css'
-import '@fontsource/mitr/400.css'
-import '@fontsource/mitr/700.css'
-import '@fontsource/chakra-petch/400.css'
-import '@fontsource/chakra-petch/700.css'
-import '@fontsource/mali/400.css'
-import '@fontsource/mali/700.css'
-import '@fontsource/pridi/400.css'
-import '@fontsource/pridi/700.css'
-import '@fontsource/kodchasan/400.css'
-import '@fontsource/kodchasan/700.css'
 import { Login } from './components/Login'
 import { LoadingBoundary, LoadingStage } from './components/LoadingBoundary'
 import { ClientConfigError, loadClientConfig } from './config'
 import { getCloudStartupVariant } from './services/auth/startupLoading'
-import './app.css'
+import './shell.css'
 
 const AUTH_KEY = 'packit-auth'
 const CloudRoot = lazy(() => import('./CloudRoot').then((module) => ({ default: module.CloudRoot })))
-// ตัวแอป (App + blueprint + template ทั้งหมด + โค้ดส่งออก) โหลดแยก — หน้าต้อนรับ/ล็อกอินไม่ต้องรอโค้ดทั้งก้อน
-// แล้วเริ่มโหลดล่วงหน้าทันทีหลังหน้าแรกขึ้น จึงกด "เริ่มใช้งาน" แล้วเข้าได้เลย
-const loadApp = () => import('./App')
-const App = lazy(loadApp)
+// ตัวแอป (App + blueprint + template ทั้งหมด + โค้ดส่งออก) โหลดแยกเมื่อเข้าใช้งานจริงเท่านั้น
+// ไม่ preload จากหน้า login — การโหลดล่วงหน้าทำให้ lazy boundary ไม่มีผล (ROUTES-PHASE-1.md 1-A2)
+const App = lazy(() => import('./App'))
 const clientConfig = (() => {
   try {
     return { value: loadClientConfig(), error: null }
@@ -86,11 +69,6 @@ function LocalDemoRoot() {
     localStorage.removeItem(AUTH_KEY)
     setAuthed(false)
   }
-  useEffect(() => {
-    if (authed) return
-    const t = window.setTimeout(() => void loadApp(), 200)
-    return () => window.clearTimeout(t)
-  }, [authed])
   return authed ? (
     <LoadingBoundary>
       <Suspense fallback={<LoadingStage title="กำลังเปิดพื้นที่ทำงาน" message="กำลังโหลดเครื่องมือออกแบบ…" />}>
