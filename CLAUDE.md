@@ -154,18 +154,20 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   หั่นชื่อแบรนด์ "ลมหาย" เป็น "ลม|หาย") ไม่งั้นตัดบรรทัดได้แค่ในที่ว่างถึงชิ้นเนื้อหาถัดลงไป (ข้อความ/รูป/โภชนาการ เว้น `FRONT_GAP_MM`;
   รูปทรง/เส้นเป็นพื้นหลัง ทับได้) — ตัดบรรทัดที่ขนาดเดิมทำให้บล็อกสูงจนทับชิ้นด้านล่าง; ไม่ได้ทั้งคู่ = คงเดิม + เตือน `front-fit`;
   รูปกว้างเกินย่อเท่าช่วง, รูปทรง/เส้นไม่จำกัด (แถบสีพันรอบได้)
-- รูปของ AI มี 3 ทาง: `preset:<id>:<#สี>` (ไลบรารี), `asset:<id>` (รูปที่ผู้ใช้อัปโหลด client แทนที่เป็น data URL จริงตอน compile),
+- รูปของ AI ใช้ `motif:<id>:<#พื้น>:<#สีภาพ>:<#สีเส้น>` สำหรับภาพละเอียดที่ประกอบจากสีและลายที่โมเดลเลือก
+  (`server/artworkMotifs.ts` สร้าง SVG ก่อนตรวจแผน) หรือ `preset:<id>:<#สี>` (ไลบรารี), `asset:<id>` (รูปที่ผู้ใช้อัปโหลด),
   `svg:<markup>` ที่ AI วาดเอง → `sanitizeSvg` (allowlist แท็ก/แอตทริบิวต์, ไม่มี script/style/image/use/ลิงก์ภายนอก, `url(#id)` เท่านั้น,
   ≤ 60k ตัวอักษร/รูป) → data URL เหมือน preset; `background` = SVG รูปพื้นทั้งแผ่น → `FillImage`
 - `server/aiArtwork.ts` — route `/api/ai-artwork` (Vite middleware, เปิดเฉพาะ `isLegacyAiRouteEnabled`): คำขอจาก client มี prompt + panels
   (client คำนวณ) + รูปแนบ ≤ 4 ({ role: reference|logo, assetId }) → วงรอบ `designArtwork` (parse → ตรวจแผงที่ไม่มี → feedback ≤ 2 รอบ;
   ชิ้นที่ผิดถูกตัดตอน parse ถ้ายังเหลือ ≥ 4 ชิ้นไม่เสียรอบแก้) backend api/cli/mock เหมือน box-structure (cli เขียนรูปเป็นไฟล์ tmp ให้เปิดอ่าน);
-  `max_tokens` 24k, API timeout 240 วิ, CLI 420 วิ
+  เวลารวม 220 วิ, รอบแรกไม่เกิน 130 วิ, ถ้าหมดเวลาหรือ API ตัดคำตอบ ให้ลองอีกครั้งแบบกระชับไม่เกิน 80 วิ
+  (API `max_tokens` 10k รอบแรก / 5k รอบกระชับ); CLI จำกัดเครื่องมือตามรูปที่แนบและส่งข้อความผ่าน stdin
 - **cloud** = `POST /api/v1/ai/artwork` (router.ts: ซอง workspace/operation ตรวจด้วย `aiArtworkRequestSchema` แล้ว payload ด้วย `parseArtworkRequest`
   → `chargedAiCall` จอง/settle เครดิตชุดเดียวกับ box-spec 1 เครดิต/แบบ → `AnthropicAiService.generateArtwork` ใช้ `apiAskWithUsage` (สะสม usage ทุกรอบ)
-  ภายใต้งบเวลารวม 270 วิ `CLOUD_ARTWORK_LIMITS` ใต้ `maxDuration` 300 ของ `api/backend.js` ใน vercel.json (Hobby + Fluid compute เปิดอยู่ —
-  ถ้าลดกลับเป็น 60 งานศิลป์จะถูกตัดทุกครั้ง); รอบแก้ที่เริ่มไม่ทันงบ (`ArtworkDeadlineError`) → คืนแบบรอบก่อน ok=false; refusal/ตัดที่ max_tokens
-  = `ArtworkResponseError` และไม่มีแบบเลย → provider ล้ม คืนเครดิต (502); คำตอบที่ไม่มี JSON → raw null + รอบแก้ (เล่นข้อความเดิมซ้ำ);
+  ภายใต้งบ 220 วิ `CLOUD_ARTWORK_LIMITS` ใต้ `maxDuration` 300 ของ `api/backend.js` ใน vercel.json เพื่อเหลือเวลาบันทึกผล/คืนเครดิต
+  รอบแก้ที่หมดเวลา → คืนแบบรอบก่อนถ้ามีแผงที่ใช้ได้; หมดเวลาและไม่มีแบบ → ตอบ 504 และคืนเครดิต
+  refusal หรือคำตอบถูกตัดแล้วยังไม่มีแบบ → 502 และคืนเครดิต; คำตอบที่ไม่มี JSON → raw null + รอบแก้ (เล่นข้อความเดิมซ้ำ);
   **schema งานศิลป์ส่งเป็นข้อความใน system prompt (`JSON_INSTRUCTION`, cache ได้) ไม่ใช่ `output_config.format`** — มีช่อง union ~75 ช่อง
   เกินเพดาน structured outputs (union ≤ 16, optional ≤ 24 รวมทุก schema ในคำขอ; เกิน = 400 ทันที — พังบน staging วันแรกเพราะ local ใช้ CLI
   ซึ่งส่ง schema เป็นข้อความอยู่แล้ว); schema ที่ยังส่งผ่าน structured outputs (box-spec, ภาษาแผง) ถูกนับใน `server/structuredOutputs.test.ts`;

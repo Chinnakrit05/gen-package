@@ -220,6 +220,8 @@ function aiRouteError(error: unknown, requestId: string, route: string): HttpErr
     httpError = new HttpError(503, 'CONFIGURATION_ERROR', 'คีย์ AI ของ server ไม่ถูกต้อง')
   } else if (error instanceof AiProviderError && error.kind === 'rate-limit') {
     httpError = new HttpError(429, 'AI_RATE_LIMITED', 'เรียก AI ถี่เกินไป รอสักครู่แล้วลองใหม่')
+  } else if (error instanceof AiProviderError && error.kind === 'timeout') {
+    httpError = new HttpError(504, 'AI_PROVIDER_UNAVAILABLE', 'AI ใช้เวลาออกแบบเกินกำหนด ลองใหม่อีกครั้ง')
   } else if (error instanceof AiProviderError && error.kind === 'refusal') {
     // โมเดลปฏิเสธคำขอ (stop_reason refusal) — กดซ้ำแบบเดิมไม่ช่วย จึงบอกให้ปรับคำอธิบาย; รหัสเดิม ไม่แตะ contract
     httpError = new HttpError(502, 'AI_PROVIDER_UNAVAILABLE', 'AI ไม่รับคำขอนี้ ลองปรับคำอธิบายแล้วส่งใหม่')

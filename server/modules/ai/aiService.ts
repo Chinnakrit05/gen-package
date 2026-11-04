@@ -9,6 +9,7 @@ import {
 } from '../../boxSpec'
 import {
   apiAskWithUsage,
+  ArtworkAttemptTimeout,
   ArtworkDeadlineError,
   ArtworkResponseError,
   designArtwork,
@@ -50,7 +51,7 @@ export interface AiService {
 }
 
 // refusal = โมเดลตอบ stop_reason "refusal" (ส่งซ้ำแบบเดิมก็ไม่ผ่าน ต้องปรับคำขอ) — คืนเครดิตเหมือน provider ล้ม
-export type AiProviderFailureKind = 'authentication' | 'rate-limit' | 'refusal' | 'provider' | 'internal'
+export type AiProviderFailureKind = 'authentication' | 'rate-limit' | 'refusal' | 'timeout' | 'provider' | 'internal'
 
 export class AiProviderError extends Error {
   // providerMessage = ข้อความจากต้นทางที่ผ่าน redact แล้ว ไว้ให้ router log (ไม่ส่งถึง client)
@@ -66,9 +67,8 @@ export class AiProviderError extends Error {
 // เวลารอ provider บน cloud (box-spec): ตอบสั้น จึงคงไว้ 50 วินาที; ไม่ retry เพราะ retry ทำให้เกินเวลา function —
 // ผู้ใช้กดใหม่ได้และเครดิตถูกคืนแล้ว
 export const CLOUD_AI_LIMITS = { timeoutMs: 50_000, maxRetries: 0 } as const
-// artwork ตอบยาวกว่ามาก (max_tokens 24k + อาจมีรอบแก้) — งบเวลารวมทุกรอบ 270 วินาที ต้องจบก่อน maxDuration 300 ของ
-// api/backend.js ใน vercel.json (Hobby + Fluid compute) ให้เหลือเวลา settle/ตอบกลับ; รอบแก้ที่ไม่ทันงบ → คืนแบบรอบก่อน
-export const CLOUD_ARTWORK_LIMITS = { timeoutMs: 240_000, maxRetries: 0, budgetMs: 270_000 } as const
+// กันเวลาให้รอบแก้แบบกระชับ และเหลือเวลาให้ Vercel บันทึกผลและคืนเครดิตเมื่อไม่สำเร็จ
+export const CLOUD_ARTWORK_LIMITS = { timeoutMs: 130_000, maxRetries: 0, budgetMs: 220_000 } as const
 
 export class AnthropicAiService implements AiService {
   constructor(
@@ -107,7 +107,7 @@ export class AnthropicAiService implements AiService {
     } catch (error) {
       if (error instanceof AiProviderError) throw error
       if (error instanceof ArtworkResponseError) throw new AiProviderError(error.reason === 'refusal' ? 'refusal' : 'provider', error)
-      if (error instanceof ArtworkDeadlineError) throw new AiProviderError('provider', error)
+      if (error instanceof ArtworkDeadlineError || error instanceof ArtworkAttemptTimeout) throw new AiProviderError('timeout', error)
       if (error instanceof Anthropic.AuthenticationError) throw new AiProviderError('authentication', error)
       if (error instanceof Anthropic.RateLimitError) throw new AiProviderError('rate-limit', error)
       if (error instanceof Anthropic.APIError) throw new AiProviderError('provider', error)

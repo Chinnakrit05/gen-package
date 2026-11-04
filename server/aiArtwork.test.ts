@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { compileArtworkPlan, panelBoxes } from '../src/core/aiArtwork'
 import { getMaterial } from '../src/core/materials'
 import { TEMPLATES } from '../src/core/templates'
-import { ArtworkDeadlineError, buildArtworkUserContent, designArtwork, firstUserMessage, mockArtwork, parseArtworkRequest, type ArtworkRequest } from './aiArtwork'
+import { ArtworkAttemptTimeout, ArtworkDeadlineError, ArtworkResponseError, buildArtworkUserContent, designArtwork, firstUserMessage, mockArtwork, parseArtworkRequest, type ArtworkRequest } from './aiArtwork'
 
 const dieline = TEMPLATES.find((t) => t.id === 'tuck-end')!.generate({ W: 80, D: 50, H: 120, handle: false }, getMaterial('carton-300'))
 const panels = panelBoxes(dieline)
@@ -83,7 +83,7 @@ describe('designArtwork', () => {
     let calls = 0
     const r = await designArtwork(async () => {
       calls++
-      if (calls === 1) return { raw: { ...goodPlan, elements: [{ ...goodPlan.elements[0], panel: 'lid-top' }] }, model: 'fake' }
+      if (calls === 1) return { raw: { ...goodPlan, elements: [...goodPlan.elements, { ...goodPlan.elements[0], panel: 'lid-top' }] }, model: 'fake' }
       throw new ArtworkDeadlineError()
     }, base(), 2)
     expect(calls).toBe(2)
@@ -92,6 +92,39 @@ describe('designArtwork', () => {
     expect(r.rounds).toHaveLength(1)
     // ยังไม่มีแบบเลยตอนหมดเวลา → โยนต่อให้ service คืนเครดิต
     await expect(designArtwork(async () => { throw new ArtworkDeadlineError() }, base(), 2)).rejects.toBeInstanceOf(ArtworkDeadlineError)
+  })
+
+  it.each([
+    new ArtworkAttemptTimeout(),
+    new ArtworkResponseError('max_tokens', 'cut off'),
+  ])('retries once in compact mode after %s and expands the resulting motif into normal SVG artwork', async (failure) => {
+    let calls = 0
+    const artwork = await designArtwork(async (messages, compact) => {
+      if (++calls === 1) {
+        expect(compact).toBe(false)
+        throw failure
+      }
+      expect(compact).toBe(true)
+      expect(messages[0]).toEqual(firstUserMessage(base()))
+      expect(messages[1].content).toContain('ตอบแบบกระชับ')
+      return { raw: { ...goodPlan, elements: [...goodPlan.elements, {
+        type: 'image', panel: 'front', x: 13, y: 35, w: 54, src: 'motif:rain-window:#14283f:#257d78:#d7ae6a',
+      }] }, model: 'fake' }
+    }, base())
+    expect(calls).toBe(2)
+    expect(artwork.ok).toBe(true)
+    expect(artwork.rounds[0].attempt).toBe(2)
+    expect(artwork.plan?.elements[2]).toMatchObject({
+      type: 'image', src: expect.stringMatching(/^svg:<svg.*<clipPath.*<linearGradient/),
+    })
+  })
+
+  it('does not return an unusable plan when all its panels were invalid and the repair times out', async () => {
+    let calls = 0
+    await expect(designArtwork(async () => {
+      if (++calls === 2) throw new ArtworkAttemptTimeout()
+      return { raw: { ...goodPlan, elements: [{ ...goodPlan.elements[0], panel: 'missing' }] }, model: 'fake' }
+    }, base())).rejects.toBeInstanceOf(ArtworkAttemptTimeout)
   })
 
   it('คำตอบรอบแรกไม่มี JSON → รอบแก้ได้คำตอบเดิมเป็นข้อความ assistant แล้วผ่านรอบสอง', async () => {

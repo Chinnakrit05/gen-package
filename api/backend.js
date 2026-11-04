@@ -463,13 +463,13 @@ function __disposeResources(env) {
   }
   return next();
 }
-function __rewriteRelativeImportExtension(path5, preserveJsx) {
-  if (typeof path5 === "string" && /^\.\.?\//.test(path5)) {
-    return path5.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m, tsx, d, ext, cm) {
+function __rewriteRelativeImportExtension(path6, preserveJsx) {
+  if (typeof path6 === "string" && /^\.\.?\//.test(path6)) {
+    return path6.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m, tsx, d, ext, cm) {
       return tsx ? preserveJsx ? ".jsx" : ".js" : d && (!ext || !cm) ? m : d + ext + "." + cm.toLowerCase() + "js";
     });
   }
-  return path5;
+  return path6;
 }
 var extendStatics, __assign, __createBinding, __setModuleDefault, ownKeys, _SuppressedError, tslib_es6_default;
 var init_tslib_es6 = __esm({
@@ -5986,9 +5986,9 @@ var require_helpers = __commonJS({
       const fragment = hashIndex === -1 ? "" : redirectTo.slice(hashIndex);
       const queryIndex = base.indexOf("?");
       if (queryIndex !== -1) {
-        const path5 = base.slice(0, queryIndex);
+        const path6 = base.slice(0, queryIndex);
         const remaining = base.slice(queryIndex + 1).split("&").filter((pair) => pair !== "" && pair !== constants_1.PKCE_FLOW_ID_PARAM && !pair.startsWith(`${constants_1.PKCE_FLOW_ID_PARAM}=`));
-        base = remaining.length > 0 ? `${path5}?${remaining.join("&")}` : path5;
+        base = remaining.length > 0 ? `${path6}?${remaining.join("&")}` : path6;
       }
       const separator = base.includes("?") ? "&" : "?";
       return `${base}${separator}${constants_1.PKCE_FLOW_ID_PARAM}=${encodeURIComponent(flowId)}${fragment}`;
@@ -14821,14 +14821,14 @@ function redactSensitive(body) {
   }
   return null;
 }
-async function checkCredentialsFileSafety(path5, onWarn = (m) => console.warn(`anthropic-sdk: ${m}`)) {
+async function checkCredentialsFileSafety(path6, onWarn = (m) => console.warn(`anthropic-sdk: ${m}`)) {
   if (typeof process === "undefined" || process.platform === "win32")
     return;
   const fs4 = await import("node:fs");
-  let resolved = path5;
+  let resolved = path6;
   let st;
   try {
-    resolved = await fs4.promises.realpath(path5);
+    resolved = await fs4.promises.realpath(path6);
     st = await fs4.promises.stat(resolved);
   } catch {
     return;
@@ -14846,8 +14846,8 @@ async function checkCredentialsFileSafety(path5, onWarn = (m) => console.warn(`a
 }
 async function writeCredentialsFileAtomic(targetPath, data) {
   const fs4 = await import("node:fs");
-  const path5 = await import("node:path");
-  const dir = path5.dirname(targetPath);
+  const path6 = await import("node:path");
+  const dir = path6.dirname(targetPath);
   await fs4.promises.mkdir(dir, { recursive: true, mode: 448 });
   const tmpPath = `${targetPath}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
   try {
@@ -15230,8 +15230,8 @@ var init_credentials = __esm({
       }
       validateProfileName(profileName);
       const fs4 = await import("node:fs");
-      const path5 = await import("node:path");
-      const configPath = path5.join(rootConfigPath, "configs", `${profileName}.json`);
+      const path6 = await import("node:path");
+      const configPath = path6.join(rootConfigPath, "configs", `${profileName}.json`);
       let configRaw;
       try {
         configRaw = await fs4.promises.readFile(configPath, "utf-8");
@@ -15315,14 +15315,14 @@ var init_credentials = __esm({
         return null;
       }
       validateProfileName(profileName);
-      const path5 = await import("node:path");
-      return path5.join(rootConfigPath, "credentials", `${profileName}.json`);
+      const path6 = await import("node:path");
+      return path6.join(rootConfigPath, "credentials", `${profileName}.json`);
     };
     getRootConfigPath = async () => {
       if (!supportsLocalConfigFiles()) {
         return null;
       }
-      const path5 = await import("node:path");
+      const path6 = await import("node:path");
       const configDir = readEnv("ANTHROPIC_CONFIG_DIR");
       if (configDir) {
         return configDir;
@@ -15331,21 +15331,21 @@ var init_credentials = __esm({
       if (os === "Windows") {
         const appData = readEnv("APPDATA");
         if (appData) {
-          return path5.join(appData, "Anthropic");
+          return path6.join(appData, "Anthropic");
         }
         const userProfile = readEnv("USERPROFILE");
         if (userProfile) {
-          return path5.join(userProfile, "AppData", "Roaming", "Anthropic");
+          return path6.join(userProfile, "AppData", "Roaming", "Anthropic");
         }
         return null;
       }
       const xdgConfigHome = readEnv("XDG_CONFIG_HOME");
       if (xdgConfigHome) {
-        return path5.join(xdgConfigHome, "anthropic");
+        return path6.join(xdgConfigHome, "anthropic");
       }
       const home = readEnv("HOME");
       if (home) {
-        return path5.join(home, ".config", "anthropic");
+        return path6.join(home, ".config", "anthropic");
       }
       return null;
     };
@@ -15363,8 +15363,8 @@ var init_credentials = __esm({
         return profileName;
       }
       const fs4 = await import("node:fs");
-      const path5 = await import("node:path");
-      const filePath = path5.join(rootConfigPath, "active_config");
+      const path6 = await import("node:path");
+      const filePath = path6.join(rootConfigPath, "active_config");
       try {
         return (await fs4.promises.readFile(filePath, "utf-8")).trim() || "default";
       } catch (err) {
@@ -15378,21 +15378,21 @@ var init_credentials = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/lib/credentials/identity-token.mjs
-function identityTokenFromFile(path5) {
-  if (!path5) {
+function identityTokenFromFile(path6) {
+  if (!path6) {
     throw new AnthropicError("Identity token file path is empty");
   }
   return async () => {
     const fs4 = await import("node:fs");
     let content;
     try {
-      content = await fs4.promises.readFile(path5, "utf-8");
+      content = await fs4.promises.readFile(path6, "utf-8");
     } catch (err) {
-      throw new AnthropicError(`Failed to read identity token file at ${path5}: ${err}`);
+      throw new AnthropicError(`Failed to read identity token file at ${path6}: ${err}`);
     }
     const token = content.trim();
     if (!token) {
-      throw new AnthropicError(`Identity token file at ${path5} is empty`);
+      throw new AnthropicError(`Identity token file at ${path6} is empty`);
     }
     return token;
   };
@@ -16717,12 +16717,12 @@ var init_path = __esm({
   "node_modules/@anthropic-ai/sdk/internal/utils/path.mjs"() {
     init_error();
     EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
-    createPathTagFunction = (pathEncoder = encodeURIPath) => function path5(statics, ...params) {
+    createPathTagFunction = (pathEncoder = encodeURIPath) => function path6(statics, ...params) {
       if (statics.length === 1)
         return statics[0];
       let postPath = false;
       const invalidSegments = [];
-      const path6 = statics.reduce((previousValue, currentValue, index) => {
+      const path7 = statics.reduce((previousValue, currentValue, index) => {
         if (/[?#]/.test(currentValue)) {
           postPath = true;
         }
@@ -16739,7 +16739,7 @@ var init_path = __esm({
         }
         return previousValue + currentValue + (index === params.length ? "" : encoded);
       }, "");
-      const pathOnly = path6.split(/[?#]/, 1)[0];
+      const pathOnly = path7.split(/[?#]/, 1)[0];
       const invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
       let match;
       while ((match = invalidSegmentPattern.exec(pathOnly)) !== null) {
@@ -16760,10 +16760,10 @@ var init_path = __esm({
         }, "");
         throw new AnthropicError(`Path parameters result in path with invalid segments:
 ${invalidSegments.map((e) => e.error).join("\n")}
-${path6}
+${path7}
 ${underline}`);
       }
-      return path6;
+      return path7;
     };
     path = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
   }
@@ -25539,9 +25539,9 @@ var init_client = __esm({
       makeStatusError(status, error62, message, headers) {
         return APIError.generate(status, error62, message, headers);
       }
-      buildURL(path5, query, defaultBaseURL) {
+      buildURL(path6, query, defaultBaseURL) {
         const baseURL = !__classPrivateFieldGet2(this, _BaseAnthropic_instances, "m", _BaseAnthropic_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
-        const url2 = isAbsoluteURL(path5) ? new URL(path5) : new URL(baseURL + (baseURL.endsWith("/") && path5.startsWith("/") ? path5.slice(1) : path5));
+        const url2 = isAbsoluteURL(path6) ? new URL(path6) : new URL(baseURL + (baseURL.endsWith("/") && path6.startsWith("/") ? path6.slice(1) : path6));
         const defaultQuery = this.defaultQuery();
         const pathQuery = Object.fromEntries(url2.searchParams);
         if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
@@ -25613,24 +25613,24 @@ var init_client = __esm({
       backendMiddleware() {
         return [];
       }
-      get(path5, opts) {
-        return this.methodRequest("get", path5, opts);
+      get(path6, opts) {
+        return this.methodRequest("get", path6, opts);
       }
-      post(path5, opts) {
-        return this.methodRequest("post", path5, opts);
+      post(path6, opts) {
+        return this.methodRequest("post", path6, opts);
       }
-      patch(path5, opts) {
-        return this.methodRequest("patch", path5, opts);
+      patch(path6, opts) {
+        return this.methodRequest("patch", path6, opts);
       }
-      put(path5, opts) {
-        return this.methodRequest("put", path5, opts);
+      put(path6, opts) {
+        return this.methodRequest("put", path6, opts);
       }
-      delete(path5, opts) {
-        return this.methodRequest("delete", path5, opts);
+      delete(path6, opts) {
+        return this.methodRequest("delete", path6, opts);
       }
-      methodRequest(method, path5, opts) {
+      methodRequest(method, path6, opts) {
         return this.request(Promise.resolve(opts).then((opts2) => {
-          return { method, path: path5, ...opts2 };
+          return { method, path: path6, ...opts2 };
         }));
       }
       request(options, remainingRetries = null) {
@@ -25744,8 +25744,8 @@ var init_client = __esm({
         }));
         return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
       }
-      getAPIList(path5, Page2, opts) {
-        return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path5, ...opts2 })) : { method: "get", path: path5, ...opts });
+      getAPIList(path6, Page2, opts) {
+        return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path6, ...opts2 })) : { method: "get", path: path6, ...opts });
       }
       requestAPIList(Page2, options) {
         const request = this.makeRequest(options, null, void 0);
@@ -25861,14 +25861,14 @@ var init_client = __esm({
       }
       async buildRequest(inputOptions, { retryCount = 0 } = {}) {
         const options = { ...inputOptions };
-        const { method, path: path5, query, defaultBaseURL } = options;
+        const { method, path: path6, query, defaultBaseURL } = options;
         if (this._authState.resolution) {
           await this._authState.resolution;
         }
         if (!this._baseURLIsExplicit && this._authState.baseURL && this.baseURL !== this._authState.baseURL) {
           this.baseURL = this._authState.baseURL;
         }
-        const url2 = this.buildURL(path5, query, defaultBaseURL);
+        const url2 = this.buildURL(path6, query, defaultBaseURL);
         if ("timeout" in options)
           validatePositiveInteger("timeout", options.timeout);
         options.timeout = options.timeout ?? this.timeout;
@@ -26894,10 +26894,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj2, path5) {
-  if (!path5)
+function getElementAtPath(obj2, path6) {
+  if (!path6)
     return obj2;
-  return path5.reduce((acc, key) => acc?.[key], obj2);
+  return path6.reduce((acc, key) => acc?.[key], obj2);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -27237,11 +27237,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path5, issues) {
+function prefixIssues(path6, issues) {
   return issues.map((iss) => {
     var _a4;
     (_a4 = iss).path ?? (_a4.path = []);
-    iss.path.unshift(path5);
+    iss.path.unshift(path6);
     return iss;
   });
 }
@@ -27691,16 +27691,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error63, path5 = []) => {
+  const processError = (error63, path6 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path5, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path6, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
       } else {
-        const fullpath = [...path5, ...issue2.path];
+        const fullpath = [...path6, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -27739,17 +27739,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error63, path5 = []) => {
+  const processError = (error63, path6 = []) => {
     var _a4;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path5, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path6, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
       } else {
-        const fullpath = [...path5, ...issue2.path];
+        const fullpath = [...path6, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -27788,8 +27788,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path5 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path5) {
+  const path6 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path6) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -44891,13 +44891,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path5 = ref.slice(1).split("/").filter(Boolean);
-  if (path5.length === 0) {
+  const path6 = ref.slice(1).split("/").filter(Boolean);
+  if (path6.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path5[0] === defsKey) {
-    const key = path5[1] === void 0 ? void 0 : decodeJSONPointerSegment(path5[1]);
+  if (path6[0] === defsKey) {
+    const key = path6[1] === void 0 ? void 0 : decodeJSONPointerSegment(path6[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -49705,8 +49705,8 @@ var IcebergError = class extends Error {
     return this.status === 419;
   }
 };
-function buildUrl(baseUrl, path5, query) {
-  const url2 = new URL(path5, baseUrl);
+function buildUrl(baseUrl, path6, query) {
+  const url2 = new URL(path6, baseUrl);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value !== void 0) {
@@ -49736,12 +49736,12 @@ function createFetchClient(options) {
   return {
     async request({
       method,
-      path: path5,
+      path: path6,
       query,
       body,
       headers
     }) {
-      const url2 = buildUrl(options.baseUrl, path5, query);
+      const url2 = buildUrl(options.baseUrl, path6, query);
       const authHeaders = await buildAuthHeaders(options.auth);
       const res = await fetchFn(url2, {
         method,
@@ -50338,7 +50338,7 @@ var isValidBucketName = (bucketName) => {
   if (bucketName.includes("/") || bucketName.includes("\\")) return false;
   return /^[\w!.\*'() &$@=;:+,?-]+$/.test(bucketName);
 };
-var encodeStoragePath = (path5) => path5.split("/").map(encodeURIComponent).join("/");
+var encodeStoragePath = (path6) => path6.split("/").map(encodeURIComponent).join("/");
 var _getErrorMessage = (err) => {
   if (typeof err === "object" && err !== null) {
     const e = err;
@@ -50605,7 +50605,7 @@ var StorageFileApi = class extends BaseApiClient {
   * @param path The relative file path. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
   * @param fileBody The body of the file to be stored in the bucket.
   */
-  async uploadOrUpdate(method, path5, fileBody, fileOptions) {
+  async uploadOrUpdate(method, path6, fileBody, fileOptions) {
     var _this = this;
     return _this.handleOperation(async () => {
       let body;
@@ -50629,7 +50629,7 @@ var StorageFileApi = class extends BaseApiClient {
         if ((typeof ReadableStream !== "undefined" && body instanceof ReadableStream || body && typeof body === "object" && "pipe" in body && typeof body.pipe === "function") && !options.duplex) options.duplex = "half";
       }
       if (fileOptions === null || fileOptions === void 0 ? void 0 : fileOptions.headers) for (const [key, value] of Object.entries(fileOptions.headers)) headers = setHeader(headers, key, value);
-      const cleanPath = _this._removeEmptyFolders(path5);
+      const cleanPath = _this._removeEmptyFolders(path6);
       const _path = _this._getFinalPath(cleanPath);
       const data = await (method == "PUT" ? put : post)(_this.fetch, `${_this.url}/object/${_path}`, body, _objectSpread22({ headers }, (options === null || options === void 0 ? void 0 : options.duplex) ? { duplex: options.duplex } : {}));
       return {
@@ -50706,8 +50706,8 @@ var StorageFileApi = class extends BaseApiClient {
   * - Refer to the [Storage guide](/docs/guides/storage/security/access-control) on how access control works
   * - For React Native, using either `Blob`, `File` or `FormData` does not work as intended. Upload file using `ArrayBuffer` from base64 file data instead, see example below.
   */
-  async upload(path5, fileBody, fileOptions) {
-    return this.uploadOrUpdate("POST", path5, fileBody, fileOptions);
+  async upload(path6, fileBody, fileOptions) {
+    return this.uploadOrUpdate("POST", path6, fileBody, fileOptions);
   }
   /**
   * Upload a file with a token generated from `createSignedUploadUrl`.
@@ -50747,9 +50747,9 @@ var StorageFileApi = class extends BaseApiClient {
   *   - `objects` table permissions: none
   * - Refer to the [Storage guide](/docs/guides/storage/security/access-control) on how access control works
   */
-  async uploadToSignedUrl(path5, token, fileBody, fileOptions) {
+  async uploadToSignedUrl(path6, token, fileBody, fileOptions) {
     var _this3 = this;
-    const cleanPath = _this3._removeEmptyFolders(path5);
+    const cleanPath = _this3._removeEmptyFolders(path6);
     const _path = _this3._getFinalPath(cleanPath);
     const url2 = new URL(_this3.url + `/object/upload/sign/${_path}`);
     url2.searchParams.set("token", token);
@@ -50818,10 +50818,10 @@ var StorageFileApi = class extends BaseApiClient {
   *   - `objects` table permissions: `insert`
   * - Refer to the [Storage guide](/docs/guides/storage/security/access-control) on how access control works
   */
-  async createSignedUploadUrl(path5, options) {
+  async createSignedUploadUrl(path6, options) {
     var _this4 = this;
     return _this4.handleOperation(async () => {
-      let _path = _this4._getFinalPath(path5);
+      let _path = _this4._getFinalPath(path6);
       const headers = _objectSpread22({}, _this4.headers);
       if (options === null || options === void 0 ? void 0 : options.upsert) headers["x-upsert"] = "true";
       const data = await post(_this4.fetch, `${_this4.url}/object/upload/sign/${_path}`, {}, { headers });
@@ -50830,7 +50830,7 @@ var StorageFileApi = class extends BaseApiClient {
       if (!token) throw new StorageError("No token returned by API");
       return {
         signedUrl: url2.toString(),
-        path: path5,
+        path: path6,
         token
       };
     });
@@ -50890,8 +50890,8 @@ var StorageFileApi = class extends BaseApiClient {
   * - Refer to the [Storage guide](/docs/guides/storage/security/access-control) on how access control works
   * - For React Native, using either `Blob`, `File` or `FormData` does not work as intended. Update file using `ArrayBuffer` from base64 file data instead, see example below.
   */
-  async update(path5, fileBody, fileOptions) {
-    return this.uploadOrUpdate("PUT", path5, fileBody, fileOptions);
+  async update(path6, fileBody, fileOptions) {
+    return this.uploadOrUpdate("PUT", path6, fileBody, fileOptions);
   }
   /**
   * Moves an existing file to a new path in the same bucket.
@@ -51047,10 +51047,10 @@ var StorageFileApi = class extends BaseApiClient {
   *   - `objects` table permissions: `select`
   * - Refer to the [Storage guide](/docs/guides/storage/security/access-control) on how access control works
   */
-  async createSignedUrl(path5, expiresIn, options) {
+  async createSignedUrl(path6, expiresIn, options) {
     var _this8 = this;
     return _this8.handleOperation(async () => {
-      let _path = _this8._getFinalPath(path5);
+      let _path = _this8._getFinalPath(path6);
       const hasTransform = typeof (options === null || options === void 0 ? void 0 : options.transform) === "object" && options.transform !== null && Object.keys(options.transform).length > 0;
       let data = await post(_this8.fetch, `${_this8.url}/object/sign/${_path}`, _objectSpread22(_objectSpread22({ expiresIn }, hasTransform ? { transform: options.transform } : {}), (options === null || options === void 0 ? void 0 : options.versionId) != null ? { versionId: options.versionId } : {}), { headers: _this8.headers });
       const query = new URLSearchParams();
@@ -51185,14 +51185,14 @@ var StorageFileApi = class extends BaseApiClient {
   *   - `objects` table permissions: `select`
   * - Refer to the [Storage guide](/docs/guides/storage/security/access-control) on how access control works
   */
-  download(path5, options, parameters) {
+  download(path6, options, parameters) {
     const renderPath = typeof (options === null || options === void 0 ? void 0 : options.transform) === "object" && options.transform !== null && Object.keys(options.transform).length > 0 ? "render/image/authenticated" : "object";
     const query = new URLSearchParams();
     if (options === null || options === void 0 ? void 0 : options.transform) this.applyTransformOptsToQuery(query, options.transform);
     if ((options === null || options === void 0 ? void 0 : options.cacheNonce) != null) query.set("cacheNonce", String(options.cacheNonce));
     if ((options === null || options === void 0 ? void 0 : options.versionId) != null) query.set("versionId", String(options.versionId));
     const queryString = query.toString();
-    const _path = this._getFinalPath(path5);
+    const _path = this._getFinalPath(path6);
     const downloadFn = () => get(this.fetch, `${this.url}/${renderPath}/${_path}${queryString ? `?${queryString}` : ""}`, {
       headers: this.headers,
       noResolveJson: true
@@ -51224,9 +51224,9 @@ var StorageFileApi = class extends BaseApiClient {
   * }
   * ```
   */
-  async info(path5, options) {
+  async info(path6, options) {
     var _this10 = this;
-    const _path = _this10._getFinalPath(path5);
+    const _path = _this10._getFinalPath(path6);
     const query = new URLSearchParams();
     if ((options === null || options === void 0 ? void 0 : options.versionId) != null) query.set("versionId", String(options.versionId));
     const queryString = query.toString();
@@ -51250,9 +51250,9 @@ var StorageFileApi = class extends BaseApiClient {
   *   .exists('folder/avatar1.png')
   * ```
   */
-  async exists(path5) {
+  async exists(path6) {
     var _this11 = this;
-    const _path = _this11._getFinalPath(path5);
+    const _path = _this11._getFinalPath(path6);
     try {
       await head(_this11.fetch, `${_this11.url}/object/${_path}`, { headers: _this11.headers });
       return {
@@ -51332,8 +51332,8 @@ var StorageFileApi = class extends BaseApiClient {
   *   - `objects` table permissions: none
   * - Refer to the [Storage guide](/docs/guides/storage/security/access-control) on how access control works
   */
-  getPublicUrl(path5, options) {
-    const _path = this._getFinalPath(path5);
+  getPublicUrl(path6, options) {
+    const _path = this._getFinalPath(path6);
     const query = new URLSearchParams();
     if (options === null || options === void 0 ? void 0 : options.download) query.set("download", options.download === true ? "" : options.download);
     if (options === null || options === void 0 ? void 0 : options.transform) this.applyTransformOptsToQuery(query, options.transform);
@@ -51433,10 +51433,10 @@ var StorageFileApi = class extends BaseApiClient {
   *   .purgeCache('folder/avatar1.png', { transformations: true })
   * ```
   */
-  async purgeCache(path5, options, parameters) {
+  async purgeCache(path6, options, parameters) {
     var _this13 = this;
     return _this13.handleOperation(async () => {
-      const _path = encodeStoragePath(_this13._getFinalPath(path5));
+      const _path = encodeStoragePath(_this13._getFinalPath(path6));
       const query = new URLSearchParams();
       if (options === null || options === void 0 ? void 0 : options.transformations) query.set("transformations", "true");
       const queryString = query.toString();
@@ -51534,13 +51534,13 @@ var StorageFileApi = class extends BaseApiClient {
   *   - `objects` table permissions: `select`
   * - Refer to the [Storage guide](/docs/guides/storage/security/access-control) on how access control works
   */
-  async list(path5, options, parameters) {
+  async list(path6, options, parameters) {
     var _this14 = this;
     return _this14.handleOperation(async () => {
       const sortBy = (options === null || options === void 0 ? void 0 : options.sortBy) ? _objectSpread22(_objectSpread22({}, DEFAULT_SEARCH_OPTIONS.sortBy), options.sortBy) : DEFAULT_SEARCH_OPTIONS.sortBy;
       const body = _objectSpread22(_objectSpread22(_objectSpread22({}, DEFAULT_SEARCH_OPTIONS), options), {}, {
         sortBy,
-        prefix: path5 || ""
+        prefix: path6 || ""
       });
       return await post(_this14.fetch, `${_this14.url}/object/list/${_this14.bucketId}`, body, { headers: _this14.headers }, parameters);
     });
@@ -51606,11 +51606,11 @@ var StorageFileApi = class extends BaseApiClient {
     if (typeof Buffer !== "undefined") return Buffer.from(data).toString("base64");
     return btoa(data);
   }
-  _getFinalPath(path5) {
-    return `${this.bucketId}/${path5.replace(/^\/+/, "")}`;
+  _getFinalPath(path6) {
+    return `${this.bucketId}/${path6.replace(/^\/+/, "")}`;
   }
-  _removeEmptyFolders(path5) {
-    return path5.replace(/^\/|\/$/g, "").replace(/\/+/g, "/");
+  _removeEmptyFolders(path6) {
+    return path6.replace(/^\/|\/$/g, "").replace(/\/+/g, "/");
   }
   /** Modifies the `query`, appending values the from `transform` */
   applyTransformOptsToQuery(query, transform2) {
@@ -55184,10 +55184,10 @@ function autoSegments(panels) {
   const f = (v) => String(Math.round(v * 1e3) / 1e3);
   for (const p of panels) {
     const ring = p.outline;
-    let path5 = [];
+    let path6 = [];
     const flush = () => {
-      if (path5.length > 1) out.push({ kind: "cut", d: "M " + path5.map((v) => `${f(v.x)} ${f(v.y)}`).join(" L ") });
-      path5 = [];
+      if (path6.length > 1) out.push({ kind: "cut", d: "M " + path6.map((v) => `${f(v.x)} ${f(v.y)}`).join(" L ") });
+      path6 = [];
     };
     for (let i = 0; i < ring.length; i++) {
       const a = ring[i];
@@ -55206,8 +55206,8 @@ function autoSegments(panels) {
       }
       if (t0 < 1 - 1e-6) pieces.push([t0, 1]);
       if (pieces.length === 1 && pieces[0][0] === 0 && pieces[0][1] === 1) {
-        if (!path5.length) path5.push(a);
-        path5.push(b);
+        if (!path6.length) path6.push(a);
+        path6.push(b);
         continue;
       }
       flush();
@@ -59841,7 +59841,7 @@ var shapeSchema2 = obj({
 var imageSchema2 = obj({
   type: en(["image"]),
   ...baseProps,
-  src: str("preset:<id>:<#rrggbb> \u0E25\u0E32\u0E22\u0E08\u0E32\u0E01\u0E44\u0E25\u0E1A\u0E23\u0E32\u0E23\u0E35 \xB7 asset:<id> \u0E23\u0E39\u0E1B\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E31\u0E1B\u0E42\u0E2B\u0E25\u0E14 \xB7 svg:<markup> \u0E20\u0E32\u0E1E\u0E40\u0E27\u0E01\u0E40\u0E15\u0E2D\u0E23\u0E4C\u0E17\u0E35\u0E48\u0E04\u0E38\u0E13\u0E27\u0E32\u0E14\u0E40\u0E2D\u0E07 (\u0E21\u0E35 viewBox)"),
+  src: str("motif:<id>:<#\u0E1E\u0E37\u0E49\u0E19>:<#\u0E2A\u0E35\u0E20\u0E32\u0E1E>:<#\u0E2A\u0E35\u0E40\u0E2A\u0E49\u0E19> \u0E20\u0E32\u0E1E\u0E25\u0E30\u0E40\u0E2D\u0E35\u0E22\u0E14\u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E27\u0E32\u0E14\u0E08\u0E32\u0E01\u0E1E\u0E32\u0E40\u0E25\u0E15 \xB7 preset:<id>:<#rrggbb> \u0E25\u0E32\u0E22\u0E08\u0E32\u0E01\u0E44\u0E25\u0E1A\u0E23\u0E32\u0E23\u0E35 \xB7 asset:<id> \u0E23\u0E39\u0E1B\u0E41\u0E19\u0E1A \xB7 svg:<markup> \u0E20\u0E32\u0E1E\u0E40\u0E27\u0E01\u0E40\u0E15\u0E2D\u0E23\u0E4C\u0E2A\u0E31\u0E49\u0E19 (\u0E21\u0E35 viewBox)"),
   w: num("\u0E04\u0E27\u0E32\u0E21\u0E01\u0E27\u0E49\u0E32\u0E07 \u0E21\u0E21."),
   h: nullable2(num("\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07 \u0E21\u0E21. (\u0E44\u0E21\u0E48\u0E43\u0E2A\u0E48 = \u0E15\u0E32\u0E21\u0E2A\u0E31\u0E14\u0E2A\u0E48\u0E27\u0E19\u0E23\u0E39\u0E1B)")),
   fit: nullable2(en(["cover", "contain", "stretch"])),
@@ -60374,10 +60374,10 @@ function sanitizeSvg(markup) {
     if (!selfClose) stack.push(name);
   }
   if (!rootSeen || stack.length) return null;
-  const svg = out.join("");
-  if (!/<(path|rect|circle|ellipse|line|polyline|polygon|text)\b/.test(svg)) return null;
+  const svg2 = out.join("");
+  if (!/<(path|rect|circle|ellipse|line|polyline|polygon|text)\b/.test(svg2)) return null;
   const [, , vw, vh] = viewBox.split(/\s+/).map(Number);
-  return { svg, aspect: vw / vh };
+  return { svg: svg2, aspect: vw / vh };
 }
 
 // shared/contracts/aiModels.ts
@@ -60419,10 +60419,105 @@ function addAiUsage(report, model, usage) {
   };
 }
 
+// server/artworkMotifs.ts
+var motifDescriptions = {
+  "rain-window": "\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E42\u0E04\u0E49\u0E07 \u0E40\u0E2B\u0E47\u0E19\u0E08\u0E31\u0E19\u0E17\u0E23\u0E4C \u0E2B\u0E21\u0E2D\u0E01 \u0E1D\u0E19 \u0E23\u0E30\u0E25\u0E2D\u0E01\u0E19\u0E49\u0E33\u0E41\u0E25\u0E30\u0E1E\u0E23\u0E23\u0E13\u0E44\u0E21\u0E49 (\u0E01\u0E27\u0E49\u0E32\u0E07:\u0E2A\u0E39\u0E07 210:244)",
+  "sun-window": "\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E42\u0E04\u0E49\u0E07 \u0E40\u0E2B\u0E47\u0E19\u0E14\u0E27\u0E07\u0E2D\u0E32\u0E17\u0E34\u0E15\u0E22\u0E4C \u0E40\u0E19\u0E34\u0E19\u0E0B\u0E49\u0E2D\u0E19\u0E41\u0E25\u0E30\u0E41\u0E2A\u0E07\u0E1A\u0E19\u0E1C\u0E34\u0E27\u0E19\u0E49\u0E33 (210:244)",
+  "leaf-panel": "\u0E25\u0E32\u0E22\u0E01\u0E34\u0E48\u0E07\u0E43\u0E1A\u0E41\u0E25\u0E30\u0E40\u0E2A\u0E49\u0E19\u0E43\u0E1A\u0E43\u0E19\u0E01\u0E23\u0E2D\u0E1A\u0E41\u0E04\u0E1A\u0E41\u0E19\u0E27\u0E15\u0E31\u0E49\u0E07 (36:104)",
+  "grass-panel": "\u0E25\u0E32\u0E22\u0E01\u0E2D\u0E2B\u0E0D\u0E49\u0E32\u0E01\u0E31\u0E1A\u0E23\u0E30\u0E25\u0E2D\u0E01\u0E19\u0E49\u0E33\u0E43\u0E19\u0E01\u0E23\u0E2D\u0E1A\u0E41\u0E04\u0E1A\u0E41\u0E19\u0E27\u0E15\u0E31\u0E49\u0E07 (36:104)",
+  "leaf-icon": "\u0E40\u0E2B\u0E23\u0E35\u0E22\u0E0D\u0E27\u0E07\u0E01\u0E25\u0E21\u0E23\u0E39\u0E1B\u0E43\u0E1A\u0E44\u0E21\u0E49 (1:1)",
+  "grass-icon": "\u0E40\u0E2B\u0E23\u0E35\u0E22\u0E0D\u0E27\u0E07\u0E01\u0E25\u0E21\u0E23\u0E39\u0E1B\u0E01\u0E2D\u0E2B\u0E0D\u0E49\u0E32 (1:1)",
+  "drop-icon": "\u0E40\u0E2B\u0E23\u0E35\u0E22\u0E0D\u0E27\u0E07\u0E01\u0E25\u0E21\u0E23\u0E39\u0E1B\u0E2B\u0E22\u0E14\u0E19\u0E49\u0E33 (1:1)"
+};
+var ARTWORK_MOTIF_GUIDE = Object.entries(motifDescriptions).map(([id, description]) => `  ${id} = ${description}`).join("\n");
+function svg(w, h, body) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">${body}</svg>`;
+}
+function path5(d, fill, stroke = "none", width = 1) {
+  return `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+function leaf(x, y, angle, scale, fill, ink) {
+  return `<g transform="translate(${x} ${y}) rotate(${angle}) scale(${scale})">` + path5("M0 0C-15-9-16-26 0-44C16-26 15-9 0 0Z", fill, ink) + path5("M0 0Q4-22 0-40M2-14L-7-23M3-19L10-28M2-26L-4-34", "none", ink, 0.7) + "</g>";
+}
+function windowScene(base, color3, ink, rain) {
+  const arch = "M14 232V100C14 49 53 13 105 13S196 49 196 100V232Z";
+  const weather = rain ? Array.from({ length: 38 }, (_, i) => {
+    const x = 10 + (i * 43 + 8) % 192;
+    const y = 32 + i * 37 % 124;
+    return `<path d="M${x} ${y}l-3 ${5 + i % 7}" stroke="${ink}" stroke-width=".8" opacity=".42"/>`;
+  }).join("") : "";
+  const ripples = Array.from({ length: 14 }, (_, i) => {
+    const x = 46 + i * 53 % 134;
+    const y = 163 + i * 19 % 61;
+    const r = 4 + i % 6 * 2;
+    return `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r / 5}" fill="none" stroke="${ink}" stroke-width=".7" opacity=".56"/>` + path5(`M${103 - i % 4 * 4} ${156 + i * 3}h${4 + i % 5 * 4}`, "none", ink, 0.8);
+  }).join("");
+  const foliage = path5("M26 230Q39 189 75 155M177 232Q170 191 152 166", "none", ink, 1.5) + [
+    [30, 216, -66, 0.68],
+    [38, 200, 26, 0.8],
+    [48, 185, -51, 0.74],
+    [61, 169, 41, 0.61],
+    [175, 223, 66, 0.78],
+    [170, 205, -23, 0.73],
+    [162, 189, 43, 0.66],
+    [154, 171, -45, 0.64]
+  ].map(([x, y, angle, scale]) => leaf(x, y, angle, scale, color3, ink)).join("");
+  const grass = Array.from({ length: 15 }, (_, i) => {
+    const x = 9 + i * 13;
+    const h = 12 + i % 6 * 3;
+    return path5(`M${x} 234q${i % 2 ? 3 : -3} ${-h * 0.8} ${i % 2 ? 11 : -9} ${-h}`, "none", ink, 0.7);
+  }).join("");
+  return svg(210, 244, `<defs><clipPath id="arch">${path5(arch, "#ffffff")}</clipPath><linearGradient id="sky" x2="0%" y2="100%"><stop offset="0" stop-color="${base}"/><stop offset=".76" stop-color="${color3}"/></linearGradient><linearGradient id="water" x2="0%" y2="100%"><stop offset="0" stop-color="${color3}"/><stop offset="1" stop-color="${base}"/></linearGradient></defs><g clip-path="url(#arch)"><rect width="210" height="244" fill="url(#sky)"/><circle cx="108" cy="58" r="21" fill="${ink}" opacity=".23"/><circle cx="108" cy="58" r="${rain ? 11 : 15}" fill="${ink}"/>` + path5("M0 129Q27 96 52 109T92 114Q109 88 137 100T210 124V157H0Z", color3) + `<g opacity=".55">${path5("M0 138Q31 120 59 131T105 132Q124 117 149 123T210 135V166H0Z", base)}</g>` + path5("M0 153Q48 145 95 152T210 147V244H0Z", "url(#water)") + `<g opacity=".5">${path5("M2 116Q59 127 100 113T199 112M1 143Q43 134 92 140T207 136M5 149Q53 141 97 149T205 143", "none", ink, 1.5)}</g>` + ripples + weather + foliage + grass + "</g>" + path5(arch, "none", ink, 2.3) + path5("M7 233V100C7 45 49 6 105 6S203 45 203 100V233M105 15V231M15 115H195M3 237H207", "none", ink, 1.1) + path5("M98 6L105 1L112 6L105 11Z", ink));
+}
+function botanicalPanel(base, color3, ink, grass) {
+  const foliage = grass ? Array.from({ length: 13 }, (_, i) => {
+    const x = 5 + i * 2;
+    return path5(`M18 91Q${x} ${45 + i % 4 * 4} ${x} ${15 + i % 6 * 7}`, "none", i % 3 ? color3 : ink, 0.55);
+  }).join("") : path5("M17 90Q7 59 22 14", "none", ink, 0.9) + [[16, 83, 47, 0.39], [13, 69, -42, 0.36], [15, 56, 45, 0.39], [17, 43, -39, 0.35], [20, 30, 38, 0.32], [21, 21, -25, 0.26]].map(([x, y, angle, scale]) => leaf(x, y, angle, scale, color3, ink)).join("");
+  const rain = Array.from({ length: 12 }, (_, i) => path5(`M${7 + i * 9 % 23} ${6 + i * 13 % 82}l-1.4 4`, "none", color3, 0.36)).join("");
+  return svg(36, 104, `<rect x="3" y="1" width="30" height="101" rx="13" fill="${base}" stroke="${ink}" stroke-width=".35"/>` + rain + foliage + `<ellipse cx="18" cy="91" rx="9" ry="2.1" fill="none" stroke="${ink}" stroke-width=".5"/><ellipse cx="18" cy="91" rx="5" ry="1.1" fill="none" stroke="${color3}" stroke-width=".4"/>`);
+}
+function icon(id, base, color3, ink) {
+  const symbol2 = id === "leaf-icon" ? leaf(13, 25, 31, 0.48, color3, ink) : id === "grass-icon" ? path5("M16 24Q14 15 7 10M16 24Q15 11 13 6M16 24Q17 13 24 9M16 24Q21 17 25 17M16 24Q13 19 9 17", "none", color3, 1.5) : path5("M16 6C12 11 10 15 10 18A6 6 0 0 0 22 18C22 15 20 11 16 6Z", color3, ink) + path5("M13 18Q13 21 16 22", "none", base, 1.4);
+  return svg(32, 32, `<circle cx="16" cy="16" r="14" fill="${base}" stroke="${ink}"/>` + symbol2);
+}
+function renderMotif(source) {
+  const match = /^motif:([a-z-]+):(#[\da-f]{6}):(#[\da-f]{6}):(#[\da-f]{6})$/i.exec(source);
+  if (!match) return null;
+  const [, id, base, color3, ink] = match;
+  switch (id) {
+    case "rain-window":
+      return windowScene(base, color3, ink, true);
+    case "sun-window":
+      return windowScene(base, color3, ink, false);
+    case "leaf-panel":
+      return botanicalPanel(base, color3, ink, false);
+    case "grass-panel":
+      return botanicalPanel(base, color3, ink, true);
+    case "leaf-icon":
+    case "grass-icon":
+    case "drop-icon":
+      return icon(id, base, color3, ink);
+    default:
+      return null;
+  }
+}
+function expandArtworkMotifs(raw) {
+  if (!raw || typeof raw !== "object" || !("elements" in raw) || !Array.isArray(raw.elements)) return raw;
+  return { ...raw, elements: raw.elements.map((element) => {
+    if (!element || typeof element !== "object" || !("type" in element) || element.type !== "image" || !("src" in element) || typeof element.src !== "string" || !element.src.startsWith("motif:")) return element;
+    const rendered = renderMotif(element.src);
+    return rendered ? { ...element, src: `svg:${rendered}` } : element;
+  }) };
+}
+
 // server/aiArtwork.ts
 var execFileP2 = promisify3(execFile3);
 var MAX_ROUNDS = 2;
-var MAX_TOKENS2 = 24e3;
+var MAX_TOKENS2 = 1e4;
+var COMPACT_TOKENS = 5e3;
+var COMPACT_TIMEOUT_MS = 8e4;
+var LOCAL_ARTWORK_LIMITS = { timeoutMs: 13e4, maxRetries: 0, budgetMs: 22e4 };
 var MAX_IMAGES = 4;
 var MAX_PANELS = 80;
 var ArtworkResponseError = class extends Error {
@@ -60438,7 +60533,19 @@ var ArtworkDeadlineError = class extends Error {
     this.name = "ArtworkDeadlineError";
   }
 };
+var ArtworkAttemptTimeout = class extends Error {
+  constructor() {
+    super("\u0E2B\u0E21\u0E14\u0E40\u0E27\u0E25\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E43\u0E19\u0E23\u0E2D\u0E1A\u0E19\u0E35\u0E49");
+    this.name = "ArtworkAttemptTimeout";
+  }
+};
 var MIN_ROUND_MS = 45e3;
+function attemptTimeout(timeoutMs, deadlineMs, compact) {
+  const remaining = deadlineMs === void 0 ? Infinity : deadlineMs - Date.now();
+  if (remaining < MIN_ROUND_MS) throw new ArtworkDeadlineError();
+  return Math.min(timeoutMs, remaining, compact ? COMPACT_TIMEOUT_MS : Infinity);
+}
+var COMPACT_RETRY = "\u0E15\u0E2D\u0E1A\u0E41\u0E1A\u0E1A\u0E01\u0E23\u0E30\u0E0A\u0E31\u0E1A\u0E43\u0E19\u0E23\u0E2D\u0E1A\u0E19\u0E35\u0E49: \u0E43\u0E0A\u0E49 10\u201324 \u0E0A\u0E34\u0E49\u0E19 \u0E23\u0E31\u0E01\u0E29\u0E32\u0E0A\u0E37\u0E48\u0E2D/\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E43\u0E2B\u0E49\u0E41\u0E25\u0E30\u0E08\u0E31\u0E14\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E25\u0E31\u0E01\u0E01\u0E48\u0E2D\u0E19 \u0E43\u0E0A\u0E49 motif \u0E2B\u0E23\u0E37\u0E2D preset \u0E41\u0E17\u0E19 SVG \u0E22\u0E32\u0E27 \u0E15\u0E2D\u0E1A JSON \u0E43\u0E2B\u0E49\u0E04\u0E23\u0E1A\u0E41\u0E25\u0E30\u0E1B\u0E34\u0E14\u0E27\u0E07\u0E40\u0E25\u0E47\u0E1A";
 var ARTWORK_SYSTEM = `\u0E04\u0E38\u0E13\u0E04\u0E37\u0E2D\u0E19\u0E31\u0E01\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E01\u0E23\u0E32\u0E1F\u0E34\u0E01\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C\u0E21\u0E37\u0E2D\u0E2D\u0E32\u0E0A\u0E35\u0E1E \u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E04\u0E37\u0E2D\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A "\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E32" (\u0E25\u0E32\u0E22 \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21 \u0E42\u0E25\u0E42\u0E01\u0E49 \u0E20\u0E32\u0E1E\u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A) \u0E25\u0E07\u0E1A\u0E19\u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48\u0E02\u0E2D\u0E07\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C
 \u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E44\u0E27\u0E49\u0E41\u0E25\u0E49\u0E27 \u0E42\u0E14\u0E22\u0E40\u0E02\u0E35\u0E22\u0E19\u0E40\u0E1B\u0E47\u0E19 JSON \u0E15\u0E32\u0E21 schema \u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E01\u0E33\u0E2B\u0E19\u0E14 (\u0E41\u0E1C\u0E19\u0E07\u0E32\u0E19\u0E28\u0E34\u0E25\u0E1B\u0E4C) \u2014 \u0E04\u0E38\u0E13\u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E23\u0E39\u0E49\u0E1C\u0E31\u0E07\u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48 \u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E49 "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E41\u0E1C\u0E07" \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E02\u0E19\u0E32\u0E14\u0E41\u0E25\u0E30\u0E1A\u0E17\u0E1A\u0E32\u0E17
 \u0E17\u0E38\u0E01\u0E0A\u0E34\u0E49\u0E19\u0E07\u0E32\u0E19\u0E2D\u0E49\u0E32\u0E07\u0E41\u0E1C\u0E07\u0E14\u0E49\u0E27\u0E22 panel id \u0E41\u0E25\u0E30\u0E1E\u0E34\u0E01\u0E31\u0E14 x,y \u0E40\u0E1B\u0E47\u0E19 \u0E21\u0E21. \u0E08\u0E32\u0E01\u0E21\u0E38\u0E21\u0E0B\u0E49\u0E32\u0E22\u0E1A\u0E19\u0E02\u0E2D\u0E07\u0E41\u0E1C\u0E07\u0E19\u0E31\u0E49\u0E19 \u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E30\u0E27\u0E32\u0E07\u0E25\u0E07\u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48 \u0E27\u0E31\u0E14\u0E04\u0E27\u0E32\u0E21\u0E01\u0E27\u0E49\u0E32\u0E07\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E14\u0E49\u0E27\u0E22\u0E1F\u0E2D\u0E19\u0E15\u0E4C\u0E08\u0E23\u0E34\u0E07
@@ -60451,10 +60558,12 @@ var ARTWORK_SYSTEM = `\u0E04\u0E38\u0E13\u0E04\u0E37\u0E2D\u0E19\u0E31\u0E01\u0E
   curve \u0E43\u0E0A\u0E49\u0E44\u0E14\u0E49\u0E40\u0E09\u0E1E\u0E32\u0E30\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2D\u0E31\u0E07\u0E01\u0E24\u0E29/\u0E15\u0E31\u0E27\u0E40\u0E25\u0E02 (\u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22\u0E2B\u0E49\u0E32\u0E21 \u0E2A\u0E23\u0E30\u0E08\u0E30\u0E2B\u0E25\u0E38\u0E14)
 - shape: rect/ellipse/line/triangle/polygon/star \u2014 \u0E41\u0E16\u0E1A\u0E2A\u0E35 \u0E01\u0E23\u0E2D\u0E1A \u0E40\u0E2A\u0E49\u0E19\u0E04\u0E31\u0E48\u0E19 \u0E1E\u0E37\u0E49\u0E19\u0E2B\u0E25\u0E31\u0E07\u0E1B\u0E49\u0E32\u0E22 (fill/stroke \u0E40\u0E1B\u0E47\u0E19 #rrggbb \u0E2B\u0E23\u0E37\u0E2D none, grad \u0E44\u0E25\u0E48\u0E2A\u0E35\u0E44\u0E14\u0E49)
 - image: src \u0E40\u0E1B\u0E47\u0E19\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E43\u0E19
+  \xB7 "motif:<id>:<#\u0E1E\u0E37\u0E49\u0E19>:<#\u0E2A\u0E35\u0E20\u0E32\u0E1E>:<#\u0E2A\u0E35\u0E40\u0E2A\u0E49\u0E19>" \u0E20\u0E32\u0E1E\u0E27\u0E32\u0E14\u0E25\u0E30\u0E40\u0E2D\u0E35\u0E22\u0E14\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49 \u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E2A\u0E35\u0E43\u0E2B\u0E49\u0E40\u0E02\u0E49\u0E32\u0E01\u0E31\u0E1A\u0E07\u0E32\u0E19\u0E44\u0E14\u0E49 \u0E43\u0E0A\u0E49\u0E41\u0E17\u0E19 SVG \u0E22\u0E32\u0E27\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E20\u0E32\u0E1E\u0E40\u0E2B\u0E21\u0E32\u0E30\u0E01\u0E31\u0E1A\u0E42\u0E08\u0E17\u0E22\u0E4C
+${ARTWORK_MOTIF_GUIDE}
   \xB7 "preset:<id>:<#\u0E2A\u0E35>" \u0E25\u0E32\u0E22\u0E08\u0E32\u0E01\u0E44\u0E25\u0E1A\u0E23\u0E32\u0E23\u0E35: ${PRESETS.map((p) => `${p.id} (${p.nameTh})`).join(", ")}
   \xB7 "asset:<id>" \u0E23\u0E39\u0E1B\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E31\u0E1B\u0E42\u0E2B\u0E25\u0E14 (\u0E23\u0E30\u0E1A\u0E1A\u0E1A\u0E2D\u0E01 id \u0E43\u0E2B\u0E49\u0E43\u0E19\u0E04\u0E33\u0E02\u0E2D \u0E40\u0E0A\u0E48\u0E19 \u0E42\u0E25\u0E42\u0E01\u0E49) \u2014 \u0E15\u0E49\u0E2D\u0E07\u0E43\u0E0A\u0E49\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E41\u0E19\u0E1A\u0E42\u0E25\u0E42\u0E01\u0E49 \u0E27\u0E32\u0E07\u0E43\u0E2B\u0E49\u0E40\u0E14\u0E48\u0E19\u0E1A\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E01\u0E25\u0E48\u0E2D\u0E07
   \xB7 "svg:<svg viewBox=\\"0 0 W H\\">\u2026</svg>" \u0E20\u0E32\u0E1E\u0E40\u0E27\u0E01\u0E40\u0E15\u0E2D\u0E23\u0E4C\u0E17\u0E35\u0E48\u0E04\u0E38\u0E13\u0E27\u0E32\u0E14\u0E40\u0E2D\u0E07 (\u0E20\u0E32\u0E1E\u0E2B\u0E25\u0E31\u0E01 \u0E44\u0E2D\u0E04\u0E2D\u0E19 \u0E25\u0E32\u0E22\u0E1B\u0E23\u0E30\u0E14\u0E31\u0E1A \u0E1A\u0E32\u0E23\u0E4C\u0E42\u0E04\u0E49\u0E14\u0E08\u0E33\u0E25\u0E2D\u0E07) \u0E43\u0E0A\u0E49 path/rect/circle/ellipse/polygon/
-    text/linearGradient \u0E44\u0E14\u0E49 \u0E2B\u0E49\u0E32\u0E21 script/style/image/use/\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E20\u0E32\u0E22\u0E19\u0E2D\u0E01 \u0E04\u0E27\u0E32\u0E21\u0E22\u0E32\u0E27\u0E15\u0E48\u0E2D\u0E23\u0E39\u0E1B\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19 60,000 \u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 \u2014 \u0E27\u0E32\u0E14\u0E43\u0E2B\u0E49\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E07\u0E48\u0E32\u0E22\u0E41\u0E15\u0E48\u0E2A\u0E27\u0E22 (flat/line art)
+    linearGradient \u0E44\u0E14\u0E49 \u0E2B\u0E49\u0E32\u0E21 script/style/image/use/\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E20\u0E32\u0E22\u0E19\u0E2D\u0E01 \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E20\u0E32\u0E1E\u0E40\u0E09\u0E1E\u0E32\u0E30\u0E17\u0E35\u0E48\u0E44\u0E21\u0E48\u0E21\u0E35 motif \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E2A\u0E21 \u0E43\u0E0A\u0E49 path \u0E01\u0E23\u0E30\u0E0A\u0E31\u0E1A\u0E41\u0E25\u0E30\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19\u0E1B\u0E23\u0E30\u0E21\u0E32\u0E13 1,500 \u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23\u0E15\u0E48\u0E2D\u0E23\u0E39\u0E1B
   w = \u0E01\u0E27\u0E49\u0E32\u0E07 \u0E21\u0E21. (h \u0E44\u0E21\u0E48\u0E43\u0E2A\u0E48 = \u0E15\u0E32\u0E21\u0E2A\u0E31\u0E14\u0E2A\u0E48\u0E27\u0E19\u0E23\u0E39\u0E1B)
 - path: \u0E23\u0E39\u0E1B\u0E27\u0E32\u0E14\u0E40\u0E2D\u0E07\u0E08\u0E32\u0E01\u0E08\u0E38\u0E14 anchors (0..1 \u0E43\u0E19\u0E01\u0E23\u0E2D\u0E1A w\xD7h) \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E40\u0E2A\u0E49\u0E19\u0E42\u0E04\u0E49\u0E07/\u0E04\u0E25\u0E37\u0E48\u0E19/\u0E23\u0E39\u0E1B\u0E1B\u0E34\u0E14\u0E07\u0E48\u0E32\u0E22 \u0E46
 - nutrition: \u0E15\u0E32\u0E23\u0E32\u0E07\u0E42\u0E20\u0E0A\u0E19\u0E32\u0E01\u0E32\u0E23\u0E41\u0E1A\u0E1A \u0E2D\u0E22. (\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E2D\u0E32\u0E2B\u0E32\u0E23/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E14\u0E37\u0E48\u0E21) \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E23\u0E30\u0E1A\u0E1A\u0E04\u0E33\u0E19\u0E27\u0E13\u0E40\u0E2D\u0E07 (~1.2\xD7w)
@@ -60466,10 +60575,18 @@ var ARTWORK_SYSTEM = `\u0E04\u0E38\u0E13\u0E04\u0E37\u0E2D\u0E19\u0E31\u0E01\u0E
   \u0E1A\u0E32\u0E23\u0E4C\u0E42\u0E04\u0E49\u0E14 \u0E40\u0E25\u0E02\u0E17\u0E30\u0E40\u0E1A\u0E35\u0E22\u0E19 \xB7 \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07 = \u0E08\u0E38\u0E14\u0E02\u0E32\u0E22/\u0E15\u0E32\u0E23\u0E32\u0E07\u0E42\u0E20\u0E0A\u0E19\u0E32\u0E01\u0E32\u0E23 \xB7 \u0E1D\u0E32 = \u0E41\u0E1A\u0E23\u0E19\u0E14\u0E4C\u0E0B\u0E49\u0E33\u0E40\u0E25\u0E47\u0E01 \u0E46 \xB7 \u0E1B\u0E35\u0E01\u0E17\u0E32\u0E01\u0E32\u0E27 \u0E2B\u0E49\u0E32\u0E21\u0E27\u0E32\u0E07 \xB7 \u0E25\u0E34\u0E49\u0E19\u0E01\u0E31\u0E19\u0E1D\u0E38\u0E48\u0E19/\u0E25\u0E34\u0E49\u0E19\u0E40\u0E2A\u0E35\u0E22\u0E1A \u0E27\u0E32\u0E07\u0E44\u0E14\u0E49\u0E41\u0E04\u0E48\u0E25\u0E32\u0E22\u0E1E\u0E37\u0E49\u0E19
 - \u0E09\u0E25\u0E32\u0E01\u0E02\u0E27\u0E14/\u0E2B\u0E25\u0E2D\u0E14 (\u0E41\u0E1C\u0E07 label): \u0E14\u0E49\u0E32\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E22\u0E39\u0E48\u0E01\u0E36\u0E48\u0E07\u0E01\u0E25\u0E32\u0E07\u0E04\u0E27\u0E32\u0E21\u0E01\u0E27\u0E49\u0E32\u0E07\u0E02\u0E2D\u0E07\u0E09\u0E25\u0E32\u0E01 \u0E14\u0E49\u0E32\u0E19\u0E2B\u0E25\u0E31\u0E07\u0E2D\u0E22\u0E39\u0E48\u0E2A\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E07 (\u0E0B\u0E49\u0E32\u0E22-\u0E02\u0E27\u0E32\u0E2A\u0E38\u0E14\u0E04\u0E37\u0E2D\u0E2B\u0E25\u0E31\u0E07\u0E02\u0E27\u0E14) \xB7 \u0E16\u0E38\u0E07: \u0E41\u0E1C\u0E07 front/back \u0E41\u0E22\u0E01 \u0E2B\u0E23\u0E37\u0E2D film \u0E1C\u0E37\u0E19\u0E40\u0E14\u0E35\u0E22\u0E27
 - \u0E43\u0E0A\u0E49\u0E2A\u0E35\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19 3-4 \u0E2A\u0E35 \u0E21\u0E35\u0E25\u0E33\u0E14\u0E31\u0E1A\u0E0A\u0E31\u0E49\u0E19\u0E0A\u0E31\u0E14 (\u0E43\u0E2B\u0E0D\u0E48-\u0E01\u0E25\u0E32\u0E07-\u0E40\u0E25\u0E47\u0E01) \u0E40\u0E27\u0E49\u0E19\u0E17\u0E35\u0E48\u0E27\u0E48\u0E32\u0E07 \u0E44\u0E21\u0E48\u0E22\u0E31\u0E14\u0E08\u0E19\u0E41\u0E19\u0E48\u0E19 \u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23\u0E2A\u0E35\u0E15\u0E31\u0E14\u0E01\u0E31\u0E1A\u0E1E\u0E37\u0E49\u0E19\u0E43\u0E2B\u0E49\u0E2D\u0E48\u0E32\u0E19\u0E2D\u0E2D\u0E01
+- \u0E40\u0E21\u0E37\u0E48\u0E2D\u0E42\u0E08\u0E17\u0E22\u0E4C\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E07\u0E32\u0E19\u0E25\u0E30\u0E40\u0E2D\u0E35\u0E22\u0E14 \u0E43\u0E2B\u0E49\u0E21\u0E35\u0E20\u0E32\u0E1E\u0E40\u0E14\u0E48\u0E19\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E14\u0E35\u0E22\u0E27\u0E02\u0E19\u0E32\u0E14\u0E1B\u0E23\u0E30\u0E21\u0E32\u0E13 60\u201375% \u0E02\u0E2D\u0E07\u0E2B\u0E19\u0E49\u0E32\u0E01\u0E27\u0E49\u0E32\u0E07 \u0E21\u0E35\u0E01\u0E25\u0E38\u0E48\u0E21\u0E0A\u0E37\u0E48\u0E2D\u0E14\u0E49\u0E32\u0E19\u0E1A\u0E19\u0E41\u0E25\u0E30\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E14\u0E49\u0E32\u0E19\u0E25\u0E48\u0E32\u0E07 \u0E41\u0E22\u0E01\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E43\u0E2B\u0E49\u0E41\u0E01\u0E49\u0E44\u0E14\u0E49
+  \u0E43\u0E0A\u0E49\u0E01\u0E23\u0E2D\u0E1A\u0E40\u0E2A\u0E49\u0E19\u0E1A\u0E32\u0E07 \u0E25\u0E32\u0E22\u0E02\u0E49\u0E32\u0E07\u0E41\u0E04\u0E1A\u0E15\u0E32\u0E21\u0E2A\u0E31\u0E14\u0E2A\u0E48\u0E27\u0E19 \u0E41\u0E25\u0E30\u0E0A\u0E38\u0E14\u0E44\u0E2D\u0E04\u0E2D\u0E19\u0E40\u0E25\u0E47\u0E01\u0E17\u0E35\u0E48\u0E43\u0E0A\u0E49\u0E2A\u0E35\u0E23\u0E48\u0E27\u0E21\u0E01\u0E31\u0E19 \u0E08\u0E31\u0E14\u0E2B\u0E25\u0E31\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19\u0E01\u0E25\u0E38\u0E48\u0E21\u0E2D\u0E48\u0E32\u0E19\u0E07\u0E48\u0E32\u0E22 \u0E01\u0E31\u0E19\u0E23\u0E30\u0E22\u0E30\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E08\u0E32\u0E01\u0E02\u0E2D\u0E1A\u0E41\u0E25\u0E30\u0E20\u0E32\u0E1E
+- \u0E40\u0E21\u0E37\u0E48\u0E2D motif \u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A\u0E42\u0E08\u0E17\u0E22\u0E4C \u0E43\u0E2B\u0E49\u0E43\u0E0A\u0E49 src \u0E41\u0E1A\u0E1A motif \u0E41\u0E21\u0E49\u0E42\u0E08\u0E17\u0E22\u0E4C\u0E08\u0E30\u0E40\u0E23\u0E35\u0E22\u0E01\u0E20\u0E32\u0E1E\u0E19\u0E31\u0E49\u0E19\u0E27\u0E48\u0E32 SVG \u0E40\u0E1E\u0E23\u0E32\u0E30\u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E30\u0E27\u0E32\u0E14 SVG \u0E25\u0E30\u0E40\u0E2D\u0E35\u0E22\u0E14\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07
+  \u0E15\u0E31\u0E27\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E20\u0E32\u0E1E\u0E2A\u0E27\u0E19\u0E2B\u0E25\u0E31\u0E07\u0E1D\u0E19\u0E43\u0E0A\u0E49 rain-window \u0E40\u0E1B\u0E47\u0E19\u0E20\u0E32\u0E1E\u0E2B\u0E25\u0E31\u0E01, leaf-panel/grass-panel \u0E17\u0E35\u0E48\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07, drop-icon/leaf-icon/grass-icon \u0E1A\u0E19\u0E2B\u0E25\u0E31\u0E07
+  \u0E43\u0E0A\u0E49\u0E04\u0E39\u0E48\u0E2A\u0E35\u0E17\u0E35\u0E48\u0E40\u0E2B\u0E47\u0E19\u0E40\u0E2A\u0E49\u0E19\u0E0A\u0E31\u0E14 \u0E40\u0E0A\u0E48\u0E19 \u0E04\u0E23\u0E32\u0E21\u0E40\u0E1B\u0E47\u0E19\u0E1E\u0E37\u0E49\u0E19 \u0E40\u0E02\u0E35\u0E22\u0E27\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E35\u0E20\u0E32\u0E1E \u0E17\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E35\u0E40\u0E2A\u0E49\u0E19 \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E20\u0E32\u0E1E\u0E15\u0E48\u0E32\u0E07\u0E08\u0E32\u0E01\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E42\u0E08\u0E17\u0E22\u0E4C\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23
+- \u0E15\u0E31\u0E27\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E0A\u0E34\u0E49\u0E19\u0E20\u0E32\u0E1E\u0E17\u0E35\u0E48\u0E2A\u0E21\u0E1A\u0E39\u0E23\u0E13\u0E4C: {"type":"image","panel":"front","x":14,"y":35,"w":56,"src":"motif:rain-window:#14283f:#257d78:#d7ae6a"}
+- \u0E15\u0E23\u0E27\u0E08\u0E27\u0E48\u0E32\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E17\u0E38\u0E01\u0E0A\u0E34\u0E49\u0E19\u0E21\u0E35 text \u0E41\u0E25\u0E30 size \u0E17\u0E35\u0E48\u0E21\u0E32\u0E01\u0E01\u0E27\u0E48\u0E32 0 \u0E41\u0E25\u0E30\u0E02\u0E19\u0E32\u0E14+\u0E15\u0E33\u0E41\u0E2B\u0E19\u0E48\u0E07\u0E44\u0E21\u0E48\u0E17\u0E31\u0E1A\u0E20\u0E32\u0E1E\u0E2B\u0E25\u0E31\u0E01\u0E2B\u0E23\u0E37\u0E2D\u0E01\u0E23\u0E2D\u0E1A
+- \u0E40\u0E2A\u0E49\u0E19\u0E04\u0E31\u0E48\u0E19\u0E43\u0E0A\u0E49\u0E2A\u0E35\u0E48\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21\u0E1A\u0E32\u0E07\u0E40\u0E15\u0E34\u0E21\u0E2A\u0E35\u0E2B\u0E23\u0E37\u0E2D shape line \u0E17\u0E35\u0E48\u0E01\u0E33\u0E2B\u0E19\u0E14 stroke \u0E41\u0E25\u0E30 strokeW \u0E43\u0E2B\u0E49\u0E0A\u0E31\u0E14\u0E40\u0E08\u0E19
 - \u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E15\u0E32\u0E21\u0E01\u0E0E\u0E2B\u0E21\u0E32\u0E22 (\u0E40\u0E25\u0E02 \u0E2D\u0E22., \u0E1A\u0E32\u0E23\u0E4C\u0E42\u0E04\u0E49\u0E14 GS1, \u0E2A\u0E48\u0E27\u0E19\u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E08\u0E23\u0E34\u0E07, \u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48\u0E1C\u0E39\u0E49\u0E1C\u0E25\u0E34\u0E15) \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E43\u0E2B\u0E49 \u0E43\u0E2B\u0E49\u0E43\u0E2A\u0E48\u0E40\u0E1B\u0E47\u0E19\u0E0A\u0E48\u0E2D\u0E07\u0E01\u0E23\u0E2D\u0E01 \u0E40\u0E0A\u0E48\u0E19 "\u0E40\u0E25\u0E02\u0E2A\u0E32\u0E23\u0E1A\u0E1A\u0E2D\u0E32\u0E2B\u0E32\u0E23: [\u0E01\u0E23\u0E2D\u0E01]"
   \u0E2B\u0E49\u0E32\u0E21\u0E41\u0E15\u0E48\u0E07\u0E15\u0E31\u0E27\u0E40\u0E25\u0E02\u0E02\u0E36\u0E49\u0E19\u0E40\u0E2D\u0E07 \u0E1A\u0E32\u0E23\u0E4C\u0E42\u0E04\u0E49\u0E14\u0E27\u0E32\u0E14\u0E40\u0E1B\u0E47\u0E19\u0E20\u0E32\u0E1E\u0E08\u0E33\u0E25\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27\u0E40\u0E02\u0E35\u0E22\u0E19\u0E01\u0E33\u0E01\u0E31\u0E1A\u0E27\u0E48\u0E32 "\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E1A\u0E32\u0E23\u0E4C\u0E42\u0E04\u0E49\u0E14"
 - \u0E23\u0E39\u0E1B\u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E41\u0E19\u0E1A = \u0E41\u0E23\u0E07\u0E1A\u0E31\u0E19\u0E14\u0E32\u0E25\u0E43\u0E08\u0E40\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E42\u0E17\u0E19\u0E2A\u0E35 \u0E2D\u0E32\u0E23\u0E21\u0E13\u0E4C \u0E2A\u0E44\u0E15\u0E25\u0E4C\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 (\u0E2B\u0E49\u0E32\u0E21\u0E25\u0E2D\u0E01\u0E22\u0E01\u0E21\u0E32) \xB7 \u0E42\u0E25\u0E42\u0E01\u0E49\u0E17\u0E35\u0E48\u0E41\u0E19\u0E1A = \u0E15\u0E49\u0E2D\u0E07\u0E27\u0E32\u0E07\u0E08\u0E23\u0E34\u0E07\u0E14\u0E49\u0E27\u0E22 asset id
-- \u0E08\u0E33\u0E19\u0E27\u0E19\u0E0A\u0E34\u0E49\u0E19 8-${Math.min(60, ART_MAX_ELEMENTS)} \u0E0A\u0E34\u0E49\u0E19\u0E01\u0E33\u0E25\u0E31\u0E07\u0E14\u0E35 \u0E15\u0E31\u0E49\u0E07 id \u0E2A\u0E37\u0E48\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2B\u0E21\u0E32\u0E22 (brand, product-name, slogan, hero, ingredients \u2026)
+- \u0E1B\u0E01\u0E15\u0E34\u0E43\u0E0A\u0E49 8\u201340 \u0E0A\u0E34\u0E49\u0E19\u0E15\u0E32\u0E21\u0E08\u0E33\u0E19\u0E27\u0E19\u0E41\u0E1C\u0E07\u0E41\u0E25\u0E30\u0E42\u0E08\u0E17\u0E22\u0E4C \u0E08\u0E31\u0E14\u0E23\u0E32\u0E22\u0E25\u0E30\u0E40\u0E2D\u0E35\u0E22\u0E14\u0E40\u0E1B\u0E47\u0E19\u0E01\u0E25\u0E38\u0E48\u0E21\u0E41\u0E17\u0E19\u0E01\u0E32\u0E23\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E0A\u0E34\u0E49\u0E19\u0E08\u0E34\u0E4B\u0E27\u0E08\u0E33\u0E19\u0E27\u0E19\u0E21\u0E32\u0E01 \u0E15\u0E31\u0E49\u0E07 id \u0E2A\u0E37\u0E48\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2B\u0E21\u0E32\u0E22
 
 ## \u0E27\u0E34\u0E18\u0E35\u0E15\u0E2D\u0E1A
 - \u0E15\u0E2D\u0E1A JSON \u0E15\u0E32\u0E21 schema \u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 \u0E16\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E02\u0E49\u0E2D\u0E1C\u0E34\u0E14\u0E1E\u0E25\u0E32\u0E14\u0E01\u0E25\u0E31\u0E1A\u0E21\u0E32 \u0E43\u0E2B\u0E49\u0E2A\u0E48\u0E07 JSON \u0E09\u0E1A\u0E31\u0E1A\u0E41\u0E01\u0E49\u0E41\u0E25\u0E49\u0E27 "\u0E17\u0E31\u0E49\u0E07\u0E09\u0E1A\u0E31\u0E1A"
@@ -60480,7 +60597,7 @@ function buildArtworkUserContent(req) {
   const lines = [
     `\u0E0A\u0E19\u0E34\u0E14\u0E07\u0E32\u0E19: ${KIND_TH[req.kind]} (template ${req.template}) \u0E27\u0E31\u0E2A\u0E14\u0E38 ${mat ? `${mat.nameTh} (${mat.id})` : req.materialId} \u0E02\u0E19\u0E32\u0E14 W\xD7D\xD7H = ${req.box.W}\xD7${req.box.D}\xD7${req.box.H} \u0E21\u0E21.`,
     `\u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48 ${req.sheet.w.toFixed(1)}\xD7${req.sheet.h.toFixed(1)} \u0E21\u0E21. \u2014 \u0E41\u0E1C\u0E07\u0E17\u0E35\u0E48\u0E27\u0E32\u0E07\u0E0A\u0E34\u0E49\u0E19\u0E07\u0E32\u0E19\u0E44\u0E14\u0E49 (id: \u0E01\u0E27\u0E49\u0E32\u0E07\xD7\u0E2A\u0E39\u0E07 \u0E21\u0E21. \u2014 \u0E1A\u0E17\u0E1A\u0E32\u0E17):`,
-    ...req.panels.map((p) => `- ${p.id}: ${p.w.toFixed(1)}\xD7${p.h.toFixed(1)} \u2014 ${p.role}`),
+    ...req.panels.filter((p) => p.print).map((p) => `- ${p.id}: ${p.w.toFixed(1)}\xD7${p.h.toFixed(1)} \u2014 ${p.role}`),
     req.fillColor ? `\u0E2A\u0E35\u0E1E\u0E37\u0E49\u0E19\u0E1B\u0E31\u0E08\u0E08\u0E38\u0E1A\u0E31\u0E19 ${req.fillColor} (\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E44\u0E14\u0E49)` : "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E2A\u0E35\u0E1E\u0E37\u0E49\u0E19",
     req.existing > 0 ? `\u0E07\u0E32\u0E19\u0E19\u0E35\u0E49\u0E21\u0E35\u0E0A\u0E34\u0E49\u0E19\u0E07\u0E32\u0E19\u0E40\u0E14\u0E34\u0E21 ${req.existing} \u0E0A\u0E34\u0E49\u0E19 \u2014 \u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48\u0E02\u0E2D\u0E07\u0E04\u0E38\u0E13\u0E08\u0E30\u0E43\u0E0A\u0E49\u0E41\u0E17\u0E19\u0E2B\u0E23\u0E37\u0E2D\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E15\u0E48\u0E2D\u0E15\u0E32\u0E21\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01 \u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E49\u0E04\u0E23\u0E1A\u0E43\u0E19\u0E15\u0E31\u0E27` : "\u0E07\u0E32\u0E19\u0E27\u0E48\u0E32\u0E07 \u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14"
   ];
@@ -60519,30 +60636,39 @@ function firstUserMessage(req) {
 async function designArtwork(ask, req, maxRounds = MAX_ROUNDS) {
   const messages = [firstUserMessage(req)];
   const rounds = [];
+  const printable = new Set(req.panels.filter((p) => p.print).map((p) => p.id));
   let model = "";
   let last = null;
+  let compact = false;
   for (let attempt = 1; attempt <= maxRounds; attempt++) {
     let answer;
     try {
-      answer = await ask(messages);
+      answer = await ask(messages, compact);
     } catch (error62) {
-      if (error62 instanceof ArtworkDeadlineError && last) break;
+      const recoverable = error62 instanceof ArtworkAttemptTimeout || error62 instanceof ArtworkResponseError && error62.reason === "max_tokens";
+      if (last && (recoverable || error62 instanceof ArtworkDeadlineError)) break;
+      if (recoverable && attempt < maxRounds) {
+        messages.splice(1, messages.length - 1, { role: "user", content: COMPACT_RETRY });
+        compact = true;
+        continue;
+      }
       throw error62;
     }
     model = answer.model;
-    const parsed = parseArtworkPlan(answer.raw);
+    const parsed = parseArtworkPlan(expandArtworkMotifs(answer.raw));
     let issues;
     let plan = null;
     if (!parsed.ok) issues = parsed.issues;
     else {
       plan = parsed.plan;
       issues = [...parsed.issues, ...checkArtworkPlan(plan, req.panels)];
-      last = { plan, issues };
+      if (plan.elements.some((e) => printable.has(e.panel))) last = { plan, issues };
+      else issues.push({ severity: "error", code: "no-printable-art", message: "\u0E27\u0E32\u0E07\u0E2D\u0E07\u0E04\u0E4C\u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E19\u0E49\u0E2D\u0E22\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E0A\u0E34\u0E49\u0E19\u0E1A\u0E19\u0E41\u0E1C\u0E07\u0E17\u0E35\u0E48\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E44\u0E14\u0E49" });
     }
     const ok = plan !== null && !issues.some((i) => i.severity === "error");
     rounds.push({ attempt, plan, issues, ok });
     if (ok && plan) return { ok: true, plan, issues, rounds, model, mock: false };
-    if (plan && plan.elements.length >= 4 && !issues.some((i) => i.code === "panel-unknown")) {
+    if (plan && plan.elements.filter((e) => printable.has(e.panel)).length >= 4 && !issues.some((i) => ["panel-unknown", "image-invalid", "svg-invalid", "svg-too-large"].includes(i.code))) {
       return { ok: true, plan, issues, rounds, model, mock: false };
     }
     messages.push(
@@ -60556,35 +60682,34 @@ function artworkModelOptions(model) {
   const base = boxSpecModelOptions(model);
   return { effort: base.effort ? "medium" : void 0, serverFallback: base.serverFallback };
 }
-function apiAskWithUsage(apiKey, model, limits = { timeoutMs: 24e4, maxRetries: 1 }) {
+function apiAskWithUsage(apiKey, model, limits = LOCAL_ARTWORK_LIMITS) {
   const client = new Anthropic({ apiKey, timeout: limits.timeoutMs, maxRetries: limits.maxRetries });
   const options = artworkModelOptions(model);
   let total = null;
   let report = null;
-  const ask = async (messages) => {
-    let timeout = limits.timeoutMs;
-    if (limits.deadlineMs !== void 0) {
-      const remaining = limits.deadlineMs - Date.now();
-      if (remaining < MIN_ROUND_MS) throw new ArtworkDeadlineError();
-      timeout = Math.min(timeout, remaining);
-    }
+  const ask = async (messages, compact = false) => {
+    const timeout = attemptTimeout(limits.timeoutMs, limits.deadlineMs, compact);
     const params = {
       model,
-      max_tokens: MAX_TOKENS2,
+      max_tokens: compact ? COMPACT_TOKENS : MAX_TOKENS2,
       // system + schema คงที่ทุกคำขอ → cache ไว้ (รอบแก้/คำขอซ้ำภายใน 5 นาทีอ่านจาก cache)
       system: [{ type: "text", text: ARTWORK_SYSTEM + JSON_INSTRUCTION2, cache_control: { type: "ephemeral" } }],
       messages,
-      ...options.effort ? { output_config: { effort: options.effort } } : {}
+      ...options.effort ? { output_config: { effort: compact ? "low" : options.effort } } : {}
     };
-    const msg = options.serverFallback ? await client.beta.messages.create(
+    const requestOptions = { timeout, signal: AbortSignal.timeout(timeout) };
+    const msg = await (options.serverFallback ? client.beta.messages.create(
       {
         ...params,
         betas: [SERVER_FALLBACK_BETA],
         // @ts-expect-error fallbacks: "default" ยังไม่อยู่ใน type ของ SDK 0.111 (ดู boxSpec.ts)
         fallbacks: "default"
       },
-      { timeout }
-    ) : await client.messages.create(params, { timeout });
+      requestOptions
+    ) : client.messages.create(params, requestOptions)).catch((error62) => {
+      if (requestOptions.signal.aborted || error62 instanceof Anthropic.APIConnectionTimeoutError || error62 instanceof Anthropic.APIError && error62.status === 504) throw new ArtworkAttemptTimeout();
+      throw error62;
+    });
     const u = msg.usage;
     const call = {
       inputTokens: u.input_tokens,
@@ -60684,7 +60809,7 @@ var AiProviderError = class extends Error {
   providerMessage;
 };
 var CLOUD_AI_LIMITS = { timeoutMs: 5e4, maxRetries: 0 };
-var CLOUD_ARTWORK_LIMITS = { timeoutMs: 24e4, maxRetries: 0, budgetMs: 27e4 };
+var CLOUD_ARTWORK_LIMITS = { timeoutMs: 13e4, maxRetries: 0, budgetMs: 22e4 };
 var AnthropicAiService = class {
   constructor(model = DEFAULT_AI_MODEL, limits = CLOUD_AI_LIMITS, artworkLimits = CLOUD_ARTWORK_LIMITS) {
     this.model = model;
@@ -60718,7 +60843,7 @@ var AnthropicAiService = class {
     } catch (error62) {
       if (error62 instanceof AiProviderError) throw error62;
       if (error62 instanceof ArtworkResponseError) throw new AiProviderError(error62.reason === "refusal" ? "refusal" : "provider", error62);
-      if (error62 instanceof ArtworkDeadlineError) throw new AiProviderError("provider", error62);
+      if (error62 instanceof ArtworkDeadlineError || error62 instanceof ArtworkAttemptTimeout) throw new AiProviderError("timeout", error62);
       if (error62 instanceof Anthropic.AuthenticationError) throw new AiProviderError("authentication", error62);
       if (error62 instanceof Anthropic.RateLimitError) throw new AiProviderError("rate-limit", error62);
       if (error62 instanceof Anthropic.APIError) throw new AiProviderError("provider", error62);
@@ -61063,6 +61188,8 @@ function aiRouteError(error62, requestId, route) {
     httpError = new HttpError(503, "CONFIGURATION_ERROR", "\u0E04\u0E35\u0E22\u0E4C AI \u0E02\u0E2D\u0E07 server \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
   } else if (error62 instanceof AiProviderError && error62.kind === "rate-limit") {
     httpError = new HttpError(429, "AI_RATE_LIMITED", "\u0E40\u0E23\u0E35\u0E22\u0E01 AI \u0E16\u0E35\u0E48\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48");
+  } else if (error62 instanceof AiProviderError && error62.kind === "timeout") {
+    httpError = new HttpError(504, "AI_PROVIDER_UNAVAILABLE", "AI \u0E43\u0E0A\u0E49\u0E40\u0E27\u0E25\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E40\u0E01\u0E34\u0E19\u0E01\u0E33\u0E2B\u0E19\u0E14 \u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07");
   } else if (error62 instanceof AiProviderError && error62.kind === "refusal") {
     httpError = new HttpError(502, "AI_PROVIDER_UNAVAILABLE", "AI \u0E44\u0E21\u0E48\u0E23\u0E31\u0E1A\u0E04\u0E33\u0E02\u0E2D\u0E19\u0E35\u0E49 \u0E25\u0E2D\u0E07\u0E1B\u0E23\u0E31\u0E1A\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E41\u0E25\u0E49\u0E27\u0E2A\u0E48\u0E07\u0E43\u0E2B\u0E21\u0E48");
   } else {
@@ -61136,8 +61263,8 @@ function createApiRouter(config2, dependencies = {}) {
   const billingService = dependencies.billingService === void 0 ? billingRepository && new BillingService(billingRepository, billingFlags(config2)) : dependencies.billingService;
   return async (req, res) => {
     const requestId = randomUUID3();
-    const path5 = requestPath(req);
-    if (path5 === "/api/v1/health") {
+    const path6 = requestPath(req);
+    if (path6 === "/api/v1/health") {
       if (req.method !== "GET") {
         res.setHeader("allow", "GET");
         const error63 = new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
@@ -61148,7 +61275,7 @@ function createApiRouter(config2, dependencies = {}) {
       sendJson(res, 200, body, requestId);
       return;
     }
-    if (path5 === "/api/v1/session/bootstrap") {
+    if (path6 === "/api/v1/session/bootstrap") {
       if (req.method !== "POST") {
         res.setHeader("allow", "POST");
         const error63 = new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
@@ -61169,7 +61296,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    if (path5 === "/api/v1/me") {
+    if (path6 === "/api/v1/me") {
       try {
         if (req.method !== "GET") {
           res.setHeader("allow", "GET");
@@ -61187,7 +61314,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    if (path5 === "/api/v1/ai/artwork") {
+    if (path6 === "/api/v1/ai/artwork") {
       try {
         if (req.method !== "POST") {
           res.setHeader("allow", "POST");
@@ -61225,7 +61352,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    if (path5 === "/api/v1/ai/box-spec") {
+    if (path6 === "/api/v1/ai/box-spec") {
       try {
         if (req.method !== "POST") {
           res.setHeader("allow", "POST");
@@ -61267,7 +61394,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    if (path5 === "/api/v1/projects") {
+    if (path6 === "/api/v1/projects") {
       try {
         if (!sessionService || !projectService) {
           throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Supabase");
@@ -61318,7 +61445,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    if (path5 === "/api/v1/projects/import-legacy") {
+    if (path6 === "/api/v1/projects/import-legacy") {
       try {
         if (req.method !== "POST") {
           res.setHeader("allow", "POST");
@@ -61338,7 +61465,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    if (path5 === "/api/v1/assets/upload-intents" || path5 === "/api/v1/assets/download-tickets") {
+    if (path6 === "/api/v1/assets/upload-intents" || path6 === "/api/v1/assets/download-tickets") {
       try {
         if (req.method !== "POST") {
           res.setHeader("allow", "POST");
@@ -61349,7 +61476,7 @@ function createApiRouter(config2, dependencies = {}) {
         }
         requireJsonContentType(req);
         const actor = await sessionService.authenticate(bearerToken(req), requestId);
-        if (path5.endsWith("/upload-intents")) {
+        if (path6.endsWith("/upload-intents")) {
           const input2 = parseOrThrow(createAssetUploadIntentSchema.safeParse(await readJsonBody(req)));
           const data = await assetService.createIntent(actor, input2);
           sendJson(res, 201, { data, requestId }, requestId);
@@ -61364,7 +61491,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    const assetActionMatch = /^\/api\/v1\/assets\/([^/]+)(?:\/(complete|upload-ticket))?$/.exec(path5);
+    const assetActionMatch = /^\/api\/v1\/assets\/([^/]+)(?:\/(complete|upload-ticket))?$/.exec(path6);
     if (assetActionMatch) {
       try {
         if (!sessionService || !assetService) {
@@ -61398,7 +61525,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    if (path5 === "/api/v1/billing/entitlements") {
+    if (path6 === "/api/v1/billing/entitlements") {
       try {
         if (req.method !== "GET") {
           res.setHeader("allow", "GET");
@@ -61431,7 +61558,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    if (path5 === "/api/v1/billing/orders") {
+    if (path6 === "/api/v1/billing/orders") {
       try {
         if (req.method !== "POST") {
           res.setHeader("allow", "POST");
@@ -61456,7 +61583,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    const devFulfilMatch = /^\/api\/v1\/billing\/orders\/([^/]+)\/dev-fulfil$/.exec(path5);
+    const devFulfilMatch = /^\/api\/v1\/billing\/orders\/([^/]+)\/dev-fulfil$/.exec(path6);
     if (devFulfilMatch) {
       try {
         if (!isDevFulfilEnvironment(config2)) {
@@ -61485,7 +61612,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    if (path5 === "/api/v1/projects/thumbnails") {
+    if (path6 === "/api/v1/projects/thumbnails") {
       try {
         if (req.method !== "POST") {
           res.setHeader("allow", "POST");
@@ -61510,7 +61637,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    const thumbnailMatch = /^\/api\/v1\/projects\/([^/]+)\/thumbnail$/.exec(path5);
+    const thumbnailMatch = /^\/api\/v1\/projects\/([^/]+)\/thumbnail$/.exec(path6);
     if (thumbnailMatch) {
       try {
         if (req.method !== "PUT") {
@@ -61537,7 +61664,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    const exportAuthorizationMatch = /^\/api\/v1\/projects\/([^/]+)\/export-authorizations$/.exec(path5);
+    const exportAuthorizationMatch = /^\/api\/v1\/projects\/([^/]+)\/export-authorizations$/.exec(path6);
     if (exportAuthorizationMatch) {
       try {
         if (req.method !== "POST") {
@@ -61563,7 +61690,7 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
-    const projectMatch = /^\/api\/v1\/projects\/([^/]+)$/.exec(path5);
+    const projectMatch = /^\/api\/v1\/projects\/([^/]+)$/.exec(path6);
     if (projectMatch) {
       try {
         if (!sessionService || !projectService) {

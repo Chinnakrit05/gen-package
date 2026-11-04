@@ -51,11 +51,12 @@ export function panelRole(id: string): { role: string; print: boolean } {
   if (k === 'side-left' || k === 'left') return { role: 'ผนังข้างซ้าย (ข้อมูลรอง/ตารางโภชนาการ)', print: true }
   if (k === 'side-right' || k === 'right') return { role: 'ผนังข้างขวา (จุดขาย/วิธีใช้)', print: true }
   if (k.startsWith('dust')) return { role: 'ลิ้นกันฝุ่น (ซ่อนตอนปิด ไม่ควรวางลายสำคัญ)', print: true }
-  if (k.startsWith('tongue') || k === 'lip' || k.startsWith('lip-')) return { role: 'ลิ้นเสียบ (ซ่อนตอนปิด)', print: true }
+  if (k.startsWith('tongue') || k === 'lip' || k.startsWith('lip-') || k === 'door-tuck') return { role: 'ลิ้นเสียบ (ซ่อนตอนปิด)', print: true }
   if (k.startsWith('tuck') || k.startsWith('lid') || k.startsWith('cap-') || k.startsWith('tip-') || k === 'door') return { role: 'ฝา (เห็นตอนปิด ใส่ชื่อแบรนด์/ลายเล็ก ๆ ได้)', print: true }
   if (k.startsWith('ear') || k.startsWith('spine') || k.startsWith('roll') || k.startsWith('fin') || k.includes('seam') || k.startsWith('grip')) return { role: 'หูมุม/สัน/ชั้นทบ/ครีบ (ซ่อนตอนประกอบ ไม่ควรวางลาย)', print: true }
   if (k.startsWith('flap')) return { role: 'ฝาปิดบน-ล่าง (ลังลูกฟูก เห็นตอนปิด)', print: true }
   if (k.startsWith('handle')) return { role: 'แผงหูหิ้ว (ตั้งขึ้น เห็นทั้งสองด้าน)', print: true }
+  if (k === 'hanger') return { role: 'แผงแขวน มีรูตรงกลาง วางลายได้เฉพาะริมซ้ายและขวา', print: true }
   if (k.startsWith('gable')) return { role: 'หน้าจั่ว (เห็นตอนปิด)', print: true }
   if (k === 'base' || k === 'bottom' || k.startsWith('base-') || /^[bdls]-base$/.test(k)) return { role: 'ฐาน/ก้นกล่อง (ไม่ค่อยเห็น ใส่ข้อมูลผลิต/รีไซเคิลได้)', print: true }
   if (k === 'top') return { role: 'ด้านบน', print: true }
@@ -239,7 +240,7 @@ const shapeSchema = obj({
 const imageSchema = obj({
   type: en(['image']),
   ...baseProps,
-  src: str('preset:<id>:<#rrggbb> ลายจากไลบรารี · asset:<id> รูปที่ลูกค้าอัปโหลด · svg:<markup> ภาพเวกเตอร์ที่คุณวาดเอง (มี viewBox)'),
+  src: str('motif:<id>:<#พื้น>:<#สีภาพ>:<#สีเส้น> ภาพละเอียดที่ระบบวาดจากพาเลต · preset:<id>:<#rrggbb> ลายจากไลบรารี · asset:<id> รูปแนบ · svg:<markup> ภาพเวกเตอร์สั้น (มี viewBox)'),
   w: num('ความกว้าง มม.'), h: nullable(num('ความสูง มม. (ไม่ใส่ = ตามสัดส่วนรูป)')),
   fit: nullable(en(['cover', 'contain', 'stretch'])), radius: nullable(num('มุมโค้ง มม.')), circle: nullable(bool()),
 })

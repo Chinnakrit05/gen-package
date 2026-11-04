@@ -4,14 +4,12 @@
 // เปิดเฉพาะ local dev (isLegacyAiRouteEnabled) — cloud/เครดิตตามมาทีหลัง (ต้องมีงานเบื้องหลังเพราะคำตอบยาวกว่า box-spec มาก)
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { execFile } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
-import { unlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import Anthropic from '@anthropic-ai/sdk'
 import {
-  ART_MAX_ELEMENTS,
   ART_MIN_TEXT_MM,
   ART_SAFE_MM,
   ARTWORK_SCHEMA,
@@ -43,11 +41,15 @@ import {
 import { DEFAULT_AI_MODEL } from './config'
 import { isLegacyAiRouteEnabled } from './http/legacyAiGuard'
 import { readRequestApiKey } from './modules/ai/requestApiKey'
+import { ARTWORK_MOTIF_GUIDE, expandArtworkMotifs } from './artworkMotifs'
 
 const execFileP = promisify(execFile)
 
 export const MAX_ROUNDS = 2
-const MAX_TOKENS = 24_000
+const MAX_TOKENS = 10_000
+const COMPACT_TOKENS = 5_000
+const COMPACT_TIMEOUT_MS = 80_000
+const LOCAL_ARTWORK_LIMITS = { timeoutMs: 130_000, maxRetries: 0, budgetMs: 220_000 }
 export const MAX_IMAGES = 4
 const MAX_PANELS = 80
 
@@ -93,7 +95,7 @@ export interface ArtworkResult {
 }
 
 // raw = JSON ที่แกะได้ (null = คำตอบไม่มี JSON object → designArtwork ส่งกลับให้แก้เป็นรอบถัดไป), text = คำตอบดิบไว้เล่นซ้ำในรอบแก้
-export type AskArtwork = (messages: Anthropic.MessageParam[]) => Promise<{ raw: unknown; model: string; text?: string }>
+export type AskArtwork = (messages: Anthropic.MessageParam[], compact?: boolean) => Promise<{ raw: unknown; model: string; text?: string }>
 
 // โมเดลตอบกลับมาแต่ใช้ไม่ได้ (refusal / ถูกตัดที่ max_tokens) — cloud แยก refusal ไว้บอกผู้ใช้ให้ปรับคำขอ และคืนเครดิต
 // (คำตอบที่ไม่มี JSON ไม่ใช่ error: คืน raw null ให้วงรอบส่งกลับไปแก้)
@@ -112,6 +114,15 @@ export class ArtworkDeadlineError extends Error {
   }
 }
 
+// A single attempt ran out of time. The caller may still have time for a
+// shorter retry, unlike an exhausted request deadline.
+export class ArtworkAttemptTimeout extends Error {
+  constructor() {
+    super('หมดเวลาออกแบบในรอบนี้')
+    this.name = 'ArtworkAttemptTimeout'
+  }
+}
+
 // รอบหนึ่งต้องมีเวลาอย่างน้อยเท่านี้ ไม่งั้นไม่เริ่ม (เริ่มแล้วโดน timeout = เสียเงินเปล่า)
 const MIN_ROUND_MS = 45_000
 
@@ -120,6 +131,14 @@ export interface ApiAskLimits {
   maxRetries: number
   deadlineMs?: number // epoch ms: งบเวลารวมทุกรอบ (cloud ต้องจบก่อน maxDuration ของ function)
 }
+
+function attemptTimeout(timeoutMs: number, deadlineMs: number | undefined, compact: boolean): number {
+  const remaining = deadlineMs === undefined ? Infinity : deadlineMs - Date.now()
+  if (remaining < MIN_ROUND_MS) throw new ArtworkDeadlineError()
+  return Math.min(timeoutMs, remaining, compact ? COMPACT_TIMEOUT_MS : Infinity)
+}
+
+const COMPACT_RETRY = 'ตอบแบบกระชับในรอบนี้: ใช้ 10–24 ชิ้น รักษาชื่อ/ข้อมูลที่ลูกค้าให้และจัดด้านหลักก่อน ใช้ motif หรือ preset แทน SVG ยาว ตอบ JSON ให้ครบและปิดวงเล็บ'
 
 export const ARTWORK_SYSTEM = `คุณคือนักออกแบบกราฟิกบรรจุภัณฑ์มืออาชีพ หน้าที่คือออกแบบ "หน้าตา" (ลาย ข้อความ โลโก้ ภาพประกอบ) ลงบนแผ่นคลี่ของบรรจุภัณฑ์
 ที่ลูกค้าเลือกไว้แล้ว โดยเขียนเป็น JSON ตาม schema ที่ระบบกำหนด (แผนงานศิลป์) — คุณไม่ต้องรู้ผังแผ่นคลี่ ระบบให้ "รายการแผง" พร้อมขนาดและบทบาท
@@ -133,10 +152,12 @@ export const ARTWORK_SYSTEM = `คุณคือนักออกแบบก�
   curve ใช้ได้เฉพาะข้อความอังกฤษ/ตัวเลข (ภาษาไทยห้าม สระจะหลุด)
 - shape: rect/ellipse/line/triangle/polygon/star — แถบสี กรอบ เส้นคั่น พื้นหลังป้าย (fill/stroke เป็น #rrggbb หรือ none, grad ไล่สีได้)
 - image: src เป็นหนึ่งใน
+  · "motif:<id>:<#พื้น>:<#สีภาพ>:<#สีเส้น>" ภาพวาดละเอียดพร้อมใช้ เปลี่ยนสีให้เข้ากับงานได้ ใช้แทน SVG ยาวเมื่อภาพเหมาะกับโจทย์
+${ARTWORK_MOTIF_GUIDE}
   · "preset:<id>:<#สี>" ลายจากไลบรารี: ${PRESETS.map((p) => `${p.id} (${p.nameTh})`).join(', ')}
   · "asset:<id>" รูปที่ลูกค้าอัปโหลด (ระบบบอก id ให้ในคำขอ เช่น โลโก้) — ต้องใช้เมื่อลูกค้าแนบโลโก้ วางให้เด่นบนหน้ากล่อง
   · "svg:<svg viewBox=\\"0 0 W H\\">…</svg>" ภาพเวกเตอร์ที่คุณวาดเอง (ภาพหลัก ไอคอน ลายประดับ บาร์โค้ดจำลอง) ใช้ path/rect/circle/ellipse/polygon/
-    text/linearGradient ได้ ห้าม script/style/image/use/ลิงก์ภายนอก ความยาวต่อรูปไม่เกิน 60,000 ตัวอักษร — วาดให้เรียบง่ายแต่สวย (flat/line art)
+    linearGradient ได้ ห้าม script/style/image/use/ลิงก์ภายนอก ใช้กับภาพเฉพาะที่ไม่มี motif เหมาะสม ใช้ path กระชับและไม่เกินประมาณ 1,500 ตัวอักษรต่อรูป
   w = กว้าง มม. (h ไม่ใส่ = ตามสัดส่วนรูป)
 - path: รูปวาดเองจากจุด anchors (0..1 ในกรอบ w×h) สำหรับเส้นโค้ง/คลื่น/รูปปิดง่าย ๆ
 - nutrition: ตารางโภชนาการแบบ อย. (ใช้กับอาหาร/เครื่องดื่ม) ความสูงระบบคำนวณเอง (~1.2×w)
@@ -148,10 +169,18 @@ export const ARTWORK_SYSTEM = `คุณคือนักออกแบบก�
   บาร์โค้ด เลขทะเบียน · ผนังข้าง = จุดขาย/ตารางโภชนาการ · ฝา = แบรนด์ซ้ำเล็ก ๆ · ปีกทากาว ห้ามวาง · ลิ้นกันฝุ่น/ลิ้นเสียบ วางได้แค่ลายพื้น
 - ฉลากขวด/หลอด (แผง label): ด้านหน้าอยู่กึ่งกลางความกว้างของฉลาก ด้านหลังอยู่สองข้าง (ซ้าย-ขวาสุดคือหลังขวด) · ถุง: แผง front/back แยก หรือ film ผืนเดียว
 - ใช้สีไม่เกิน 3-4 สี มีลำดับชั้นชัด (ใหญ่-กลาง-เล็ก) เว้นที่ว่าง ไม่ยัดจนแน่น ตัวอักษรสีตัดกับพื้นให้อ่านออก
+- เมื่อโจทย์ต้องการงานละเอียด ให้มีภาพเด่นชิ้นเดียวขนาดประมาณ 60–75% ของหน้ากว้าง มีกลุ่มชื่อด้านบนและข้อมูลด้านล่าง แยกข้อความให้แก้ได้
+  ใช้กรอบเส้นบาง ลายข้างแคบตามสัดส่วน และชุดไอคอนเล็กที่ใช้สีร่วมกัน จัดหลังกล่องเป็นกลุ่มอ่านง่าย กันระยะข้อความจากขอบและภาพ
+- เมื่อ motif ตรงกับโจทย์ ให้ใช้ src แบบ motif แม้โจทย์จะเรียกภาพนั้นว่า SVG เพราะระบบจะวาด SVG ละเอียดให้เอง
+  ตัวอย่างภาพสวนหลังฝนใช้ rain-window เป็นภาพหลัก, leaf-panel/grass-panel ที่ผนังข้าง, drop-icon/leaf-icon/grass-icon บนหลัง
+  ใช้คู่สีที่เห็นเส้นชัด เช่น ครามเป็นพื้น เขียวเป็นสีภาพ ทองเป็นสีเส้น เลือกภาพต่างจากตัวอย่างเมื่อโจทย์ต้องการ
+- ตัวอย่างชิ้นภาพที่สมบูรณ์: {"type":"image","panel":"front","x":14,"y":35,"w":56,"src":"motif:rain-window:#14283f:#257d78:#d7ae6a"}
+- ตรวจว่าข้อความทุกชิ้นมี text และ size ที่มากกว่า 0 และขนาด+ตำแหน่งไม่ทับภาพหลักหรือกรอบ
+- เส้นคั่นใช้สี่เหลี่ยมบางเติมสีหรือ shape line ที่กำหนด stroke และ strokeW ให้ชัดเจน
 - ข้อมูลที่ต้องถูกต้องตามกฎหมาย (เลข อย., บาร์โค้ด GS1, ส่วนประกอบจริง, ที่อยู่ผู้ผลิต) ถ้าลูกค้าไม่ได้ให้ ให้ใส่เป็นช่องกรอก เช่น "เลขสารบบอาหาร: [กรอก]"
   ห้ามแต่งตัวเลขขึ้นเอง บาร์โค้ดวาดเป็นภาพจำลองแล้วเขียนกำกับว่า "ตัวอย่างบาร์โค้ด"
 - รูปอ้างอิงที่ลูกค้าแนบ = แรงบันดาลใจเรื่องโทนสี อารมณ์ สไตล์ตัวอักษร (ห้ามลอกยกมา) · โลโก้ที่แนบ = ต้องวางจริงด้วย asset id
-- จำนวนชิ้น 8-${Math.min(60, ART_MAX_ELEMENTS)} ชิ้นกำลังดี ตั้ง id สื่อความหมาย (brand, product-name, slogan, hero, ingredients …)
+- ปกติใช้ 8–40 ชิ้นตามจำนวนแผงและโจทย์ จัดรายละเอียดเป็นกลุ่มแทนการสร้างชิ้นจิ๋วจำนวนมาก ตั้ง id สื่อความหมาย
 
 ## วิธีตอบ
 - ตอบ JSON ตาม schema เท่านั้น ถ้าได้รายการข้อผิดพลาดกลับมา ให้ส่ง JSON ฉบับแก้แล้ว "ทั้งฉบับ"
@@ -164,7 +193,7 @@ export function buildArtworkUserContent(req: ArtworkRequest): string {
   const lines: string[] = [
     `ชนิดงาน: ${KIND_TH[req.kind]} (template ${req.template}) วัสดุ ${mat ? `${mat.nameTh} (${mat.id})` : req.materialId} ขนาด W×D×H = ${req.box.W}×${req.box.D}×${req.box.H} มม.`,
     `แผ่นคลี่ ${req.sheet.w.toFixed(1)}×${req.sheet.h.toFixed(1)} มม. — แผงที่วางชิ้นงานได้ (id: กว้าง×สูง มม. — บทบาท):`,
-    ...req.panels.map((p) => `- ${p.id}: ${p.w.toFixed(1)}×${p.h.toFixed(1)} — ${p.role}`),
+    ...req.panels.filter((p) => p.print).map((p) => `- ${p.id}: ${p.w.toFixed(1)}×${p.h.toFixed(1)} — ${p.role}`),
     req.fillColor ? `สีพื้นปัจจุบัน ${req.fillColor} (เปลี่ยนได้)` : 'ยังไม่มีสีพื้น',
     req.existing > 0 ? `งานนี้มีชิ้นงานเดิม ${req.existing} ชิ้น — แบบใหม่ของคุณจะใช้แทนหรือเพิ่มต่อตามที่ลูกค้าเลือก ออกแบบให้ครบในตัว` : 'งานว่าง ออกแบบใหม่ทั้งหมด',
   ]
@@ -208,32 +237,43 @@ export function firstUserMessage(req: ArtworkRequest): Anthropic.MessageParam {
 export async function designArtwork(ask: AskArtwork, req: ArtworkRequest, maxRounds = MAX_ROUNDS): Promise<ArtworkResult> {
   const messages: Anthropic.MessageParam[] = [firstUserMessage(req)]
   const rounds: ArtworkRound[] = []
+  const printable = new Set(req.panels.filter((p) => p.print).map((p) => p.id))
   let model = ''
   let last: { plan: ArtworkPlan; issues: ArtIssue[] } | null = null
+  let compact = false
   for (let attempt = 1; attempt <= maxRounds; attempt++) {
     let answer: Awaited<ReturnType<AskArtwork>>
     try {
-      answer = await ask(messages)
+      answer = await ask(messages, compact)
     } catch (error) {
       // งบเวลาหมดก่อนรอบแก้ แต่มีแบบจากรอบก่อนอยู่แล้ว → ส่งแบบนั้นไป (client ตัดชิ้นที่ผิดออกตอน compile) ดีกว่าล้มทั้งคำขอ
-      if (error instanceof ArtworkDeadlineError && last) break
+      const recoverable = error instanceof ArtworkAttemptTimeout
+        || (error instanceof ArtworkResponseError && error.reason === 'max_tokens')
+      if (last && (recoverable || error instanceof ArtworkDeadlineError)) break
+      if (recoverable && attempt < maxRounds) {
+        messages.splice(1, messages.length - 1, { role: 'user', content: COMPACT_RETRY })
+        compact = true
+        continue
+      }
       throw error
     }
     model = answer.model
-    const parsed = parseArtworkPlan(answer.raw)
+    const parsed = parseArtworkPlan(expandArtworkMotifs(answer.raw))
     let issues: ArtIssue[]
     let plan: ArtworkPlan | null = null
     if (!parsed.ok) issues = parsed.issues
     else {
       plan = parsed.plan
       issues = [...parsed.issues, ...checkArtworkPlan(plan, req.panels)]
-      last = { plan, issues }
+      if (plan.elements.some((e) => printable.has(e.panel))) last = { plan, issues }
+      else issues.push({ severity: 'error', code: 'no-printable-art', message: 'วางองค์ประกอบอย่างน้อยหนึ่งชิ้นบนแผงที่พิมพ์ได้' })
     }
     const ok = plan !== null && !issues.some((i) => i.severity === 'error')
     rounds.push({ attempt, plan, issues, ok })
     if (ok && plan) return { ok: true, plan, issues, rounds, model, mock: false }
     // ชิ้นที่ผิดถูกตัดทิ้งตอน parse แล้ว — ถ้ายังเหลือชิ้นดีพอ ไม่ต้องเสียรอบแก้ (ประหยัดเวลา/ค่าใช้จ่าย)
-    if (plan && plan.elements.length >= 4 && !issues.some((i) => i.code === 'panel-unknown')) {
+    if (plan && plan.elements.filter((e) => printable.has(e.panel)).length >= 4
+      && !issues.some((i) => ['panel-unknown', 'image-invalid', 'svg-invalid', 'svg-too-large'].includes(i.code))) {
       return { ok: true, plan, issues, rounds, model, mock: false }
     }
     messages.push(
@@ -255,38 +295,38 @@ function artworkModelOptions(model: string) {
 export function apiAskWithUsage(
   apiKey: string,
   model: string,
-  limits: ApiAskLimits = { timeoutMs: 240_000, maxRetries: 1 },
+  limits: ApiAskLimits = LOCAL_ARTWORK_LIMITS,
 ): { ask: AskArtwork; usage: () => ClaudeUsage | null; report: () => AiUsageReport | null } {
   const client = new Anthropic({ apiKey, timeout: limits.timeoutMs, maxRetries: limits.maxRetries })
   const options = artworkModelOptions(model)
   let total: ClaudeUsage | null = null
   let report: AiUsageReport | null = null
-  const ask: AskArtwork = async (messages) => {
-    let timeout = limits.timeoutMs
-    if (limits.deadlineMs !== undefined) {
-      const remaining = limits.deadlineMs - Date.now()
-      if (remaining < MIN_ROUND_MS) throw new ArtworkDeadlineError()
-      timeout = Math.min(timeout, remaining)
-    }
+  const ask: AskArtwork = async (messages, compact = false) => {
+    const timeout = attemptTimeout(limits.timeoutMs, limits.deadlineMs, compact)
     const params = {
       model,
-      max_tokens: MAX_TOKENS,
+      max_tokens: compact ? COMPACT_TOKENS : MAX_TOKENS,
       // system + schema คงที่ทุกคำขอ → cache ไว้ (รอบแก้/คำขอซ้ำภายใน 5 นาทีอ่านจาก cache)
       system: [{ type: 'text' as const, text: ARTWORK_SYSTEM + JSON_INSTRUCTION, cache_control: { type: 'ephemeral' as const } }],
       messages,
-      ...(options.effort ? { output_config: { effort: options.effort } } : {}),
+      ...(options.effort ? { output_config: { effort: compact ? 'low' as const : options.effort } } : {}),
     }
-    const msg = options.serverFallback
-      ? await client.beta.messages.create(
+    const requestOptions = { timeout, signal: AbortSignal.timeout(timeout) }
+    const msg = await (options.serverFallback
+      ? client.beta.messages.create(
           {
             ...params,
             betas: [SERVER_FALLBACK_BETA],
             // @ts-expect-error fallbacks: "default" ยังไม่อยู่ใน type ของ SDK 0.111 (ดู boxSpec.ts)
             fallbacks: 'default',
           },
-          { timeout },
+          requestOptions,
         )
-      : await client.messages.create(params, { timeout })
+      : client.messages.create(params, requestOptions)).catch((error: unknown) => {
+        if (requestOptions.signal.aborted || error instanceof Anthropic.APIConnectionTimeoutError
+          || (error instanceof Anthropic.APIError && error.status === 504)) throw new ArtworkAttemptTimeout()
+        throw error
+      })
     const u = msg.usage
     const call = {
       inputTokens: u.input_tokens,
@@ -318,16 +358,18 @@ export const JSON_INSTRUCTION =
   JSON.stringify(ARTWORK_SCHEMA)
 
 export function cliAsk(model: string | undefined, oauthToken: string | undefined, images: ArtworkImage[]): AskArtwork {
-  return async (messages) => {
+  const deadlineMs = Date.now() + LOCAL_ARTWORK_LIMITS.budgetMs
+  return async (messages, compact = false) => {
     // CLI รับรูปตรงไม่ได้ — เขียนเป็นไฟล์ชั่วคราวให้เปิดอ่านเอง (ลบทิ้งเมื่อเสร็จ)
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'packit-art-'))
     const files: string[] = []
-    for (const im of images) {
-      const ext = im.mediaType.split('/')[1].replace('jpeg', 'jpg')
-      const p = path.join(os.tmpdir(), `art-ref-${randomUUID()}.${ext}`)
-      await writeFile(p, Buffer.from(im.data, 'base64'))
-      files.push(p)
-    }
     try {
+      for (const im of images) {
+        const ext = im.mediaType.split('/')[1].replace('jpeg', 'jpg')
+        const p = path.join(dir, `ref-${files.length + 1}.${ext}`)
+        files.push(p)
+        await writeFile(p, Buffer.from(im.data, 'base64'), { mode: 0o600 })
+      }
       const imgNote = files.length
         ? `ลูกค้าแนบรูปไว้ที่ไฟล์ (เปิดดูด้วยเครื่องมือ Read ก่อนออกแบบ):\n${files.map((f, i) => `[${i + 1}] ${images[i].role === 'logo' ? 'โลโก้' : 'รูปอ้างอิง'}: ${f}`).join('\n')}\n\n`
         : ''
@@ -337,16 +379,29 @@ export function cliAsk(model: string | undefined, oauthToken: string | undefined
           return `## ${m.role === 'user' ? 'ลูกค้า/ระบบ' : 'คำตอบก่อนหน้าของคุณ'}\n${body}`
         })
         .join('\n\n')
-      const args = ['-p', `${ARTWORK_SYSTEM}${JSON_INSTRUCTION}\n\n${imgNote}${transcript}`, '--output-format', 'json']
+      const args = [
+        '-p', '--output-format', 'json', '--effort', 'low',
+        '--no-session-persistence', '--setting-sources', '', '--strict-mcp-config',
+        '--system-prompt', ARTWORK_SYSTEM + JSON_INSTRUCTION,
+        '--tools', files.length ? 'Read' : '',
+      ]
+      if (files.length) {
+        args.push('--permission-mode', 'dontAsk', '--allowedTools', ...files.map((file) => `Read(./${path.basename(file)})`))
+      }
       if (model) args.push('--model', model)
-      const pending = execFileP(resolveClaudeBin(), args, { timeout: 420_000, maxBuffer: 8 * 1024 * 1024, cwd: os.tmpdir(), env: cliEnv(oauthToken) })
-      pending.child.stdin?.end()
-      const { stdout } = await pending
+      const timeout = attemptTimeout(LOCAL_ARTWORK_LIMITS.timeoutMs, deadlineMs, compact)
+      const pending = execFileP(resolveClaudeBin(), args, { timeout, maxBuffer: 8 * 1024 * 1024, cwd: dir, env: cliEnv(oauthToken) })
+      pending.child.stdin?.on('error', () => {}) // The process can exit before it reads the prompt.
+      pending.child.stdin?.end(imgNote + transcript)
+      const { stdout } = await pending.catch((error: unknown) => {
+        if (error && typeof error === 'object' && 'killed' in error && error.killed === true) throw new ArtworkAttemptTimeout()
+        throw new Error('Claude CLI ทำงานไม่สำเร็จ ตรวจการตั้งค่าแล้วลองใหม่')
+      })
       const envelope = JSON.parse(stdout) as { is_error?: boolean; result?: string }
       if (envelope.is_error || typeof envelope.result !== 'string') throw new Error('Claude CLI ตอบกลับผิดรูปแบบ')
       return { raw: extractJson(envelope.result), model: model ?? 'claude-cli', text: envelope.result }
     } finally {
-      for (const f of files) void unlink(f).catch(() => {})
+      await rm(dir, { recursive: true, force: true }).catch(() => {})
     }
   }
 }
@@ -482,7 +537,7 @@ export async function handleAiArtwork(req: IncomingMessage, res: ServerResponse,
         send(res, 500, { error: 'BOX_SPEC_BACKEND=api แต่ไม่ได้ตั้ง ANTHROPIC_API_KEY' })
         return
       }
-      ;({ ask, report } = apiAskWithUsage(apiKey, model))
+      ;({ ask, report } = apiAskWithUsage(apiKey, model, { ...LOCAL_ARTWORK_LIMITS, deadlineMs: Date.now() + LOCAL_ARTWORK_LIMITS.budgetMs }))
     } else if ((backend === 'cli' || !backend) && (await hasClaudeCli())) {
       // CLI ไม่รายงานโทเคนของ API (นับรวม overhead ของ Claude Code) จึงไม่มีสรุปค่าใช้จ่าย
       ask = cliAsk(request.model ?? env.BOX_SPEC_MODEL, env.CLAUDE_CODE_OAUTH_TOKEN, request.images)
@@ -500,7 +555,8 @@ export async function handleAiArtwork(req: IncomingMessage, res: ServerResponse,
     const result = await designArtwork(ask, request)
     send(res, 200, { ...result, usage: report?.() ?? null })
   } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) send(res, 502, { error: 'Anthropic API key ไม่ถูกต้อง' })
+    if (err instanceof ArtworkDeadlineError || err instanceof ArtworkAttemptTimeout) send(res, 504, { error: 'AI ใช้เวลาออกแบบเกินกำหนด ลองใหม่อีกครั้ง' })
+    else if (err instanceof Anthropic.AuthenticationError) send(res, 502, { error: 'Anthropic API key ไม่ถูกต้อง' })
     else if (err instanceof Anthropic.RateLimitError) send(res, 429, { error: 'เรียกถี่เกินไป รอสักครู่แล้วลองใหม่' })
     else if (err instanceof Anthropic.APIError) {
       send(res, 502, { error: `Claude API ขัดข้อง (${err.status ?? '?'}): ${err.message.replace(/sk-ant-[\w-]+/g, '[key]').slice(0, 400)}` })

@@ -10,6 +10,7 @@ vi.mock('@anthropic-ai/sdk', () => {
     messages = { create: sdk.create }
     beta = { messages: { create: sdk.betaCreate } }
     static APIError = class extends Error {}
+    static APIConnectionTimeoutError = class extends Error {}
     static AuthenticationError = class extends Error {}
     static RateLimitError = class extends Error {}
     constructor(readonly options: unknown) {}
@@ -17,7 +18,8 @@ vi.mock('@anthropic-ai/sdk', () => {
   return { default: MockAnthropic }
 })
 
-import { apiAskWithUsage, ArtworkDeadlineError, JSON_INSTRUCTION } from './aiArtwork'
+import Anthropic from '@anthropic-ai/sdk'
+import { apiAskWithUsage, ArtworkAttemptTimeout, ArtworkDeadlineError, JSON_INSTRUCTION } from './aiArtwork'
 
 const reply = (
   text: string,
@@ -41,7 +43,7 @@ describe('apiAskWithUsage', () => {
     const first = await ask([{ role: 'user', content: 'x' }])
     expect(first).toEqual({ raw: { a: 1 }, model: 'm-resolved', text: '{"a":1}' })
     const [params, options] = sdk.betaCreate.mock.calls[0] as [Record<string, unknown>, { timeout: number }]
-    expect(params).toMatchObject({ model: 'claude-opus-5-5', max_tokens: 24_000, fallbacks: 'default' })
+    expect(params).toMatchObject({ model: 'claude-opus-5-5', max_tokens: 10_000, fallbacks: 'default' })
     // schema อยู่ใน system (cache ได้) — ห้ามส่ง output_config.format: schema นี้มีช่อง union เกินเพดาน API (16)
     expect(params.output_config).toEqual({ effort: 'medium' })
     expect(params.system).toEqual([{ type: 'text', text: expect.stringContaining(JSON_INSTRUCTION), cache_control: { type: 'ephemeral' } }])
@@ -85,11 +87,22 @@ describe('apiAskWithUsage', () => {
     sdk.create.mockResolvedValueOnce(reply('นี่คือแบบ:\n```json\n{"name":"x"}\n```'))
     await expect(open.ask([])).resolves.toMatchObject({ raw: { name: 'x' } })
     // ไม่มี deadline → timeout = ค่าตั้งต้นของ limits; รุ่นที่ไม่อยู่ในชุด fallback ใช้ messages.create ปกติ
-    expect(sdk.create.mock.calls[0][1]).toEqual({ timeout: 240_000 })
+    expect(sdk.create.mock.calls[0][1]).toMatchObject({ timeout: 240_000, signal: expect.any(AbortSignal) })
     expect(sdk.betaCreate).not.toHaveBeenCalled()
     // usage ยังสะสมแม้คำตอบใช้ไม่ได้ (จ่าย provider ไปแล้ว)
     expect(open.usage()).toEqual({ inputTokens: 400, outputTokens: 200, cacheReadTokens: 0, cacheCreationTokens: 0 })
     // รุ่นที่ไม่มี effort (ไม่ใช่ตระกูล 5) ไม่ส่ง output_config เลย
     expect(sdk.create.mock.calls[0][0]).not.toHaveProperty('output_config')
+  })
+
+  it('maps SDK timeouts to a retryable artwork attempt and gives the compact retry its own lower limits', async () => {
+    const { ask } = apiAskWithUsage('sk-test', 'claude-opus-5-5', { timeoutMs: 130_000, maxRetries: 0, deadlineMs: Date.now() + 220_000 })
+    sdk.betaCreate.mockRejectedValueOnce(new Anthropic.APIConnectionTimeoutError())
+    await expect(ask([])).rejects.toBeInstanceOf(ArtworkAttemptTimeout)
+
+    sdk.betaCreate.mockResolvedValueOnce(reply('{"elements":[]}'))
+    await ask([], true)
+    expect(sdk.betaCreate.mock.calls[1][0]).toMatchObject({ max_tokens: 5_000, output_config: { effort: 'low' } })
+    expect(sdk.betaCreate.mock.calls[1][1]).toMatchObject({ timeout: 80_000 })
   })
 })

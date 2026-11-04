@@ -1223,7 +1223,10 @@ describe('API router — AI artwork', () => {
     else expect(data).not.toHaveProperty('usage')
   })
 
-  it('refunds the credit and answers 502 when the artwork provider fails', async () => {
+  it.each([
+    ['provider', 502, 'บริการ AI ขัดข้อง ลองใหม่อีกครั้ง'],
+    ['timeout', 504, 'AI ใช้เวลาออกแบบเกินกำหนด ลองใหม่อีกครั้ง'],
+  ] as const)('refunds the credit when the artwork provider fails with %s', async (kind, status, message) => {
     const calls: unknown[] = []
     const logSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const configuredRouter = billingRouter(billingRepositoryStub({
@@ -1236,17 +1239,17 @@ describe('API router — AI artwork', () => {
       ai: { anthropicApiKey: serverAiKey, model: 'm' },
       aiService: {
         generateBoxSpec: async () => { throw new Error('must not be called') },
-        generateArtwork: async () => { throw new AiProviderError('provider', new Error('upstream exploded')) },
+        generateArtwork: async () => { throw new AiProviderError(kind, new Error('upstream exploded')) },
       },
     })
     const target = response()
     await configuredRouter(artworkRequest({ ...artworkBody, images: [] }), target.res)
 
-    expect(target.res.statusCode).toBe(502)
-    expect(target.readBody()).toMatchObject({ error: { code: 'AI_PROVIDER_UNAVAILABLE' } })
+    expect(target.res.statusCode).toBe(status)
+    expect(target.readBody()).toMatchObject({ error: { code: 'AI_PROVIDER_UNAVAILABLE', message } })
     expect(calls).toEqual([['settle', aiRequestId, 'failed', { hasImage: false }]])
     expect(logLines(logSpy)).toEqual([
-      expect.objectContaining({ event: 'ai_provider_error', route: 'POST /api/v1/ai/artwork', status: 502, kind: 'provider' }),
+      expect.objectContaining({ event: 'ai_provider_error', route: 'POST /api/v1/ai/artwork', status, kind }),
     ])
   })
 
