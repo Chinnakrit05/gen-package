@@ -54067,9 +54067,11 @@ function publicStatus(asset) {
   };
 }
 var AssetService = class {
-  constructor(repository, storage) {
+  // quota = โควตาพื้นที่เก็บงาน ตรวจก่อนออกตั๋วอัปโหลด (null = ยังไม่เปิดใช้ — isStorageQuotaEnabled ใน server/http/router.ts)
+  constructor(repository, storage, quota = null) {
     this.repository = repository;
     this.storage = storage;
+    this.quota = quota;
   }
   async ticket(asset) {
     if (asset.state !== "pending") return { asset: publicStatus(asset), upload: null };
@@ -54089,6 +54091,13 @@ var AssetService = class {
     };
   }
   async createIntent(actor, input2) {
+    await this.quota?.assert(actor, {
+      workspaceId: input2.workspaceId,
+      projectId: null,
+      operationId: input2.operationId,
+      document: null,
+      extraBytes: input2.declaredSize
+    });
     const hash2 = requestHash({ operationType: "create-asset", ...input2 });
     const asset = await this.repository.createIntent(actor, {
       ...input2,
@@ -54389,11 +54398,11 @@ var SupabaseObjectStorage = class {
     if (error62) throw error62;
   }
 };
-function createSupabaseAssetService(config2) {
+function createSupabaseAssetService(config2, quota = null) {
   const client = createClient(config2.url, config2.secretKey, {
     auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false }
   });
-  return new AssetService(new SupabaseAssetRepository(client), new SupabaseObjectStorage(client));
+  return new AssetService(new SupabaseAssetRepository(client), new SupabaseObjectStorage(client), quota);
 }
 
 // server/logging.ts
@@ -54482,6 +54491,14 @@ var aiReservationResultSchema = external_exports.object({
 }).strict();
 var aiSettlementResultSchema = external_exports.object({
   credits: creditsSchema
+}).strict();
+var byteCountSchema = external_exports.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+var storageQuotaResultSchema = external_exports.object({
+  ok: external_exports.boolean(),
+  plan: external_exports.enum(["free", "pro"]),
+  limitBytes: byteCountSchema.min(1),
+  usedBytes: byteCountSchema,
+  projectedBytes: byteCountSchema
 }).strict();
 var orderResultSchema = external_exports.object({
   id: external_exports.uuid(),
@@ -54695,8 +54712,34 @@ var SupabaseBillingRepository = class {
     if (!parsed.success) throw this.contractError("fulfil_order", actor, parsed.error);
     return { ...parsed.data, checkoutUrl: null };
   }
+  // โควตาพื้นที่เก็บงาน (ยังไม่เปิดใช้ — เรียกผ่าน StorageQuota เฉพาะเมื่อ isStorageQuotaEnabled)
+  async checkStorageQuota(actor, input2, openAccess) {
+    const { data, error: error62 } = await this.client.rpc("check_storage_quota", {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: input2.workspaceId,
+      p_project_id: input2.projectId,
+      p_operation_id: input2.operationId,
+      p_document: input2.document,
+      p_extra_bytes: input2.extraBytes,
+      p_open_access: openAccess
+    });
+    if (error62) throw this.databaseError(error62, "check_storage_quota", actor, input2.projectId ? { projectId: input2.projectId } : {});
+    const parsed = storageQuotaResultSchema.safeParse(data);
+    if (!parsed.success) throw this.contractError("check_storage_quota", actor, parsed.error);
+    return parsed.data;
+  }
 };
 function createSupabaseBillingRepository(config2) {
+  const client = createClient(config2.url, config2.secretKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false
+    }
+  });
+  return new SupabaseBillingRepository(client);
+}
+function createSupabaseStorageQuotaRepository(config2) {
   const client = createClient(config2.url, config2.secretKey, {
     auth: {
       autoRefreshToken: false,
@@ -54902,6 +54945,138 @@ var MATERIALS = [
     note: "\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19 + \u0E44\u0E14\u0E04\u0E31\u0E17\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B \u2014 blueprint \u0E17\u0E35\u0E48\u0E40\u0E2B\u0E47\u0E19\u0E04\u0E37\u0E2D\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14\u0E02\u0E2D\u0E07\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E2A\u0E48\u0E07\u0E1E\u0E34\u0E21\u0E1E\u0E4C"
   },
   {
+    id: "sticker-art-gloss",
+    nameTh: "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E2D\u0E32\u0E23\u0E4C\u0E15\u0E21\u0E31\u0E19",
+    detail: "\u0E09\u0E25\u0E32\u0E01\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E2A\u0E35\u0E2A\u0E14 \xB7 \u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E42\u0E1B\u0E23\u0E42\u0E21\u0E0A\u0E31\u0E19 \xB7 \u0E09\u0E25\u0E32\u0E01\u0E02\u0E19\u0E21/\u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01",
+    thickness: 0.1,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C + \u0E44\u0E14\u0E04\u0E31\u0E17",
+    color: "#ffffff",
+    roughness: 0.2,
+    note: "\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E2D\u0E32\u0E23\u0E4C\u0E15\u0E1C\u0E34\u0E27\u0E21\u0E31\u0E19\u0E40\u0E07\u0E32 \u0E2A\u0E35\u0E2A\u0E14\u0E04\u0E21\u0E0A\u0E31\u0E14 \u0E23\u0E32\u0E04\u0E32\u0E1B\u0E23\u0E30\u0E2B\u0E22\u0E31\u0E14 \u2014 \u0E44\u0E21\u0E48\u0E01\u0E31\u0E19\u0E19\u0E49\u0E33 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E43\u0E0A\u0E49\u0E43\u0E19\u0E23\u0E48\u0E21"
+  },
+  {
+    id: "sticker-kraft",
+    nameTh: "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E04\u0E23\u0E32\u0E1F\u0E17\u0E4C",
+    detail: "\u0E09\u0E25\u0E32\u0E01\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E2D\u0E2D\u0E23\u0E4C\u0E41\u0E01\u0E19\u0E34\u0E01/\u0E2D\u0E35\u0E42\u0E04\u0E48 \xB7 \u0E09\u0E25\u0E32\u0E01\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48 \xB7 \u0E02\u0E2D\u0E07\u0E17\u0E33\u0E21\u0E37\u0E2D",
+    thickness: 0.12,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C + \u0E44\u0E14\u0E04\u0E31\u0E17",
+    color: "#b48a5a",
+    roughness: 0.95,
+    surface: "kraft",
+    inkMultiply: true,
+    note: "\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E2A\u0E35\u0E19\u0E49\u0E33\u0E15\u0E32\u0E25\u0E40\u0E2B\u0E47\u0E19\u0E40\u0E2A\u0E49\u0E19\u0E43\u0E22 \u0E44\u0E21\u0E48\u0E21\u0E35\u0E2B\u0E21\u0E36\u0E01\u0E02\u0E32\u0E27 \u2014 \u0E2A\u0E35\u0E02\u0E32\u0E27/\u0E2A\u0E35\u0E2D\u0E48\u0E2D\u0E19\u0E43\u0E19\u0E07\u0E32\u0E19\u0E08\u0E30\u0E44\u0E21\u0E48\u0E02\u0E36\u0E49\u0E19 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E25\u0E32\u0E22\u0E2A\u0E35\u0E40\u0E02\u0E49\u0E21\u0E40\u0E2A\u0E49\u0E19\u0E0A\u0E31\u0E14"
+  },
+  {
+    id: "sticker-felt",
+    nameTh: "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E40\u0E17\u0E47\u0E01\u0E0B\u0E4C\u0E40\u0E08\u0E2D\u0E23\u0E4C",
+    detail: "\u0E09\u0E25\u0E32\u0E01\u0E44\u0E27\u0E19\u0E4C/\u0E2A\u0E38\u0E23\u0E32\u0E04\u0E23\u0E32\u0E1F\u0E17\u0E4C \xB7 \u0E09\u0E25\u0E32\u0E01\u0E19\u0E49\u0E33\u0E2B\u0E2D\u0E21 \xB7 \u0E02\u0E2D\u0E07\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21",
+    thickness: 0.15,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C + \u0E44\u0E14\u0E04\u0E31\u0E17 (\u0E1B\u0E31\u0E4A\u0E21\u0E19\u0E39\u0E19/\u0E1F\u0E2D\u0E22\u0E25\u0E4C\u0E44\u0E14\u0E49)",
+    color: "#f5f1e6",
+    roughness: 0.95,
+    surface: "felt",
+    note: "\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E40\u0E19\u0E37\u0E49\u0E2D\u0E1F\u0E39\u0E21\u0E35\u0E1C\u0E34\u0E27\u0E2A\u0E31\u0E21\u0E1C\u0E31\u0E2A (felt) \u0E2A\u0E35\u0E02\u0E32\u0E27\u0E19\u0E27\u0E25 \u2014 \u0E14\u0E39\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E40\u0E02\u0E49\u0E32\u0E01\u0E31\u0E1A\u0E1F\u0E2D\u0E22\u0E25\u0E4C/\u0E1B\u0E31\u0E4A\u0E21\u0E19\u0E39\u0E19 \u0E2A\u0E35\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E19\u0E38\u0E48\u0E21\u0E01\u0E27\u0E48\u0E32\u0E2D\u0E32\u0E23\u0E4C\u0E15\u0E40\u0E25\u0E47\u0E01\u0E19\u0E49\u0E2D\u0E22"
+  },
+  {
+    id: "sticker-silver",
+    nameTh: "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E40\u0E21\u0E17\u0E31\u0E25\u0E25\u0E34\u0E01\u0E40\u0E07\u0E34\u0E19",
+    detail: "\u0E09\u0E25\u0E32\u0E01\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \xB7 \u0E09\u0E25\u0E32\u0E01\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07 \xB7 \u0E42\u0E25\u0E42\u0E01\u0E49\u0E40\u0E07\u0E32",
+    thickness: 0.06,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C + \u0E44\u0E14\u0E04\u0E31\u0E17",
+    color: "#d3d6db",
+    roughness: 0.3,
+    metalness: 0.85,
+    note: "\u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E40\u0E04\u0E25\u0E37\u0E2D\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E40\u0E07\u0E32 \u0E2B\u0E21\u0E36\u0E01\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E17\u0E31\u0E1A\u0E08\u0E30\u0E2D\u0E2D\u0E01\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E1A\u0E42\u0E25\u0E2B\u0E30 \u0E2A\u0E48\u0E27\u0E19\u0E17\u0E35\u0E48\u0E44\u0E21\u0E48\u0E21\u0E35\u0E25\u0E32\u0E22/\u0E2A\u0E35\u0E02\u0E32\u0E27\u0E40\u0E1B\u0E47\u0E19\u0E40\u0E19\u0E37\u0E49\u0E2D\u0E40\u0E07\u0E34\u0E19"
+  },
+  {
+    id: "sticker-holo",
+    nameTh: "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E42\u0E2E\u0E42\u0E25\u0E41\u0E01\u0E23\u0E21",
+    detail: "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E2A\u0E30\u0E2A\u0E21/\u0E41\u0E1F\u0E19\u0E2D\u0E32\u0E23\u0E4C\u0E15 \xB7 \u0E0B\u0E35\u0E25\u0E23\u0E31\u0E1A\u0E1B\u0E23\u0E30\u0E01\u0E31\u0E19 \xB7 \u0E02\u0E2D\u0E07\u0E41\u0E15\u0E48\u0E07\u0E43\u0E2B\u0E49\u0E40\u0E14\u0E48\u0E19",
+    thickness: 0.06,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C + \u0E44\u0E14\u0E04\u0E31\u0E17",
+    color: "#d9dde6",
+    roughness: 0.32,
+    metalness: 0.6,
+    surface: "holo",
+    note: "\u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E42\u0E2E\u0E42\u0E25\u0E41\u0E01\u0E23\u0E21\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E1A\u0E23\u0E38\u0E49\u0E07\u0E15\u0E32\u0E21\u0E21\u0E38\u0E21\u0E21\u0E2D\u0E07 \u0E2A\u0E48\u0E27\u0E19\u0E17\u0E35\u0E48\u0E44\u0E21\u0E48\u0E21\u0E35\u0E25\u0E32\u0E22/\u0E2A\u0E35\u0E02\u0E32\u0E27\u0E08\u0E30\u0E40\u0E2B\u0E47\u0E19\u0E23\u0E38\u0E49\u0E07\u0E40\u0E15\u0E47\u0E21\u0E17\u0E35\u0E48"
+  },
+  {
+    id: "card-art-matte",
+    nameTh: "\u0E2D\u0E32\u0E23\u0E4C\u0E15\u0E01\u0E32\u0E23\u0E4C\u0E14 350 \u0E41\u0E01\u0E23\u0E21 \u0E40\u0E04\u0E25\u0E37\u0E2D\u0E1A\u0E14\u0E49\u0E32\u0E19",
+    detail: "\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23\u0E17\u0E31\u0E48\u0E27\u0E44\u0E1B \xB7 \u0E1C\u0E34\u0E27\u0E19\u0E38\u0E48\u0E21\u0E44\u0E21\u0E48\u0E2A\u0E30\u0E17\u0E49\u0E2D\u0E19\u0E41\u0E2A\u0E07 \u0E2A\u0E35\u0E2A\u0E14",
+    thickness: 0.38,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C + \u0E40\u0E04\u0E25\u0E37\u0E2D\u0E1A\u0E14\u0E49\u0E32\u0E19 + \u0E15\u0E31\u0E14",
+    color: "#ffffff",
+    roughness: 0.82,
+    note: "\u0E01\u0E32\u0E23\u0E4C\u0E14\u0E2D\u0E32\u0E23\u0E4C\u0E15\u0E1C\u0E34\u0E27\u0E40\u0E23\u0E35\u0E22\u0E1A \u0E40\u0E04\u0E25\u0E37\u0E2D\u0E1A\u0E25\u0E32\u0E21\u0E34\u0E40\u0E19\u0E15\u0E14\u0E49\u0E32\u0E19 \u2014 \u0E21\u0E32\u0E15\u0E23\u0E10\u0E32\u0E19\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23 \u0E01\u0E31\u0E19\u0E23\u0E2D\u0E22\u0E19\u0E34\u0E49\u0E27\u0E21\u0E37\u0E2D \u0E43\u0E0A\u0E49\u0E23\u0E48\u0E27\u0E21\u0E1F\u0E2D\u0E22\u0E25\u0E4C/Spot UV \u0E44\u0E14\u0E49\u0E14\u0E35"
+  },
+  {
+    id: "card-art-gloss",
+    nameTh: "\u0E2D\u0E32\u0E23\u0E4C\u0E15\u0E01\u0E32\u0E23\u0E4C\u0E14 300 \u0E41\u0E01\u0E23\u0E21 \u0E40\u0E04\u0E25\u0E37\u0E2D\u0E1A\u0E40\u0E07\u0E32",
+    detail: "\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23\u0E2A\u0E35\u0E2A\u0E14\u0E2A\u0E30\u0E14\u0E38\u0E14\u0E15\u0E32 \xB7 \u0E04\u0E39\u0E1B\u0E2D\u0E07 \xB7 \u0E01\u0E32\u0E23\u0E4C\u0E14\u0E2A\u0E30\u0E2A\u0E21",
+    thickness: 0.33,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C + \u0E40\u0E04\u0E25\u0E37\u0E2D\u0E1A\u0E40\u0E07\u0E32 + \u0E15\u0E31\u0E14",
+    color: "#ffffff",
+    roughness: 0.16,
+    note: "\u0E01\u0E32\u0E23\u0E4C\u0E14\u0E2D\u0E32\u0E23\u0E4C\u0E15\u0E40\u0E04\u0E25\u0E37\u0E2D\u0E1A\u0E40\u0E07\u0E32 \u0E2A\u0E35\u0E2D\u0E34\u0E48\u0E21\u0E2A\u0E14 \u0E2A\u0E30\u0E17\u0E49\u0E2D\u0E19\u0E41\u0E2A\u0E07 \u2014 \u0E40\u0E02\u0E35\u0E22\u0E19\u0E14\u0E49\u0E27\u0E22\u0E1B\u0E32\u0E01\u0E01\u0E32\u0E25\u0E39\u0E01\u0E25\u0E37\u0E48\u0E19\u0E44\u0E21\u0E48\u0E04\u0E48\u0E2D\u0E22\u0E15\u0E34\u0E14"
+  },
+  {
+    id: "card-cotton",
+    nameTh: "\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E04\u0E2D\u0E15\u0E15\u0E2D\u0E19 600 \u0E41\u0E01\u0E23\u0E21",
+    detail: "\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \xB7 \u0E1B\u0E31\u0E4A\u0E21\u0E08\u0E21/letterpress \xB7 \u0E01\u0E32\u0E23\u0E4C\u0E14\u0E40\u0E0A\u0E34\u0E0D\u0E07\u0E32\u0E19\u0E41\u0E15\u0E48\u0E07",
+    thickness: 0.8,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C/\u0E1B\u0E31\u0E4A\u0E21 + \u0E15\u0E31\u0E14",
+    color: "#f6f3ea",
+    roughness: 0.96,
+    surface: "felt",
+    note: "\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E1D\u0E49\u0E32\u0E22\u0E2B\u0E19\u0E32\u0E19\u0E38\u0E48\u0E21 \u0E1C\u0E34\u0E27\u0E1F\u0E39\u0E21\u0E35\u0E40\u0E17\u0E47\u0E01\u0E0B\u0E4C\u0E40\u0E08\u0E2D\u0E23\u0E4C \u2014 \u0E1B\u0E31\u0E4A\u0E21\u0E08\u0E21/\u0E1B\u0E31\u0E4A\u0E21\u0E19\u0E39\u0E19\u0E44\u0E14\u0E49\u0E25\u0E36\u0E01\u0E04\u0E21\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14 \u0E2A\u0E35\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E2D\u0E2D\u0E01\u0E19\u0E38\u0E48\u0E21\u0E14\u0E49\u0E32\u0E19\u0E01\u0E27\u0E48\u0E32\u0E2D\u0E32\u0E23\u0E4C\u0E15"
+  },
+  {
+    id: "card-linen",
+    nameTh: "\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E25\u0E32\u0E22\u0E1C\u0E49\u0E32\u0E25\u0E34\u0E19\u0E34\u0E19 300 \u0E41\u0E01\u0E23\u0E21",
+    detail: "\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23\u0E2A\u0E33\u0E19\u0E31\u0E01\u0E07\u0E32\u0E19/\u0E17\u0E19\u0E32\u0E22 \xB7 \u0E01\u0E32\u0E23\u0E4C\u0E14\u0E02\u0E2D\u0E1A\u0E04\u0E38\u0E13 \xB7 \u0E02\u0E2D\u0E07\u0E04\u0E25\u0E32\u0E2A\u0E2A\u0E34\u0E01",
+    thickness: 0.35,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C + \u0E15\u0E31\u0E14",
+    color: "#f8f6f0",
+    roughness: 0.9,
+    surface: "linen",
+    note: "\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E1B\u0E31\u0E4A\u0E21\u0E25\u0E32\u0E22\u0E40\u0E2A\u0E49\u0E19\u0E1C\u0E49\u0E32\u0E15\u0E32\u0E23\u0E32\u0E07\u0E25\u0E30\u0E40\u0E2D\u0E35\u0E22\u0E14 \u0E14\u0E39\u0E04\u0E25\u0E32\u0E2A\u0E2A\u0E34\u0E01 \u2014 \u0E2A\u0E35\u0E1E\u0E37\u0E49\u0E19\u0E40\u0E15\u0E47\u0E21\u0E41\u0E1C\u0E48\u0E19\u0E08\u0E30\u0E40\u0E2B\u0E47\u0E19\u0E25\u0E32\u0E22\u0E1C\u0E49\u0E32\u0E40\u0E1B\u0E47\u0E19\u0E40\u0E2A\u0E49\u0E19\u0E02\u0E32\u0E27\u0E08\u0E32\u0E07 \u0E46"
+  },
+  {
+    id: "card-pearl",
+    nameTh: "\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E21\u0E38\u0E01 300 \u0E41\u0E01\u0E23\u0E21",
+    detail: "\u0E01\u0E32\u0E23\u0E4C\u0E14\u0E40\u0E0A\u0E34\u0E0D \xB7 \u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23\u0E04\u0E27\u0E32\u0E21\u0E07\u0E32\u0E21/\u0E08\u0E34\u0E27\u0E40\u0E27\u0E25\u0E23\u0E35\u0E48 \xB7 \u0E01\u0E32\u0E23\u0E4C\u0E14\u0E2D\u0E27\u0E22\u0E1E\u0E23",
+    thickness: 0.33,
+    foldable: true,
+    process: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C + \u0E15\u0E31\u0E14",
+    color: "#f3eee8",
+    roughness: 0.42,
+    metalness: 0.2,
+    surface: "pearl",
+    note: "\u0E1C\u0E34\u0E27\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E1A\u0E21\u0E38\u0E01\u0E23\u0E30\u0E22\u0E34\u0E1A\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E40\u0E2D\u0E35\u0E22\u0E07\u0E23\u0E31\u0E1A\u0E41\u0E2A\u0E07 \u2014 \u0E2A\u0E35\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E2D\u0E48\u0E2D\u0E19\u0E25\u0E07\u0E40\u0E25\u0E47\u0E01\u0E19\u0E49\u0E2D\u0E22 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E25\u0E32\u0E22\u0E40\u0E23\u0E35\u0E22\u0E1A/\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23"
+  },
+  {
+    id: "card-black",
+    nameTh: "\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E14\u0E33 350 \u0E41\u0E01\u0E23\u0E21",
+    detail: "\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23\u0E2B\u0E23\u0E39 \xB7 \u0E04\u0E39\u0E48\u0E1F\u0E2D\u0E22\u0E25\u0E4C\u0E17\u0E2D\u0E07/\u0E40\u0E07\u0E34\u0E19 \xB7 \u0E1B\u0E31\u0E4A\u0E21\u0E08\u0E21",
+    thickness: 0.4,
+    foldable: true,
+    process: "\u0E1F\u0E2D\u0E22\u0E25\u0E4C/\u0E1B\u0E31\u0E4A\u0E21/Spot UV + \u0E15\u0E31\u0E14",
+    color: "#1d1d1f",
+    roughness: 0.85,
+    inkMultiply: true,
+    note: "\u0E40\u0E19\u0E37\u0E49\u0E2D\u0E14\u0E33\u0E17\u0E31\u0E49\u0E07\u0E41\u0E1C\u0E48\u0E19 \u0E44\u0E21\u0E48\u0E21\u0E35\u0E2B\u0E21\u0E36\u0E01\u0E02\u0E32\u0E27 \u2014 \u0E2B\u0E21\u0E36\u0E01 CMYK \u0E41\u0E17\u0E1A\u0E21\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E40\u0E2B\u0E47\u0E19 \u0E43\u0E0A\u0E49\u0E1F\u0E2D\u0E22\u0E25\u0E4C/\u0E1B\u0E31\u0E4A\u0E21/Spot UV \u0E17\u0E33\u0E25\u0E32\u0E22\u0E41\u0E17\u0E19"
+  },
+  {
     id: "pouch-clear",
     nameTh: "\u0E16\u0E38\u0E07\u0E43\u0E2A\u0E15\u0E31\u0E49\u0E07\u0E44\u0E14\u0E49",
     detail: "\u0E25\u0E39\u0E01\u0E2D\u0E21/\u0E02\u0E19\u0E21 \xB7 \u0E02\u0E2D\u0E07\u0E41\u0E2B\u0E49\u0E07/\u0E16\u0E31\u0E48\u0E27 \xB7 \u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E42\u0E0A\u0E27\u0E4C\u0E40\u0E19\u0E37\u0E49\u0E2D\u0E43\u0E19",
@@ -54920,6 +55095,9 @@ function getMaterial(id) {
   if (!m) throw new Error(`unknown material: ${id}`);
   return m;
 }
+var isCardMat = (m) => m.id.startsWith("card-");
+var CARD_STOCK_IDS = [...MATERIALS.filter(isCardMat).map((m) => m.id), "carton-300", "carton-400", "kraft-350"];
+var DEFAULT_CARD_MAT = "card-art-matte";
 
 // src/core/templates/shared.ts
 var P = (x, y) => ({ x, y });
@@ -55287,7 +55465,8 @@ function generateMailerBox(box, mat) {
   const dustIn = Math.max(1.5, 2 * t + 0.5);
   const lipH = Math.max(10, Math.min(0.7 * Hp, 0.8 * Dp));
   const lipS = Math.max(8, Math.min(0.7 * Hp, Hp - t - 1));
-  const lipIns = Math.max(2, t + 1);
+  const sideIn = layer;
+  const lipIns = Math.max(2, 2 * t + 1);
   const lipSlant = Math.min(6, lipS * 0.4);
   const dustW = Math.max(8, Math.min(0.75 * Hp, Wp / 2 - 4) - t);
   const dustSlant = Math.min(5, dustW * 0.45);
@@ -55295,6 +55474,8 @@ function generateMailerBox(box, mat) {
   const margin = Math.max(Hp, lipS);
   const cx0 = margin;
   const cx1 = cx0 + Wp;
+  const lx0 = cx0 + sideIn;
+  const lx1 = cx1 - sideIn;
   const y1 = lipH;
   const y2 = y1 + Dp;
   const y3 = y2 + Hp;
@@ -55309,6 +55490,9 @@ function generateMailerBox(box, mat) {
   const holeOff = Math.min(Math.max(14, 0.3 * Hp), Hp / 2);
   const holeLx = cx0 - Hp + holeOff;
   const holeRx = cx1 + Hp - holeOff;
+  const flapLx = lx0 - holeOff;
+  const flapRx = lx1 + holeOff;
+  const flapCy = (y1 + y2) / 2;
   const lipOutline = [
     P(cx0 + tuckIn, y1),
     ...arcPts(cx0 + tuckIn + r, r, r, Math.PI, Math.PI * 1.5),
@@ -55321,6 +55505,8 @@ function generateMailerBox(box, mat) {
     P(xb - dustIn - dustSlant, y + dir * dustW),
     P(xb - dustIn, y)
   ];
+  const EARLY = [0, 0.35];
+  const LID_LAG = [0.3, 1];
   const panels = [
     { id: "base", parentId: null, outline: rect(cx0, y3, cx1, y4), stage: 0 },
     {
@@ -55404,11 +55590,12 @@ function generateMailerBox(box, mat) {
     {
       id: "lid",
       parentId: "back",
-      outline: rect(cx0, y1, cx1, y2),
-      hingeA: P(cx0, y2),
-      hingeB: P(cx1, y2),
+      outline: rect(lx0, y1, lx1, y2),
+      hingeA: P(lx0, y2),
+      hingeB: P(lx1, y2),
       foldAngle: 90,
-      stage: 3
+      stage: 3,
+      within: LID_LAG
     },
     {
       id: "lip",
@@ -55425,31 +55612,33 @@ function generateMailerBox(box, mat) {
       id: "lip-left",
       parentId: "lid",
       outline: [
-        P(cx0, y1 + lipIns),
-        P(cx0 - lipS, y1 + lipIns + lipSlant),
-        P(cx0 - lipS, y2 - lipIns - lipSlant),
-        P(cx0, y2 - lipIns)
+        P(lx0, y1 + lipIns),
+        P(lx0 - lipS, y1 + lipIns + lipSlant),
+        P(lx0 - lipS, y2 - lipIns - lipSlant),
+        P(lx0, y2 - lipIns)
       ],
-      hingeA: P(cx0, y1),
-      hingeB: P(cx0, y2),
+      holes: hasHandle ? [obroundPts(flapLx, flapCy, holeLen, holeThick, true)] : void 0,
+      hingeA: P(lx0, y1),
+      hingeB: P(lx0, y2),
       foldAngle: -90,
       stage: 3,
-      zOffset: -layer
+      within: EARLY
     },
     {
       id: "lip-right",
       parentId: "lid",
       outline: [
-        P(cx1, y1 + lipIns),
-        P(cx1 + lipS, y1 + lipIns + lipSlant),
-        P(cx1 + lipS, y2 - lipIns - lipSlant),
-        P(cx1, y2 - lipIns)
+        P(lx1, y1 + lipIns),
+        P(lx1 + lipS, y1 + lipIns + lipSlant),
+        P(lx1 + lipS, y2 - lipIns - lipSlant),
+        P(lx1, y2 - lipIns)
       ],
-      hingeA: P(cx1, y1),
-      hingeB: P(cx1, y2),
+      holes: hasHandle ? [obroundPts(flapRx, flapCy, holeLen, holeThick, true)] : void 0,
+      hingeA: P(lx1, y1),
+      hingeB: P(lx1, y2),
       foldAngle: 90,
       stage: 3,
-      zOffset: -layer
+      within: EARLY
     }
   ];
   const cut = (d) => ({ kind: "cut", d });
@@ -55459,13 +55648,13 @@ function generateMailerBox(box, mat) {
     cut(
       `M ${cx0 + tuckIn} ${y1} L ${cx0 + tuckIn} ${r} Q ${cx0 + tuckIn} 0 ${cx0 + tuckIn + r} 0 L ${cx1 - tuckIn - r} 0 Q ${cx1 - tuckIn} 0 ${cx1 - tuckIn} ${r} L ${cx1 - tuckIn} ${y1}`
     ),
-    cut(`M ${cx0} ${y1} L ${cx0 + tuckIn} ${y1}`),
-    cut(`M ${cx1 - tuckIn} ${y1} L ${cx1} ${y1}`),
+    cut(`M ${lx0} ${y1} L ${cx0 + tuckIn} ${y1}`),
+    cut(`M ${cx1 - tuckIn} ${y1} L ${lx1} ${y1}`),
     cut(
-      `M ${cx0} ${y1} L ${cx0} ${y1 + lipIns} L ${cx0 - lipS} ${y1 + lipIns + lipSlant} L ${cx0 - lipS} ${y2 - lipIns - lipSlant} L ${cx0} ${y2 - lipIns} L ${cx0} ${y2}`
+      `M ${lx0} ${y1} L ${lx0} ${y1 + lipIns} L ${lx0 - lipS} ${y1 + lipIns + lipSlant} L ${lx0 - lipS} ${y2 - lipIns - lipSlant} L ${lx0} ${y2 - lipIns} L ${lx0} ${y2} L ${cx0} ${y2}`
     ),
     cut(
-      `M ${cx1} ${y1} L ${cx1} ${y1 + lipIns} L ${cx1 + lipS} ${y1 + lipIns + lipSlant} L ${cx1 + lipS} ${y2 - lipIns - lipSlant} L ${cx1} ${y2 - lipIns} L ${cx1} ${y2}`
+      `M ${lx1} ${y1} L ${lx1} ${y1 + lipIns} L ${lx1 + lipS} ${y1 + lipIns + lipSlant} L ${lx1 + lipS} ${y2 - lipIns - lipSlant} L ${lx1} ${y2 - lipIns} L ${lx1} ${y2} L ${cx1} ${y2}`
     ),
     cut(`M ${cx0} ${y2} L ${cx0} ${y3}`),
     cut(`M ${cx1} ${y2} L ${cx1} ${y3}`),
@@ -55479,9 +55668,9 @@ function generateMailerBox(box, mat) {
     cut(`M ${cx1} ${y4} L ${cx1} ${y5}`),
     cut(`M ${cx0} ${y5} L ${cx1} ${y5}`),
     crease(`M ${cx0 + tuckIn} ${y1} L ${cx1 - tuckIn} ${y1}`),
-    crease(`M ${cx0} ${y1 + lipIns} L ${cx0} ${y2 - lipIns}`),
-    crease(`M ${cx1} ${y1 + lipIns} L ${cx1} ${y2 - lipIns}`),
-    crease(`M ${cx0} ${y2} L ${cx1} ${y2}`),
+    crease(`M ${lx0} ${y1 + lipIns} L ${lx0} ${y2 - lipIns}`),
+    crease(`M ${lx1} ${y1 + lipIns} L ${lx1} ${y2 - lipIns}`),
+    crease(`M ${lx0} ${y2} L ${lx1} ${y2}`),
     crease(`M ${cx0} ${y3} L ${cx1} ${y3}`),
     crease(`M ${cx0} ${y4} L ${cx1} ${y4}`),
     crease(`M ${cx0} ${y3} L ${cx0} ${y4}`),
@@ -55494,6 +55683,8 @@ function generateMailerBox(box, mat) {
   if (hasHandle) {
     segments.push(cut(obroundPath(holeLx, holeCy, holeLen, holeThick, true)));
     segments.push(cut(obroundPath(holeRx, holeCy, holeLen, holeThick, true)));
+    segments.push(cut(obroundPath(flapLx, flapCy, holeLen, holeThick, true)));
+    segments.push(cut(obroundPath(flapRx, flapCy, holeLen, holeThick, true)));
   }
   const dims = [
     { a: P(cx0, y5 + 12), b: P(cx1, y5 + 12), label: `W ${fmt(Wp)}` },
@@ -57257,6 +57448,129 @@ function generateDisplayBox(box, _mat) {
   return { width, height, segments, panels, dims };
 }
 
+// src/core/templates/hangingDoorBox.ts
+function generateHangingDoorBox({ W, D, H }, { thickness: t }) {
+  const width = W + 2 * t;
+  const depth = D + 2 * t;
+  const height = H + 2 * t;
+  const hangerHeight = 25;
+  const tabDepth = 15;
+  const inset = Math.max(1, t + 0.5);
+  const layer = t + 0.05;
+  const left = depth;
+  const right = left + width;
+  const doorHinge = right + depth;
+  const doorEdge = doorHinge + width - t;
+  const top = hangerHeight + depth;
+  const bottom = top + height;
+  const doorTop = top + inset;
+  const doorBottom = bottom - inset;
+  const tongueEdge = doorEdge + tabDepth;
+  const radius = tabDepth * 0.45;
+  const panels = [
+    { id: "back", parentId: null, outline: rect(left, top, right, bottom), stage: 0 },
+    {
+      id: "side-left",
+      parentId: "back",
+      outline: rect(0, top, left, bottom),
+      hingeA: P(left, top),
+      hingeB: P(left, bottom),
+      foldAngle: -90,
+      stage: 0
+    },
+    {
+      id: "side-right",
+      parentId: "back",
+      outline: rect(right, top, doorHinge, bottom),
+      hingeA: P(right, top),
+      hingeB: P(right, bottom),
+      foldAngle: 90,
+      stage: 0
+    },
+    {
+      id: "top",
+      parentId: "back",
+      outline: rect(left, hangerHeight, right, top),
+      hingeA: P(left, top),
+      hingeB: P(right, top),
+      foldAngle: 90,
+      stage: 2
+    },
+    {
+      id: "bottom",
+      parentId: "back",
+      outline: rect(left, bottom, right, bottom + depth),
+      hingeA: P(left, bottom),
+      hingeB: P(right, bottom),
+      foldAngle: -90,
+      stage: 2
+    },
+    {
+      id: "front",
+      parentId: "side-right",
+      outline: rect(doorHinge, doorTop, doorEdge, doorBottom),
+      hingeA: P(doorHinge, doorTop),
+      hingeB: P(doorHinge, doorBottom),
+      foldAngle: 90,
+      stage: 3
+    },
+    {
+      id: "hanger",
+      parentId: "top",
+      outline: rect(left, 0, right, hangerHeight),
+      holes: [obroundPts(left + width / 2, hangerHeight / 2, Math.min(30, width - 8), 8)],
+      hingeA: P(left, hangerHeight),
+      hingeB: P(right, hangerHeight),
+      foldAngle: -90,
+      stage: 2
+    }
+  ];
+  for (const [side, start] of [["left", 0], ["right", right]]) {
+    const a = start + inset;
+    const b = start + depth - inset;
+    for (const [edge, y, angle] of [["top", top, 90], ["bottom", bottom, -90]]) {
+      const end = y - Math.sign(angle) * tabDepth;
+      panels.push({
+        id: `glue-${side}-${edge}`,
+        parentId: `side-${side}`,
+        outline: [P(a, y), P(a + 4, end), P(b - 4, end), P(b, y)],
+        hingeA: P(a, y),
+        hingeB: P(b, y),
+        foldAngle: angle,
+        stage: 1,
+        zOffset: layer
+      });
+    }
+  }
+  panels.push({
+    id: "door-tuck",
+    parentId: "front",
+    outline: [
+      P(doorEdge, doorTop),
+      ...arcPts(tongueEdge - radius, doorTop + radius, radius, -Math.PI / 2, 0),
+      ...arcPts(tongueEdge - radius, doorBottom - radius, radius, 0, Math.PI / 2),
+      P(doorEdge, doorBottom)
+    ],
+    hingeA: P(doorEdge, doorTop),
+    hingeB: P(doorEdge, doorBottom),
+    foldAngle: 90,
+    stage: 4,
+    zOffset: layer,
+    tuck: true
+  });
+  return {
+    width: tongueEdge,
+    height: bottom + depth,
+    panels,
+    segments: autoSegments(panels),
+    dims: [
+      { a: P(left, bottom + depth + 8), b: P(right, bottom + depth + 8), label: `W ${fmt(width)}` },
+      { a: P(0, top - tabDepth - 8), b: P(left, top - tabDepth - 8), label: `D ${fmt(depth)}` },
+      { a: P(-8, top), b: P(-8, bottom), label: `H ${fmt(height)}` }
+    ]
+  };
+}
+
 // src/core/templates/fefco0215.ts
 function generateFefco0215(box, mat) {
   const { W, D, H } = box;
@@ -58119,6 +58433,16 @@ var TEMPLATES = [
     generate: generateDisplayBox
   },
   {
+    id: "hanging-door-box",
+    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E41\u0E02\u0E27\u0E19\u0E1D\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E2B\u0E19\u0E49\u0E32\u0E41\u0E1A\u0E1A\u0E1A\u0E32\u0E19\u0E1B\u0E23\u0E30\u0E15\u0E39",
+    detail: "\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E23\u0E49\u0E32\u0E19 \xB7 \u0E21\u0E35\u0E41\u0E1C\u0E07\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E41\u0E02\u0E27\u0E19\u0E14\u0E49\u0E32\u0E19\u0E1A\u0E19 \xB7 \u0E40\u0E1B\u0E34\u0E14\u0E1D\u0E32\u0E44\u0E1B\u0E14\u0E49\u0E32\u0E19\u0E02\u0E49\u0E32\u0E07",
+    defaults: { W: 84, D: 36, H: 128 },
+    tilt: 0,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
+    generate: generateHangingDoorBox
+  },
+  {
     id: "tray",
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E16\u0E32\u0E14 (open tray)",
     detail: "\u0E16\u0E32\u0E14\u0E2D\u0E32\u0E2B\u0E32\u0E23/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48 \xB7 \u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C\u0E2B\u0E19\u0E49\u0E32\u0E23\u0E49\u0E32\u0E19 \xB7 \u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01\u0E04\u0E39\u0E48\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21",
@@ -58289,6 +58613,12 @@ var TEXT_FX_RANGE = {
 };
 var LETTER_SPACING_RANGE = [-20, 100];
 
+// shared/contracts/projects.ts
+var THUMBNAIL_KINDS = ["box", "vessel", "pouch", "card"];
+var THUMBNAIL_MIME_TYPES = ["image/webp", "image/jpeg"];
+var THUMBNAIL_MAX_BYTES = 65536;
+var THUMBNAIL_BATCH_MAX = 24;
+
 // server/modules/projects/validation.ts
 var finite = external_exports.number().finite();
 var coordinate = finite.min(-1e6).max(1e6);
@@ -58367,6 +58697,8 @@ var textSchema = external_exports.object({
   w: positiveSize,
   font: external_exports.enum(TEXT_FONT_IDS).optional(),
   weight: external_exports.union([external_exports.literal(400), external_exports.literal(700)]).optional(),
+  italic: external_exports.boolean().optional(),
+  underline: external_exports.boolean().optional(),
   align: external_exports.enum(["left", "center", "right"]).optional(),
   lh: finite.min(0.5).max(5).optional(),
   strokeColor: color.optional(),
@@ -58489,6 +58821,7 @@ var cloudProjectDocumentSchema = external_exports.object({
   fillImage: fillImageSchema.nullable().optional(),
   labelStyle: external_exports.enum(["body", "full", "band", "neck"]).optional(),
   neckH: finite.min(1).max(300).optional(),
+  rectDepth: finite.min(1).max(300).optional(),
   shoulderH: finite.min(1).max(300).optional(),
   shoulderStyle: external_exports.enum(["round", "slope", "flat"]).optional(),
   labelBox: external_exports.object({
@@ -58499,14 +58832,16 @@ var cloudProjectDocumentSchema = external_exports.object({
   }).strict().optional(),
   capStyle: external_exports.enum(["none", "screw", "flip", "pump", "cork", "foil", "crown", "oval"]).optional(),
   capColor: color.optional(),
-  pouchStyle: external_exports.enum(["stand", "flat", "gusset", "box", "pillow", "spout"]).optional(),
+  pouchStyle: external_exports.enum(["stand", "kseal", "flat", "gusset", "box", "pillow", "spout"]).optional(),
   zipper: external_exports.boolean().optional(),
   pouchAddons: external_exports.object({
     hangHole: optionalTrue,
     valve: optionalTrue,
     tinTie: optionalTrue,
     zipAt: finite.min(0).max(1e3).optional(),
-    tearAt: finite.min(0).max(1e3).optional()
+    tearAt: finite.min(0).max(1e3).optional(),
+    spoutAt: external_exports.enum(["left", "right"]).optional(),
+    tear: external_exports.enum(["none", "notch", "zigzag"]).optional()
   }).strict().optional(),
   stickerCut: external_exports.object({
     shape: external_exports.enum(["rect", "square", "ellipse", "hexagon", "star", "heart", "contour"]),
@@ -58516,7 +58851,8 @@ var cloudProjectDocumentSchema = external_exports.object({
     perSheet: external_exports.number().int().min(1).max(1e3).optional(),
     sheetW: finite.min(0).max(5e3).optional(),
     sheetH: finite.min(0).max(5e3).optional(),
-    sheetMargin: finite.min(0).max(100).optional()
+    sheetMargin: finite.min(0).max(100).optional(),
+    sheetGap: finite.min(0).max(100).optional()
   }).strict().optional(),
   decos: external_exports.array(decoSchema).max(500),
   history: external_exports.array(historySchema).max(30),
@@ -58626,6 +58962,43 @@ var projectListRowSchema = external_exports.object({
   project_revision: safeRevisionSchema,
   project_updated_at: timestampSchema2
 }).strict();
+var thumbnailMagic = {
+  "image/webp": (b) => b.length >= 12 && b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP",
+  "image/jpeg": (b) => b.length >= 3 && b[0] === 255 && b[1] === 216 && b[2] === 255
+};
+var putProjectThumbnailInputSchema = external_exports.object({
+  mimeType: external_exports.enum(THUMBNAIL_MIME_TYPES),
+  imageBase64: external_exports.string().min(4).max(Math.ceil(THUMBNAIL_MAX_BYTES / 3) * 4).regex(/^[A-Za-z0-9+/]+={0,2}$/),
+  kind: external_exports.enum(THUMBNAIL_KINDS),
+  label: external_exports.string().trim().min(1).max(60)
+}).strict().superRefine((input2, context) => {
+  const bytes = Buffer.from(input2.imageBase64, "base64");
+  if (bytes.length < 1 || bytes.length > THUMBNAIL_MAX_BYTES) {
+    context.addIssue({ code: "custom", path: ["imageBase64"], message: `\u0E20\u0E32\u0E1E\u0E22\u0E48\u0E2D\u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19 ${THUMBNAIL_MAX_BYTES} \u0E44\u0E1A\u0E15\u0E4C` });
+  } else if (!thumbnailMagic[input2.mimeType](bytes)) {
+    context.addIssue({ code: "custom", path: ["imageBase64"], message: "\u0E44\u0E1F\u0E25\u0E4C\u0E20\u0E32\u0E1E\u0E22\u0E48\u0E2D\u0E44\u0E21\u0E48\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A\u0E0A\u0E19\u0E34\u0E14\u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E38" });
+  }
+});
+var projectThumbnailBatchSchema = external_exports.object({
+  workspaceId: external_exports.uuid(),
+  projectIds: external_exports.array(external_exports.uuid()).min(1).max(THUMBNAIL_BATCH_MAX).refine((ids) => new Set(ids).size === ids.length, "projectIds \u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E0B\u0E49\u0E33")
+}).strict();
+var projectThumbnailReceiptSchema = external_exports.object({
+  projectId: external_exports.uuid(),
+  version: timestampSchema2
+}).strict();
+var projectThumbnailMetaRowSchema = external_exports.object({
+  project_id: external_exports.uuid(),
+  thumbnail_version: timestampSchema2,
+  kind: external_exports.enum(THUMBNAIL_KINDS),
+  label: external_exports.string().min(1).max(60)
+}).strict();
+var projectThumbnailImageRowSchema = external_exports.object({
+  project_id: external_exports.uuid(),
+  thumbnail_version: timestampSchema2,
+  mime_type: external_exports.enum(THUMBNAIL_MIME_TYPES),
+  image_base64: external_exports.string().min(1)
+}).strict();
 
 // server/adapters/supabase/projectRepository.ts
 function mapDatabaseError(error62) {
@@ -58653,8 +59026,12 @@ function mapDatabaseError(error62) {
   if (error62.message.includes("APP_USER_NOT_ACTIVE")) {
     return new HttpError(403, "USER_NOT_ACTIVE", "\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
   }
+  if (error62.message.includes("THUMBNAIL_INVALID") || error62.message.includes("THUMBNAIL_LIMIT_INVALID")) {
+    return new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E20\u0E32\u0E1E\u0E22\u0E48\u0E2D\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+  }
   return new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
 }
+var thumbnailVersion = (value) => new Date(value).toISOString();
 function providerContractError() {
   return new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E37\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
 }
@@ -58759,6 +59136,50 @@ var SupabaseProjectRepository = class {
     const parsed = deleteReceiptSchema.safeParse(data);
     if (!parsed.success) throw providerContractError();
     return parsed.data;
+  }
+  async putThumbnail(actor, projectId, input2) {
+    const { data, error: error62 } = await this.client.rpc("put_project_thumbnail", {
+      p_actor_user_id: actor.userId,
+      p_project_id: projectId,
+      p_mime_type: input2.mimeType,
+      p_image_base64: input2.imageBase64,
+      p_kind: input2.kind,
+      p_label: input2.label
+    });
+    if (error62) throw mapDatabaseError(error62);
+    const parsed = projectThumbnailReceiptSchema.safeParse(data);
+    if (!parsed.success) throw providerContractError();
+    return { ...parsed.data, version: thumbnailVersion(parsed.data.version) };
+  }
+  async thumbnailMeta(actor, workspaceId, projectIds) {
+    const { data, error: error62 } = await this.client.rpc("list_project_thumbnail_meta", {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId,
+      p_project_ids: projectIds
+    });
+    if (error62) throw mapDatabaseError(error62);
+    const parsed = projectThumbnailMetaRowSchema.array().safeParse(data);
+    if (!parsed.success) throw providerContractError();
+    return new Map(parsed.data.map((row) => [
+      row.project_id,
+      { version: thumbnailVersion(row.thumbnail_version), kind: row.kind, label: row.label }
+    ]));
+  }
+  async thumbnails(actor, workspaceId, projectIds) {
+    const { data, error: error62 } = await this.client.rpc("get_project_thumbnails", {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId,
+      p_project_ids: projectIds
+    });
+    if (error62) throw mapDatabaseError(error62);
+    const parsed = projectThumbnailImageRowSchema.array().safeParse(data);
+    if (!parsed.success) throw providerContractError();
+    return parsed.data.map((row) => ({
+      projectId: row.project_id,
+      version: thumbnailVersion(row.thumbnail_version),
+      mimeType: row.mime_type,
+      imageBase64: row.image_base64
+    }));
   }
 };
 function createSupabaseProjectRepository(config2) {
@@ -58931,6 +59352,7 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
 - lid-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A): \u0E10\u0E32\u0E19\u0E16\u0E32\u0E14\u0E25\u0E36\u0E01 + \u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E16\u0E32\u0E14\u0E15\u0E37\u0E49\u0E19\u0E2A\u0E27\u0E21\u0E17\u0E31\u0E1A (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E10\u0E32\u0E19; \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1D\u0E32\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 (\u0E01\u0E27\u0E49\u0E32\u0E07/\u0E25\u0E36\u0E01\u0E01\u0E27\u0E48\u0E32\u0E40\u0E25\u0E47\u0E01\u0E19\u0E49\u0E2D\u0E22 \u0E2A\u0E39\u0E07 ~40%), handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E23\u0E2D\u0E07\u0E40\u0E17\u0E49\u0E32/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E1D\u0E32\u0E04\u0E23\u0E2D\u0E1A\u0E41\u0E22\u0E01\u0E0A\u0E34\u0E49\u0E19
 - slide-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E2A\u0E44\u0E25\u0E14\u0E4C/matchbox): \u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (\u0E16\u0E32\u0E14) \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E40\u0E02\u0E49\u0E32-\u0E2D\u0E2D\u0E01\u0E43\u0E19\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E20\u0E32\u0E22\u0E19\u0E2D\u0E01 (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (D = \u0E17\u0E34\u0E28\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19), \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E1B\u0E23\u0E30\u0E14\u0E31\u0E1A/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E25\u0E47\u0E01/\u0E44\u0E21\u0E49\u0E02\u0E35\u0E14
 - display-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E02\u0E49\u0E32\u0E07/\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07): \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1B\u0E34\u0E14 5 \u0E14\u0E49\u0E32\u0E19 + \u0E1D\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E44\u0E14\u0E49 \u0E40\u0E08\u0E32\u0E30\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32 \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E02\u0E2D\u0E07\u0E2A\u0E30\u0E2A\u0E21\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E40\u0E2B\u0E47\u0E19\u0E02\u0E49\u0E32\u0E07\u0E43\u0E19
+- hanging-door-box: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E41\u0E02\u0E27\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E23\u0E49\u0E32\u0E19 \u0E1D\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E36\u0E1A\u0E40\u0E1B\u0E34\u0E14\u0E08\u0E32\u0E01\u0E1A\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E14\u0E49\u0E32\u0E19\u0E02\u0E49\u0E32\u0E07\u0E41\u0E25\u0E30\u0E1B\u0E34\u0E14\u0E14\u0E49\u0E27\u0E22\u0E25\u0E34\u0E49\u0E19\u0E40\u0E2A\u0E35\u0E22\u0E1A \u0E21\u0E35\u0E41\u0E1C\u0E07\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E41\u0E02\u0E27\u0E19\u0E40\u0E2B\u0E19\u0E37\u0E2D\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E43\u0E19\u0E15\u0E31\u0E27 \u0E43\u0E2B\u0E49\u0E43\u0E0A\u0E49 handle=false \u0E41\u0E25\u0E30\u0E23\u0E30\u0E1A\u0E38 H \u0E40\u0E1B\u0E47\u0E19\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E15\u0E31\u0E27\u0E01\u0E25\u0E48\u0E2D\u0E07
 - gable: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27 (carry box) \u0E17\u0E48\u0E2D\u0E17\u0E32\u0E01\u0E32\u0E27\u0E02\u0E49\u0E32\u0E07 + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01 \u2014 \u0E1D\u0E32\u0E41\u0E1A\u0E19\u0E08\u0E32\u0E01\u0E1C\u0E19\u0E31\u0E07\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E1E\u0E31\u0E1A\u0E1B\u0E34\u0E14\u0E1B\u0E32\u0E01 \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E04\u0E32\u0E07\u0E2B\u0E21\u0E39\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E08\u0E31\u0E1A\u0E15\u0E31\u0E49\u0E07\u0E01\u0E25\u0E32\u0E07\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 \u0E41\u0E1C\u0E07\u0E1B\u0E34\u0E14\u0E1A\u0E19\u0E08\u0E32\u0E01\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E41\u0E22\u0E01\u0E2A\u0E2D\u0E07\u0E0B\u0E35\u0E01\u0E1E\u0E31\u0E1A\u0E17\u0E31\u0E1A\u0E1D\u0E32\u0E02\u0E49\u0E32\u0E07\u0E25\u0E30\u0E0B\u0E35\u0E01\u0E02\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27 \u0E1B\u0E25\u0E32\u0E22\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E25\u0E47\u0E2D\u0E01\u0E23\u0E48\u0E2D\u0E07\u0E01\u0E25\u0E32\u0E07 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false \u2014 \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E21\u0E35\u0E43\u0E19\u0E15\u0E31\u0E27); W\xD7D = footprint, H = \u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 (\u0E23\u0E30\u0E1A\u0E1A\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E40\u0E2B\u0E19\u0E37\u0E2D\u0E1B\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07) \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E16\u0E37\u0E2D\u0E01\u0E25\u0E31\u0E1A/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D
 - tray: \u0E16\u0E32\u0E14\u0E40\u0E1B\u0E34\u0E14\u0E1A\u0E19 (\u0E44\u0E21\u0E48\u0E21\u0E35\u0E1D\u0E32) \u0E1C\u0E19\u0E31\u0E07 4 \u0E14\u0E49\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19 \u0E21\u0E38\u0E21\u0E21\u0E35\u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u2014 H \u0E04\u0E37\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 (\u0E16\u0E32\u0E14\u0E21\u0E31\u0E01\u0E15\u0E37\u0E49\u0E19); \u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (handle=false); \u0E43\u0E0A\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E16\u0E32\u0E14/\u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C \u0E2B\u0E23\u0E37\u0E2D\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01\u0E04\u0E39\u0E48\u0E01\u0E31\u0E1A sleeve
 - fefco-0427: \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 (roll end) + \u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E10\u0E32\u0E19 \u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49\u0E01\u0E32\u0E27 \u2014 \u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48\u0E01\u0E27\u0E49\u0E32\u0E07\u0E01\u0E27\u0E48\u0E32 mailer \u0E18\u0E23\u0E23\u0E21\u0E14\u0E32 (\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E02\u0E49\u0E32\u0E07\u0E25\u0E30 ~H) \u0E41\u0E25\u0E30\u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false)
@@ -58940,8 +59362,8 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
 - sleeve: W\xD7D = \u0E2B\u0E19\u0E49\u0E32\u0E15\u0E31\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E17\u0E48\u0E2D (\u0E15\u0E49\u0E2D\u0E07\u0E1E\u0E2D\u0E14\u0E35\u0E01\u0E31\u0E1A\u0E02\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E2A\u0E27\u0E21 \u0E40\u0E0A\u0E48\u0E19 \u0E41\u0E01\u0E49\u0E27 \u230090 \u2192 W\u224892, D\u224892), H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E02\u0E2D\u0E07\u0E1B\u0E25\u0E2D\u0E01 \u2014 \u0E23\u0E30\u0E1A\u0E1A\u0E04\u0E33\u0E19\u0E27\u0E13\u0E04\u0E27\u0E32\u0E21\u0E22\u0E32\u0E27\u0E41\u0E1C\u0E48\u0E19\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A (\u0E1B\u0E35\u0E01\u0E01\u0E32\u0E27 + 2(W+D)) \u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07\u0E2D\u0E22\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27 \u0E2B\u0E49\u0E32\u0E21\u0E40\u0E2D\u0E32\u0E40\u0E2A\u0E49\u0E19\u0E23\u0E2D\u0E1A\u0E27\u0E07\u0E02\u0E2D\u0E07\u0E21\u0E32\u0E43\u0E2A\u0E48\u0E43\u0E19 W \u0E40\u0E14\u0E47\u0E14\u0E02\u0E32\u0E14
 - sleeve \u0E40\u0E1B\u0E47\u0E19\u0E17\u0E48\u0E2D\u0E17\u0E23\u0E07\u0E15\u0E23\u0E07 \u2014 \u0E02\u0E2D\u0E07\u0E17\u0E23\u0E07\u0E40\u0E23\u0E35\u0E22\u0E27 (\u0E41\u0E01\u0E49\u0E27\u0E01\u0E32\u0E41\u0E1F) \u0E08\u0E30\u0E2B\u0E25\u0E27\u0E21\u0E14\u0E49\u0E32\u0E19\u0E41\u0E04\u0E1A \u0E43\u0E2B\u0E49\u0E1B\u0E23\u0E30\u0E01\u0E32\u0E28\u0E40\u0E1B\u0E47\u0E19\u0E02\u0E49\u0E2D\u0E08\u0E33\u0E01\u0E31\u0E14\u0E43\u0E19 assumptions
 - bottle-carrier: W\xD7D = footprint \u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 (\u0E40\u0E0A\u0E48\u0E19 \u0E02\u0E27\u0E14 \u230066 \u0E27\u0E32\u0E07 2\xD72 \u2192 W,D \u2248 150), H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E02\u0E27\u0E14 \u2014 \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34: \u0E41\u0E1C\u0E48\u0E19\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E01\u0E25\u0E32\u0E07\u0E2A\u0E39\u0E07\u0E01\u0E27\u0E48\u0E32\u0E02\u0E27\u0E14 ~55 \u0E21\u0E21. \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E23\u0E39\u0E21\u0E37\u0E2D\u0E01\u0E25\u0E21, \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E2A\u0E39\u0E07 ~42% \u0E02\u0E2D\u0E07 H, \u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E2A\u0E2D\u0E07\u0E0A\u0E48\u0E2D\u0E07\u0E15\u0E48\u0E2D\u0E1C\u0E19\u0E31\u0E07 (handle flag \u0E44\u0E21\u0E48\u0E40\u0E01\u0E35\u0E48\u0E22\u0E27\u0E01\u0E31\u0E1A template \u0E19\u0E35\u0E49 \u2014 \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E21\u0E35\u0E43\u0E19\u0E15\u0E31\u0E27)
-- card (\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23): \u0E01\u0E32\u0E23\u0E4C\u0E14\u0E41\u0E1A\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E2A\u0E2D\u0E07\u0E2B\u0E19\u0E49\u0E32 (\u0E2B\u0E19\u0E49\u0E32+\u0E2B\u0E25\u0E31\u0E07 \u0E27\u0E32\u0E07\u0E40\u0E23\u0E35\u0E22\u0E07\u0E01\u0E31\u0E19\u0E1A\u0E19\u0E41\u0E1C\u0E48\u0E19\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E15\u0E01\u0E41\u0E15\u0E48\u0E07\u0E44\u0E14\u0E49\u0E17\u0E31\u0E49\u0E07\u0E2A\u0E2D\u0E07\u0E14\u0E49\u0E32\u0E19) \u0E44\u0E21\u0E48\u0E21\u0E35\u0E23\u0E2D\u0E22\u0E1E\u0E31\u0E1A \u2014 W = \u0E01\u0E27\u0E49\u0E32\u0E07, H = \u0E2A\u0E39\u0E07, \u0E04\u0E48\u0E32 D \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 (\u0E43\u0E2A\u0E48\u0E04\u0E48\u0E32\u0E43\u0E14\u0E01\u0E47\u0E44\u0E14\u0E49\u0E43\u0E19\u0E25\u0E34\u0E21\u0E34\u0E15), handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false; \u0E02\u0E19\u0E32\u0E14\u0E21\u0E32\u0E15\u0E23\u0E10\u0E32\u0E19 90\xD754 \u0E21\u0E21. \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D "\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23 / business card" \u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 (\u0E40\u0E1B\u0E47\u0E19\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E01\u0E32\u0E23\u0E4C\u0E14 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C)
-- sticker (\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E44\u0E14\u0E04\u0E31\u0E17): \u0E41\u0E1C\u0E48\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E14\u0E35\u0E22\u0E27 \u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E35\u0E48\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21\u0E21\u0E38\u0E21\u0E21\u0E19 (\u0E44\u0E14\u0E04\u0E31\u0E17\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B) \u0E44\u0E21\u0E48\u0E21\u0E35\u0E23\u0E2D\u0E22\u0E1E\u0E31\u0E1A \u2014 W = \u0E01\u0E27\u0E49\u0E32\u0E07, H = \u0E2A\u0E39\u0E07, \u0E04\u0E48\u0E32 D \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49, handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false; \u0E15\u0E49\u0E2D\u0E07\u0E43\u0E0A\u0E49\u0E04\u0E39\u0E48\u0E01\u0E31\u0E1A\u0E27\u0E31\u0E2A\u0E14\u0E38\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C: sticker-vinyl (\u0E44\u0E27\u0E19\u0E34\u0E25\u0E01\u0E31\u0E19\u0E19\u0E49\u0E33 \u0E17\u0E19\u0E41\u0E14\u0E14), sticker-pp (PP \u0E02\u0E32\u0E27 \u0E01\u0E31\u0E19\u0E19\u0E49\u0E33 \u0E17\u0E19\u0E01\u0E27\u0E48\u0E32\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29), sticker-pp-clear (PP \u0E43\u0E2A \u0E44\u0E21\u0E48\u0E21\u0E35\u0E2B\u0E21\u0E36\u0E01\u0E02\u0E32\u0E27 \u2014 \u0E2A\u0E35\u0E02\u0E32\u0E27\u0E43\u0E19\u0E07\u0E32\u0E19\u0E08\u0E30\u0E43\u0E2A \u0E2A\u0E35\u0E2D\u0E48\u0E2D\u0E19\u0E08\u0E32\u0E07 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E25\u0E32\u0E22\u0E2A\u0E35\u0E40\u0E02\u0E49\u0E21\u0E1A\u0E19\u0E02\u0E27\u0E14\u0E41\u0E01\u0E49\u0E27/\u0E01\u0E23\u0E30\u0E08\u0E01), sticker-pp-clear-white (PP \u0E43\u0E2A \u0E23\u0E2D\u0E07\u0E02\u0E32\u0E27 \u2014 \u0E25\u0E32\u0E22\u0E17\u0E36\u0E1A\u0E2A\u0E14\u0E1A\u0E19\u0E1E\u0E37\u0E49\u0E19\u0E43\u0E2A) \u0E2B\u0E23\u0E37\u0E2D sticker-paper (\u0E1B\u0E23\u0E30\u0E2B\u0E22\u0E31\u0E14); \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C / \u0E09\u0E25\u0E32\u0E01\u0E15\u0E34\u0E14 / label / \u0E42\u0E25\u0E42\u0E01\u0E49\u0E15\u0E34\u0E14" (\u0E40\u0E1B\u0E47\u0E19\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C)
+- card (\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23): \u0E01\u0E32\u0E23\u0E4C\u0E14\u0E41\u0E1A\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E2A\u0E2D\u0E07\u0E2B\u0E19\u0E49\u0E32 (\u0E2B\u0E19\u0E49\u0E32+\u0E2B\u0E25\u0E31\u0E07 \u0E27\u0E32\u0E07\u0E40\u0E23\u0E35\u0E22\u0E07\u0E01\u0E31\u0E19\u0E1A\u0E19\u0E41\u0E1C\u0E48\u0E19\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E15\u0E01\u0E41\u0E15\u0E48\u0E07\u0E44\u0E14\u0E49\u0E17\u0E31\u0E49\u0E07\u0E2A\u0E2D\u0E07\u0E14\u0E49\u0E32\u0E19) \u0E44\u0E21\u0E48\u0E21\u0E35\u0E23\u0E2D\u0E22\u0E1E\u0E31\u0E1A \u2014 W = \u0E01\u0E27\u0E49\u0E32\u0E07, H = \u0E2A\u0E39\u0E07, \u0E04\u0E48\u0E32 D \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 (\u0E43\u0E2A\u0E48\u0E04\u0E48\u0E32\u0E43\u0E14\u0E01\u0E47\u0E44\u0E14\u0E49\u0E43\u0E19\u0E25\u0E34\u0E21\u0E34\u0E15), handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false; \u0E02\u0E19\u0E32\u0E14\u0E21\u0E32\u0E15\u0E23\u0E10\u0E32\u0E19 90\xD754 \u0E21\u0E21. \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D "\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23 / business card" \u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 (\u0E40\u0E1B\u0E47\u0E19\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E01\u0E32\u0E23\u0E4C\u0E14 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C); \u0E15\u0E49\u0E2D\u0E07\u0E43\u0E0A\u0E49\u0E04\u0E39\u0E48\u0E01\u0E31\u0E1A\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23: card-art-matte (\u0E2D\u0E32\u0E23\u0E4C\u0E15\u0E01\u0E32\u0E23\u0E4C\u0E14\u0E40\u0E04\u0E25\u0E37\u0E2D\u0E1A\u0E14\u0E49\u0E32\u0E19 \u2014 \u0E21\u0E32\u0E15\u0E23\u0E10\u0E32\u0E19), card-art-gloss (\u0E40\u0E04\u0E25\u0E37\u0E2D\u0E1A\u0E40\u0E07\u0E32 \u0E2A\u0E35\u0E2A\u0E14), card-cotton (\u0E04\u0E2D\u0E15\u0E15\u0E2D\u0E19 600 \u0E41\u0E01\u0E23\u0E21 \u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E1B\u0E31\u0E4A\u0E21\u0E08\u0E21/letterpress), card-linen (\u0E25\u0E32\u0E22\u0E1C\u0E49\u0E32\u0E25\u0E34\u0E19\u0E34\u0E19 \u0E04\u0E25\u0E32\u0E2A\u0E2A\u0E34\u0E01), card-pearl (\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E21\u0E38\u0E01 \u0E01\u0E32\u0E23\u0E4C\u0E14\u0E40\u0E0A\u0E34\u0E0D/\u0E04\u0E27\u0E32\u0E21\u0E07\u0E32\u0E21) \u0E2B\u0E23\u0E37\u0E2D card-black (\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E14\u0E33 \u2014 \u0E2B\u0E21\u0E36\u0E01\u0E44\u0E21\u0E48\u0E02\u0E36\u0E49\u0E19 \u0E43\u0E0A\u0E49\u0E1F\u0E2D\u0E22\u0E25\u0E4C/\u0E1B\u0E31\u0E4A\u0E21); \u0E27\u0E31\u0E2A\u0E14\u0E38 card-* \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19
+- sticker (\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E44\u0E14\u0E04\u0E31\u0E17): \u0E41\u0E1C\u0E48\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E14\u0E35\u0E22\u0E27 \u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E35\u0E48\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21\u0E21\u0E38\u0E21\u0E21\u0E19 (\u0E44\u0E14\u0E04\u0E31\u0E17\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B) \u0E44\u0E21\u0E48\u0E21\u0E35\u0E23\u0E2D\u0E22\u0E1E\u0E31\u0E1A \u2014 W = \u0E01\u0E27\u0E49\u0E32\u0E07, H = \u0E2A\u0E39\u0E07, \u0E04\u0E48\u0E32 D \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49, handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false; \u0E15\u0E49\u0E2D\u0E07\u0E43\u0E0A\u0E49\u0E04\u0E39\u0E48\u0E01\u0E31\u0E1A\u0E27\u0E31\u0E2A\u0E14\u0E38\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C: sticker-vinyl (\u0E44\u0E27\u0E19\u0E34\u0E25\u0E01\u0E31\u0E19\u0E19\u0E49\u0E33 \u0E17\u0E19\u0E41\u0E14\u0E14), sticker-pp (PP \u0E02\u0E32\u0E27 \u0E01\u0E31\u0E19\u0E19\u0E49\u0E33 \u0E17\u0E19\u0E01\u0E27\u0E48\u0E32\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29), sticker-pp-clear (PP \u0E43\u0E2A \u0E44\u0E21\u0E48\u0E21\u0E35\u0E2B\u0E21\u0E36\u0E01\u0E02\u0E32\u0E27 \u2014 \u0E2A\u0E35\u0E02\u0E32\u0E27\u0E43\u0E19\u0E07\u0E32\u0E19\u0E08\u0E30\u0E43\u0E2A \u0E2A\u0E35\u0E2D\u0E48\u0E2D\u0E19\u0E08\u0E32\u0E07 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E25\u0E32\u0E22\u0E2A\u0E35\u0E40\u0E02\u0E49\u0E21\u0E1A\u0E19\u0E02\u0E27\u0E14\u0E41\u0E01\u0E49\u0E27/\u0E01\u0E23\u0E30\u0E08\u0E01), sticker-pp-clear-white (PP \u0E43\u0E2A \u0E23\u0E2D\u0E07\u0E02\u0E32\u0E27 \u2014 \u0E25\u0E32\u0E22\u0E17\u0E36\u0E1A\u0E2A\u0E14\u0E1A\u0E19\u0E1E\u0E37\u0E49\u0E19\u0E43\u0E2A), sticker-paper (\u0E1B\u0E23\u0E30\u0E2B\u0E22\u0E31\u0E14), sticker-art-gloss (\u0E2D\u0E32\u0E23\u0E4C\u0E15\u0E21\u0E31\u0E19 \u0E2A\u0E35\u0E2A\u0E14 \u0E43\u0E19\u0E23\u0E48\u0E21), sticker-kraft (\u0E04\u0E23\u0E32\u0E1F\u0E17\u0E4C \u0E2D\u0E35\u0E42\u0E04\u0E48 \u2014 \u0E44\u0E21\u0E48\u0E21\u0E35\u0E2B\u0E21\u0E36\u0E01\u0E02\u0E32\u0E27), sticker-felt (\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E40\u0E17\u0E47\u0E01\u0E0B\u0E4C\u0E40\u0E08\u0E2D\u0E23\u0E4C \u0E09\u0E25\u0E32\u0E01\u0E44\u0E27\u0E19\u0E4C/\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21), sticker-silver (\u0E40\u0E21\u0E17\u0E31\u0E25\u0E25\u0E34\u0E01\u0E40\u0E07\u0E34\u0E19) \u0E2B\u0E23\u0E37\u0E2D sticker-holo (\u0E42\u0E2E\u0E42\u0E25\u0E41\u0E01\u0E23\u0E21\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E1A\u0E23\u0E38\u0E49\u0E07); \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D "\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C / \u0E09\u0E25\u0E32\u0E01\u0E15\u0E34\u0E14 / label / \u0E42\u0E25\u0E42\u0E01\u0E49\u0E15\u0E34\u0E14" (\u0E40\u0E1B\u0E47\u0E19\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48\u0E1A\u0E23\u0E23\u0E08\u0E38\u0E20\u0E31\u0E13\u0E11\u0E4C)
 
 ## \u0E27\u0E31\u0E2A\u0E14\u0E38\u0E17\u0E35\u0E48\u0E21\u0E35\u0E43\u0E19\u0E23\u0E30\u0E1A\u0E1A (materialId)
 ${MATERIALS.map(
@@ -58958,7 +59380,8 @@ ${MATERIALS.map(
 - \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23 "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E43\u0E2A\u0E48\u0E02\u0E27\u0E14/\u0E41\u0E01\u0E49\u0E27" \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E27\u0E31\u0E2A\u0E14\u0E38\u0E01\u0E25\u0E48\u0E2D\u0E07 \u0E41\u0E15\u0E48\u0E16\u0E49\u0E32\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E1C\u0E25\u0E34\u0E15\u0E15\u0E31\u0E27\u0E02\u0E27\u0E14/\u0E01\u0E23\u0E30\u0E1B\u0E4B\u0E2D\u0E07/\u0E42\u0E2B\u0E25\u0E40\u0E2D\u0E07 \u2192 pet-bottle / aluminum / glass
 - \u0E16\u0E38\u0E07/\u0E0B\u0E2D\u0E07/doypack/\u0E16\u0E38\u0E07\u0E0B\u0E34\u0E1B/\u0E16\u0E38\u0E07\u0E15\u0E31\u0E49\u0E07\u0E44\u0E14\u0E49 (\u0E01\u0E32\u0E41\u0E1F \u0E0A\u0E32 \u0E02\u0E19\u0E21 \u0E1C\u0E07\u0E0A\u0E07 \u0E02\u0E2D\u0E07\u0E41\u0E2B\u0E49\u0E07) \u2192 pouch-foil (\u0E01\u0E31\u0E19\u0E0A\u0E37\u0E49\u0E19\u0E14\u0E35, \u0E04\u0E48\u0E32\u0E40\u0E23\u0E34\u0E48\u0E21\u0E15\u0E49\u0E19\u0E02\u0E2D\u0E07\u0E16\u0E38\u0E07); \u0E2A\u0E32\u0E22\u0E2D\u0E35\u0E42\u0E04\u0E48/\u0E04\u0E23\u0E32\u0E1F\u0E17\u0E4C \u2192 pouch-kraft; \u0E2D\u0E22\u0E32\u0E01\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E02\u0E49\u0E32\u0E07\u0E43\u0E19 \u2192 pouch-clear
 - \u0E2B\u0E25\u0E2D\u0E14\u0E04\u0E23\u0E35\u0E21/\u0E40\u0E08\u0E25/\u0E42\u0E25\u0E0A\u0E31\u0E48\u0E19/\u0E22\u0E32\u0E2A\u0E35\u0E1F\u0E31\u0E19 (\u0E2B\u0E25\u0E2D\u0E14\u0E1A\u0E35\u0E1A) \u2192 tube-laminate (template \u0E43\u0E2A\u0E48\u0E2D\u0E30\u0E44\u0E23\u0E01\u0E47\u0E44\u0E14\u0E49 \u0E16\u0E39\u0E01\u0E25\u0E30\u0E40\u0E25\u0E22)
-- \u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C/\u0E09\u0E25\u0E32\u0E01\u0E15\u0E34\u0E14/\u0E42\u0E25\u0E42\u0E01\u0E49\u0E15\u0E34\u0E14/label \u2192 template sticker + \u0E27\u0E31\u0E2A\u0E14\u0E38 sticker-vinyl (\u0E01\u0E31\u0E19\u0E19\u0E49\u0E33 \u0E17\u0E19\u0E41\u0E14\u0E14) / sticker-pp (\u0E09\u0E25\u0E32\u0E01\u0E02\u0E27\u0E14 \u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07 \u0E02\u0E2D\u0E07\u0E40\u0E02\u0E49\u0E32\u0E15\u0E39\u0E49\u0E40\u0E22\u0E47\u0E19) / sticker-pp-clear \u0E2B\u0E23\u0E37\u0E2D sticker-pp-clear-white (\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E43\u0E2A \u0E15\u0E34\u0E14\u0E41\u0E01\u0E49\u0E27/\u0E01\u0E23\u0E30\u0E08\u0E01 \u2014 \u0E25\u0E32\u0E22\u0E2A\u0E35\u0E2D\u0E48\u0E2D\u0E19/\u0E02\u0E32\u0E27\u0E2B\u0E23\u0E37\u0E2D\u0E2D\u0E22\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E25\u0E32\u0E22\u0E17\u0E36\u0E1A \u0E43\u0E0A\u0E49 -white) / sticker-paper (\u0E43\u0E19\u0E23\u0E48\u0E21/\u0E1B\u0E23\u0E30\u0E2B\u0E22\u0E31\u0E14)
+- \u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23 \u2192 template card + card-art-matte (\u0E17\u0E31\u0E48\u0E27\u0E44\u0E1B) / card-art-gloss (\u0E2A\u0E35\u0E2A\u0E14) / card-cotton (\u0E2B\u0E23\u0E39 \u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E1B\u0E31\u0E4A\u0E21\u0E08\u0E21) / card-linen (\u0E04\u0E25\u0E32\u0E2A\u0E2A\u0E34\u0E01 \u0E17\u0E32\u0E07\u0E01\u0E32\u0E23) / card-pearl (\u0E01\u0E32\u0E23\u0E4C\u0E14\u0E40\u0E0A\u0E34\u0E0D \u0E04\u0E27\u0E32\u0E21\u0E07\u0E32\u0E21) / card-black (\u0E14\u0E33\u0E2B\u0E23\u0E39 \u0E04\u0E39\u0E48\u0E1F\u0E2D\u0E22\u0E25\u0E4C)
+- \u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C/\u0E09\u0E25\u0E32\u0E01\u0E15\u0E34\u0E14/\u0E42\u0E25\u0E42\u0E01\u0E49\u0E15\u0E34\u0E14/label \u2192 template sticker + \u0E27\u0E31\u0E2A\u0E14\u0E38 sticker-vinyl (\u0E01\u0E31\u0E19\u0E19\u0E49\u0E33 \u0E17\u0E19\u0E41\u0E14\u0E14) / sticker-pp (\u0E09\u0E25\u0E32\u0E01\u0E02\u0E27\u0E14 \u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07 \u0E02\u0E2D\u0E07\u0E40\u0E02\u0E49\u0E32\u0E15\u0E39\u0E49\u0E40\u0E22\u0E47\u0E19) / sticker-pp-clear \u0E2B\u0E23\u0E37\u0E2D sticker-pp-clear-white (\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E43\u0E2A \u0E15\u0E34\u0E14\u0E41\u0E01\u0E49\u0E27/\u0E01\u0E23\u0E30\u0E08\u0E01 \u2014 \u0E25\u0E32\u0E22\u0E2A\u0E35\u0E2D\u0E48\u0E2D\u0E19/\u0E02\u0E32\u0E27\u0E2B\u0E23\u0E37\u0E2D\u0E2D\u0E22\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E25\u0E32\u0E22\u0E17\u0E36\u0E1A \u0E43\u0E0A\u0E49 -white) / sticker-paper (\u0E43\u0E19\u0E23\u0E48\u0E21/\u0E1B\u0E23\u0E30\u0E2B\u0E22\u0E31\u0E14) / sticker-art-gloss (\u0E2A\u0E35\u0E2A\u0E14\u0E40\u0E07\u0E32) / sticker-kraft (\u0E2D\u0E35\u0E42\u0E04\u0E48 \u0E04\u0E23\u0E32\u0E1F\u0E17\u0E4C) / sticker-felt (\u0E09\u0E25\u0E32\u0E01\u0E44\u0E27\u0E19\u0E4C \u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21) / sticker-silver (\u0E40\u0E21\u0E17\u0E31\u0E25\u0E25\u0E34\u0E01) / sticker-holo (\u0E42\u0E2E\u0E42\u0E25\u0E41\u0E01\u0E23\u0E21)
 
 ## \u0E15\u0E32\u0E23\u0E32\u0E07\u0E02\u0E19\u0E32\u0E14\u0E02\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E1E\u0E1A\u0E1A\u0E48\u0E2D\u0E22 (\u0E21\u0E21.)
 ${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? " (\u0E40\u0E1B\u0E23\u0E32\u0E30)" : ""}`).join("\n")}
@@ -59015,8 +59438,10 @@ var BOX_SPEC_SCHEMA = {
   required: ["template", "materialId", "W", "D", "H", "handle", "assumptions", "layoutNote", "explanation"]
 };
 function sanitize(raw, mock) {
-  const materialId = MATERIALS.some((m) => m.id === raw.materialId) ? raw.materialId : "carton-300";
+  let materialId = MATERIALS.some((m) => m.id === raw.materialId) ? raw.materialId : "carton-300";
   const template = TEMPLATE_IDS.includes(raw.template) ? raw.template : "tuck-end";
+  if (template === "card" && !CARD_STOCK_IDS.includes(materialId)) materialId = DEFAULT_CARD_MAT;
+  else if (template !== "card" && materialId.startsWith("card-")) materialId = "carton-300";
   return {
     template,
     materialId,
@@ -59713,6 +60138,7 @@ function checkArtworkPlan(plan, panels) {
 function describeArtIssues(issues) {
   return issues.map((i) => `- [${i.severity}] ${i.message}`).join("\n");
 }
+var LABEL_FRONT_FRACTION = 1 / 3;
 var SVG_TAGS = /* @__PURE__ */ new Set([
   "svg",
   "g",
@@ -59954,6 +60380,45 @@ function sanitizeSvg(markup) {
   return { svg, aspect: vw / vh };
 }
 
+// shared/contracts/aiModels.ts
+var AI_MODEL_CHOICES = [
+  { id: "claude-opus-5-5", label: "Opus 5.5" },
+  { id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
+  { id: "claude-haiku-5-5", label: "Haiku 5.5" }
+];
+var isAiModelChoice = (value) => AI_MODEL_CHOICES.some((choice) => choice.id === value);
+var CACHE_WRITE_MULTIPLIER = 1.25;
+var AI_MODEL_PRICES = {
+  "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.2 },
+  "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01, longPrompt: { above: 1e5, input: 0.5, output: 2.5 } },
+  // รุ่นที่ server-side fallback ส่งต่อไปตอบแทนได้ — คิดตามรุ่นที่ตอบจริง
+  "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5 },
+  "claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2 }
+};
+function aiRequestCostUsd(model, usage) {
+  const price = AI_MODEL_PRICES[model];
+  if (!price) return null;
+  const prompt = usage.inputTokens + usage.cacheReadTokens + usage.cacheCreationTokens;
+  const long = price.longPrompt && prompt > price.longPrompt.above ? price.longPrompt : null;
+  const input2 = long ? long.input : price.input;
+  const output2 = long ? long.output : price.output;
+  const cacheRead = long ? price.cacheRead * (long.input / price.input) : price.cacheRead;
+  return (usage.inputTokens * input2 + usage.cacheCreationTokens * input2 * CACHE_WRITE_MULTIPLIER + usage.cacheReadTokens * cacheRead + usage.outputTokens * output2) / 1e6;
+}
+function addAiUsage(report, model, usage) {
+  const cost = aiRequestCostUsd(model, usage);
+  return {
+    model,
+    requests: (report?.requests ?? 0) + 1,
+    inputTokens: (report?.inputTokens ?? 0) + usage.inputTokens,
+    outputTokens: (report?.outputTokens ?? 0) + usage.outputTokens,
+    cacheReadTokens: (report?.cacheReadTokens ?? 0) + usage.cacheReadTokens,
+    cacheCreationTokens: (report?.cacheCreationTokens ?? 0) + usage.cacheCreationTokens,
+    costUsd: cost === null || report && report.costUsd === null ? null : (report?.costUsd ?? 0) + cost
+  };
+}
+
 // server/aiArtwork.ts
 var execFileP2 = promisify3(execFile3);
 var MAX_ROUNDS = 2;
@@ -60019,6 +60484,12 @@ function buildArtworkUserContent(req) {
     req.fillColor ? `\u0E2A\u0E35\u0E1E\u0E37\u0E49\u0E19\u0E1B\u0E31\u0E08\u0E08\u0E38\u0E1A\u0E31\u0E19 ${req.fillColor} (\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E44\u0E14\u0E49)` : "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E2A\u0E35\u0E1E\u0E37\u0E49\u0E19",
     req.existing > 0 ? `\u0E07\u0E32\u0E19\u0E19\u0E35\u0E49\u0E21\u0E35\u0E0A\u0E34\u0E49\u0E19\u0E07\u0E32\u0E19\u0E40\u0E14\u0E34\u0E21 ${req.existing} \u0E0A\u0E34\u0E49\u0E19 \u2014 \u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48\u0E02\u0E2D\u0E07\u0E04\u0E38\u0E13\u0E08\u0E30\u0E43\u0E0A\u0E49\u0E41\u0E17\u0E19\u0E2B\u0E23\u0E37\u0E2D\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E15\u0E48\u0E2D\u0E15\u0E32\u0E21\u0E17\u0E35\u0E48\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01 \u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E49\u0E04\u0E23\u0E1A\u0E43\u0E19\u0E15\u0E31\u0E27` : "\u0E07\u0E32\u0E19\u0E27\u0E48\u0E32\u0E07 \u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14"
   ];
+  if (req.front) {
+    const fw = req.front.x1 - req.front.x0;
+    lines.push(
+      `\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E2D\u0E48\u0E32\u0E19\u0E44\u0E14\u0E49\u0E15\u0E23\u0E07\u0E02\u0E2D\u0E07\u0E20\u0E32\u0E0A\u0E19\u0E30\u0E17\u0E23\u0E07\u0E01\u0E23\u0E30\u0E1A\u0E2D\u0E01: \u0E41\u0E1C\u0E07 ${req.front.panel} \u0E0A\u0E48\u0E27\u0E07 x = ${req.front.x0.toFixed(1)}\u2013${req.front.x1.toFixed(1)} \u0E21\u0E21. (\u0E01\u0E27\u0E49\u0E32\u0E07 ${fw.toFixed(1)} \u0E21\u0E21.) \u2014 \u0E0A\u0E37\u0E48\u0E2D\u0E41\u0E1A\u0E23\u0E19\u0E14\u0E4C \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2B\u0E25\u0E31\u0E01 \u0E41\u0E25\u0E30\u0E42\u0E25\u0E42\u0E01\u0E49\u0E15\u0E49\u0E2D\u0E07\u0E2D\u0E22\u0E39\u0E48\u0E43\u0E19\u0E0A\u0E48\u0E27\u0E07\u0E19\u0E35\u0E49\u0E41\u0E25\u0E30\u0E01\u0E27\u0E49\u0E32\u0E07\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19 ${fw.toFixed(0)} \u0E21\u0E21. (\u0E2A\u0E48\u0E27\u0E19\u0E17\u0E35\u0E48\u0E40\u0E25\u0E22\u0E08\u0E30\u0E2D\u0E49\u0E2D\u0E21\u0E02\u0E2D\u0E1A\u0E42\u0E04\u0E49\u0E07\u0E08\u0E19\u0E2D\u0E48\u0E32\u0E19\u0E44\u0E21\u0E48\u0E2D\u0E2D\u0E01 \u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E30\u0E15\u0E31\u0E14\u0E1A\u0E23\u0E23\u0E17\u0E31\u0E14/\u0E22\u0E48\u0E2D\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07); \u0E14\u0E49\u0E32\u0E19\u0E02\u0E49\u0E32\u0E07/\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E25\u0E31\u0E07\u0E43\u0E0A\u0E49\u0E27\u0E32\u0E07\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E23\u0E2D\u0E07 \u0E41\u0E16\u0E1A\u0E2A\u0E35\u0E2B\u0E23\u0E37\u0E2D\u0E25\u0E32\u0E22\u0E1E\u0E37\u0E49\u0E19\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E44\u0E14\u0E49`
+    );
+  }
   if (req.images.length) {
     lines.push("\u0E23\u0E39\u0E1B\u0E17\u0E35\u0E48\u0E41\u0E19\u0E1A\u0E21\u0E32 (\u0E15\u0E32\u0E21\u0E25\u0E33\u0E14\u0E31\u0E1A):");
     req.images.forEach((im, i) => {
@@ -60089,6 +60560,7 @@ function apiAskWithUsage(apiKey, model, limits = { timeoutMs: 24e4, maxRetries: 
   const client = new Anthropic({ apiKey, timeout: limits.timeoutMs, maxRetries: limits.maxRetries });
   const options = artworkModelOptions(model);
   let total = null;
+  let report = null;
   const ask = async (messages) => {
     let timeout = limits.timeoutMs;
     if (limits.deadlineMs !== void 0) {
@@ -60114,18 +60586,25 @@ function apiAskWithUsage(apiKey, model, limits = { timeoutMs: 24e4, maxRetries: 
       { timeout }
     ) : await client.messages.create(params, { timeout });
     const u = msg.usage;
-    total = {
-      inputTokens: (total?.inputTokens ?? 0) + u.input_tokens,
-      outputTokens: (total?.outputTokens ?? 0) + u.output_tokens,
-      cacheReadTokens: (total?.cacheReadTokens ?? 0) + (u.cache_read_input_tokens ?? 0),
-      cacheCreationTokens: (total?.cacheCreationTokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
+    const call = {
+      inputTokens: u.input_tokens,
+      outputTokens: u.output_tokens,
+      cacheReadTokens: u.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: u.cache_creation_input_tokens ?? 0
     };
+    total = {
+      inputTokens: (total?.inputTokens ?? 0) + call.inputTokens,
+      outputTokens: (total?.outputTokens ?? 0) + call.outputTokens,
+      cacheReadTokens: (total?.cacheReadTokens ?? 0) + call.cacheReadTokens,
+      cacheCreationTokens: (total?.cacheCreationTokens ?? 0) + call.cacheCreationTokens
+    };
+    report = addAiUsage(report, msg.model, call);
     if (msg.stop_reason === "refusal") throw new ArtworkResponseError("refusal", "\u0E42\u0E21\u0E40\u0E14\u0E25\u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18\u0E04\u0E33\u0E02\u0E2D \u0E25\u0E2D\u0E07\u0E1B\u0E23\u0E31\u0E1A\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E2B\u0E23\u0E37\u0E2D\u0E23\u0E39\u0E1B\u0E17\u0E35\u0E48\u0E41\u0E19\u0E1A");
     if (msg.stop_reason === "max_tokens") throw new ArtworkResponseError("max_tokens", "\u0E41\u0E1A\u0E1A\u0E17\u0E35\u0E48\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E22\u0E32\u0E27\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E16\u0E39\u0E01\u0E15\u0E31\u0E14\u0E01\u0E48\u0E2D\u0E19\u0E08\u0E1A \u2014 \u0E25\u0E2D\u0E07\u0E02\u0E2D\u0E43\u0E2B\u0E49\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E07\u0E48\u0E32\u0E22\u0E25\u0E07");
     const text = msg.content.map((b) => b.type === "text" ? b.text : "").join("");
     return { raw: extractJson(text), model: msg.model, text };
   };
-  return { ask, usage: () => total };
+  return { ask, usage: () => total, report: () => report };
 }
 var JSON_INSTRUCTION2 = `
 
@@ -60169,7 +60648,28 @@ function parseArtworkRequest(body) {
       images.push({ ...im, role, ...assetId ? { assetId } : {}, ...note ? { note } : {} });
     }
   }
-  return { prompt, kind, template, materialId, box: { W, D, H }, sheet: { w: sw, h: sh }, panels, fillColor, existing, images };
+  let front = null;
+  const f = body.front ?? null;
+  if (f && typeof f === "object" && typeof f.panel === "string") {
+    const target = panels.find((p) => p.id === f.panel);
+    const x0 = num2(f.x0, 0, 5e3), x1 = num2(f.x1, 0, 5e3);
+    if (target && x0 !== null && x1 !== null && x1 > x0 && x1 <= target.w + 0.5) front = { panel: target.id, x0, x1 };
+  }
+  const model = isAiModelChoice(body.model) ? body.model : void 0;
+  return {
+    prompt,
+    kind,
+    template,
+    materialId,
+    box: { W, D, H },
+    sheet: { w: sw, h: sh },
+    panels,
+    fillColor,
+    existing,
+    images,
+    ...front ? { front } : {},
+    ...model ? { model } : {}
+  };
 }
 
 // server/modules/ai/aiService.ts
@@ -60205,8 +60705,8 @@ var AnthropicAiService = class {
     }
   }
   // ออกแบบหน้าตาบน template ที่เลือก: วงรอบ designArtwork เดิม (parse → ตรวจแผง → รอบแก้ ≤ 1) ใต้งบเวลารวม + สะสม usage ทุกรอบ
-  async generateArtwork(apiKey, input2) {
-    const { ask, usage } = apiAskWithUsage(apiKey, this.model, {
+  async generateArtwork(apiKey, input2, model = this.model) {
+    const { ask, usage, report } = apiAskWithUsage(apiKey, model, {
       timeoutMs: this.artworkLimits.timeoutMs,
       maxRetries: this.artworkLimits.maxRetries,
       deadlineMs: Date.now() + this.artworkLimits.budgetMs
@@ -60214,7 +60714,7 @@ var AnthropicAiService = class {
     try {
       const result = await designArtwork(ask, input2);
       if (!result.plan) throw new AiProviderError("provider", new Error(result.issues[0]?.message ?? "no usable plan"));
-      return { result, model: result.model || this.model, usage: usage() };
+      return { result, model: result.model || model, usage: usage(), report: report() };
     } catch (error62) {
       if (error62 instanceof AiProviderError) throw error62;
       if (error62 instanceof ArtworkResponseError) throw new AiProviderError(error62.reason === "refusal" ? "refusal" : "provider", error62);
@@ -60261,7 +60761,8 @@ var BillingService = class {
       ...entitlements,
       devFulfilAvailable: this.options.devFulfilEnabled,
       purchasesEnabled: this.options.purchasesEnabled,
-      openAccess: this.options.openAccess
+      openAccess: this.options.openAccess,
+      ...this.options.aiModelChoice ? { aiModelChoice: true } : {}
     };
   }
   async getEntitlements(actor, workspaceId) {
@@ -60319,26 +60820,87 @@ var BillingService = class {
   }
 };
 
+// server/modules/billing/storageQuota.ts
+var StorageQuota = class {
+  constructor(repository, options) {
+    this.repository = repository;
+    this.options = options;
+  }
+  // เกินโควตา → 402 STORAGE_QUOTA_EXCEEDED: คิวบันทึกของ client ถือเป็น error ถาวร (ไม่ลองซ้ำเอง)
+  // ต้องลบงาน/รูป หรืออัปเกรดก่อน; details ให้ client บอกพื้นที่ที่ใช้/เพดานได้
+  async assert(actor, input2) {
+    const result = await this.repository.checkStorageQuota(actor, input2, this.options.openAccess);
+    if (result.ok) return;
+    throw new HttpError(402, "STORAGE_QUOTA_EXCEEDED", "\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E35\u0E48\u0E40\u0E01\u0E47\u0E1A\u0E07\u0E32\u0E19\u0E40\u0E15\u0E47\u0E21\u0E41\u0E25\u0E49\u0E27", {
+      plan: result.plan,
+      limitBytes: result.limitBytes,
+      usedBytes: result.usedBytes,
+      projectedBytes: result.projectedBytes
+    });
+  }
+};
+
 // server/modules/projects/projectService.ts
 var ProjectService = class {
-  constructor(repository) {
+  // quota = โควตาพื้นที่เก็บงาน ตรวจก่อนเขียนงานทุกทาง (null = ยังไม่เปิดใช้ — isStorageQuotaEnabled ใน server/http/router.ts)
+  constructor(repository, quota = null) {
     this.repository = repository;
+    this.quota = quota;
   }
-  list(actor, query) {
-    return this.repository.list(actor, query);
+  // หน้ารายการ + meta ภาพย่อของหน้านั้น — อ่าน meta ไม่ได้ (เช่นฐานข้อมูลยังไม่ migrate) ไม่ทำให้รายการล้ม
+  async list(actor, query) {
+    const page = await this.repository.list(actor, query);
+    if (!page.items.length) return page;
+    let meta3;
+    try {
+      meta3 = await this.repository.thumbnailMeta(actor, query.workspaceId, page.items.map((item) => item.id));
+    } catch {
+      return page;
+    }
+    return {
+      ...page,
+      items: page.items.map((item) => meta3.has(item.id) ? { ...item, thumbnail: meta3.get(item.id) } : item)
+    };
+  }
+  putThumbnail(actor, projectId, input2) {
+    return this.repository.putThumbnail(actor, projectId, input2);
+  }
+  thumbnails(actor, workspaceId, projectIds) {
+    return this.repository.thumbnails(actor, workspaceId, projectIds);
   }
   get(actor, projectId) {
     return this.repository.get(actor, projectId);
   }
-  create(actor, input2) {
+  async create(actor, input2) {
+    await this.quota?.assert(actor, {
+      workspaceId: input2.workspaceId,
+      projectId: null,
+      operationId: input2.operationId,
+      document: input2.document,
+      extraBytes: 0
+    });
     const hash2 = requestHash({ operationType: "create", ...input2 });
     return this.repository.create(actor, input2, hash2);
   }
-  importLegacy(actor, input2) {
+  async importLegacy(actor, input2) {
+    await this.quota?.assert(actor, {
+      workspaceId: input2.workspaceId,
+      projectId: null,
+      operationId: input2.operationId,
+      document: input2.document,
+      extraBytes: 0
+    });
     const hash2 = requestHash({ operationType: "legacy-import", ...input2 });
     return this.repository.importLegacy(actor, input2, hash2);
   }
-  save(actor, input2) {
+  async save(actor, input2) {
+    await this.quota?.assert(actor, {
+      workspaceId: null,
+      projectId: input2.projectId,
+      operationId: input2.operationId,
+      document: input2.document,
+      extraBytes: 0
+    });
     const hash2 = requestHash({ operationType: "save", ...input2 });
     return this.repository.save(actor, input2, hash2);
   }
@@ -60468,11 +61030,18 @@ function isPurchaseEnabled(config2) {
 function isOpenAccess(config2) {
   return !isPurchaseEnabled(config2);
 }
+function isStorageQuotaEnabled(_config) {
+  return false;
+}
+function isAiModelChoiceEnabled(config2) {
+  return config2.appEnv !== "production";
+}
 function billingFlags(config2) {
   return {
     devFulfilEnabled: isDevFulfilEnvironment(config2),
     purchasesEnabled: isPurchaseEnabled(config2),
-    openAccess: isOpenAccess(config2)
+    openAccess: isOpenAccess(config2),
+    aiModelChoice: isAiModelChoiceEnabled(config2)
   };
 }
 function unexpectedError(requestId, route, error62, fallback) {
@@ -60559,8 +61128,9 @@ function parseOrThrow(result) {
 }
 function createApiRouter(config2, dependencies = {}) {
   const sessionService = dependencies.sessionService === void 0 ? config2.supabase && createSupabaseSessionService(config2.supabase) : dependencies.sessionService;
-  const projectService = dependencies.projectService === void 0 ? config2.supabase && new ProjectService(createSupabaseProjectRepository(config2.supabase)) : dependencies.projectService;
-  const assetService = dependencies.assetService === void 0 ? config2.supabase && createSupabaseAssetService(config2.supabase) : dependencies.assetService;
+  const storageQuota = config2.supabase && isStorageQuotaEnabled(config2) ? new StorageQuota(createSupabaseStorageQuotaRepository(config2.supabase), { openAccess: isOpenAccess(config2) }) : null;
+  const projectService = dependencies.projectService === void 0 ? config2.supabase && new ProjectService(createSupabaseProjectRepository(config2.supabase), storageQuota) : dependencies.projectService;
+  const assetService = dependencies.assetService === void 0 ? config2.supabase && createSupabaseAssetService(config2.supabase, storageQuota) : dependencies.assetService;
   const aiService = dependencies.aiService === void 0 ? new AnthropicAiService(config2.ai?.model) : dependencies.aiService;
   const billingRepository = dependencies.billingRepository === void 0 ? config2.supabase && createSupabaseBillingRepository(config2.supabase) : dependencies.billingRepository;
   const billingService = dependencies.billingService === void 0 ? billingRepository && new BillingService(billingRepository, billingFlags(config2)) : dependencies.billingService;
@@ -60639,14 +61209,16 @@ function createApiRouter(config2, dependencies = {}) {
         if (!serverAi) {
           throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E04\u0E35\u0E22\u0E4C AI");
         }
-        const { value: result, credits } = await chargedAiCall(
+        const modelChoice = isAiModelChoiceEnabled(config2);
+        const { value, credits } = await chargedAiCall(
           { billingService, actor, workspaceId: input2.workspaceId, operationId: input2.operationId, requestId, route: AI_ARTWORK_ROUTE, hasImage: request.images.length > 0 },
           async () => {
-            const generated = await aiService.generateArtwork(serverAi.anthropicApiKey, request);
-            return { value: generated.result, model: generated.model, usage: generated.usage };
+            const generated = await aiService.generateArtwork(serverAi.anthropicApiKey, request, modelChoice ? request.model : void 0);
+            return { value: generated, model: generated.model, usage: generated.usage };
           }
         );
-        sendJson(res, 200, { data: { ...result, credits }, requestId }, requestId);
+        const usage = modelChoice && value.report ? { usage: value.report } : {};
+        sendJson(res, 200, { data: { ...value.result, ...usage, credits }, requestId }, requestId);
       } catch (error63) {
         const httpError = aiRouteError(error63, requestId, AI_ARTWORK_ROUTE);
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
@@ -60908,6 +61480,58 @@ function createApiRouter(config2, dependencies = {}) {
           "POST /api/v1/billing/orders/:id/dev-fulfil",
           error63,
           new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E08\u0E33\u0E25\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08")
+        );
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
+    if (path5 === "/api/v1/projects/thumbnails") {
+      try {
+        if (req.method !== "POST") {
+          res.setHeader("allow", "POST");
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!sessionService || !projectService) {
+          throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Supabase");
+        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId);
+        requireJsonContentType(req);
+        const input2 = parseOrThrow(projectThumbnailBatchSchema.safeParse(await readJsonBody(req)));
+        const items = await projectService.thumbnails(actor, input2.workspaceId, input2.projectIds);
+        sendJson(res, 200, { data: { items }, requestId }, requestId);
+      } catch (error63) {
+        const httpError = error63 instanceof HttpError ? error63 : unexpectedError(
+          requestId,
+          "POST /api/v1/projects/thumbnails",
+          error63,
+          new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E42\u0E2B\u0E25\u0E14\u0E20\u0E32\u0E1E\u0E22\u0E48\u0E2D\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08")
+        );
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
+    const thumbnailMatch = /^\/api\/v1\/projects\/([^/]+)\/thumbnail$/.exec(path5);
+    if (thumbnailMatch) {
+      try {
+        if (req.method !== "PUT") {
+          res.setHeader("allow", "PUT");
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!sessionService || !projectService) {
+          throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Supabase");
+        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId);
+        const projectId = parseOrThrow(projectIdSchema.safeParse(thumbnailMatch[1]));
+        requireJsonContentType(req);
+        const input2 = parseOrThrow(putProjectThumbnailInputSchema.safeParse(await readJsonBody(req)));
+        const data = await projectService.putThumbnail(actor, projectId, input2);
+        sendJson(res, 200, { data, requestId }, requestId);
+      } catch (error63) {
+        const httpError = error63 instanceof HttpError ? error63 : unexpectedError(
+          requestId,
+          "PUT /api/v1/projects/:id/thumbnail",
+          error63,
+          new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E20\u0E32\u0E1E\u0E22\u0E48\u0E2D\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08")
         );
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
       }

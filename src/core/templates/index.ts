@@ -12,6 +12,7 @@ import { generateSticker } from './sticker'
 import { generateLidBox } from './lidBox'
 import { generateSlideBox } from './slideBox'
 import { generateDisplayBox } from './displayBox'
+import { generateHangingDoorBox } from './hangingDoorBox'
 import { generateFefco0215 } from './fefco0215'
 import { generateFefco0202 } from './fefco0202'
 import { generateFefco0217 } from './fefco0217'
@@ -179,6 +180,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: false,
     foldDepth: (b, m) => b.H + m.thickness,
     generate: generateDisplayBox,
+  },
+  {
+    id: 'hanging-door-box',
+    nameTh: 'กล่องแขวนฝาเปิดหน้าแบบบานประตู',
+    detail: 'สินค้าหน้าร้าน · มีแผงเจาะรูแขวนด้านบน · เปิดฝาไปด้านข้าง',
+    defaults: { W: 84, D: 36, H: 128 },
+    tilt: 0,
+    supportsHandle: false,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
+    generate: generateHangingDoorBox,
   },
   {
     id: 'tray',
