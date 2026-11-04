@@ -13,6 +13,7 @@ import { generateLidBox } from './lidBox'
 import { generateSlideBox } from './slideBox'
 import { generateDisplayBox } from './displayBox'
 import { generateHangingDoorBox } from './hangingDoorBox'
+import { generateTaperedLidBox, TAPERED_LID_BOX_ID } from './taperedLidBox'
 import { generateFefco0215 } from './fefco0215'
 import { generateFefco0202 } from './fefco0202'
 import { generateFefco0217 } from './fefco0217'
@@ -190,6 +191,16 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsHandle: false,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateHangingDoorBox,
+  },
+  {
+    id: TAPERED_LID_BOX_ID,
+    nameTh: 'กล่องทรงคางหมูฝาพับ',
+    detail: 'กล่องของฝาก · ปากสอบ · ฝาพับติดด้านหลังพร้อมลิ้นเสียบ',
+    defaults: { W: 142, D: 54, H: 112 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (box, material) => box.H + 2 * material.thickness,
+    generate: generateTaperedLidBox,
   },
   {
     id: 'tray',

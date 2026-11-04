@@ -14995,6 +14995,118 @@ function generateHangingDoorBox({ W, D, H }, { thickness: t }) {
   };
 }
 
+// src/core/templates/taperedLidBox.ts
+var TAPERED_LID_BOX_ID = "tapered-lid-box";
+var TAPER_RATIO = 19 / 142;
+function generateTaperedLidBox({ W, D, H }, { thickness: t }) {
+  const width = W + 2 * t;
+  const depth = D + 2 * t;
+  const height = H + 2 * t;
+  const taper = W * TAPER_RATIO;
+  const sideHeight = Math.hypot(height, taper);
+  const sideAngle = 90 + Math.atan2(taper, height) * 180 / Math.PI;
+  const inset = t + 0.6;
+  const layer = t + 0.05;
+  const lidDepth = depth - t - 0.55;
+  const lip = Math.min(15, H / 2);
+  const left = sideHeight;
+  const right = left + width;
+  const topLeft = left + taper;
+  const topRight = right - taper;
+  const lidLeft = topLeft + inset;
+  const lidRight = topRight - inset;
+  const backTop = lidDepth + lip;
+  const backBase = backTop + height;
+  const frontBase = backBase + depth;
+  const frontTop = frontBase + height;
+  const sheetWidth = right + sideHeight;
+  const panels = [
+    { id: "base", parentId: null, outline: rect(left, backBase, right, frontBase), stage: 0 },
+    {
+      id: "side-left",
+      parentId: "base",
+      outline: rect(0, backBase, left, frontBase),
+      hingeA: P(left, backBase),
+      hingeB: P(left, frontBase),
+      foldAngle: -sideAngle,
+      stage: 0
+    },
+    {
+      id: "side-right",
+      parentId: "base",
+      outline: rect(right, backBase, sheetWidth, frontBase),
+      hingeA: P(right, backBase),
+      hingeB: P(right, frontBase),
+      foldAngle: sideAngle,
+      stage: 0
+    },
+    {
+      id: "back",
+      parentId: "base",
+      outline: [P(left, backBase), P(right, backBase), P(topRight, backTop), P(topLeft, backTop)],
+      hingeA: P(left, backBase),
+      hingeB: P(right, backBase),
+      foldAngle: 90,
+      stage: 2
+    },
+    {
+      id: "front",
+      parentId: "base",
+      outline: [P(left, frontBase), P(right, frontBase), P(topRight, frontTop), P(topLeft, frontTop)],
+      hingeA: P(left, frontBase),
+      hingeB: P(right, frontBase),
+      foldAngle: -90,
+      stage: 2
+    },
+    {
+      id: "lid",
+      parentId: "back",
+      outline: rect(lidLeft, lip, lidRight, backTop),
+      hingeA: P(lidLeft, backTop),
+      hingeB: P(lidRight, backTop),
+      foldAngle: 90,
+      stage: 3
+    },
+    {
+      id: "tongue-lid",
+      parentId: "lid",
+      outline: [P(lidLeft + 3, lip), P(lidLeft + 7, 0), P(lidRight - 7, 0), P(lidRight - 3, lip)],
+      hingeA: P(lidLeft + 3, lip),
+      hingeB: P(lidRight - 3, lip),
+      foldAngle: 90,
+      stage: 4,
+      zOffset: layer,
+      tuck: true
+    }
+  ];
+  for (const [side, a, b] of [["side-left", 3, left - 3], ["side-right", right + 3, sheetWidth - 3]]) {
+    for (const [edge, y, sign] of [["back", backBase, 1], ["front", frontBase, -1]]) {
+      const tabEdge = y - 12 * sign;
+      panels.push({
+        id: `glue-${side}-${edge}`,
+        parentId: side,
+        stage: 1,
+        zOffset: layer,
+        foldAngle: 90 * sign,
+        outline: [P(a, y), P(b, y), P(b - 4, tabEdge), P(a + 4, tabEdge)],
+        hingeA: P(a, y),
+        hingeB: P(b, y)
+      });
+    }
+  }
+  return {
+    width: sheetWidth,
+    height: frontTop,
+    panels,
+    segments: autoSegments(panels),
+    dims: [
+      { a: P(left, frontTop + 8), b: P(right, frontTop + 8), label: `W ${fmt(width)}` },
+      { a: P(-8, backBase), b: P(-8, frontBase), label: `D ${fmt(depth)}` },
+      { a: P(sheetWidth + 8, frontBase), b: P(sheetWidth + 8, frontTop), label: `H ${fmt(height)}` }
+    ]
+  };
+}
+
 // src/core/templates/fefco0215.ts
 function generateFefco0215(box, mat) {
   const { W, D, H } = box;
@@ -15867,6 +15979,16 @@ var TEMPLATES = [
     generate: generateHangingDoorBox
   },
   {
+    id: TAPERED_LID_BOX_ID,
+    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E17\u0E23\u0E07\u0E04\u0E32\u0E07\u0E2B\u0E21\u0E39\u0E1D\u0E32\u0E1E\u0E31\u0E1A",
+    detail: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01 \xB7 \u0E1B\u0E32\u0E01\u0E2A\u0E2D\u0E1A \xB7 \u0E1D\u0E32\u0E1E\u0E31\u0E1A\u0E15\u0E34\u0E14\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E25\u0E31\u0E07\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E25\u0E34\u0E49\u0E19\u0E40\u0E2A\u0E35\u0E22\u0E1A",
+    defaults: { W: 142, D: 54, H: 112 },
+    tilt: -Math.PI / 2,
+    supportsHandle: false,
+    foldDepth: (box, material) => box.H + 2 * material.thickness,
+    generate: generateTaperedLidBox
+  },
+  {
     id: "tray",
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E16\u0E32\u0E14 (open tray)",
     detail: "\u0E16\u0E32\u0E14\u0E2D\u0E32\u0E2B\u0E32\u0E23/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48 \xB7 \u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C\u0E2B\u0E19\u0E49\u0E32\u0E23\u0E49\u0E32\u0E19 \xB7 \u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01\u0E04\u0E39\u0E48\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21",
@@ -15946,6 +16068,7 @@ ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
 - slide-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E2A\u0E44\u0E25\u0E14\u0E4C/matchbox): \u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (\u0E16\u0E32\u0E14) \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E40\u0E02\u0E49\u0E32-\u0E2D\u0E2D\u0E01\u0E43\u0E19\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E20\u0E32\u0E22\u0E19\u0E2D\u0E01 (2 \u0E0A\u0E34\u0E49\u0E19) \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 (D = \u0E17\u0E34\u0E28\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19), \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1B\u0E25\u0E2D\u0E01\u0E2A\u0E27\u0E21\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E1B\u0E23\u0E30\u0E14\u0E31\u0E1A/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E25\u0E47\u0E01/\u0E44\u0E21\u0E49\u0E02\u0E35\u0E14
 - display-box (\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E02\u0E49\u0E32\u0E07/\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07): \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1B\u0E34\u0E14 5 \u0E14\u0E49\u0E32\u0E19 + \u0E1D\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E44\u0E14\u0E49 \u0E40\u0E08\u0E32\u0E30\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32 \u2014 W\xD7D\xD7H = \u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, handle=false; \u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E42\u0E0A\u0E27\u0E4C\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E02\u0E2D\u0E07\u0E2A\u0E30\u0E2A\u0E21\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E40\u0E2B\u0E47\u0E19\u0E02\u0E49\u0E32\u0E07\u0E43\u0E19
 - hanging-door-box: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E41\u0E02\u0E27\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E23\u0E49\u0E32\u0E19 \u0E1D\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E36\u0E1A\u0E40\u0E1B\u0E34\u0E14\u0E08\u0E32\u0E01\u0E1A\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E14\u0E49\u0E32\u0E19\u0E02\u0E49\u0E32\u0E07\u0E41\u0E25\u0E30\u0E1B\u0E34\u0E14\u0E14\u0E49\u0E27\u0E22\u0E25\u0E34\u0E49\u0E19\u0E40\u0E2A\u0E35\u0E22\u0E1A \u0E21\u0E35\u0E41\u0E1C\u0E07\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E41\u0E02\u0E27\u0E19\u0E40\u0E2B\u0E19\u0E37\u0E2D\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E43\u0E19\u0E15\u0E31\u0E27 \u0E43\u0E2B\u0E49\u0E43\u0E0A\u0E49 handle=false \u0E41\u0E25\u0E30\u0E23\u0E30\u0E1A\u0E38 H \u0E40\u0E1B\u0E47\u0E19\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E02\u0E2D\u0E07\u0E15\u0E31\u0E27\u0E01\u0E25\u0E48\u0E2D\u0E07
+- tapered-lid-box: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E17\u0E23\u0E07\u0E04\u0E32\u0E07\u0E2B\u0E21\u0E39\u0E1D\u0E32\u0E1E\u0E31\u0E1A\u0E15\u0E34\u0E14\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E25\u0E31\u0E07\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E25\u0E34\u0E49\u0E19\u0E40\u0E2A\u0E35\u0E22\u0E1A; W/D \u0E04\u0E37\u0E2D\u0E02\u0E19\u0E32\u0E14\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19\u0E17\u0E35\u0E48\u0E10\u0E32\u0E19 \u0E1B\u0E32\u0E01\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E01\u0E27\u0E49\u0E32\u0E07\u0E1B\u0E23\u0E30\u0E21\u0E32\u0E13 73% \u0E02\u0E2D\u0E07 W, H \u0E04\u0E37\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, handle=false
 - gable: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27 (carry box) \u0E17\u0E48\u0E2D\u0E17\u0E32\u0E01\u0E32\u0E27\u0E02\u0E49\u0E32\u0E07 + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01 \u2014 \u0E1D\u0E32\u0E41\u0E1A\u0E19\u0E08\u0E32\u0E01\u0E1C\u0E19\u0E31\u0E07\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E1E\u0E31\u0E1A\u0E1B\u0E34\u0E14\u0E1B\u0E32\u0E01 \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E04\u0E32\u0E07\u0E2B\u0E21\u0E39\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E08\u0E31\u0E1A\u0E15\u0E31\u0E49\u0E07\u0E01\u0E25\u0E32\u0E07\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 \u0E41\u0E1C\u0E07\u0E1B\u0E34\u0E14\u0E1A\u0E19\u0E08\u0E32\u0E01\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E41\u0E22\u0E01\u0E2A\u0E2D\u0E07\u0E0B\u0E35\u0E01\u0E1E\u0E31\u0E1A\u0E17\u0E31\u0E1A\u0E1D\u0E32\u0E02\u0E49\u0E32\u0E07\u0E25\u0E30\u0E0B\u0E35\u0E01\u0E02\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27 \u0E1B\u0E25\u0E32\u0E22\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E25\u0E47\u0E2D\u0E01\u0E23\u0E48\u0E2D\u0E07\u0E01\u0E25\u0E32\u0E07 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false \u2014 \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E21\u0E35\u0E43\u0E19\u0E15\u0E31\u0E27); W\xD7D = footprint, H = \u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 (\u0E23\u0E30\u0E1A\u0E1A\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E40\u0E2B\u0E19\u0E37\u0E2D\u0E1B\u0E32\u0E01\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07) \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E16\u0E37\u0E2D\u0E01\u0E25\u0E31\u0E1A/\u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D
 - tray: \u0E16\u0E32\u0E14\u0E40\u0E1B\u0E34\u0E14\u0E1A\u0E19 (\u0E44\u0E21\u0E48\u0E21\u0E35\u0E1D\u0E32) \u0E1C\u0E19\u0E31\u0E07 4 \u0E14\u0E49\u0E32\u0E19\u0E1E\u0E31\u0E1A\u0E02\u0E36\u0E49\u0E19 \u0E21\u0E38\u0E21\u0E21\u0E35\u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u2014 H \u0E04\u0E37\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 (\u0E16\u0E32\u0E14\u0E21\u0E31\u0E01\u0E15\u0E37\u0E49\u0E19); \u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (handle=false); \u0E43\u0E0A\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E16\u0E32\u0E14/\u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C \u0E2B\u0E23\u0E37\u0E2D\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01\u0E04\u0E39\u0E48\u0E01\u0E31\u0E1A sleeve
 - fefco-0427: \u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 (roll end) + \u0E25\u0E34\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E10\u0E32\u0E19 \u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49\u0E01\u0E32\u0E27 \u2014 \u0E41\u0E1C\u0E48\u0E19\u0E04\u0E25\u0E35\u0E48\u0E01\u0E27\u0E49\u0E32\u0E07\u0E01\u0E27\u0E48\u0E32 mailer \u0E18\u0E23\u0E23\u0E21\u0E14\u0E32 (\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E02\u0E49\u0E32\u0E07\u0E25\u0E30 ~H) \u0E41\u0E25\u0E30\u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (handle \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false)

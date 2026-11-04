@@ -13,6 +13,7 @@ const TopBarCtx = createContext(false)
 import { LangCtx, loadLang, LANG_KEY, useT, type Lang } from './i18n'
 import { CARD_STOCK_IDS, DEFAULT_CARD_MAT, MATERIALS, getMaterial, isCardMat, packKind } from './core/materials'
 import { TEMPLATES, getTemplate } from './core/templates'
+import { TAPERED_LID_BOX_ID, taperedLidWidth } from './core/templates/taperedLidBox'
 import type { Dieline, Vec2 } from './core/types'
 import type { AiBoxSpec, ArtworkRequestInput, ArtworkResponse, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
@@ -2096,9 +2097,12 @@ export default function App({
       return isTube && vessel.tube
         ? tubeVolumeMl(vessel.tube)
         : vesselVolumeMl(vessel.profile, vessel.rect)
-    if (kind === 'box') return boxVolumeMl(W, D, H)
+    if (kind === 'box') {
+      const averageWidth = templateId === TAPERED_LID_BOX_ID ? (W + taperedLidWidth(W)) / 2 : W
+      return boxVolumeMl(averageWidth, D, H)
+    }
     return null
-  }, [kind, W, D, H, pouch, vessel, pouchStyle, isTube, isCard, isSticker])
+  }, [kind, W, D, H, pouch, vessel, pouchStyle, isTube, isCard, isSticker, templateId])
 
   // imposition: กล่องแผ่นคลี่วางบนแผ่นใหญ่ได้กี่ชิ้น (ประเมินต้นทุน/สั่งวัสดุ)
   const sheet: Sheet =
