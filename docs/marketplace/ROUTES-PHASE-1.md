@@ -215,6 +215,8 @@ node scripts/marketplace/serve-build.mjs tmp/a0-build-cloud 5192
 node scripts/marketplace/cold-load.mjs http://localhost:5191/ http://localhost:5192/
 node scripts/marketplace/editor-smoke.mjs http://localhost:5191/
 node scripts/marketplace/import-closure.mjs
+# Phase 1: browser checks ของ routes/requests/lifecycle บน build cloud ด้วย fixture (ไม่ใช่ integration)
+node scripts/marketplace/cloud-fixture.mjs http://localhost:5192/
 ```
 
 ต้องมี Chrome (ตั้ง `PACKIT_E2E_CHROME` ถ้าไม่ได้อยู่ path ค่าเริ่มต้นของ Windows) และ `playwright-core` จาก devDependencies เดิม

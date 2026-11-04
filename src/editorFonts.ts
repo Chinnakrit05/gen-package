@@ -1,0 +1,18 @@
+// ฟอนต์ไทยเสริมให้เลือกในงานออกแบบ (แต่ละแบบ 400/700) — ต้องขึ้นทะเบียนใน FONTS ของ artwork.ts ด้วย
+// import จาก App (chunk ของ Editor) ไม่ใช่ main.tsx: หน้า login/รายการงานไม่ต้องโหลด @font-face ของฟอนต์เหล่านี้
+import '@fontsource/sarabun/400.css'
+import '@fontsource/sarabun/700.css'
+import '@fontsource/kanit/400.css'
+import '@fontsource/kanit/700.css'
+import '@fontsource/bai-jamjuree/400.css'
+import '@fontsource/bai-jamjuree/700.css'
+import '@fontsource/mitr/400.css'
+import '@fontsource/mitr/700.css'
+import '@fontsource/chakra-petch/400.css'
+import '@fontsource/chakra-petch/700.css'
+import '@fontsource/mali/400.css'
+import '@fontsource/mali/700.css'
+import '@fontsource/pridi/400.css'
+import '@fontsource/pridi/700.css'
+import '@fontsource/kodchasan/400.css'
+import '@fontsource/kodchasan/700.css'

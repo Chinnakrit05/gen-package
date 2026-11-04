@@ -1,0 +1,204 @@
+/* หน้ารายการงาน /app/projects — โหลดพร้อม chunk ของหน้านี้เท่านั้น */
+.projects-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 18px 16px 40px;
+}
+
+.projects-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.projects-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: auto;
+}
+
+.projects-title {
+  font-family: 'Prompt', 'Noto Sans Thai', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.projects-workspace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+}
+
+.projects-workspace select {
+  min-width: 160px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.projects-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.projects-actions button {
+  width: auto;
+}
+
+.projects-banner {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+}
+
+.projects-banner.is-offline,
+.projects-banner.is-error {
+  background: #fde7bd;
+  color: #3a2d05;
+}
+
+.projects-section {
+  margin-top: 18px;
+}
+
+.projects-section h2 {
+  margin-bottom: 10px;
+  font-size: 15px;
+  color: var(--text-2);
+}
+
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.project-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.project-card:hover {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.project-card.is-skeleton {
+  height: 210px;
+  background: var(--surface-2);
+  animation: projects-pulse 1.4s ease-in-out infinite;
+}
+
+.project-card.is-pending {
+  border-style: dashed;
+}
+
+.project-thumb {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 8 / 5;
+  background: #fff;
+  color: var(--text-3);
+}
+
+/* รูปลอยในกรอบ: สัดส่วนกรอบคงที่ 8:5 ไม่ยืดตามขนาดรูปจริง */
+.project-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.project-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px 12px;
+}
+
+.project-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.project-sub {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.project-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fde7bd;
+  color: #3a2d05;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.projects-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 16px;
+  color: var(--text-2);
+}
+
+.projects-empty button,
+.projects-more button {
+  width: auto;
+}
+
+.projects-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+@keyframes projects-pulse {
+  50% { opacity: 0.55; }
+}
+
+@media (max-width: 640px) {
+  .projects-actions {
+    width: 100%;
+  }
+  .projects-actions button {
+    flex: 1;
+  }
+}

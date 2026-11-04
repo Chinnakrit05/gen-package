@@ -21,12 +21,15 @@ export interface DurableProjectMutationOptions {
 
 const activeMutations = new Map<string, Promise<unknown>>()
 
+// matchPendingPayload false = ผู้เรียกถือ operationId ของตัวเอง (create intent ของ /editor/new):
+// ไม่รวมกับ create ที่ค้างอยู่ซึ่ง payload เหมือนกันแต่เป็นคนละความตั้งใจ
 export async function executeDurableCreate(
   options: DurableProjectMutationOptions,
   input: CreateProjectInput,
+  behaviour: { matchPendingPayload?: boolean } = {},
 ): Promise<CloudProject> {
   assertWorkspace(options.scope, input.workspaceId)
-  const pending = (await options.store.list(options.scope)).find((record) => (
+  const pending = behaviour.matchPendingPayload === false ? undefined : (await options.store.list(options.scope)).find((record) => (
     record.kind === 'create' && sameCreateIntent(record.input, input)
   )) as Extract<PersistedProjectMutation, { kind: 'create' }> | undefined
   if (pending) {

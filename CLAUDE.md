@@ -4,6 +4,13 @@
 
 เมื่อผู้ใช้มอบหมายงานแยก Editor, Marketplace หรือ Admin ตามแผนทีม ให้อ่าน [AGENTS.md](AGENTS.md) และ [จุดเริ่มต้นแผน](docs/marketplace/README.md) แล้วใช้ HANDOFF ของบทบาทที่ได้รับมอบหมาย พร้อมตรวจ PROGRESS ของทั้งสองฝ่าย แผนไม่ใช่สถานะ implementation และไม่ใช่คำสั่งให้เริ่มทุกเฟสเอง คำสั่งล่าสุดของผู้ใช้เป็นหลัก
 
+- Routes ฝั่ง cloud (Phase 1, `docs/marketplace/ROUTES-PHASE-1.md`): `src/CloudRoot.tsx` = react-router data router + auth/bootstrap; หน้าเบาใน `src/app/`
+  (`ProjectsPage` ห้าม import Editor/core engine/three; `EditorRoute` = chunk ที่ดึง `CloudWorkspace` → App) — โหลดหน้าด้วย `React.lazy`
+  ใน element ไม่ใช้ route `lazy` (router โหลด lazy ของทุก route ที่ match ก่อน guard); ห้าม preload Editor จากหน้า login;
+  CSS ของหน้าเบาอยู่ `src/shell.css` (entry) ส่วน Editor อยู่ `src/app.css` + ฟอนต์ออกแบบ `src/editorFonts.ts` (import จาก App);
+  `/editor/new` = create intent (IndexedDB `packit-editor-intents`) และทุกทางออกของ Editor ผ่าน `leaveEditor`;
+  ตรวจ browser ด้วย fixture: `scripts/marketplace/cloud-fixture.mjs` (session ปลอม + API จำลองจาก `docs/marketplace/fixtures/phase-1.json` — ไม่ใช่ integration)
+
 Web app สร้างบรรจุภัณฑ์แบบ parametric: ผู้ใช้เลือกวัสดุ+ขนาด (หรือพิมพ์ prompt ให้ AI ตั้งค่าให้) → ระบบ gen dieline (blueprint การพับ, SVG หน่วย mm สเกล 1:1) พร้อมพับเป็น 3D ให้ดู UI เป็นภาษาไทย
 
 ## คำสั่ง

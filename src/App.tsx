@@ -1,3 +1,6 @@
+// สไตล์/ฟอนต์ของ Editor โหลดพร้อม chunk นี้ — หน้าเบาใช้ shell.css ใน entry
+import './app.css'
+import './editorFonts'
 import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { LogOut } from 'lucide-react'
@@ -1240,6 +1243,8 @@ export interface CloudProjectBridge {
   resolveConflict(current: Project, action: 'reload' | 'copy'): Promise<Project>
   retrySave(): Promise<void>
   subscribeRemoteProject(listener: (project: Project) => void): () => void
+  // ให้ route ออกจาก Editor อ่านสถานะงานล่าสุดได้ทันที (ไม่รอ debounce 300 ms ของ App) — ROUTES-PHASE-1.md §7 R4
+  registerFlush?(flush: () => Project | null): () => void
   // AI บน cloud ใช้คีย์ของระบบ (ไม่รับคีย์ผู้ใช้) หัก 1 เครดิต/คำขอ — bridge อัปเดต entitlements.credits เอง
   requestAiSpec: (
     prompt: string,
@@ -2450,6 +2455,16 @@ export default function App({
     setHistIdx(p.histIdx)
     setFold(1)
   }
+
+  // งานที่เปิดอยู่รวมการแก้ที่ยังรอ debounce — closure ของ render ล่าสุดเสมอ
+  const flushLatestRef = useRef<() => Project | null>(() => null)
+  flushLatestRef.current = () => flushInto(projects).find((project) => project.id === activeId) ?? null
+  useEffect(() => {
+    if (!cloud?.registerFlush) return
+    return cloud.registerFlush(() => flushLatestRef.current())
+    // registerFlush is stable for the lifetime of a cloud workspace.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloud?.registerFlush])
 
   useEffect(() => {
     if (!cloud) return

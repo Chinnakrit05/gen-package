@@ -202,4 +202,15 @@ describe('durable project create/delete mutations', () => {
     expect(left.id).toBe(right.id)
     expect(create).toHaveBeenCalledTimes(1)
   })
+
+  it('create intent ที่ถือ operationId เอง ไม่ถูกรวมกับ create ค้างที่ payload เหมือนกัน', async () => {
+    const store = new MemoryProjectMutationStore()
+    const sent: string[] = []
+    const failing = options(store, { create: async () => { throw new Error('offline') } })
+    await expect(executeDurableCreate(failing, createInput('30000000-0000-4000-8000-00000000000a'))).rejects.toThrow('offline')
+    const recording = options(store, { create: async (input) => { sent.push(input.operationId); return cloud(input) } })
+    await executeDurableCreate(recording, createInput('30000000-0000-4000-8000-00000000000b'), { matchPendingPayload: false })
+    expect(sent).toEqual(['30000000-0000-4000-8000-00000000000b'])
+    expect((await store.list(scope)).map((record) => record.operationId)).toEqual(['30000000-0000-4000-8000-00000000000a'])
+  })
 })

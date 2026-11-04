@@ -7,6 +7,7 @@ import { Login } from '../../src/components/Login'
 import { getCloudStartupVariant, type CloudStartupVariant } from '../../src/services/auth/startupLoading'
 import '@fontsource/noto-sans-thai/400.css'
 import '@fontsource/prompt/400.css'
+import '../../src/shell.css'
 import '../../src/app.css'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
