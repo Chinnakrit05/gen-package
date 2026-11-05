@@ -21,6 +21,7 @@ export type CloudProjectControllerState =
 
 export interface CloudProjectControllerOptions {
   scope: AssetSidecarScope
+  readOnly?: boolean
   clientId: string
   store: ProjectDraftStore
   transfer: ProjectAssetTransfer
@@ -66,7 +67,8 @@ export class CloudProjectController {
 
     try {
       const draftKey = projectDraftKey(this.options.scope, cloudProject.id, this.options.clientId)
-      const persisted = await this.options.store.get(draftKey)
+      // A former editor's drafts must neither replace the server copy nor replay on a viewer's visit.
+      const persisted = this.options.readOnly ? null : await this.options.store.get(draftKey)
       const hasPendingDraft = persisted !== null
         && (persisted.inFlight !== null || persisted.savedGeneration < persisted.latestDraft.generation)
       const online = this.options.isOnline?.()
@@ -74,12 +76,10 @@ export class CloudProjectController {
       const usePersistedDraft = persisted !== null && (hasPendingDraft || !online)
 
       let initialProject: Project
-      let sidecar: ProjectAssetSidecar
+      const sidecar = new ProjectAssetSidecar(this.options.scope, usePersistedDraft ? persisted.latestDraft.sidecar : undefined)
       if (usePersistedDraft) {
-        sidecar = new ProjectAssetSidecar(this.options.scope, persisted.latestDraft.sidecar)
         initialProject = validateDraftProject(persisted.latestDraft.project, cloudProject.id)
       } else {
-        sidecar = new ProjectAssetSidecar(this.options.scope)
         initialProject = await hydrateProject({
           cloudProject,
           sidecar,
@@ -88,6 +88,15 @@ export class CloudProjectController {
         })
       }
       if (this.epoch !== epoch || abortController.signal.aborted) throw new DOMException('stale project open', 'AbortError')
+
+      if (this.options.readOnly) {
+        this.publish({
+          status: 'ready',
+          project: initialProject,
+          save: { state: 'clean', baseRevision: cloudProject.revision, latestGeneration: 0, savedGeneration: 0, error: null },
+        })
+        return structuredClone(initialProject)
+      }
 
       const queue = new DurableProjectSaveQueue({
         scope: this.options.scope,
@@ -172,6 +181,7 @@ export class CloudProjectController {
   }
 
   async discardDraft(): Promise<void> {
+    if (this.options.readOnly) throw new Error('พื้นที่งานนี้ดูได้อย่างเดียว')
     if (this.state.status !== 'ready') throw new Error('ไม่มี draft ที่เปิดอยู่')
     const projectId = this.state.project.id
     this.epoch += 1

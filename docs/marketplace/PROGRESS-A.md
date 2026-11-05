@@ -2,7 +2,19 @@
 
 สถานะเริ่มต้น 30 ตุลาคม 2026: มีเอกสารแผนแล้ว ยังไม่ได้เริ่ม implementation ตามแผนนี้ คน A แก้ไฟล์นี้ คน B อ่านเพื่อรับส่งงาน
 
-อัปเดตล่าสุด 3 พฤศจิกายน 2026: gate Phase 0 ผ่าน (B รับ `A0-r2` ใน `b-review-a0-r2-r1`, B `a14ad48`) → A implement 1-A1..1-A6 แล้ว **ตรวจด้วย fixture harness + unit tests เท่านั้น** — API/Auth จริง, OAuth และ preview ยังไม่ได้ตรวจ (รอ environment ร่วมกับ B) จึงยังไม่ใช่ DONE ของ acceptance
+อัปเดต 5 พฤศจิกายน 2026 — ผู้ใช้มอบหมาย A และ B ให้ตรวจรับ Phase 1 ร่วมกัน โค้ด A รุ่น `b6f43f1` เข้า `main` ผ่าน `6dbb30b` แล้ว รอบแก้และตรวจร่วมอยู่บน branch `codex/marketplace-phase-1-integration` ฐาน `a85de8b` ดูสถานะของโค้ดชุดนี้และหลักฐานใน [ผลตรวจร่วม A/B](B-PHASE-1-RESULTS.md#ตรวจรับร่วม-ab-5-พฤศจิกายน-2026)
+
+## สถานะรอบตรวจร่วม
+
+| งาน | ผลรอบนี้ |
+|---|---|
+| 1-A1 / 1-A2 | Router และ lazy boundary ผ่าน browser fixture กับ build ล่าสุด หน้ารายการไม่โหลด Editor, Three.js หรือ exporter |
+| 1-A3 / 1-A4 | ตรวจแบ่งหน้าและภาพย่อกับ fixture และ API จริง ตรวจเปิด ID เดิมและ retry สร้างงานกับเบราว์เซอร์และ Auth จริงในเครื่อง |
+| 1-A5 | ตรวจร่างออฟไลน์ กู้ร่างจากหน้ารายการ ลองบันทึกใหม่ conflict ข้ามแท็บ และ V1/V2 ปรับทางย้ายงานเดิมให้ใช้ได้จากหน้ารายการส่วนตัว |
+| 1-A6 | ตรวจ owner/editor/viewer/outsider และเปลี่ยนบัญชีในแท็บเดิมกับ Auth จริงในเครื่อง เพิ่มการอ่านสิทธิ์ซ้ำเมื่อ API ปฏิเสธการเขียน และแยกร่าง/ภาพย่อตามบัญชีกับพื้นที่งาน |
+| P1-10 | ผ่านบน Preview ของ `66a3fb2` ด้วย Google จริงใน Safari ส่วนตัว เปิดลิงก์ตรงก่อนเข้าสู่ระบบแล้วกลับเข้า Editor ของงานเดิม รีเฟรช Editor และหน้ารวมงานได้ |
+
+ผลและสถานะด้านล่างเป็นประวัติการส่งงานวันที่ 3 พฤศจิกายน
 
 ## บริบทการทำงาน
 
@@ -70,4 +82,4 @@ Phase 1 (3 พ.ย. 2026) บน working tree ฐาน `main` @ `a14ad48`, Wind
 - `executeDurableCreate` มี option `matchPendingPayload: false` สำหรับ create intent (งานใหม่สองงานที่ payload เหมือนกันต้องไม่ถูกรวม) — ไม่เปลี่ยน API
 - ไม่มีการแก้ `server/`, `shared/`, `supabase/`, `vercel.json`, `src/core/` engine/schema/billing
 
-**งานถัดไปของ A:** ปิดข้อจำกัด viewer read-only ใน Editor (P1-08 UI), ตรวจบน preview ร่วมกับ B, แล้วจึงเสนอ merge branch เข้า `main`
+**งานที่ส่งต่อ ณ 3 พฤศจิกายน:** ปิดข้อจำกัด viewer read-only ใน Editor (P1-08 UI) และตรวจบน preview ร่วมกับ B

@@ -295,6 +295,120 @@ const apiCalls = (api, method, re) => api.log.filter((r) => r.method === method 
   await ctx.close()
 }
 
+// P1-09: pending create intent ของ workspace เก่าต้องหายทันที แม้ IndexedDB ของ workspace ใหม่ยังไม่ตอบ
+{
+  const { ctx, page } = await context()
+  const name = 'ร่างทดสอบเฉพาะพื้นที่ทีม'
+  const teamScope = { appUserId: ids.owner, workspaceId: ids.team }
+  await page.goto(`${BASE}app/projects`, { waitUntil: 'networkidle' })
+  await page.getByText('งานตัวอย่าง 1', { exact: true }).waitFor()
+  await page.evaluate(async ({ teamScope, name, document }) => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('packit-editor-intents', 1)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      await new Promise((resolve, reject) => {
+        const intentId = crypto.randomUUID()
+        const scopeKey = `cloud:${teamScope.appUserId}:${teamScope.workspaceId}`
+        const now = Date.now()
+        const transaction = db.transaction('create-intents', 'readwrite')
+        transaction.oncomplete = resolve
+        transaction.onerror = () => reject(transaction.error)
+        transaction.objectStore('create-intents').put({
+          version: 1, key: `${scopeKey}:${intentId}`, scopeKey, scope: teamScope, intentId, status: 'local',
+          latest: { generation: 1, project: { ...document, id: crypto.randomUUID(), name, updatedAt: now } },
+          frozen: null, result: null, error: null, createdAt: now, updatedAt: now,
+        })
+      })
+    } finally {
+      db.close()
+    }
+  }, { teamScope, name, document: C['projects.detail'].response.data.document })
+  await page.reload({ waitUntil: 'networkidle' })
+  await page.getByText(name, { exact: true }).waitFor()
+  await page.evaluate(() => {
+    const open = indexedDB.open.bind(indexedDB)
+    // จงใจค้างคำขอเปิด store ถัดไป เพื่อแยกผลระหว่างสลับพื้นที่กับผล query ของ IndexedDB
+    indexedDB.open = (name, ...args) => name === 'packit-editor-intents' ? {} : open(name, ...args)
+  })
+  await page.locator('.projects-workspace select').selectOption(ids.personal)
+  await page.getByText('ยังไม่มีงานในพื้นที่นี้').waitFor()
+  check('P1-09 ระหว่างรอ IndexedDB ไม่แสดงงานที่รอส่งของพื้นที่เดิม', await page.getByText(name, { exact: true }).count() === 0)
+  await ctx.close()
+}
+
+// P1-11: เปลี่ยนไปพื้นที่ที่ยังไม่เคยโหลดขณะออฟไลน์ ต้องมีสถานะและทางต่อที่ตรงจริง
+{
+  const { ctx, page } = await context()
+  await page.goto(`${BASE}app/projects`, { waitUntil: 'networkidle' })
+  await page.getByText('งานตัวอย่าง 1', { exact: true }).waitFor()
+  await ctx.setOffline(true)
+  await page.locator('.projects-workspace select').selectOption(ids.personal)
+  await page.getByText('ออฟไลน์ — แสดงเฉพาะงานที่โหลดไว้และงานที่รอส่งในเครื่องนี้').waitFor()
+  check('P1-11 พื้นที่ใหม่ขณะออฟไลน์แสดงสถานะเปิดรายการไม่ได้แทน skeleton ค้าง', await page.getByText('ออฟไลน์ — ยังโหลดรายการงานไม่ได้', { exact: true }).count() === 1
+    && await page.locator('.is-skeleton').count() === 0)
+  await ctx.setOffline(false)
+  await page.getByText('ยังไม่มีงานในพื้นที่นี้').waitFor()
+  check('P1-11 กลับออนไลน์โหลดพื้นที่ที่เลือกและแสดงสถานะว่าง', await page.getByText('ยังไม่มีงานในพื้นที่นี้', { exact: true }).count() === 1)
+  await ctx.close()
+}
+
+// P1-11: skeleton, error และปุ่มลองใหม่ของหน้ารายการ
+{
+  const { ctx, page, api } = await context()
+  let fail = true
+  await ctx.route('**/api/v1/projects?*', async (route) => {
+    if (!fail) return api.handle(route)
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    await route.fulfill({ status: 503, json: { error: { code: 'DEPENDENCY_UNAVAILABLE', message: 'Unavailable' } } })
+  })
+  await page.goto(`${BASE}app/projects`, { waitUntil: 'domcontentloaded' })
+  await page.locator('.is-skeleton').first().waitFor()
+  check('P1-11 หน้ารายการแสดง skeleton ขณะโหลด', await page.locator('.is-skeleton').count() > 0)
+  await page.getByText('โหลดรายการงานไม่สำเร็จ', { exact: true }).waitFor()
+  fail = false
+  await page.getByRole('button', { name: 'ลองใหม่', exact: true }).click()
+  await page.getByText('งานตัวอย่าง 1', { exact: true }).waitFor()
+  check('P1-11 หลัง API ล้ม ปุ่มลองใหม่เปิดรายการเดิมได้', await page.getByText('งานตัวอย่าง 1', { exact: true }).count() === 1)
+  await ctx.close()
+}
+
+// P1-11: API ปฏิเสธ token ขณะ session ยังอยู่ใน browser — ต่ออายุบัญชีเดิมหรือกลับไปล็อกอิน
+for (const rejected of [false, true]) {
+  const { ctx, page, api } = await context()
+  const rotated = { ...fakeSession(), access_token: 'fixture-rotated-token' }
+  let refreshCount = 0
+  await ctx.route(`${SUPABASE_URL}/auth/v1/token?**`, async (route) => {
+    refreshCount += 1
+    await route.fulfill(rejected
+      ? { status: 400, json: { error_code: 'refresh_token_not_found', msg: 'Refresh token invalid' } }
+      : { status: 200, json: rotated })
+  })
+  await ctx.route(`${SUPABASE_URL}/auth/v1/logout?**`, (route) => route.fulfill({ status: 204 }))
+  const seenTokens = []
+  await ctx.route('**/api/v1/projects?*', async (route) => {
+    const token = route.request().headers().authorization
+    seenTokens.push(token)
+    if (token === `Bearer ${rotated.access_token}` && !rejected) return api.handle(route)
+    await route.fulfill({ status: 401, json: { error: { code: 'SESSION_INVALID', message: 'Session expired' } } })
+  })
+  await page.goto(`${BASE}app/projects`, { waitUntil: 'networkidle' })
+  if (rejected) {
+    await page.waitForURL((url) => url.pathname === '/login')
+    const url = new URL(page.url())
+    check('P1-11 เซสชันหมดอายุพากลับ login และเก็บ returnTo', refreshCount === 1
+      && url.searchParams.get('returnTo') === '/app/projects'
+      && await page.locator('.projects-page').count() === 0)
+  } else {
+    await page.getByText('งานตัวอย่าง 1', { exact: true }).waitFor()
+    check('P1-11 ต่ออายุ token ของบัญชีเดิมหนึ่งครั้งแล้วโหลดรายการต่อ', refreshCount === 1
+      && seenTokens.length === 2 && seenTokens[1] === `Bearer ${rotated.access_token}`)
+  }
+  await ctx.close()
+}
+
 console.log(`\n${results.filter((r) => r.ok).length}/${results.length} PASS (fixture harness — ไม่ใช่ cloud integration)`)
 await browser.close()
 process.exitCode = results.every((r) => r.ok) ? 0 : 1

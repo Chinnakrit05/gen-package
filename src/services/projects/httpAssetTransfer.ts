@@ -9,13 +9,13 @@ import type { CodecAssetDownload, CodecAssetUploadInput, ProjectAssetTransfer } 
 
 export interface HttpAssetTransferOptions {
   apiBaseUrl: string
-  accessToken: string
+  getAccessToken(): string
 }
 
 export function createHttpAssetTransfer(options: HttpAssetTransferOptions): ProjectAssetTransfer {
   return {
     async upload(input: CodecAssetUploadInput): Promise<ReadyAssetMetadata> {
-      const intent = await createAssetUploadIntent(options.apiBaseUrl, options.accessToken, {
+      const intent = await createAssetUploadIntent(options.apiBaseUrl, options.getAccessToken(), {
         workspaceId: input.workspaceId,
         purpose: input.purpose,
         declaredMime: input.mimeType,
@@ -26,6 +26,9 @@ export function createHttpAssetTransfer(options: HttpAssetTransferOptions): Proj
       if (intent.asset.state === 'ready') return toReadyAsset(intent.asset)
       if (!intent.upload) throw new Error('server ไม่ได้ออก upload ticket สำหรับ pending asset')
 
+      // A signed URL can outlive the browser session. Recheck the bound identity before use.
+      input.signal?.throwIfAborted()
+      options.getAccessToken()
       await uploadAssetBytes(
         intent.upload,
         new Blob([input.bytes as Uint8Array<ArrayBuffer>], { type: input.mimeType }),
@@ -33,7 +36,7 @@ export function createHttpAssetTransfer(options: HttpAssetTransferOptions): Proj
       )
       const completed = await completeAsset(
         options.apiBaseUrl,
-        options.accessToken,
+        options.getAccessToken(),
         intent.asset.id,
         crypto.randomUUID(),
         input.signal,
@@ -44,10 +47,12 @@ export function createHttpAssetTransfer(options: HttpAssetTransferOptions): Proj
     async download(assetIds: string[], signal?: AbortSignal): Promise<CodecAssetDownload[]> {
       const response = await createAssetDownloadTickets(
         options.apiBaseUrl,
-        options.accessToken,
+        options.getAccessToken(),
         assetIds,
         signal,
       )
+      signal?.throwIfAborted()
+      options.getAccessToken()
       return Promise.all(response.tickets.map(async (ticket) => {
         const download = await fetch(ticket.url, { method: 'GET', signal })
         if (!download.ok) throw new Error(`ดาวน์โหลด asset ไม่สำเร็จ (${download.status})`)

@@ -4,7 +4,7 @@ import type { ThumbnailKind } from '../../../shared/contracts/projects'
 
 export interface ThumbRecord {
   key: string // `${scope}:${projectId}`
-  scope: string // 'local' | workspaceId
+  scope: string // 'local' | appUserId:workspaceId
   projectId: string
   version: string // cloud = version จาก server; local = updatedAt ของงานตอนถ่าย
   sourceUpdatedAt?: number // updatedAt ของงานตอนถ่ายบนเครื่องนี้ (ไม่รู้ = โหลดมาจาก cloud)
@@ -24,6 +24,7 @@ const DATABASE_VERSION = 1
 const STORE_NAME = 'thumbnails'
 
 export const thumbKey = (scope: string, projectId: string) => `${scope}:${projectId}`
+export const cloudThumbnailScope = (appUserId: string, workspaceId: string) => `${appUserId}:${workspaceId}`
 
 export class IndexedDbThumbStore implements ThumbStore {
   private databasePromise: Promise<IDBDatabase> | null = null

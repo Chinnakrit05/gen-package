@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MemoryThumbStore, ThumbnailCache, base64ToBlob, blobToBase64, thumbKey } from './thumbnailCache'
+import { MemoryThumbStore, ThumbnailCache, base64ToBlob, blobToBase64, cloudThumbnailScope, thumbKey } from './thumbnailCache'
 
 // แคชภาพย่อแกลเลอรีในเบราว์เซอร์: เก็บ/อ่านตาม scope, แจ้งผู้ฟัง, object URL ใหม่เมื่อรูปเปลี่ยน
 describe('ThumbnailCache', () => {
@@ -42,5 +42,15 @@ describe('ThumbnailCache', () => {
     const b64 = await blobToBase64(new Blob([bytes]))
     const back = new Uint8Array(await base64ToBlob(b64, 'image/webp').arrayBuffer())
     expect(back).toEqual(bytes)
+  })
+
+  it('keeps cloud thumbnails separate for two accounts in the same workspace', async () => {
+    const store = new MemoryThumbStore()
+    const first = new ThumbnailCache(cloudThumbnailScope('user-1', 'shared-workspace'), store)
+    await first.save({ projectId: 'p1', version: 'v1', blob: blob('a') })
+
+    const second = new ThumbnailCache(cloudThumbnailScope('user-2', 'shared-workspace'), store)
+    await second.load(['p1'])
+    expect(second.record('p1')).toBeUndefined()
   })
 })

@@ -24,9 +24,9 @@ import {
   type ProjectAssetTransfer,
 } from '../../services/projects/cloudProjectCodec'
 import { rasterizeTrustedPresets } from '../../services/projects/trustedPresetRasterizer'
+import { LEGACY_PROJECTS_STORAGE_KEY, LEGACY_SINGLE_STORAGE_KEY } from './legacyStorage'
 
-export const LEGACY_PROJECTS_STORAGE_KEY = 'gen-package-projects-v1'
-export const LEGACY_SINGLE_STORAGE_KEY = 'gen-package-design-v1'
+export { LEGACY_PROJECTS_STORAGE_KEY, LEGACY_SINGLE_STORAGE_KEY } from './legacyStorage'
 export const LEGACY_INSTALLATION_STORAGE_KEY = 'gen-package-installation-v1'
 
 export interface LegacyStorage {

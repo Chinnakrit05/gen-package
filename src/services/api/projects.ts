@@ -137,5 +137,5 @@ export function getProjectThumbnails(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(input),
     signal,
-  })
+  }, { replaySafeRead: true })
 }

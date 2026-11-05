@@ -17,10 +17,69 @@ export class ApiClientError extends Error {
 export const NETWORK_ERROR = 'NETWORK_ERROR'
 export const NETWORK_ERROR_MESSAGE = 'เชื่อมต่อ server ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองใหม่'
 
+export function isApiSessionError(error: unknown): boolean {
+  return error instanceof ApiClientError && error.status === 401
+    && (error.code === 'SESSION_INVALID' || error.code === 'AUTH_REQUIRED')
+}
+
+interface ApiSessionRecovery {
+  isCurrent(accessToken: string): boolean
+  refresh(): Promise<string | null>
+  expire(accessToken: string): void
+}
+
+type ResolveApiSession = (url: string, accessToken: string) => ApiSessionRecovery | null
+
+let resolveApiSession: ResolveApiSession | null = null
+
+// CloudRoot owns recovery for authenticated API requests. Local demo has no resolver.
+export function registerApiSessionRecovery(resolve: ResolveApiSession): () => void {
+  resolveApiSession = resolve
+  return () => { if (resolveApiSession === resolve) resolveApiSession = null }
+}
+
 const isAbortError = (error: unknown) =>
   typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'AbortError'
 
+function canReplay(init: RequestInit): boolean {
+  const method = init.method?.toUpperCase() ?? 'GET'
+  if (method === 'GET' || method === 'HEAD') return true
+  if (new Headers(init.headers).get('idempotency-key')) return true
+  if (typeof init.body !== 'string') return false
+  try {
+    const payload = JSON.parse(init.body)
+    return typeof payload?.operationId === 'string' && payload.operationId.length > 0
+  } catch {
+    return false
+  }
+}
+
 export async function requestApi<T>(
+  url: string,
+  accessToken: string,
+  init: RequestInit,
+  options?: { replaySafeRead?: true },
+): Promise<T> {
+  const resolve = resolveApiSession
+  // Bind to the account that owns the token at request start, including while fetch is in flight.
+  const recovery = resolve?.(url, accessToken)
+  try {
+    return await requestOnce<T>(url, accessToken, init)
+  } catch (error) {
+    if (!recovery || resolve !== resolveApiSession || init.signal?.aborted || !isApiSessionError(error)) throw error
+    const refreshed = await recovery.refresh()
+    if (!refreshed || resolve !== resolveApiSession || init.signal?.aborted
+      || !recovery.isCurrent(refreshed) || (!options?.replaySafeRead && !canReplay(init))) throw error
+    try {
+      return await requestOnce<T>(url, refreshed, init)
+    } catch (retryError) {
+      if (!init.signal?.aborted && resolve === resolveApiSession && isApiSessionError(retryError)) recovery.expire(refreshed)
+      throw retryError
+    }
+  }
+}
+
+async function requestOnce<T>(
   url: string,
   accessToken: string,
   init: RequestInit,

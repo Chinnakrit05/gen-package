@@ -116,6 +116,7 @@ function buildBridge(state: FakeState, flagsRef: { current: Flags }, bump: () =>
   }
   return {
     items: summaries(state),
+    appUserId: 'fixture-user',
     workspaceId: WORKSPACE,
     putThumbnail: async (projectId, input) => {
       const version = new Date().toISOString()

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AssetStatus, ReadyAssetMetadata } from '../../../shared/contracts/assets'
+import { registerApiSessionRecovery } from '../api/client'
 import { createHttpAssetTransfer } from './httpAssetTransfer'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -40,9 +41,10 @@ const ready: ReadyAssetMetadata = {
 }
 
 describe('HTTP project asset transfer', () => {
-  it('uses app auth only for API calls and raw signed URLs for object bytes', async () => {
+  it('uses the refreshed token for upload completion and keeps app auth off signed URLs', async () => {
     const signedCalls: RequestInit[] = []
     const apiCalls: RequestInit[] = []
+    let token = 'app-token'
     const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
       if (url === 'https://storage.test/upload') {
         signedCalls.push(init)
@@ -57,8 +59,11 @@ describe('HTTP project asset transfer', () => {
       }
 
       apiCalls.push(init)
-      expect(new Headers(init.headers).get('authorization')).toBe('Bearer app-token')
+      expect(new Headers(init.headers).get('authorization')).toBe(`Bearer ${token}`)
       if (url === '/api/v1/assets/upload-intents') {
+        if (token === 'app-token') {
+          return Response.json({ error: { code: 'SESSION_INVALID', message: 'Session expired' } }, { status: 401 })
+        }
         return json({
           asset: pending,
           upload: {
@@ -87,18 +92,48 @@ describe('HTTP project asset transfer', () => {
       return new Response(null, { status: 404 })
     })
     vi.stubGlobal('fetch', fetchMock)
+    const dispose = registerApiSessionRecovery(() => ({
+      isCurrent: (candidate) => candidate === token,
+      refresh: async () => (token = 'refreshed-token'),
+      expire: vi.fn(),
+    }))
 
-    const transfer = createHttpAssetTransfer({ apiBaseUrl: '/api/v1', accessToken: 'app-token' })
-    await expect(transfer.upload({
-      workspaceId,
-      purpose: 'project-decoration',
-      mimeType: 'image/png',
-      bytes,
-      sourceSha256: 'b'.repeat(64),
-    })).resolves.toEqual(ready)
-    await expect(transfer.download([assetId])).resolves.toEqual([{ asset: ready, bytes }])
-    expect(apiCalls).toHaveLength(3)
-    expect(signedCalls).toHaveLength(2)
+    try {
+      const transfer = createHttpAssetTransfer({ apiBaseUrl: '/api/v1', getAccessToken: () => token })
+      await expect(transfer.upload({
+        workspaceId,
+        purpose: 'project-decoration',
+        mimeType: 'image/png',
+        bytes,
+        sourceSha256: 'b'.repeat(64),
+      })).resolves.toEqual(ready)
+      await expect(transfer.download([assetId])).resolves.toEqual([{ asset: ready, bytes }])
+      expect(apiCalls.map((call) => new Headers(call.headers).get('authorization')))
+        .toEqual(['Bearer app-token', 'Bearer refreshed-token', 'Bearer refreshed-token', 'Bearer refreshed-token'])
+      expect(apiCalls[1].body).toBe(apiCalls[0].body)
+      expect(signedCalls).toHaveLength(2)
+    } finally {
+      dispose()
+    }
+  })
+
+  it('does not use download capabilities received after the bound account changed', async () => {
+    let stillCurrent = true
+    const fetchMock = vi.fn(async () => {
+      stillCurrent = false
+      return json({ tickets: [{ asset: ready, url: 'https://storage.test/download' }] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const transfer = createHttpAssetTransfer({
+      apiBaseUrl: '/api/v1',
+      getAccessToken: () => {
+        if (!stillCurrent) throw new Error('Account changed')
+        return 'app-token'
+      },
+    })
+
+    await expect(transfer.download([assetId])).rejects.toThrow('Account changed')
+    expect(fetchMock).toHaveBeenCalledOnce()
   })
 })
 

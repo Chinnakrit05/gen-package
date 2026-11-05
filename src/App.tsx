@@ -200,7 +200,7 @@ import { ThumbnailCapture, type ThumbnailShot } from './components/ThumbnailCapt
 import { thumbIsFresh, thumbNeedsFetch } from './core/thumbnail'
 import { reanchorBox, type ResizeAnchor } from './core/resizeAnchor'
 import { LENGTH_UNITS, dimValue, parseLengthUnit, toMm as unitToMm, unitLabel as unitLabelOf, unitStep, type LengthUnit } from './core/units'
-import { IndexedDbThumbStore, ThumbnailCache, base64ToBlob, blobToBase64 } from './services/thumbnails/thumbnailCache'
+import { IndexedDbThumbStore, ThumbnailCache, base64ToBlob, blobToBase64, cloudThumbnailScope } from './services/thumbnails/thumbnailCache'
 import {
   IconImage,
   IconText,
@@ -1227,7 +1227,9 @@ export type EntitlementsStatus = 'loading' | 'ready' | 'error'
 
 export interface CloudProjectBridge {
   items: ProjectSummary[]
+  appUserId: string
   workspaceId: string
+  readOnly?: boolean
   // ภาพย่อ 3D ของแกลเลอรีงาน — บันทึกทับของเดิม (คืน version) / โหลดตัวรูปตาม id (≤ THUMBNAIL_BATCH_MAX ต่อครั้ง)
   putThumbnail(projectId: string, input: PutProjectThumbnailInput): Promise<ProjectThumbnailReceipt>
   fetchThumbnails(projectIds: string[]): Promise<ProjectThumbnailImage[]>
@@ -1423,6 +1425,7 @@ function ImpositionDiagram({
 
 interface AppProps {
   onLogout?: () => void | Promise<void>
+  onBackToProjects?: () => void
   storageKey?: string
   migrateLegacy?: boolean
   initialStore?: ProjectStoreSnapshot
@@ -1431,11 +1434,13 @@ interface AppProps {
 
 export default function App({
   onLogout,
+  onBackToProjects,
   storageKey = STORAGE_KEY,
   migrateLegacy = true,
   initialStore: suppliedStore,
   cloud,
 }: AppProps) {
+  const readOnly = cloud?.readOnly === true
   const initialStore = useMemo(
     () => suppliedStore ?? loadStore(storageKey, migrateLegacy),
     [suppliedStore, storageKey, migrateLegacy],
@@ -1532,7 +1537,7 @@ export default function App({
   const designLicenseOf = (id: string) =>
     designLicenseKnowledge(id, licensed, cloud !== undefined, entitlementsStatus === 'ready')
   // ยังไม่เปิดขาย (server ตัดสิน; entitlements null = ไม่รู้ → ถือว่าไม่เปิด): ซ่อนทุกปุ่มที่ชวนซื้อ
-  const purchasesEnabled = entitlements?.purchasesEnabled === true
+  const purchasesEnabled = !readOnly && entitlements?.purchasesEnabled === true
   // AI ถูกบล็อกฝั่ง client เฉพาะเมื่อรู้แน่ว่าเครดิต 0 (สิทธิ์ 'ready') — โหลดไม่ได้/กำลังโหลด ปล่อยให้ server ตัดสิน
   const aiBlockedReason = cloud && entitlementsStatus === 'ready' && entitlements?.credits === 0
     ? gatePlan === 'pro'
@@ -2184,6 +2189,7 @@ export default function App({
   // local demo เขียน localStorage; cloud ส่ง active project เข้า durable IndexedDB/save queue
   useEffect(() => {
     if (cloud) {
+      if (readOnly) return
       const active = projects.find((project) => project.id === activeId)
       if (active) void cloud.onProjectChange(active).catch(() => {
         // Cloud bridge exposes the durable-save error in its status indicator.
@@ -2195,7 +2201,7 @@ export default function App({
     } catch {
       // storage เต็มหรือถูกปิดไว้ — ข้ามการ save เงียบๆ
     }
-  }, [projects, activeId, showDims, storageKey])
+  }, [projects, activeId, showDims, storageKey, readOnly])
 
   // save จานสี (ใช้ร่วมทุกงาน)
   useEffect(() => {
@@ -2275,16 +2281,15 @@ export default function App({
     decos,
   })
 
-  // เก็บสแนปช็อตแบบหน่วง (coalesce) — ตอนลาก slider/ลากลายจะไม่ยัด undo ทุกเฟรม
-  // ดันสถานะ "ก่อนหน้า" เข้าสแตกเมื่อค่านิ่งแล้วต่างจากเดิม
+  // เก็บสถานะตั้งต้นทันทีเพื่อให้ย้อนการแก้ครั้งแรกได้ ส่วนการลาก slider/ลากลายรอให้ค่านิ่งก่อนลง undo
   useEffect(() => {
-    if (skipCapture.current) {
+    const cur = snapshot()
+    if (skipCapture.current || lastSnap.current === null) {
       skipCapture.current = false
-      lastSnap.current = snapshot()
+      lastSnap.current = cur
       return
     }
     const t = setTimeout(() => {
-      const cur = snapshot()
       if (lastSnap.current && !sameSnap(lastSnap.current, cur)) {
         const prev = lastSnap.current
         setUndoStack((s) => [...s.slice(-49), prev])
@@ -2294,7 +2299,7 @@ export default function App({
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
+  }, [activeId, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -2462,11 +2467,11 @@ export default function App({
   const flushLatestRef = useRef<() => Project | null>(() => null)
   flushLatestRef.current = () => flushInto(projects).find((project) => project.id === activeId) ?? null
   useEffect(() => {
-    if (!cloud?.registerFlush) return
+    if (readOnly || !cloud?.registerFlush) return
     return cloud.registerFlush(() => flushLatestRef.current())
     // registerFlush is stable for the lifetime of a cloud workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cloud?.registerFlush])
+  }, [cloud?.registerFlush, readOnly])
 
   useEffect(() => {
     if (!cloud) return
@@ -2863,7 +2868,8 @@ export default function App({
     }
     // SVG/AI เฉพาะ Pro: รู้สิทธิ์แล้วว่าไม่ใช่ Pro → เปิดหน้าสมัคร Pro เลย (server ยังตรวจซ้ำด้านล่างเสมอ)
     if (isProOnlyExport(format) && entitlementsStatus === 'ready' && !isProPlan) {
-      setPaywall({ kind: 'pro', after: run, proOnly: true })
+      if (readOnly) window.alert(t('ไฟล์ SVG / AI ต้องใช้แพ็กเกจ Pro ของพื้นที่งาน', 'SVG / AI downloads require a Pro workspace'))
+      else setPaywall({ kind: 'pro', after: run, proOnly: true })
       return
     }
     // ขอสิทธิ์จาก server ไม่ได้ขณะออฟไลน์ — ปุ่มถูก disable อยู่แล้ว กันกรณีหลุดออฟไลน์ระหว่างทาง (เช่น หลังชำระใน paywall)
@@ -2876,13 +2882,15 @@ export default function App({
       await run()
     } catch (e) {
       if (e instanceof ApiClientError && e.code === 'PRO_REQUIRED') {
-        setPaywall({ kind: 'pro', after: run, proOnly: true })
+        if (readOnly) window.alert(e.message)
+        else setPaywall({ kind: 'pro', after: run, proOnly: true })
         return
       }
       if (e instanceof ApiClientError && e.code === 'PAYMENT_REQUIRED') {
         // สิทธิ์ฝั่ง client อาจค้าง (เช่น Pro หมดอายุระหว่างเปิดแท็บ) — เปิด paywall แล้ว effect โหลดสิทธิ์ใหม่
         // (ซิงก์ชิป/ลายน้ำ/ป้ายราคา/เปิดขายหรือยัง ข้างหลัง modal)
-        setPaywall({ kind: 'design', after: run })
+        if (readOnly) window.alert(t('พื้นที่งานนี้ยังไม่มีสิทธิ์ดาวน์โหลดไฟล์ผลิตของงานนี้', 'This workspace cannot download production files for this project yet'))
+        else setPaywall({ kind: 'design', after: run })
         return
       }
       if (e instanceof ApiClientError && e.code === 'NETWORK_ERROR') {
@@ -3225,6 +3233,7 @@ export default function App({
   // คีย์ลัด: Ctrl+Z/Ctrl+Shift+Z undo/redo, Delete ลบ, Esc เลิกเลือก, ลูกศรเลื่อน, Ctrl+D สำเนา
   // ข้ามเมื่อกำลังพิมพ์ในช่อง input/textarea (ไม่แย่งคีย์)
   useEffect(() => {
+    if (readOnly) return
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
@@ -3263,7 +3272,7 @@ export default function App({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds, selected, undoStack, redoStack, aiBusy, decos, templateId, materialId, W, D, H, handle, qty, fillColor])
+  }, [selectedIds, selected, undoStack, redoStack, aiBusy, decos, templateId, materialId, W, D, H, handle, qty, fillColor, readOnly])
 
   // ควบคุมการพับ — แถบบนสุดของมุมมอง 3D (โชว์เฉพาะวัสดุที่พับได้)
   const foldBar = mat.foldable ? (
@@ -3346,7 +3355,7 @@ export default function App({
   // ---- ภาพย่อ 3D ของแกลเลอรีงาน ----
   // ถ่ายจากงานที่เปิดอยู่หลังหยุดแก้ THUMB_IDLE_MS: mount viewer ซ่อนนอกจอ (พับเสร็จ/มุมกล้องเริ่มต้น) แล้วถอดทันทีที่ถ่ายเสร็จ
   // เก็บในแคชเบราว์เซอร์ (IndexedDB) + cloud อัปโหลดทับของเดิม — งานเก่าได้ภาพย่อเมื่อเปิดแล้วถูกถ่ายรอบแรก
-  const thumbScope = cloud ? cloud.workspaceId : 'local'
+  const thumbScope = cloud ? cloudThumbnailScope(cloud.appUserId, cloud.workspaceId) : 'local'
   const thumbCache = useMemo(
     () => new ThumbnailCache(thumbScope, typeof indexedDB === 'undefined' ? null : new IndexedDbThumbStore()),
     [thumbScope],
@@ -3361,14 +3370,14 @@ export default function App({
     void thumbCache.load([activeId])
   }, [thumbCache, activeId])
   useEffect(() => {
-    if (!activeForThumb || thumbJob) return
+    if (readOnly || !activeForThumb || thumbJob) return
     const source = activeForThumb.updatedAt
     if (thumbIsFresh(source, thumbCache.record(activeId), activeCloudThumb)) return
     if (thumbFailed.current?.id === activeId && thumbFailed.current.source === source) return
     const t = window.setTimeout(() => setThumbJob({ id: activeId, source }), THUMB_IDLE_MS)
     return () => window.clearTimeout(t)
     // thumbTick: แคชโหลดเสร็จ/เปลี่ยน → ตัดสินใหม่
-  }, [activeId, activeForThumb, activeCloudThumb, thumbJob, thumbCache, thumbTick])
+  }, [activeId, activeForThumb, activeCloudThumb, thumbJob, thumbCache, thumbTick, readOnly])
   const onThumbCaptured = (shot: ThumbnailShot | null) => {
     const job = thumbJob
     setThumbJob(null)
@@ -3527,11 +3536,11 @@ export default function App({
   // แท็บ "ออกแบบ" = โชว์ 3D ของแพ็กเกจเป็นจอหลัก (แทน blueprint)
   const design3D = sideTab === 'design'
   const renderStepTabs = (className: string) => (
-    <div className={`tabbar ${className}`} role="tablist" aria-label={t('ขั้นตอนงาน', 'Workflow steps')}>
+    <div className={`tabbar ${className}`} role="tablist" aria-label={readOnly ? t('มุมมองงาน', 'Project views') : t('ขั้นตอนงาน', 'Workflow steps')}>
       {(
         [
-          ['design', t('ออกแบบ', 'Design')],
-          ['artwork', t('ตกแต่ง', 'Decorate')],
+          ['design', readOnly ? t('ดู 3D', '3D view') : t('ออกแบบ', 'Design')],
+          ['artwork', readOnly ? t('แผ่นคลี่', 'Blueprint') : t('ตกแต่ง', 'Decorate')],
           ['export', t('ส่งออก', 'Export')],
         ] as const
       ).map(([id, label]) => (
@@ -3561,15 +3570,17 @@ export default function App({
 
   return (
     <LangCtx.Provider value={lang}>
-    <div className={`app${isV2 ? ' editor-v2' : ''}${isV2 && v2PanelClosed ? ' v2-panel-closed' : ''}`} data-editor-version={editorVersion}>
+    <div className={`app${isV2 ? ' editor-v2' : ''}${isV2 && v2PanelClosed && !readOnly ? ' v2-panel-closed' : ''}${readOnly ? ' editor-readonly' : ''}`} data-editor-version={editorVersion}>
       <header ref={headerRef} className={cloud ? 'with-plan' : undefined}>
         <h1>{isV2 && <img src={studioAssets.imgGroup} alt="" />}PackIt</h1>
+        {onBackToProjects && <button type="button" className="editor-projects-link" disabled={projectBusy} onClick={onBackToProjects}>{t('งานของฉัน', 'My projects')}</button>}
         <ProjectGallery
           variant={isV2 ? 'studio' : 'classic'}
           items={cloud?.items ?? projects}
           activeId={activeId}
           activeProject={projects.find((project) => project.id === activeId)}
           busy={aiBusy || projectBusy}
+          readOnly={readOnly}
           createDisabled={aiBusy || projectBusy || (cloud !== undefined && !cloud.online)}
           deleteDisabled={aiBusy || projectBusy || (cloud !== undefined && !cloud.online)}
           onCreate={newProject}
@@ -3581,7 +3592,7 @@ export default function App({
           thumbTick={thumbTick}
           onNeedThumbs={loadGalleryThumbs}
         />
-        {cloud && (
+        {cloud && !readOnly && (
           <div className="cloud-save-wrap">
             <span
               className={`cloud-save-state ${projectOperationLabel ? 'saving' : cloud.saveState}`}
@@ -3680,14 +3691,14 @@ export default function App({
           </button>
         ))}
         {isV2 && !cloud && <span className="v2-local-save">{t('บันทึกในเครื่องอัตโนมัติ', 'Saved on this device')}</span>}
-        <AiTrigger
+        {!readOnly && <AiTrigger
           icon={isV2 ? studioAssets.imgLucideSparkle : undefined}
           open={copilotOpen}
           onToggle={() => setCopilotOpen((v) => !v)}
           credits={cloud && entitlementsStatus === 'ready' ? gateCredits : undefined}
           blockedReason={aiBlockedReason}
           onBlocked={() => setPricingOpen(true)}
-        />
+        />}
         <button
           className="lang-btn"
           title={lang === 'en' ? 'เปลี่ยนเป็นภาษาไทย' : 'Switch to English'}
@@ -3727,7 +3738,7 @@ export default function App({
           </button>
         )}
         <EditorVersionSwitch value={editorVersion} onChange={changeEditorVersion} />
-        {!isV2 && renderStepTabs('mobile-tabbar')}
+        {(!isV2 || readOnly) && renderStepTabs('mobile-tabbar')}
         {projectOperationLabel && (
           <div className="project-progress" role="progressbar" aria-label={projectOperationLabel}>
             <span className="project-progress-beat" />
@@ -3736,13 +3747,14 @@ export default function App({
           </div>
         )}
       </header>
+      {readOnly && <div className="readonly-banner" role="status">{t('พื้นที่งานนี้คุณดูได้อย่างเดียว', 'You have view-only access to this workspace')}</div>}
       <div className="body">
-        {isV2 && <EditorRail active={sideTab === 'design' ? 'model' : sideTab === 'export' ? 'export' : v2Tool} onSelect={chooseV2Tool} />}
-        <aside ref={asideRef} className={isV2 ? 'v2-panel' : undefined} data-tool={isV2 ? v2Tool : undefined}>
-          {!isV2 && renderStepTabs('aside-tabbar')}
-          {isV2 && <button type="button" className="v2-panel-close" aria-label={t('ซ่อนแผงเครื่องมือ', 'Hide tools panel')} onClick={() => setV2PanelClosed(true)}>×</button>}
-          {isV2 && sideTab === 'design' && <div className="v2-size-host" ref={setSizeFloatEl} />}
-          {isV2 && sideTab === 'artwork' && <>
+        {isV2 && !readOnly && <EditorRail active={sideTab === 'design' ? 'model' : sideTab === 'export' ? 'export' : v2Tool} onSelect={chooseV2Tool} />}
+        <aside ref={asideRef} className={isV2 ? 'v2-panel' : undefined} data-tool={readOnly ? sideTab : isV2 ? v2Tool : undefined}>
+          {(!isV2 || readOnly) && renderStepTabs('aside-tabbar')}
+          {isV2 && !readOnly && <button type="button" className="v2-panel-close" aria-label={t('ซ่อนแผงเครื่องมือ', 'Hide tools panel')} onClick={() => setV2PanelClosed(true)}>×</button>}
+          {isV2 && !readOnly && sideTab === 'design' && <div className="v2-size-host" ref={setSizeFloatEl} />}
+          {isV2 && !readOnly && sideTab === 'artwork' && <>
             {v2Tool === 'elements' && <ElementLibrary disabled={aiBusy || projectBusy} onShape={addShape} onNutrition={addNutrition} onNext={() => chooseV2Tool('export')}
               onFreeShape={kind => { const deco = makeLibraryShape(dieline, kind); if (deco) { setDecos(ds => [...ds, deco]); setSelectedIds([deco.id]) } }} />}
             {v2Tool === 'text' && <div className="v2-insertion-panel">
@@ -3759,7 +3771,7 @@ export default function App({
             {v2Tool === 'account' && <div className="v2-insertion-panel"><h2>{t('พื้นที่ทำงาน', 'Workspace')}</h2><p>{cloud ? t('พื้นที่ทำงานบนคลาวด์', 'Cloud workspace') : t('ทำงานบนเครื่องนี้', 'On this device')}</p><p className="hint">{cloud ? cloudSaveLabel(cloud.saveState, cloud.saveError) : t('งานบันทึกอัตโนมัติในเบราว์เซอร์นี้ สำรองงานได้ในเมนูส่งออก', 'Projects are saved in this browser. Back up your work from Export & files.')}</p>{cloud && <button type="button" onClick={() => setPricingOpen(true)}>{t('แพ็กเกจและเครดิต', 'Plan & credits')}</button>}<button type="button" onClick={() => chooseV2Tool('export')}>{t('สำรองและส่งออกงาน', 'Back up & export')}</button></div>}
           </>}
 
-          {sideTab === 'design' && (
+          {!readOnly && sideTab === 'design' && (
           <>
           <Group title={t('ประเภทงาน', 'Job type')} open={groups.mode} onToggle={() => toggleGroup('mode')}>
             <div className="pick-list">
@@ -4975,7 +4987,7 @@ export default function App({
           </>
           )}
 
-          {sideTab === 'artwork' && (
+          {!readOnly && sideTab === 'artwork' && (
           <>
               {bgFloatEl && createPortal(
               <Group title={t('พื้นหลังแพ็กเกจ', 'Package background')} open={groups.bg} onToggle={() => toggleGroup('bg')}>
@@ -6533,7 +6545,7 @@ export default function App({
                 </p>
               </Group>
 
-              <Group title={t('จำนวน & จำนวนต่อแผ่น', 'Quantity & yield')} open={groups.qty} onToggle={() => toggleGroup('qty')}>
+              {!readOnly && <Group title={t('จำนวน & จำนวนต่อแผ่น', 'Quantity & yield')} open={groups.qty} onToggle={() => toggleGroup('qty')}>
                 <div className="field">
                   <span className="field-head">
                     จำนวนที่จะสั่ง
@@ -6647,14 +6659,14 @@ export default function App({
                   ขอบแผ่น {DEFAULT_OPT.margin} มม.รอบด้าน · เทียบวางตั้ง/หมุน 90° เลือกที่ได้มากสุด —
                   ประมาณการเบื้องต้น ยังไม่รวมการวางสลับทิศในแผ่นเดียว
                 </p>
-              </Group>
+              </Group>}
 
               <Group title={t('สำรอง / ย้ายงาน', 'Backup / transfer')} open={groups.backup} onToggle={() => toggleGroup('backup')}>
                 <div className="art-actions">
                   <button disabled={aiBusy} onClick={exportProject}>
                     ⬇ ส่งออกงานนี้
                   </button>
-                  <label className="file-pick inline">
+                  {!readOnly && <label className="file-pick inline">
                     <input
                       type="file"
                       accept=".json,application/json"
@@ -6665,29 +6677,29 @@ export default function App({
                       }}
                     />
                     <span>⬆ นำเข้างาน</span>
-                  </label>
+                  </label>}
                 </div>
-                <p className="hint">
+                {!readOnly && <p className="hint">
                   เก็บทั้งงาน (รูปแบบ/วัสดุ/ขนาด/สี/โลโก้-ข้อความ/ประวัติเวอร์ชัน) เป็นไฟล์เดียว —
                   สำรองไว้ ย้ายไปเครื่องอื่น หรือส่งให้ลูกค้า/โรงงานเปิดต่อได้ นำเข้าแล้วเพิ่มเป็นงานใหม่
                   ไม่ทับงานเดิม
-                </p>
+                </p>}
               </Group>
 
-              <div className="step-nav">
+              {!readOnly && <div className="step-nav">
                 <span className="step-saved">{t('✓ บันทึกงานอัตโนมัติ', '✓ Auto-saved')} · ครบทุกขั้นตอนแล้ว</span>
                 <div className="step-btns">
                   <button className="step-back" onClick={() => goStep('artwork')}>
                     {t('← ตกแต่ง','← Decorate')}
                   </button>
                 </div>
-              </div>
+              </div>}
             </>
           )}
         </aside>
 
         <main>
-          {!isV2 && history.length > 0 && (
+          {!readOnly && !isV2 && history.length > 0 && (
             <div className="versions card" aria-label="ประวัติเวอร์ชัน">
               <button
                 className="ver-nav"
@@ -6754,12 +6766,12 @@ export default function App({
                   {foldBar}
                   <div className="viewer-3d">{viewer3D}</div>
                 </div>
-                {!isV2 && <FloatModule kind="size" hostRef={setSizeFloatEl} />}
+                {!readOnly && !isV2 && <FloatModule kind="size" hostRef={setSizeFloatEl} />}
               </>
             ) : (
             <>
             {/* host แถบเครื่องมือ (Canva) — ลอยทับบน dieline (portal มาลงที่นี่เมื่อเลือกชิ้น) */}
-            {isV2 && sideTab === 'artwork' && <EditorToolbar selected={selected ?? undefined} count={selectedIds.length} disabled={aiBusy || projectBusy} advanced={v2Advanced} onAdvanced={() => { setV2Advanced(v => !v); if (!selectedIds.length) chooseV2Tool('layers') }} onPatch={patchSelected} onDuplicate={duplicateSelected} onLock={toggleLockedSelected} onDelete={removeSelected} onLayers={() => chooseV2Tool('layers')} />}
+            {!readOnly && isV2 && sideTab === 'artwork' && <EditorToolbar selected={selected ?? undefined} count={selectedIds.length} disabled={aiBusy || projectBusy} advanced={v2Advanced} onAdvanced={() => { setV2Advanced(v => !v); if (!selectedIds.length) chooseV2Tool('layers') }} onPatch={patchSelected} onDuplicate={duplicateSelected} onLock={toggleLockedSelected} onDelete={removeSelected} onLayers={() => chooseV2Tool('layers')} />}
             <div className="deco-topbar-host" ref={setDecoBar} />
             <div className="blueprint card">
               <DielineSVG
@@ -6770,27 +6782,29 @@ export default function App({
                 guides={guides}
                 fillColor={proofed.fillColor}
                 fillImage={proofed.fillImage}
-                selectedIds={selectedIds}
-                onSelect={selectDeco}
-                onMove={moveDeco}
-                onRotate={rotateDeco}
-                onResize={resizeDeco}
-                resizeAspect={resizeAspect}
-                penMode={penMode}
-                onAddPath={addPath}
-                onPenExit={() => setPenMode(false)}
-                onEditPath={editPath}
-                onCrop={cropDeco}
-                onRemove={removeDeco}
-                onText={(id, text) =>
-                  setDecos((ds) =>
-                    ds.map((d) => (d.id === id && d.type === 'text' ? withTextW({ ...d, text }) : d)),
-                  )
-                }
-                onUndo={undo}
-                onRedo={redo}
-                canUndo={!aiBusy && undoStack.length > 0}
-                canRedo={!aiBusy && redoStack.length > 0}
+                previewControls={readOnly}
+                {...(!readOnly && {
+                  selectedIds,
+                  onSelect: selectDeco,
+                  onMove: moveDeco,
+                  onRotate: rotateDeco,
+                  onResize: resizeDeco,
+                  resizeAspect,
+                  penMode,
+                  onAddPath: addPath,
+                  onPenExit: () => setPenMode(false),
+                  onEditPath: editPath,
+                  onCrop: cropDeco,
+                  onRemove: removeDeco,
+                  onText: (id: string, text: string) =>
+                    setDecos((ds) =>
+                      ds.map((d) => (d.id === id && d.type === 'text' ? withTextW({ ...d, text }) : d)),
+                    ),
+                  onUndo: undo,
+                  onRedo: redo,
+                  canUndo: !aiBusy && undoStack.length > 0,
+                  canRedo: !aiBusy && redoStack.length > 0,
+                })}
                 lengthUnit={unit}
                 toolsExtra={isV2 ? <button type="button" className="v2-proof" title={t('ดูสีแบบพิมพ์ CMYK', 'Print color preview')} aria-label={t('ดูสีแบบพิมพ์ CMYK', 'Print color preview')} aria-pressed={softProof} onClick={() => setSoftProof(v => !v)}><img src={studioAssets.imgProperty1Default} alt="" /></button> : proofToggle}
                 lowResDpi={lowResMap}
@@ -6844,7 +6858,7 @@ export default function App({
             </div>
             )}
             {/* โมดูลพื้นหลังแพ็กเกจ ลอยขวา (เฉพาะแท็บตกแต่ง) */}
-            {sideTab === 'artwork' && !isV2 && <FloatModule kind="bg" hostRef={setBgFloatEl} />}
+            {!readOnly && sideTab === 'artwork' && !isV2 && <FloatModule kind="bg" hostRef={setBgFloatEl} />}
             </>
             )}
           </div>
