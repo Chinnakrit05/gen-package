@@ -10,6 +10,7 @@ import * as studioAssets from './editor-v2/assets'
 import { finishDef } from '../core/finish'
 import { holoColor } from '../core/paperSurface'
 import type { ResizeAnchor } from '../core/resizeAnchor'
+import { convertLabelNumbers, type LengthUnit } from '../core/units'
 
 const DIM_COLOR = '#1b6ea8'
 const SEL_COLOR = '#1b6ea8'
@@ -56,14 +57,10 @@ function faceLabel(id: string): { th: string; en: string } | null {
   return null
 }
 
-// แปลงตัวเลข (มม.) ในป้ายขนาดเป็นนิ้วเมื่ออยู่โหมด imperial — ตัวเลขบน dieline เป็นระยะ score (มม.) ทั้งหมด
-function dimLabel(label: string, imperial: boolean): string {
-  if (!imperial) return label
-  return label.replace(/\d+(\.\d+)?/g, (m) => String(Math.round((Number(m) / 25.4) * 100) / 100))
-}
 
-function Dim({ d, imperial = false, fs = 6 }: { d: DimMark; imperial?: boolean; fs?: number }) {
-  const label = dimLabel(d.label, imperial)
+function Dim({ d, lengthUnit = 'mm', fs = 6 }: { d: DimMark; lengthUnit?: LengthUnit; fs?: number }) {
+  // ตัวเลขบน dieline เป็นระยะ score (มม.) ทั้งหมด — แปลงตามหน่วยที่เลือกตอนแสดง
+  const label = convertLabelNumbers(d.label, lengthUnit)
   const tick = fs * 0.42 // ขีดปลาย/ระยะห่างข้อความ ย่อตามขนาดตัวอักษร
   const gap = fs / 3
   const vert = Math.abs(d.a.x - d.b.x) < 0.001
@@ -445,7 +442,7 @@ export const DielineSVG = memo(function DielineSVG({
   onRedo,
   canUndo,
   canRedo,
-  imperial = false,
+  lengthUnit = 'mm',
   toolsExtra,
   lowResDpi,
   fillLowDpi,
@@ -457,7 +454,7 @@ export const DielineSVG = memo(function DielineSVG({
   studio?: boolean
   dieline: Dieline
   showDims: boolean
-  imperial?: boolean
+  lengthUnit?: LengthUnit
   decos?: Deco[]
   guides?: Guides | null
   fillColor?: string | null
@@ -1829,7 +1826,7 @@ export const DielineSVG = memo(function DielineSVG({
 
       {showDims &&
         dieline.dims.map((d, i) => (
-          <Dim key={i} d={d} imperial={imperial} fs={dimTextSize(dieline.width, dieline.height)} />
+          <Dim key={i} d={d} lengthUnit={lengthUnit} fs={dimTextSize(dieline.width, dieline.height)} />
         ))}
 
       {/* ป้ายกำกับหน้า (เช่น หน้า/หลัง ของนามบัตร) — โชว์เสมอในพรีวิว ไม่เข้าไฟล์ผลิต */}

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import type { LengthUnit } from '../core/units'
 import * as THREE from 'three'
 import { useArtTexture } from './useArtTexture'
 import { Canvas } from '@react-three/fiber'
@@ -886,7 +887,7 @@ function PouchModel({
   fillColor,
   fillImage,
   dims,
-  imperial,
+  lengthUnit,
   dimVariant,
   watermark,
 }: {
@@ -896,7 +897,7 @@ function PouchModel({
   fillColor: string | null | undefined
   fillImage: FillImage | null | undefined
   dims?: Dim3D[]
-  imperial?: boolean
+  lengthUnit?: LengthUnit
   dimVariant?: 'lines' | 'badge'
   watermark?: string | null
 }) {
@@ -1085,7 +1086,7 @@ function PouchModel({
         </mesh>
       )}
     </group>
-    {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant={dimVariant} />}
+    {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} lengthUnit={lengthUnit ?? 'mm'} variant={dimVariant} />}
     </>
   )
 }
@@ -1097,7 +1098,7 @@ export function PouchViewer3D({
   fillColor,
   fillImage,
   dims,
-  imperial,
+  lengthUnit,
   dimVariant,
   lightMode,
   watermark,
@@ -1109,7 +1110,7 @@ export function PouchViewer3D({
   fillColor?: string | null
   fillImage?: FillImage | null
   dims?: Dim3D[]
-  imperial?: boolean
+  lengthUnit?: LengthUnit
   dimVariant?: 'lines' | 'badge'
   lightMode?: LightMode
   watermark?: string | null
@@ -1127,7 +1128,7 @@ export function PouchViewer3D({
     >
       <color attach="background" args={['#ffffff']} />
       <SceneLighting mode={lightMode ?? 'soft'} />
-      <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} dimVariant={dimVariant} watermark={watermark} />
+      <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} lengthUnit={lengthUnit} dimVariant={dimVariant} watermark={watermark} />
       <OrbitControls makeDefault enableDamping />
       <FitViewerCamera fit={fit} />
       {extra}

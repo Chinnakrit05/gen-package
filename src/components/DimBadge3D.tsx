@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
-import { fmtDim } from '../core/units'
+import { fmtDim, type LengthUnit } from '../core/units'
 
 export interface Dim3D {
   label: string
@@ -29,22 +29,22 @@ interface Measure {
 export function DimBadge3D({
   targetRef,
   dims,
-  imperial,
+  lengthUnit,
   variant = 'lines',
 }: {
   targetRef: React.RefObject<THREE.Object3D | null>
   dims: Dim3D[]
-  imperial: boolean
+  lengthUnit: LengthUnit
   variant?: 'lines' | 'vessel' | 'tube' | 'badge'
 }) {
-  if (variant === 'badge') return <DimCard targetRef={targetRef} dims={dims} imperial={imperial} />
+  if (variant === 'badge') return <DimCard targetRef={targetRef} dims={dims} lengthUnit={lengthUnit} />
   const build = variant === 'vessel' ? buildVessel : variant === 'tube' ? buildTube : buildAuto
-  return <DimLines targetRef={targetRef} dims={dims} imperial={imperial} build={build} />
+  return <DimLines targetRef={targetRef} dims={dims} lengthUnit={lengthUnit} build={build} />
 }
 
 // จับคู่ขนาด (W/D/H) เข้ากับแกนของทรงตามช่วงที่ใกล้ที่สุด แล้ววาดตามขอบจริง (กล่อง/ถุง)
 // x = ขอบหน้า-ล่าง (ยื่นลง), y = ขอบหน้า-ซ้าย (ยื่นซ้าย), z = ขอบซ้าย-ล่าง (ยื่นซ้าย)
-function buildAuto(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[] {
+function buildAuto(b: THREE.Box3, dims: Dim3D[], lengthUnit: LengthUnit): Measure[] {
   const { min, max } = b
   const span = [max.x - min.x, max.y - min.y, max.z - min.z]
   const off = Math.max(10, Math.max(span[0], span[1], span[2]) * 0.13)
@@ -81,7 +81,7 @@ function buildAuto(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[] {
       p0: e.p0,
       p1: [e.p0[0] + e.dir[0] * e.len, e.p0[1] + e.dir[1] * e.len, e.p0[2] + e.dir[2] * e.len],
       off: [e.offv[0] * off, e.offv[1] * off, e.offv[2] * off],
-      label: `${dims[di].label} ${fmtDim(dims[di].mm, imperial)}`,
+      label: `${dims[di].label} ${fmtDim(dims[di].mm, lengthUnit)}`,
     })
   }
   return out
@@ -90,7 +90,7 @@ function buildAuto(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[] {
 // ภาชนะ/หลอด (ทรงหมุน): ⌀ตัว = เส้นนอนที่ฐาน (เต็มความกว้าง), สูง = เส้นตั้งด้านซ้าย,
 // ⌀ปาก = เส้นนอนสั้น ๆ ที่ยอด ยาวเท่าค่า ⌀ปากจริง (ไม่ใช่เต็มลำตัว) จัดกึ่งกลาง
 // dims เรียง [⌀ตัว(W), ⌀ปาก(D), สูง(H)] ตามที่ App ส่งมา
-function buildVessel(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[] {
+function buildVessel(b: THREE.Box3, dims: Dim3D[], lengthUnit: LengthUnit): Measure[] {
   const { min, max } = b
   const span = [max.x - min.x, max.y - min.y, max.z - min.z]
   const off = Math.max(10, Math.max(span[0], span[1], span[2]) * 0.13)
@@ -102,7 +102,7 @@ function buildVessel(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[]
     p0: [min.x, min.y, max.z],
     p1: [max.x, min.y, max.z],
     off: [0, -off, 0],
-    label: `${dims[0].label} ${fmtDim(dims[0].mm, imperial)}`,
+    label: `${dims[0].label} ${fmtDim(dims[0].mm, lengthUnit)}`,
   })
   // สูง — ขอบซ้ายด้านหน้า เต็มความสูง ยื่นซ้าย
   if (dims[2]) {
@@ -110,7 +110,7 @@ function buildVessel(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[]
       p0: [min.x, min.y, max.z],
       p1: [min.x, max.y, max.z],
       off: [-off, 0, 0],
-      label: `${dims[2].label} ${fmtDim(dims[2].mm, imperial)}`,
+      label: `${dims[2].label} ${fmtDim(dims[2].mm, lengthUnit)}`,
     })
   }
   // ⌀ปาก — เส้นนอนสั้นที่ยอด ยาวเท่า ⌀ปากจริง จัดกึ่งกลาง ยื่นขึ้น
@@ -119,7 +119,7 @@ function buildVessel(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[]
       p0: [cx - mouth / 2, max.y, max.z],
       p1: [cx + mouth / 2, max.y, max.z],
       off: [0, off, 0],
-      label: `${dims[1].label} ${fmtDim(dims[1].mm, imperial)}`,
+      label: `${dims[1].label} ${fmtDim(dims[1].mm, lengthUnit)}`,
     })
   }
   return out
@@ -127,7 +127,7 @@ function buildVessel(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[]
 
 // หลอดครีม: กลับหัวจากขวด — ตัวหลอด (กว้างสุด) คือตะเข็บซีลที่ยอด, ปาก/ฝาอยู่ที่ฐาน
 // ⌀ตัว = เส้นนอนเต็มกว้างที่ "ยอด", ⌀ปาก = เส้นนอนสั้นที่ "ฐาน" ยาวเท่า ⌀ปากจริง, สูง = ด้านซ้าย
-function buildTube(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[] {
+function buildTube(b: THREE.Box3, dims: Dim3D[], lengthUnit: LengthUnit): Measure[] {
   const { min, max } = b
   const span = [max.x - min.x, max.y - min.y, max.z - min.z]
   const off = Math.max(10, Math.max(span[0], span[1], span[2]) * 0.13)
@@ -139,7 +139,7 @@ function buildTube(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[] {
     p0: [min.x, max.y, max.z],
     p1: [max.x, max.y, max.z],
     off: [0, off, 0],
-    label: `${dims[0].label} ${fmtDim(dims[0].mm, imperial)}`,
+    label: `${dims[0].label} ${fmtDim(dims[0].mm, lengthUnit)}`,
   })
   // สูง — ขอบซ้ายด้านหน้า เต็มความสูง ยื่นซ้าย
   if (dims[2]) {
@@ -147,7 +147,7 @@ function buildTube(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[] {
       p0: [min.x, min.y, max.z],
       p1: [min.x, max.y, max.z],
       off: [-off, 0, 0],
-      label: `${dims[2].label} ${fmtDim(dims[2].mm, imperial)}`,
+      label: `${dims[2].label} ${fmtDim(dims[2].mm, lengthUnit)}`,
     })
   }
   // ⌀ปาก — เส้นนอนสั้นที่ฐาน (ฝา/คอ) ยาวเท่า ⌀ปากจริง จัดกึ่งกลาง ยื่นลง
@@ -156,7 +156,7 @@ function buildTube(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[] {
       p0: [cx - mouth / 2, min.y, max.z],
       p1: [cx + mouth / 2, min.y, max.z],
       off: [0, -off, 0],
-      label: `${dims[1].label} ${fmtDim(dims[1].mm, imperial)}`,
+      label: `${dims[1].label} ${fmtDim(dims[1].mm, lengthUnit)}`,
     })
   }
   return out
@@ -166,13 +166,13 @@ function buildTube(b: THREE.Box3, dims: Dim3D[], imperial: boolean): Measure[] {
 function DimLines({
   targetRef,
   dims,
-  imperial,
+  lengthUnit,
   build,
 }: {
   targetRef: React.RefObject<THREE.Object3D | null>
   dims: Dim3D[]
-  imperial: boolean
-  build: (b: THREE.Box3, dims: Dim3D[], imperial: boolean) => Measure[]
+  lengthUnit: LengthUnit
+  build: (b: THREE.Box3, dims: Dim3D[], lengthUnit: LengthUnit) => Measure[]
 }) {
   const geoRef = useRef<THREE.BufferGeometry>(null)
   // 3 เส้น × 7 ช่วง (ต่อ 2 + เส้นวัด 1 + หัวลูกศร 4) × 2 จุด × 3 พิกัด
@@ -197,7 +197,7 @@ function DimLines({
     if (b.isEmpty() || !Number.isFinite(b.min.x)) return
     const biggest = Math.max(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z)
     const arr = Math.max(4, biggest * 0.03) // ความยาวหัวลูกศร
-    const measures = build(b, dims, imperial)
+    const measures = build(b, dims, lengthUnit)
 
     const data = posAttr.array as Float32Array
     let s = 0
@@ -278,11 +278,11 @@ function DimLines({
 function DimCard({
   targetRef,
   dims,
-  imperial,
+  lengthUnit,
 }: {
   targetRef: React.RefObject<THREE.Object3D | null>
   dims: Dim3D[]
-  imperial: boolean
+  lengthUnit: LengthUnit
 }) {
   const groupRef = useRef<THREE.Group>(null)
   const box = useRef(new THREE.Box3())
@@ -307,7 +307,7 @@ function DimCard({
         {dims.map((d) => (
           <div key={d.label} className="dim3d-row">
             <span className="dim3d-k">{d.label}</span>
-            <span className="dim3d-v">{fmtDim(d.mm, imperial)}</span>
+            <span className="dim3d-v">{fmtDim(d.mm, lengthUnit)}</span>
           </div>
         ))}
       </Html>

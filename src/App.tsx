@@ -199,6 +199,7 @@ import { ProjectGallery, projectKind, projectTypeLabel } from './components/Proj
 import { ThumbnailCapture, type ThumbnailShot } from './components/ThumbnailCapture'
 import { thumbIsFresh, thumbNeedsFetch } from './core/thumbnail'
 import { reanchorBox, type ResizeAnchor } from './core/resizeAnchor'
+import { LENGTH_UNITS, dimValue, parseLengthUnit, toMm as unitToMm, unitLabel as unitLabelOf, unitStep, type LengthUnit } from './core/units'
 import { IndexedDbThumbStore, ThumbnailCache, base64ToBlob, blobToBase64 } from './services/thumbnails/thumbnailCache'
 import {
   IconImage,
@@ -267,10 +268,9 @@ interface DimFieldProps {
   // pop = แสดงเป็นปุ่มเล็ก คลิกแล้ว dropdown สไลเดอร์ลงมา (แบบ Canva) — ใช้ในแถบบน
   pop?: boolean
   icon?: React.ReactNode // ถ้ามี → ปุ่ม pop โชว์ไอคอนแทนป้ายข้อความ (label ยังอยู่ใน dropdown + tooltip)
-  imperial?: boolean // true = แสดง/ป้อนเป็นนิ้ว (ค่าจริงเก็บเป็น มม. เสมอ)
+  lengthUnit?: LengthUnit // หน่วยที่แสดง/ป้อน (ค่าจริงเก็บเป็น มม. เสมอ)
 }
 
-const MM_PER_IN = 25.4
 
 const fmtMm = (v: number) => String(Math.round(v * 10) / 10)
 const hexLuminance = (hex: string) => {
@@ -438,14 +438,15 @@ function StickerIssues({ issues, okText }: { issues: IssueItem[]; okText?: [stri
   )
 }
 
-function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange, pop: popProp, icon, imperial = false }: DimFieldProps) {
-  // ค่า state จริงเป็น มม. เสมอ (เรขาคณิตใช้ มม.) — โหมดนิ้วแค่แปลงตอนแสดง/ป้อน
-  const toDisp = (v: number) => (imperial ? Math.round((v / MM_PER_IN) * 1000) / 1000 : v)
-  const toMm = (n: number) => (imperial ? n * MM_PER_IN : n)
-  const unitLabel = imperial ? 'นิ้ว' : unit
+function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange, pop: popProp, icon, lengthUnit = 'mm' }: DimFieldProps) {
+  // ค่า state จริงเป็น มม. เสมอ (เรขาคณิตใช้ มม.) — ซม./นิ้วแค่แปลงตอนแสดง/ป้อน
+  const converted = lengthUnit !== 'mm'
+  const toDisp = (v: number) => (converted ? dimValue(v, lengthUnit) : v)
+  const toMm = (n: number) => (converted ? unitToMm(n, lengthUnit) : n)
+  const unitLabel = converted ? unitLabelOf(lengthUnit) : unit
   const dMin = toDisp(min)
   const dMax = toDisp(max)
-  const dStep = imperial ? 0.05 : step
+  const dStep = unitStep(lengthUnit, step)
   const commit = (vmm: number) => onChange(clamp(Number.isFinite(vmm) ? vmm : min, min, max))
   const inTopBar = useContext(TopBarCtx) // เรียก hook แบบไม่มีเงื่อนไข
   const pop = popProp || inTopBar // ในแถบบน = โหมด dropdown อัตโนมัติ
@@ -456,7 +457,7 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
   useEffect(() => {
     if (!editing) setText(String(toDisp(value)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, editing, imperial])
+  }, [value, editing, lengthUnit])
   const btnRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null)
@@ -1575,10 +1576,10 @@ export default function App({
       Pro
     </span>
   ) : null
-  // หน่วยวัดช่องขนาด (มม./นิ้ว) — ค่าจริงเก็บเป็น มม. เสมอ สลับแค่การแสดงผล
-  const [unit, setUnit] = useState<'mm' | 'in'>(() => {
+  // หน่วยวัดช่องขนาด (มม./ซม./นิ้ว) — ค่าจริงเก็บเป็น มม. เสมอ สลับแค่การแสดงผล
+  const [unit, setUnit] = useState<LengthUnit>(() => {
     try {
-      return localStorage.getItem('packit-unit') === 'in' ? 'in' : 'mm'
+      return parseLengthUnit(localStorage.getItem('packit-unit'))
     } catch {
       return 'mm'
     }
@@ -3451,15 +3452,15 @@ export default function App({
             fillColor={fillColor}
             fillImage={fillImage}
             dims={dims3dOn}
-            imperial={imperial}
+            lengthUnit={unit}
             dimVariant="lines"
             lightMode={lightMode3d}
             watermark={watermark}
           />
         ) : kind === 'vessel' ? (
-          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} lightMode={lightMode3d} watermark={watermark} capStyle={capStyle} capColor={capColor} />
+          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} lengthUnit={unit} lightMode={lightMode3d} watermark={watermark} capStyle={capStyle} capColor={capColor} />
         ) : (
-          <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} imperial={imperial} dimVariant="lines" lightMode={lightMode3d} watermark={watermark} />
+          <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} lengthUnit={unit} dimVariant="lines" lightMode={lightMode3d} watermark={watermark} />
         )}
       </Suspense>
       {!pip3dCompact && (
@@ -4026,7 +4027,7 @@ export default function App({
                 <>
                   {/* ฉลากกำหนดเอง: ตำแหน่งแนวตั้ง/สูง/ยาวรอบตัว — อยู่บนลำตัวตรงเสมอ (ขอบเขตจาก vessel.labelRange) */}
                   <DimField
-                    imperial={imperial}
+                    lengthUnit={unit}
                     label={t('ตำแหน่งฉลาก (ขอบล่างจากก้น)', 'Label position (bottom edge)')}
                     value={Math.round(vessel.labelY0 * 2) / 2}
                     min={Math.ceil(vessel.labelRange[0] * 2) / 2}
@@ -4035,7 +4036,7 @@ export default function App({
                     onChange={(v) => setLabelBox((b) => ({ ...b, y: v, h: Math.round((vessel.labelY1 - vessel.labelY0) * 2) / 2 }))}
                   />
                   <DimField
-                    imperial={imperial}
+                    lengthUnit={unit}
                     label={t('สูงฉลาก', 'Label height')}
                     value={Math.round((vessel.labelY1 - vessel.labelY0) * 2) / 2}
                     min={LABEL_MIN}
@@ -4070,7 +4071,7 @@ export default function App({
                     </div>
                   )}
                   <DimField
-                    imperial={imperial}
+                    lengthUnit={unit}
                     label={t('ยาวรอบขวด', 'Length around')}
                     value={vessel.labelArc >= 2 * Math.PI - 1e-9 ? Math.round(vessel.circ * 2) / 2 : vessel.label.width}
                     min={LABEL_MIN}
@@ -4227,7 +4228,7 @@ export default function App({
                   </div>
                   {stickerCut.border === 'white' && (
                     <DimField
-                      imperial={imperial}
+                      lengthUnit={unit}
                       label={t('ความกว้างขอบขาว', 'Border width')}
                       value={stickerCut.offset}
                       min={STICKER_OFFSET_MIN}
@@ -4304,7 +4305,7 @@ export default function App({
               {stickerCut.sheet === 'custom' && (
                 <>
                   <DimField
-                    imperial={imperial}
+                    lengthUnit={unit}
                     label={t('กว้างแผ่น', 'Sheet width')}
                     value={stickerCut.sheetW ?? DEFAULT_CUSTOM_SHEET.w}
                     min={CUSTOM_SHEET_MIN}
@@ -4313,7 +4314,7 @@ export default function App({
                     onChange={(v) => updateSheet({ sheetW: v })}
                   />
                   <DimField
-                    imperial={imperial}
+                    lengthUnit={unit}
                     label={t('ยาวแผ่น', 'Sheet height')}
                     value={stickerCut.sheetH ?? DEFAULT_CUSTOM_SHEET.h}
                     min={CUSTOM_SHEET_MIN}
@@ -4341,7 +4342,7 @@ export default function App({
               )}
               {stickerCut.sheet && (
                 <DimField
-                  imperial={imperial}
+                  lengthUnit={unit}
                   label={t('ขอบแผ่น (ตามโรงพิมพ์)', 'Sheet margin (per printer)')}
                   value={sheetMargin}
                   min={0}
@@ -4352,7 +4353,7 @@ export default function App({
               )}
               {stickerCut.sheet && (
                 <DimField
-                  imperial={imperial}
+                  lengthUnit={unit}
                   label={t('ระยะห่างระหว่างดวง', 'Gap between stickers')}
                   value={sheetGap}
                   min={SHEET_GAP}
@@ -4498,25 +4499,20 @@ export default function App({
             onToggle={() => toggleGroup('size')}
           >
             <div className="unit-toggle" role="group" aria-label={t('หน่วยวัด', 'Unit')}>
-              <button
-                type="button"
-                className={!imperial ? 'active' : ''}
-                aria-pressed={!imperial}
-                onClick={() => setUnit('mm')}
-              >
-                {t('มม.', 'mm')}
-              </button>
-              <button
-                type="button"
-                className={imperial ? 'active' : ''}
-                aria-pressed={imperial}
-                onClick={() => setUnit('in')}
-              >
-                {t('นิ้ว', 'inch')}
-              </button>
+              {LENGTH_UNITS.map((u) => (
+                <button
+                  key={u}
+                  type="button"
+                  className={unit === u ? 'active' : ''}
+                  aria-pressed={unit === u}
+                  onClick={() => setUnit(u)}
+                >
+                  {t(unitLabelOf(u), u === 'in' ? 'inch' : u)}
+                </button>
+              ))}
             </div>
             <DimField
-              imperial={imperial}
+              lengthUnit={unit}
               label={
                 kind === 'box'
                   ? t('กว้าง W', 'Width W')
@@ -4566,7 +4562,7 @@ export default function App({
             )}
             {kind === 'vessel' && vessel?.rect && (
               <DimField
-                imperial={imperial}
+                lengthUnit={unit}
                 label={t('ลึกขวด', 'Bottle depth')}
                 value={Math.round(vessel.rect.b * 4) / 2}
                 min={rectDepthMin(D)}
@@ -4577,7 +4573,7 @@ export default function App({
             )}
             {showNeck && (
               <DimField
-                imperial={imperial}
+                lengthUnit={unit}
                 label={t('สูงตัวขวด', 'Body height')}
                 value={bodyH}
                 min={Math.max(BODY_MIN, 30 - neckEff)}
@@ -4590,7 +4586,7 @@ export default function App({
             {!(kind === 'pouch' && (pouchStyle === 'flat' || pouchStyle === 'pillow')) &&
               !(kind === 'box' && (templateId === 'card' || templateId === 'sticker')) && (
               <DimField
-                imperial={imperial}
+                lengthUnit={unit}
                 label={
                   kind === 'box'
                     ? t('ลึก D', 'Depth D')
@@ -4612,7 +4608,7 @@ export default function App({
             {showNeck ? (
               <>
                 <DimField
-                  imperial={imperial}
+                  lengthUnit={unit}
                   label={t('สูงคอขวด', 'Neck height')}
                   value={neckEff}
                   min={NECK_MIN}
@@ -4622,7 +4618,7 @@ export default function App({
                 />
                 {/* ไหล่ = รอยต่อตัว→คอ: สูงไหล่อยู่ในความสูงตัว (สูงรวมไม่เปลี่ยน) */}
                 <DimField
-                  imperial={imperial}
+                  lengthUnit={unit}
                   label={t('สูงไหล่', 'Shoulder height')}
                   value={shoulderEff}
                   min={SHOULDER_MIN}
@@ -4648,14 +4644,12 @@ export default function App({
                   </div>
                 </div>
                 <p className="hint">
-                  {imperial
-                    ? t(`สูงรวม ${(H / MM_PER_IN).toFixed(2)} นิ้ว`, `Total height ${(H / MM_PER_IN).toFixed(2)} in`)
-                    : t(`สูงรวม ${fmtMm(H)} มม.`, `Total height ${fmtMm(H)} mm`)}
+                  {t(`สูงรวม ${dimValue(H, unit)} ${unitLabelOf(unit)}`, `Total height ${dimValue(H, unit)} ${unitLabelOf(unit, 'en')}`)}
                 </p>
               </>
             ) : (
               <DimField
-                imperial={imperial}
+                lengthUnit={unit}
                 label={kind === 'pouch' ? t('สูงลำตัว H', 'Body height H') : t('สูง H', 'Height H')}
                 value={H}
                 min={isSticker ? STICKER_MIN_SIZE : 30}
@@ -4811,7 +4805,7 @@ export default function App({
                   {zipper && pouch?.zipY !== undefined && (
                     <div className="zip-pos" style={{ margin: '6px 0 4px 24px' }}>
                       <DimField
-                        imperial={imperial}
+                        lengthUnit={unit}
                         label={t('ซิปห่างขอบบน', 'Zipper from top')}
                         value={pouch.zipY}
                         min={pouch.frontRect.y + 1}
@@ -4882,7 +4876,7 @@ export default function App({
                       </label>
                       {pouchAddons.tearAt !== undefined && (
                         <DimField
-                          imperial={imperial}
+                          lengthUnit={unit}
                           label={t('รอยฉีกห่างขอบบน', 'Tear notch from top')}
                           value={pouch.tearY}
                           min={3}
@@ -6787,7 +6781,7 @@ export default function App({
                 onRedo={redo}
                 canUndo={!aiBusy && undoStack.length > 0}
                 canRedo={!aiBusy && redoStack.length > 0}
-                imperial={imperial}
+                lengthUnit={unit}
                 toolsExtra={isV2 ? <button type="button" className="v2-proof" title={t('ดูสีแบบพิมพ์ CMYK', 'Print color preview')} aria-label={t('ดูสีแบบพิมพ์ CMYK', 'Print color preview')} aria-pressed={softProof} onClick={() => setSoftProof(v => !v)}><img src={studioAssets.imgProperty1Default} alt="" /></button> : proofToggle}
                 lowResDpi={lowResMap}
                 fillLowDpi={fillLowDpi}

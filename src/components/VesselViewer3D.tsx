@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import type { LengthUnit } from '../core/units'
 import * as THREE from 'three'
 import { useArtTexture } from './useArtTexture'
 import { Canvas } from '@react-three/fiber'
@@ -143,7 +144,7 @@ function VesselModel({
   fillColor,
   fillImage,
   dims,
-  imperial,
+  lengthUnit,
   watermark,
   capStyle = 'none',
   capColor,
@@ -154,7 +155,7 @@ function VesselModel({
   fillColor: string | null | undefined
   fillImage: FillImage | null | undefined
   dims?: Dim3D[]
-  imperial?: boolean
+  lengthUnit?: LengthUnit
   watermark?: string | null
   capStyle?: CapStyle
   capColor?: string | null
@@ -425,7 +426,7 @@ function VesselModel({
         </>
       )}
     </group>
-    {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant={tube ? 'tube' : 'vessel'} />}
+    {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} lengthUnit={lengthUnit ?? 'mm'} variant={tube ? 'tube' : 'vessel'} />}
     </>
   )
 }
@@ -437,7 +438,7 @@ export function VesselViewer3D({
   fillColor,
   fillImage,
   dims,
-  imperial,
+  lengthUnit,
   lightMode,
   watermark,
   capStyle,
@@ -450,7 +451,7 @@ export function VesselViewer3D({
   fillColor?: string | null
   fillImage?: FillImage | null
   dims?: Dim3D[]
-  imperial?: boolean
+  lengthUnit?: LengthUnit
   lightMode?: LightMode
   watermark?: string | null
   capStyle?: CapStyle
@@ -469,7 +470,7 @@ export function VesselViewer3D({
     >
       <color attach="background" args={['#ffffff']} />
       <SceneLighting mode={lightMode ?? 'soft'} />
-      <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} imperial={imperial} watermark={watermark} capStyle={capStyle} capColor={capColor} />
+      <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} lengthUnit={lengthUnit} watermark={watermark} capStyle={capStyle} capColor={capColor} />
       <OrbitControls makeDefault enableDamping />
       <FitViewerCamera fit={fit} />
       {extra}

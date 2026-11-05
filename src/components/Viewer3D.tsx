@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import type { LengthUnit } from '../core/units'
 import * as THREE from 'three'
 import { useArtTexture } from './useArtTexture'
 import { useFinishMaps, finishMaterialProps, type FinishMaps } from './useFinishMaps'
@@ -289,7 +290,7 @@ interface ModelProps {
   fillColor?: string | null
   fillImage?: FillImage | null
   dims?: Dim3D[]
-  imperial?: boolean
+  lengthUnit?: LengthUnit
   dimVariant?: 'lines' | 'badge'
   lightMode?: LightMode
   // ลายน้ำพรีวิว (Freemium) ประทับบน texture ทั้งแผ่น — null/ไม่ส่ง = ไม่มี
@@ -297,7 +298,7 @@ interface ModelProps {
   extra?: ReactNode // ของเสริมใน <Canvas> (เช่นตัวถ่ายภาพย่อแกลเลอรี)
 }
 
-function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillColor, fillImage, dims, imperial, dimVariant, watermark }: ModelProps) {
+function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillColor, fillImage, dims, lengthUnit, dimVariant, watermark }: ModelProps) {
   const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage, watermark)
   const maps = useFinishMaps({
     sheetW: dieline.width,
@@ -397,7 +398,7 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillCol
           <meshStandardMaterial color="#3e4a54" roughness={0.55} metalness={0.1} />
         </mesh>
       )}
-      {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant={dimVariant} />}
+      {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} lengthUnit={lengthUnit ?? 'mm'} variant={dimVariant} />}
     </>
   )
 }
@@ -405,7 +406,7 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillCol
 // นามบัตรใน 3D = การ์ดใบเดียว (แผ่นบาง) พิมพ์ลายหน้าที่ +Z และลายหลังที่ -Z
 // ลายมาจาก texture แผ่นคลี่ผืนเดียวกับ blueprint (หน้าอยู่ช่วง x ซ้าย, หลังอยู่ช่วง x ขวา)
 // จึงคำนวณ UV ของแต่ละหน้าให้ชี้ไปช่วง x ของหน้านั้น ๆ — หลังกลับ (หมุนรอบแกน Y) ให้อ่านถูกด้าน
-function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial, dimVariant, watermark }: ModelProps) {
+function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, lengthUnit, dimVariant, watermark }: ModelProps) {
   const tex = useSheetTexture(dieline, mat, decos ?? [], fillColor, fillImage, watermark)
   const maps = useFinishMaps({
     sheetW: dieline.width,
@@ -490,7 +491,7 @@ function CardModel({ dieline, mat, decos, fillColor, fillImage, dims, imperial, 
           <meshStandardMaterial ref={backMat} map={tex} color={tex ? '#ffffff' : mat.color} {...finishMaterialProps(maps, rough, metal)} />
         </mesh>
       </group>
-      {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} imperial={!!imperial} variant={dimVariant} />}
+      {dims && dims.length > 0 && <DimBadge3D targetRef={modelRef} dims={dims} lengthUnit={lengthUnit ?? 'mm'} variant={dimVariant} />}
     </>
   )
 }
