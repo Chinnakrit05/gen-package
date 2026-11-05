@@ -104,3 +104,25 @@ Full Vitest ผ่าน 1,504 เทสต์ ข้าม 6 เทสต์ต
     PACKIT_E2E_PORT=52474 PACKIT_E2E_SUPABASE_WORKDIR=tmp/marketplace-phase1-local npm run test:e2e:local
 
 **เงื่อนไขที่ยังเหลือก่อนปิด Phase 1** — Preview ของ commit ที่มีชุดแก้ล่าสุดพร้อมบัญชี Google ทดสอบที่เข้าถึงได้ แล้วตรวจ callback กลับเข้า URL เดิมและเปิดงานจริง บน staging ที่มีอยู่ได้ตรวจถึงขั้นเริ่ม OAuth เท่านั้น และ Preview ของ `b6f43f1` พาไป Vercel SSO ผลในเครื่องใช้เซสชันที่ Supabase ออกให้จริงโดยใช้รหัสผ่านสังเคราะห์ จึงไม่ใช่ผล Google callback
+
+### ผลตรวจ Preview ของ 66a3fb2
+
+Vercel สร้าง Preview ของ `66a3fb2749e7c3d4ce24c7cdf26f4105c1bed66a` สำเร็จ หลังผู้ใช้ผ่าน Vercel SSO ตรวจใน Safari แล้ว `/app/projects` แสดง Editor แบบ local-demo และ `/api/v1/health` ตอบ `500 FUNCTION_INVOCATION_FAILED` Runtime Logs ของคำขอนี้ระบุว่าไม่มี `APP_ENV` ขณะรันใน Vercel [Preview ที่ตรวจ](https://gen-package-staging-o4whck5yy-chinnakrit05s-projects.vercel.app/app/projects) · [Deployment](https://vercel.com/chinnakrit05s-projects/gen-package-staging/HM8V8WwhocGWQdGXMRwKPmEHHVN7)
+
+`P1-10` รอ Cloud config ของ Supabase staging สำหรับ Preview สาขาทดสอบ และ URL กลับเข้าแอปที่อนุญาตใน Supabase Auth จากนั้นจึง deploy ใหม่และตรวจ health, API JSON, Google callback และการกลับไปยังงานเดิมด้วยบัญชีทดสอบ
+
+### ผลตรวจหลัง redeploy จาก commit เดิม
+
+เพิ่ม Cloud config 8 รายการเฉพาะ Preview ของ `codex/marketplace-phase-1-integration` และเพิ่ม origin ประจำสาขาในรายการ redirect ของ Supabase staging ตรวจซ้ำแล้วว่ามี URL ตรงกันเพียงหนึ่งรายการและเก็บ URL เดิมครบสี่รายการ Vercel ยืนยันว่า deployment `dpl_6cygmJZjXecyvy4rycbXVyXeFc7N` สถานะ Ready ใช้ SHA `66a3fb2749e7c3d4ce24c7cdf26f4105c1bed66a` และ URL ประจำสาขาชี้มาที่ deployment นี้ [Preview](https://gen-package-staging-git-codex-mar-442afb-chinnakrit05s-projects.vercel.app) · [Deployment](https://vercel.com/chinnakrit05s-projects/gen-package-staging/6cygmJZjXecyvy4rycbXVyXeFc7N)
+
+Safari หลังผ่าน Vercel SSO แสดง JSON `data.status: ok` ที่ `/api/v1/health` และ Vercel request logs ของ deployment นี้ยืนยัน `200` ที่ health กับ `401` ที่ `/api/v1/me` ก่อนเข้าสู่ PackIt คำขอเริ่ม Google PKCE ไปยัง Supabase staging ตอบ `302` ไป Google พร้อม callback ของ Supabase staging
+
+รอบทดสอบด้วยบัญชีจริงใน Safari เปิดหน้ารวมงานและ Editor ของงานเดิมได้ Vercel request logs ของ deployment นี้พบ `POST /api/v1/session/bootstrap`, `GET /api/v1/me`, `GET /api/v1/projects` และ `GET /api/v1/projects/:id` ตอบ `200`
+
+`P1-10` ผ่านบน Preview นี้ เปิด `/editor/:id` ของงานทดสอบที่มีอยู่ในหน้าต่าง Safari ส่วนตัว เริ่มจาก Vercel SSO และหน้าเข้าสู่ PackIt ผู้ใช้เข้าสู่ระบบด้วย Google แล้วกลับมาที่ Editor ในหน้าต่างเดิม URL ตรงกับลิงก์ก่อนเข้าสู่ระบบและเครื่องมือ Editor แสดงครบ รีเฟรชแล้วยังเปิดงานเดิมได้ จากนั้นเปิด `/app/projects` ด้วย URL ตรงและรีเฟรช หน้ารวมงานโหลดได้ทั้งสองครั้ง
+
+Vercel request logs ของ deployment เดียวกันช่วง 23:11–23:13 น. เวลาไทยยืนยัน `GET /editor/:id` และ `GET /app/projects` ตอบ `200` หลัง Google กลับที่ origin `POST /api/v1/session/bootstrap`, `GET /api/v1/me`, `GET /api/v1/projects` และ `GET /api/v1/projects/:id` ตอบ `200` โดย ID ใน API ตรงกับลิงก์ที่เปิด ตรวจ JSON ของ health และ `401` ก่อนเข้าสู่ PackIt ในรอบก่อนหน้าแล้ว
+
+พบ `PUT /api/v1/projects/:id/thumbnail` ตอบ `503` บน Preview เดียวกัน ตรวจ migration history และ catalog ของ `gen-package-staging` ด้วย `SELECT` พบว่าฐานข้อมูลใช้ migrations ถึง `20261015000700` และยังไม่มีตาราง `app_private.project_thumbnails` หรือ RPC สำหรับบันทึกและอ่านภาพย่อทั้งสามตัว ส่วนภาพย่อของ `P1-03` และ `P1-08` บน Preview จึงยังรอ migration `20261024000800_project_thumbnails.sql` ผลทดสอบภาพย่อในเครื่องยังใช้เป็นหลักฐานของ local เท่านั้น
+
+Supabase CLI `db push --linked --project-ref <staging-ref> --workdir <temp> --skip-vault --dry-run` ผ่าน โดยโฟลเดอร์ชั่วคราวใช้ migrations 001–008 จาก commit ที่ deploy และตรวจชื่อโครงการปลายทางก่อนรัน Dry-run แสดงเฉพาะไฟล์ภาพย่อ `20261024000800_project_thumbnails.sql` การรันจริงยังรออนุญาต เพราะเปลี่ยน schema ของฐาน staging ที่ Preview และเว็บ staging ใช้ร่วมกัน

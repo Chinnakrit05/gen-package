@@ -5,8 +5,10 @@
 | งาน | ผลรอบนี้ |
 |---|---|
 | 1-B1 / 1-B2 | ตรวจ API และฐานข้อมูลจริงในเครื่องซ้ำ ผ่านรายการแบบแบ่งหน้า สิทธิ์ตาม workspace, create/save retry และ revision conflict |
-| 1-B3 | ตรวจ config และ Vercel adapter ในเครื่อง รวมถึงลิงก์ตรง รีเฟรช API JSON และเริ่ม OAuth บน staging ที่มีอยู่ การตรวจ callback ด้วยบัญชีทดสอบบน Preview ของชุดแก้ล่าสุดยังรอ |
+| 1-B3 | ผ่าน `P1-10` บน Preview ของ `66a3fb2` เชื่อม Supabase staging, Google callback กลับ Editor ของงานเดิมและรีเฟรชได้ ตรวจ API health และคำขอ list/detail/bootstrap จาก deployment เดียวกัน |
 | 1-B4 | ตรวจสิทธิ์ร่วมกับ browser ฝั่ง A ด้วยบัญชี owner/editor/viewer/outsider ใน Supabase แยก รวมชุดทดสอบ Cloud regression และขั้นตอนรันซ้ำ |
+
+บน Preview พบ API บันทึกภาพย่อตอบ `503` ตรวจฐานข้อมูล staging แบบอ่านอย่างเดียวแล้วยืนยันว่าขาด migration `20261024000800_project_thumbnails.sql` กระทบการตรวจภาพย่อของ `P1-03` และ `P1-08` [ผลตรวจ Preview](B-PHASE-1-RESULTS.md#ผลตรวจหลัง-redeploy-จาก-commit-เดิม)
 
 ผลและสถานะด้านล่างเป็นประวัติการส่งงานวันที่ 2 พฤศจิกายน ก่อนรับ router ของ A
 
