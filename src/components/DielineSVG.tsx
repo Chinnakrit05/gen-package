@@ -38,6 +38,9 @@ const ROT_R_PX = 7
 const DEL_GAP_PX = 16 // กากบาทลบเยื้องออกนอกมุมขวาบน
 const DEL_R_PX = 8
 const ANCHOR_PX = 5.5 // จุด anchor/แขน bezier ของเส้น
+const EDGE_LONG_PX = 9 // ครึ่งความยาวแถบมือจับกลางขอบ (ตามแนวขอบ)
+const EDGE_SHORT_PX = 3.5 // ครึ่งความหนาแถบมือจับกลางขอบ
+const EDGE_MIN_SPAN_PX = 56 // ด้านสั้นกว่านี้บนจอ ไม่แสดงมือจับกลางขอบ (กันชนมือจับมุม)
 
 // ชื่อด้านของแต่ละแผง (สำหรับป้ายกำกับจาง ๆ) — คืน null เมื่อไม่รู้จัก/ไม่ควรกำกับ
 function faceLabel(id: string): { th: string; en: string } | null {
@@ -365,14 +368,23 @@ function StockUnderlay({ dieline, color, surface }: { dieline: Dieline; color: s
 }
 
 type Corner = 'nw' | 'ne' | 'sw' | 'se'
-// เครื่องหมายทิศของแต่ละมุมเทียบจุดกึ่งกลาง (sx, sy)
-const CORNER_SIGN: Record<Corner, [number, number]> = {
+// มือจับกลางขอบ — ปรับแกนเดียว (n/s = สูง, e/w = กว้าง) ขอบตรงข้ามตรึง
+type Edge = 'n' | 's' | 'e' | 'w'
+type ResizeHandle = Corner | Edge
+// เครื่องหมายทิศของแต่ละมือจับเทียบจุดกึ่งกลาง (sx, sy) — 0 = กึ่งกลางแกนนั้น
+const CORNER_SIGN: Record<ResizeHandle, [number, number]> = {
   nw: [-1, -1],
   ne: [1, -1],
   sw: [-1, 1],
   se: [1, 1],
+  n: [0, -1],
+  s: [0, 1],
+  e: [1, 0],
+  w: [-1, 0],
 }
-const OPPOSITE: Record<Corner, Corner> = { nw: 'se', ne: 'sw', sw: 'ne', se: 'nw' }
+const OPPOSITE: Record<ResizeHandle, ResizeHandle> = { nw: 'se', ne: 'sw', sw: 'ne', se: 'nw', n: 's', s: 'n', e: 'w', w: 'e' }
+const EDGE_AXIS: Record<Edge, 'x' | 'y'> = { n: 'y', s: 'y', e: 'x', w: 'x' }
+const isEdge = (h: ResizeHandle): h is Edge => h.length === 1
 
 type Grab =
   | { mode: 'move'; id: string; dx: number; dy: number }
@@ -386,6 +398,9 @@ type Grab =
       asy: number
       anchor: { x: number; y: number } // ตำแหน่งจอของมุมตรึง (คงที่ตลอดการลาก)
       aspect: number // สัดส่วนตอนเริ่ม (w/h) สำหรับล็อกด้วย Shift
+      axis: 'both' | 'x' | 'y' // มือจับกลางขอบปรับแกนเดียว อีกแกนคงขนาดเดิม
+      w0: number
+      h0: number
     }
   | { mode: 'anchor'; id: string; idx: number } // ลากจุด anchor ของ path
   | { mode: 'handle'; id: string; idx: number; which: 'o' | 'i'; alt: boolean } // ลากแขน bezier
@@ -631,7 +646,7 @@ export const DielineSVG = memo(function DielineSVG({
   }
 
   // เริ่มย่อ-ขยายจากมุมกรอบ — มุมตรงข้ามเป็นจุดตรึง (คงตำแหน่งจอไว้ รองรับการหมุน)
-  const startResize = (e: React.PointerEvent, d: Deco, corner: Corner) => {
+  const startResize = (e: React.PointerEvent, d: Deco, corner: ResizeHandle) => {
     if (!editable || d.locked) return
     const w0 = elW(d)
     const h0 = elH(d)
@@ -645,7 +660,8 @@ export const DielineSVG = memo(function DielineSVG({
     const ly = (asy * h0) / 2
     // ตำแหน่งจอของมุมตรึง = กึ่งกลาง + หมุน(offset)
     const anchor = { x: cx + (cos * lx - sin * ly), y: cy + (sin * lx + cos * ly) }
-    grab.current = { mode: 'resize', id: d.id, cos, sin, asx, asy, anchor, aspect: h0 > 0 ? w0 / h0 : 1 }
+    const axis = isEdge(corner) ? EDGE_AXIS[corner] : 'both'
+    grab.current = { mode: 'resize', id: d.id, cos, sin, asx, asy, anchor, aspect: h0 > 0 ? w0 / h0 : 1, axis, w0, h0 }
     setActive(true)
     capture(e)
     e.stopPropagation()
@@ -938,10 +954,11 @@ export const DielineSVG = memo(function DielineSVG({
       // เวกเตอร์จากมุมตรึงไปเมาส์ แล้วฉายลงแกนของชิ้น (u=กว้าง, v=สูง)
       const vx = p.x - g.anchor.x
       const vy = p.y - g.anchor.y
-      let w = Math.abs(vx * g.cos + vy * g.sin)
-      let h = Math.abs(-vx * g.sin + vy * g.cos)
-      // ล็อกสัดส่วน: รูป/ข้อความ (resizeAspect) เสมอ, ชิ้นอื่นเมื่อกด Shift
-      const lock = resizeAspect ?? (e.shiftKey ? g.aspect : null)
+      // มือจับกลางขอบ: วัดเฉพาะแกนที่ลาก (ระยะจากขอบตรึงถึงเมาส์) อีกแกนคงเดิม
+      let w = g.axis === 'y' ? g.w0 : Math.abs(vx * g.cos + vy * g.sin)
+      let h = g.axis === 'x' ? g.h0 : Math.abs(-vx * g.sin + vy * g.cos)
+      // ล็อกสัดส่วน: รูป/ข้อความ (resizeAspect) เสมอ, ชิ้นอื่นเมื่อกด Shift (มือจับมุมเท่านั้น)
+      const lock = g.axis === 'both' ? resizeAspect ?? (e.shiftKey ? g.aspect : null) : null
       if (lock && lock > 0) {
         if (w / lock >= h) h = w / lock
         else w = h * lock
@@ -1535,6 +1552,41 @@ export const DielineSVG = memo(function DielineSVG({
                       />
                     </g>
                   ))}
+                {/* มือจับกลางขอบ — ปรับกว้าง/สูงแกนเดียวอิสระ (รูปทรง/เส้นวาด/รูปที่ไม่ล็อกสัดส่วน);
+                    ซ่อนเมื่อด้านนั้นสั้นบนจอจนมือจับจะชนมุม */}
+                {editable && single && onResize && !d.locked && resizeAspect == null
+                  && ((d.type === 'shape' && d.shape !== 'line') || d.type === 'path' || d.type === 'image') &&
+                  (
+                    [
+                      ['n', d.x + w / 2, d.y],
+                      ['s', d.x + w / 2, d.y + h],
+                      ['w', d.x, d.y + h / 2],
+                      ['e', d.x + w, d.y + h / 2],
+                    ] as const
+                  )
+                    .filter(([edge]) => (EDGE_AXIS[edge] === 'x' ? h : w) >= hpx(EDGE_MIN_SPAN_PX))
+                    .map(([edge, hx, hy]) => {
+                      const along = EDGE_AXIS[edge] === 'y' // n/s = แถบแนวนอน
+                      const hw = hpx(along ? EDGE_LONG_PX : EDGE_SHORT_PX)
+                      const hh = hpx(along ? EDGE_SHORT_PX : EDGE_LONG_PX)
+                      return (
+                        <g key={edge} style={{ cursor: along ? 'ns-resize' : 'ew-resize' }} onPointerDown={(e) => startResize(e, d, edge)}>
+                          <rect x={hx - Math.max(hw, hpx(HANDLE_HIT_PX))} y={hy - Math.max(hh, hpx(HANDLE_HIT_PX))} width={Math.max(hw, hpx(HANDLE_HIT_PX)) * 2} height={Math.max(hh, hpx(HANDLE_HIT_PX)) * 2} fill="transparent" />
+                          <rect
+                            className="resize-edge"
+                            x={hx - hw}
+                            y={hy - hh}
+                            width={hw * 2}
+                            height={hh * 2}
+                            rx={hpx(EDGE_SHORT_PX)}
+                            fill={HANDLE_FILL}
+                            stroke={SEL_COLOR}
+                            strokeWidth={1}
+                            vectorEffect="non-scaling-stroke"
+                          />
+                        </g>
+                      )
+                    })}
                 {editable && single && onRemove && !d.locked && (
                   // กากบาทลบ — เยื้องออกนอกมุมขวาบนเล็กน้อยให้พ้นมือจับปรับขนาด
                   <g
