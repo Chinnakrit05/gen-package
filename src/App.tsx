@@ -6802,7 +6802,7 @@ export default function App({
               <span className="bp-legend">
                 <i className="sw-cut" /> เส้นตัด
                 <i className="sw-crease" />{' '}
-                {kind === 'box' ? 'เส้นพับ' : kind === 'pouch' ? 'รอยพับ/ซีล' : 'แนวทับกาว'}
+                {kind === 'box' ? 'เส้นพับ' : kind === 'pouch' ? 'รอยพับ/ซีล' : isTube ? 'เขตห้ามพิมพ์/สันพับ' : 'แนวทับกาว'}
                 {/* ตัวเลขบนแบบ = ระยะเส้นพับจริง (ด้านใน + เผื่อความหนา) จึงมากกว่าขนาดที่ตั้ง/ที่ 3D แสดงเล็กน้อย */}
                 {kind === 'box' && showDims && (
                   <span className="bp-legend-note">

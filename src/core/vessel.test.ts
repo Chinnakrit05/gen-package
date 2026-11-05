@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TUBE_OVAL_ASPECT, TUBE_OVAL_CAP_FRAC, BODY_MIN, CAP_STYLES, capShape, LABEL_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, TUBE_TEMPLATE_GAP, defaultNeckH, generateVessel, tubeTemplatePoint, isVessel, resolveNeckH, tubeSection } from './vessel'
+import { TUBE_OVAL_ASPECT, TUBE_OVAL_CAP_FRAC, BODY_MIN, CAP_STYLES, capShape, LABEL_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, TUBE_FRONT_U, TUBE_BOTTOM_NO_PRINT, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
 import { ellipsePerimeter } from './pouch'
 import { MATERIALS, getMaterial } from './materials'
 import { computeGuides } from './guides'
@@ -121,48 +121,35 @@ describe('vessel: หลอดครีม (tube-laminate)', () => {
   const tbox = { W: 40, D: 16, H: 150, handle: false }
   const v = generateVessel(tbox, getMaterial('tube-laminate'))
 
-  it('dieline = แม่แบบด้านหน้า + ด้านหลังของหลอดบีบแบน: ซีลบนกว้าง πW/2, ไหล่ล่างกว้าง ⌀W, มีภาพอ้างอิงฝา/ไหล่', () => {
+  it('dieline = แผ่นพิมพ์เต็มรอบวง: รอยต่อขอบซ้าย/ขวา, กลางหน้า ¼ · สันพับ ½ · กลางหลัง ¾, ห้ามพิมพ์ซีล 5 มม. + เหนือไหล่ 3 มม.', () => {
     const d = v.label
     const t = v.tube!
-    expect(d.panels.map((p) => p.id)).toEqual(['front', 'back'])
-    expect(d.width).toBeCloseTo(2 * Math.PI * t.R + TUBE_TEMPLATE_GAP, 6)
-    expect(d.height).toBeCloseTo(tbox.H, 9)
-    const span = (pts: { x: number; y: number }[], y: number) => {
-      const row = pts.filter((q) => Math.abs(q.y - y) < 1e-6).map((q) => q.x)
-      return Math.max(...row) - Math.min(...row)
-    }
-    const front = d.panels[0].outline
-    const sealH = tbox.H - t.sealY0
-    const printBottom = tbox.H - t.bodyY0
-    // พื้นที่พิมพ์ = ใต้แถบซีลถึงโคนไหล่ กว้างตามหน้าตัดจริง (กลม ⌀W → แบน πW/2)
-    expect(Math.min(...front.map((q) => q.y))).toBeCloseTo(sealH, 6)
-    expect(Math.max(...front.map((q) => q.y))).toBeCloseTo(printBottom, 6)
-    expect(span(front, sealH)).toBeCloseTo((Math.PI * tbox.W) / 2, 6)
-    expect(span(front, printBottom)).toBeCloseTo(tbox.W, 6)
-    expect(d.segments.filter((s) => s.kind === 'cut')).toHaveLength(2)
-    expect(d.segments.filter((s) => s.kind === 'crease')).toHaveLength(2) // แนวซีลหน้า/หลัง
-    expect(d.refs?.length).toBeGreaterThan(4)
-    expect(d.captions?.map((c) => c.text)).toEqual(expect.arrayContaining(['ด้านหน้า', 'ด้านหลัง']))
+    const circ = Math.PI * tbox.W
+    const length = tbox.H - t.bodyY0
+    expect(d.width).toBeCloseTo(circ, 9) // ไม่มีปีกทับกาว — รอยต่ออยู่ที่ขอบ
+    expect(d.height).toBeCloseTo(length, 9)
+    expect(d.frontX).toBeCloseTo(circ * TUBE_FRONT_U, 9)
+    expect(TUBE_FRONT_U).toBe(0.25)
+    // แผงพิมพ์ = ใต้แถบซีลถึง 3 มม. เหนือไหล่ เต็มรอบวง
+    const ys = d.panels[0].outline.map((q) => q.y)
+    expect(d.panels.map((q) => q.id)).toEqual(['label'])
+    expect(Math.min(...ys)).toBeCloseTo(TUBE_SEAL, 9)
+    expect(Math.max(...ys)).toBeCloseTo(length - TUBE_BOTTOM_NO_PRINT, 9)
+    // เส้นเขตห้ามพิมพ์สองเส้น + สันพับกลางแผ่น
+    const creases = d.segments.filter((q) => q.kind === 'crease').map((q) => q.d)
+    expect(creases).toHaveLength(3)
+    expect(creases.some((q) => q.startsWith(`M ${Math.round((circ / 2) * 1000) / 1000} 0`))).toBe(true)
+    expect(d.captions?.map((c) => c.text)).toEqual(['รอยต่อ', 'กลางหน้า', 'สันพับ', 'กลางหลัง', 'รอยต่อ'])
+    // เส้นกลางหน้า/หลังเป็นเส้นประแดงอ้างอิง + ไหล่/คอใต้แผ่น
+    expect(d.refs?.filter((r) => r.dash)).toHaveLength(2)
+    expect(v.tubeSheet).toEqual({ H: tbox.H, length })
     expect(v.labelY0).toBeCloseTo(t.bodyY0, 9)
     expect(v.labelY1).toBeCloseTo(t.sealY0, 9)
   })
 
-  it('3D ฉายตรงลงแม่แบบ: กลางหน้า → กลางแผ่นหน้า, กลางหลัง → กลางแผ่นหลัง, ข้างซ้ายหลอด = ขอบซ้ายแผ่นหน้า/ขอบขวาแผ่นหลัง', () => {
-    const map = v.tubeTemplate!
-    const t = v.tube!
-    const y = (t.bodyY0 + t.sealY0) / 2
-    const { a } = tubeSection(t, y)
-    expect(tubeTemplatePoint(map, 0, y, true)).toEqual({ x: map.frontCx, y: tbox.H - y })
-    expect(tubeTemplatePoint(map, 0, y, false).x).toBeCloseTo(map.backCx, 9)
-    expect(tubeTemplatePoint(map, -a, y, true).x).toBeCloseTo(map.frontCx - a, 9)
-    expect(tubeTemplatePoint(map, -a, y, false).x).toBeCloseTo(map.backCx + a, 9)
-    // จุดบนผิวทุกจุดตกในแผงพิมพ์ของตัวเอง (กว้างแผงที่ระดับนั้น = 2a)
-    expect(map.backCx - map.frontCx).toBeCloseTo(Math.PI * t.R + TUBE_TEMPLATE_GAP, 6)
-  })
-
   it('ขวด/โหลยังเป็นฉลากพันรอบเดิม (ไม่มีแม่แบบหน้า-หลัง)', () => {
     const bottle = generateVessel({ W: 65, D: 28, H: 205, handle: false }, getMaterial('pet-bottle'))
-    expect(bottle.tubeTemplate).toBeUndefined()
+    expect(bottle.tubeSheet).toBeUndefined()
     expect(bottle.label.panels.map((p) => p.id)).toEqual(['label', 'glue'])
   })
 

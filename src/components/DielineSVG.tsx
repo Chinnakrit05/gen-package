@@ -1844,7 +1844,9 @@ export const DielineSVG = memo(function DielineSVG({
       {/* ภาพอ้างอิง (เช่น ฝา/ไหล่หลอด ลอนซีล) — พรีวิวเท่านั้น ไม่รับคลิก ไม่เข้าไฟล์ผลิต */}
       {dieline.refs && (
         <g className="bp-refs" pointerEvents="none" fill="none" stroke="#9aa6a8" strokeWidth={0.8} vectorEffect="non-scaling-stroke">
-          {dieline.refs.map((d, i) => <path key={`ref${i}`} d={d} vectorEffect="non-scaling-stroke" />)}
+          {dieline.refs.map((r, i) => (
+            <path key={`ref${i}`} d={r.d} stroke={r.stroke} strokeDasharray={r.dash ? '4 3' : undefined} vectorEffect="non-scaling-stroke" />
+          ))}
         </g>
       )}
       {/* ป้ายกำกับหน้า (เช่น หน้า/หลัง ของนามบัตร) — โชว์เสมอในพรีวิว ไม่เข้าไฟล์ผลิต */}
