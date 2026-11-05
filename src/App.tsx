@@ -198,6 +198,7 @@ import { ColorField } from './components/ColorField'
 import { ProjectGallery, projectKind, projectTypeLabel } from './components/ProjectGallery'
 import { ThumbnailCapture, type ThumbnailShot } from './components/ThumbnailCapture'
 import { thumbIsFresh, thumbNeedsFetch } from './core/thumbnail'
+import { reanchorBox, type ResizeAnchor } from './core/resizeAnchor'
 import { IndexedDbThumbStore, ThumbnailCache, base64ToBlob, blobToBase64 } from './services/thumbnails/thumbnailCache'
 import {
   IconImage,
@@ -3069,25 +3070,26 @@ export default function App({
 
   // ย่อ-ขยายจากมือจับมุม — DielineSVG ส่งกรอบใหม่ (x,y,w,h) มาให้ แล้วปรับตามชนิดชิ้น
   const r1 = (v: number) => Math.round(v * 10) / 10
-  const resizeDeco = (id: string, x: number, y: number, w: number, h: number) =>
+  const resizeDeco = (id: string, x: number, y: number, w: number, h: number, anchor: ResizeAnchor) =>
     setDecos((ds) =>
       ds.map((d) => {
         if (d.id !== id) return d
-        if (d.type === 'shape' || d.type === 'path') return { ...d, x, y, w: Math.max(2, r1(w)), h: Math.max(2, r1(h)) }
-        if (d.type === 'nutrition') return { ...d, x, y, w: Math.max(20, r1(w)) }
-        if (d.type === 'image') {
+        let next: Deco
+        if (d.type === 'shape' || d.type === 'path') next = { ...d, x, y, w: Math.max(2, r1(w)), h: Math.max(2, r1(h)) }
+        else if (d.type === 'nutrition') next = { ...d, x, y, w: Math.max(20, r1(w)) }
+        else if (d.type === 'image') {
           if (lockAspect) {
             const nw = Math.max(5, r1(w))
-            return { ...d, x, y, w: nw, h: r1(nw / d.aspect) }
-          }
-          return { ...d, x, y, w: Math.max(5, r1(w)), h: Math.max(5, r1(h)) }
-        }
-        if (d.type === 'text') {
+            next = { ...d, x, y, w: nw, h: r1(nw / d.aspect) }
+          } else next = { ...d, x, y, w: Math.max(5, r1(w)), h: Math.max(5, r1(h)) }
+        } else if (d.type === 'text') {
           const cur = elH(d) || 1
           const size = clamp(Math.round((d.size * h) / cur), 3, 120)
-          return withTextW({ ...d, size, x, y })
-        }
-        return d
+          next = withTextW({ ...d, size, x, y })
+        } else return d
+        // ขนาดจริงต่างจากกรอบที่ลาก (ปัดฟอนต์/วัดความกว้างข้อความ/ล็อกสัดส่วน/สูงตามเนื้อหา) → วางใหม่ให้มุมตรึงไม่เลื่อน
+        const pos = reanchorBox({ x, y, w, h }, { w: elW(next), h: elH(next) }, d.rot, anchor)
+        return { ...next, x: pos.x, y: pos.y }
       }),
     )
 

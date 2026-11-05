@@ -9,6 +9,7 @@ import { useT } from '../i18n'
 import * as studioAssets from './editor-v2/assets'
 import { finishDef } from '../core/finish'
 import { holoColor } from '../core/paperSurface'
+import type { ResizeAnchor } from '../core/resizeAnchor'
 
 const DIM_COLOR = '#1b6ea8'
 const SEL_COLOR = '#1b6ea8'
@@ -443,7 +444,8 @@ export const DielineSVG = memo(function DielineSVG({
   onSelect?: (id: string | null, additive?: boolean) => void
   onMove?: (id: string, x: number, y: number) => void
   onRotate?: (id: string, deg: number) => void
-  onResize?: (id: string, x: number, y: number, w: number, h: number) => void
+  // anchor = มุมที่ตรึงไว้ (เครื่องหมายจากกึ่งกลาง) ให้ผู้รับวางชิ้นใหม่ได้เมื่อขนาดจริงไม่เท่ากรอบที่ขอ
+  onResize?: (id: string, x: number, y: number, w: number, h: number, anchor: ResizeAnchor) => void
   resizeAspect?: number | null // ล็อกสัดส่วนตอนย่อ-ขยาย (รูป/ข้อความ); null = อิสระ
   onRemove?: (id: string) => void
   onText?: (id: string, text: string) => void
@@ -929,7 +931,7 @@ export const DielineSVG = memo(function DielineSVG({
       const ly = (g.asy * h) / 2
       const ncx = g.anchor.x - (g.cos * lx - g.sin * ly)
       const ncy = g.anchor.y - (g.sin * lx + g.cos * ly)
-      onResize?.(g.id, ncx - w / 2, ncy - h / 2, w, h)
+      onResize?.(g.id, ncx - w / 2, ncy - h / 2, w, h, { sx: g.asx, sy: g.asy })
       return
     }
     if (g.mode === 'move') {
