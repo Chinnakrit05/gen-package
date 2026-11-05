@@ -26,6 +26,97 @@ export interface TubeShape {
   oval?: { a0: number; b0: number; ca: number; cb: number }
 }
 
+// --- แม่แบบงานพิมพ์หลอดครีม (front/back artwork template แบบที่โรงงานหลอดให้) ---
+// หลอดบีบแบนมองตรงจากหน้าและหลัง: กว้าง 2a(y) จาก tubeSection (⌀W ที่ไหล่ → πW/2 ที่ซีล) ซีลอยู่บน ไหล่อยู่ล่าง;
+// แถบซีลบนเป็นส่วนของรูปหลอดแต่ไม่ใช่พื้นที่พิมพ์ (แผง front/back = ไหล่ถึงใต้ซีล); ฝา/ไหล่วาดเป็นภาพอ้างอิง (refs)
+// 3D แม็พลายแบบฉายตรง: จุดบนผิวด้านหน้า (z ≥ 0) อยู่ที่ x = frontCx + x, ด้านหลัง x = backCx − x (ภาพด้านหลังมองจากหลัง),
+// y แผ่น = H − y — ลายที่วางบนแม่แบบจึงเห็นในมุมมองตรงหน้า/หลังตามที่วาด
+export interface TubeTemplateMap {
+  frontCx: number
+  backCx: number
+  H: number // ความสูงหลอดรวม = y แผ่นของก้นฝา
+}
+
+export const TUBE_TEMPLATE_GAP = 14 // ระยะห่างระหว่างแผ่นหน้าและหลัง (มม.)
+
+export function tubeTemplatePoint(map: TubeTemplateMap, x: number, y: number, front: boolean): { x: number; y: number } {
+  return { x: front ? map.frontCx + x : map.backCx - x, y: map.H - y }
+}
+
+function tubeTemplate(t: TubeShape, H: number, ovalCap: boolean): { dieline: Dieline; map: TubeTemplateMap } {
+  const FW = Math.PI * t.R // กว้างที่ซีล (แบนเต็ม) = กว้างสุดของแม่แบบ
+  const frontCx = FW / 2
+  const backCx = FW + TUBE_TEMPLATE_GAP + FW / 2
+  const width = 2 * FW + TUBE_TEMPLATE_GAP
+  const sealH = H - t.sealY0
+  const printBottom = H - t.bodyY0 // y แผ่นของขอบล่างพื้นที่พิมพ์ (โคนไหล่)
+  // ด้านข้างของหลอดจากโคนไหล่ขึ้นถึงซีล (ครึ่งกว้างตามความสูง)
+  const N = 28
+  const side = Array.from({ length: N + 1 }, (_, i) => {
+    const y = t.bodyY0 + ((t.sealY0 - t.bodyY0) * i) / N
+    return { y: H - y, a: tubeSection(t, y).a }
+  })
+  const f = (v: number) => String(Math.round(v * 1000) / 1000)
+  // รูปหลอดทั้งหมด (รวมแถบซีล) = เส้นขอบ; แผงพิมพ์ = ใต้ซีลถึงโคนไหล่
+  const outlinePath = (cx: number) => {
+    const left = side.map((p) => ({ x: cx - p.a, y: p.y })) // ไหล่ → ซีล
+    const right = side.map((p) => ({ x: cx + p.a, y: p.y })).reverse() // ซีล → ไหล่
+    const ring = [...left, { x: cx - FW / 2, y: 0 }, { x: cx + FW / 2, y: 0 }, ...right]
+    return `M ${ring.map((p) => `${f(p.x)} ${f(p.y)}`).join(' L ')} Z`
+  }
+  const panelOutline = (cx: number): Vec2[] => [
+    ...side.map((p) => P(cx - p.a, p.y)).reverse(), // ซีล → ไหล่ ฝั่งซ้าย
+    ...side.map((p) => P(cx + p.a, p.y)), // ไหล่ → ซีล ฝั่งขวา
+  ]
+  const segments: Segment[] = []
+  const refs: string[] = []
+  for (const cx of [frontCx, backCx]) {
+    segments.push({ kind: 'cut', d: outlinePath(cx) })
+    segments.push({ kind: 'crease', d: `M ${f(cx - FW / 2)} ${f(sealH)} L ${f(cx + FW / 2)} ${f(sealH)}` }) // แนวซีล
+    // ลายแถบซีล (ลอนกด) — อ้างอิง
+    for (let x = cx - FW / 2 + 1.5; x < cx + FW / 2; x += 3) refs.push(`M ${f(x)} 0 L ${f(Math.min(x + 2, cx + FW / 2))} ${f(sealH)}`)
+    // ไหล่ + ฝา/คอ ใต้พื้นที่พิมพ์ — อ้างอิง (ไม่พิมพ์)
+    const sh = Array.from({ length: 13 }, (_, i) => {
+      const y = t.capTop + ((t.bodyY0 - t.capTop) * (12 - i)) / 12
+      return { y: H - y, a: tubeSection(t, y).a }
+    })
+    refs.push(`M ${sh.map((p) => `${f(cx - p.a)} ${f(p.y)}`).join(' L ')}`)
+    refs.push(`M ${sh.map((p) => `${f(cx + p.a)} ${f(p.y)}`).join(' L ')}`)
+    const ca = ovalCap && t.oval ? t.oval.ca : t.rcap
+    const capY = H - t.capTop
+    refs.push(`M ${f(cx - ca)} ${f(capY)} L ${f(cx - ca)} ${f(H)} L ${f(cx + ca)} ${f(H)} L ${f(cx + ca)} ${f(capY)} Z`)
+    refs.push(`M ${f(cx - ca)} ${f(capY + (H - capY) * 0.34)} L ${f(cx + ca)} ${f(capY + (H - capY) * 0.34)}`)
+  }
+  const fmt1 = (v: number) => String(Math.round(v * 10) / 10)
+  const dims: DimMark[] = [
+    { a: P(frontCx - FW / 2, -6), b: P(frontCx + FW / 2, -6), label: fmt1(FW) },
+    { a: P(backCx - FW / 2, -6), b: P(backCx + FW / 2, -6), label: fmt1(FW) },
+    { a: P(-8, sealH), b: P(-8, printBottom), label: `พิมพ์ ${fmt1(printBottom - sealH)}` },
+    { a: P(width + 8, 0), b: P(width + 8, H), label: `ยาวรวม ${fmt1(H)}` },
+    { a: P(frontCx - t.R, printBottom + 4), b: P(frontCx + t.R, printBottom + 4), label: `⌀${fmt1(2 * t.R)}` },
+  ]
+  return {
+    dieline: {
+      width,
+      height: H,
+      segments,
+      panels: [
+        { id: 'front', parentId: null, outline: panelOutline(frontCx).filter((p) => p.y >= sealH - 1e-9), stage: 0 },
+        { id: 'back', parentId: null, outline: panelOutline(backCx).filter((p) => p.y >= sealH - 1e-9), stage: 0 },
+      ],
+      dims,
+      captions: [
+        { x: frontCx, y: -13, text: 'ด้านหน้า' },
+        { x: backCx, y: -13, text: 'ด้านหลัง' },
+        { x: frontCx, y: sealH / 2 + 2, text: 'ซีล' },
+        { x: backCx, y: sealH / 2 + 2, text: 'ซีล' },
+      ],
+      refs,
+    },
+    map: { frontCx, backCx, H },
+  }
+}
+
 export const TUBE_BULLET = 2.6 // โปรไฟล์ด้านข้าง 1 − v^n (เทียบภาพด้านข้างหลอดจริง: กลางความสูงยังหนา ~83%)
 export const TUBE_SEAL = 5 // ความสูงตะเข็บซีลบน (มม.)
 
@@ -68,6 +159,7 @@ export interface Vessel {
   circ: number // เส้นรอบวงตัว (มม.)
   H: number
   tube?: TubeShape // มีเฉพาะหลอดครีม — บอก viewer ให้สร้างลำตัว loft บีบแบน
+  tubeTemplate?: TubeTemplateMap // หลอดครีม: dieline = แม่แบบหน้า-หลัง → ตำแหน่งบนแผ่นของจุดบนผิวหลอด
   rect?: RectSection // ขวดเหลี่ยม (แก้ว/PET) — viewer สร้างลำตัว loft หน้าตัดสี่เหลี่ยมมุมมนแทนทรงหมุน
 }
 
@@ -136,8 +228,6 @@ export const isVessel = (m: Material) => !m.foldable && m.form !== 'pouch'
 
 export const LABEL_OVERLAP = 8
 // ฝา flip-top ของหลอดครีมกว้างเกือบเท่าท่อ (⌀ ~0.8–0.92 W); D (⌀ปาก) ปรับได้ในช่วงนี้
-// หลอดครีม: กึ่งกลางด้านหน้าอยู่ ¼ รอบจากรอยต่อข้าง (สัดส่วนความยาวผิว) — ใช้ร่วม dieline และ UV ของ 3D
-export const TUBE_FRONT_U = 0.25
 export const tubeCapR = (R: number, rn: number) => Math.min(Math.max(rn, R * 0.8), R * 0.92) // ระยะทับซ้อนปลายฉลากสำหรับทากาว (มม.)
 
 // หลอดครีม: สัดส่วนความสูง (×H) ของฝา/คอกลมที่ก้น (ลำตัว loft เริ่มเหนือจุดนี้)
@@ -564,24 +654,11 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
     ...(wrap ? [crease(`M ${circ} 0 L ${circ} ${h}`)] : []), // แนวทับซ้อน/ทากาว
   ]
 
-  // หลอดครีม: รอยต่อ (ทับกาว) อยู่ด้านข้างซ้ายของหลอดเมื่อมองจากหน้า — แผ่นคลี่เริ่มที่รอยต่อ → ด้านหน้า (กึ่งกลาง ¼ รอบ)
-  // → ข้างขวา → หลัง → กลับรอยต่อ; หมายกึ่งกลางหน้าด้วยรอยบาก ▼ ที่ขอบบน/ล่าง (เส้นไกด์ ไม่ใช่เส้นตัด)
-  const tubeFront = mat.id === 'tube-laminate' && wrap ? circ * TUBE_FRONT_U : undefined
-  if (tubeFront !== undefined) {
-    const m = Math.min(3, h * 0.04)
-    segments.push(
-      crease(`M ${tubeFront - m} 0 L ${tubeFront} ${m * 1.4} L ${tubeFront + m} 0`),
-      crease(`M ${tubeFront - m} ${h} L ${tubeFront} ${h - m * 1.4} L ${tubeFront + m} ${h}`),
-    )
-  }
   const dims: DimMark[] = wrap
     ? [
         { a: P(0, h + 12), b: P(circ, h + 12), label: `รอบวง ${fmt(circ)}` },
         { a: P(circ, h + 12), b: P(w, h + 12), label: `กาว ${fmt(LABEL_OVERLAP)}` },
         { a: P(w + 10, 0), b: P(w + 10, h), label: `สูงฉลาก ${fmt(h)}` },
-        ...(tubeFront !== undefined
-          ? [{ a: P(0, -10), b: P(circ / 2, -10), label: 'ด้านหน้า (▼ กึ่งกลาง)' }]
-          : []),
       ]
     : [
         { a: P(0, h + 12), b: P(w, h + 12), label: `ยาวฉลาก ${fmt(w)}` },
@@ -590,7 +667,7 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
 
   const vessel: Vessel = {
     profile: pts,
-    label: { width: w, height: h, segments, panels, dims, ...(tubeFront !== undefined ? { frontX: tubeFront } : {}) },
+    label: { width: w, height: h, segments, panels, dims },
     labelR,
     labelY0,
     labelY1,
@@ -613,6 +690,12 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
       sealThick: Math.max(0.8, mat.thickness * 2.5),
       ...(shape.capStyle === 'oval' ? { oval: tubeOvalSection(R) } : {}),
     }
+    // แม่แบบงานพิมพ์แบบโรงงานหลอด: ด้านหน้า + ด้านหลังของหลอดบีบแบน (ภาพมองตรง) แทนแผ่นพิมพ์รอบตัว
+    const tpl = tubeTemplate(vessel.tube, H, shape.capStyle === 'oval')
+    vessel.label = tpl.dieline
+    vessel.tubeTemplate = tpl.map
+    vessel.labelY0 = vessel.tube.bodyY0
+    vessel.labelY1 = vessel.tube.sealY0
   }
   return vessel
 }

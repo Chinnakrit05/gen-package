@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TUBE_OVAL_ASPECT, TUBE_OVAL_CAP_FRAC, BODY_MIN, CAP_STYLES, capShape, LABEL_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, TUBE_FRONT_U, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
+import { TUBE_OVAL_ASPECT, TUBE_OVAL_CAP_FRAC, BODY_MIN, CAP_STYLES, capShape, LABEL_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, TUBE_TEMPLATE_GAP, defaultNeckH, generateVessel, tubeTemplatePoint, isVessel, resolveNeckH, tubeSection } from './vessel'
 import { ellipsePerimeter } from './pouch'
 import { MATERIALS, getMaterial } from './materials'
 import { computeGuides } from './guides'
@@ -121,15 +121,49 @@ describe('vessel: หลอดครีม (tube-laminate)', () => {
   const tbox = { W: 40, D: 16, H: 150, handle: false }
   const v = generateVessel(tbox, getMaterial('tube-laminate'))
 
-  it('รอยต่ออยู่ด้านข้าง: กึ่งกลางด้านหน้าอยู่ ¼ รอบจากรอยต่อ พร้อมรอยบาก ▼ ขอบบน/ล่าง และป้ายด้านหน้า', () => {
+  it('dieline = แม่แบบด้านหน้า + ด้านหลังของหลอดบีบแบน: ซีลบนกว้าง πW/2, ไหล่ล่างกว้าง ⌀W, มีภาพอ้างอิงฝา/ไหล่', () => {
     const d = v.label
-    expect(d.frontX).toBeCloseTo(v.circ * TUBE_FRONT_U, 9)
-    expect(TUBE_FRONT_U).toBe(0.25)
-    const marks = d.segments.filter((s) => s.kind === 'crease' && s.d.includes(` ${d.frontX} `))
-    expect(marks).toHaveLength(2)
-    expect(d.dims.some((m) => m.label.startsWith('ด้านหน้า') && m.a.x === 0 && Math.abs(m.b.x - v.circ / 2) < 1e-9)).toBe(true)
-    // ขวดทั่วไปยังด้านหน้ากลางแผง (รอยต่อกลางหลัง) — ไม่มี frontX
-    expect(generateVessel({ W: 65, D: 28, H: 205, handle: false }, getMaterial('pet-bottle')).label.frontX).toBeUndefined()
+    const t = v.tube!
+    expect(d.panels.map((p) => p.id)).toEqual(['front', 'back'])
+    expect(d.width).toBeCloseTo(2 * Math.PI * t.R + TUBE_TEMPLATE_GAP, 6)
+    expect(d.height).toBeCloseTo(tbox.H, 9)
+    const span = (pts: { x: number; y: number }[], y: number) => {
+      const row = pts.filter((q) => Math.abs(q.y - y) < 1e-6).map((q) => q.x)
+      return Math.max(...row) - Math.min(...row)
+    }
+    const front = d.panels[0].outline
+    const sealH = tbox.H - t.sealY0
+    const printBottom = tbox.H - t.bodyY0
+    // พื้นที่พิมพ์ = ใต้แถบซีลถึงโคนไหล่ กว้างตามหน้าตัดจริง (กลม ⌀W → แบน πW/2)
+    expect(Math.min(...front.map((q) => q.y))).toBeCloseTo(sealH, 6)
+    expect(Math.max(...front.map((q) => q.y))).toBeCloseTo(printBottom, 6)
+    expect(span(front, sealH)).toBeCloseTo((Math.PI * tbox.W) / 2, 6)
+    expect(span(front, printBottom)).toBeCloseTo(tbox.W, 6)
+    expect(d.segments.filter((s) => s.kind === 'cut')).toHaveLength(2)
+    expect(d.segments.filter((s) => s.kind === 'crease')).toHaveLength(2) // แนวซีลหน้า/หลัง
+    expect(d.refs?.length).toBeGreaterThan(4)
+    expect(d.captions?.map((c) => c.text)).toEqual(expect.arrayContaining(['ด้านหน้า', 'ด้านหลัง']))
+    expect(v.labelY0).toBeCloseTo(t.bodyY0, 9)
+    expect(v.labelY1).toBeCloseTo(t.sealY0, 9)
+  })
+
+  it('3D ฉายตรงลงแม่แบบ: กลางหน้า → กลางแผ่นหน้า, กลางหลัง → กลางแผ่นหลัง, ข้างซ้ายหลอด = ขอบซ้ายแผ่นหน้า/ขอบขวาแผ่นหลัง', () => {
+    const map = v.tubeTemplate!
+    const t = v.tube!
+    const y = (t.bodyY0 + t.sealY0) / 2
+    const { a } = tubeSection(t, y)
+    expect(tubeTemplatePoint(map, 0, y, true)).toEqual({ x: map.frontCx, y: tbox.H - y })
+    expect(tubeTemplatePoint(map, 0, y, false).x).toBeCloseTo(map.backCx, 9)
+    expect(tubeTemplatePoint(map, -a, y, true).x).toBeCloseTo(map.frontCx - a, 9)
+    expect(tubeTemplatePoint(map, -a, y, false).x).toBeCloseTo(map.backCx + a, 9)
+    // จุดบนผิวทุกจุดตกในแผงพิมพ์ของตัวเอง (กว้างแผงที่ระดับนั้น = 2a)
+    expect(map.backCx - map.frontCx).toBeCloseTo(Math.PI * t.R + TUBE_TEMPLATE_GAP, 6)
+  })
+
+  it('ขวด/โหลยังเป็นฉลากพันรอบเดิม (ไม่มีแม่แบบหน้า-หลัง)', () => {
+    const bottle = generateVessel({ W: 65, D: 28, H: 205, handle: false }, getMaterial('pet-bottle'))
+    expect(bottle.tubeTemplate).toBeUndefined()
+    expect(bottle.label.panels.map((p) => p.id)).toEqual(['label', 'glue'])
   })
 
   it('profile = ฝา/คอกลม (ทรงหมุน) เริ่มแกนกลางก้น จบเปิดที่ยอดฝา (rcap, capTop)', () => {
@@ -187,11 +221,10 @@ describe('vessel: หลอดครีม (tube-laminate)', () => {
     }
   })
 
-  it('ฉลากพันรอบตัวหลอด + dieline ไหลผ่าน export เดิม (DXF ไม่มี NaN)', () => {
+  it('แม่แบบหน้า-หลัง ไหลผ่าน export เดิม (DXF ไม่มี NaN)', () => {
     expect(v.labelR).toBeCloseTo(tbox.W / 2)
     expect(v.labelY0).toBeGreaterThan(0)
     expect(v.labelY1).toBeLessThan(tbox.H)
-    expect(v.label.width).toBeCloseTo(Math.PI * tbox.W + LABEL_OVERLAP)
     const dxf = dielineDXFString(v.label)
     expect(dxf).toContain('EOF')
     expect(dxf).not.toContain('NaN')

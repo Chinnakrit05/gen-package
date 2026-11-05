@@ -1841,6 +1841,12 @@ export const DielineSVG = memo(function DielineSVG({
           <Dim key={i} d={d} lengthUnit={lengthUnit} fs={dimTextSize(dieline.width, dieline.height)} />
         ))}
 
+      {/* ภาพอ้างอิง (เช่น ฝา/ไหล่หลอด ลอนซีล) — พรีวิวเท่านั้น ไม่รับคลิก ไม่เข้าไฟล์ผลิต */}
+      {dieline.refs && (
+        <g className="bp-refs" pointerEvents="none" fill="none" stroke="#9aa6a8" strokeWidth={0.8} vectorEffect="non-scaling-stroke">
+          {dieline.refs.map((d, i) => <path key={`ref${i}`} d={d} vectorEffect="non-scaling-stroke" />)}
+        </g>
+      )}
       {/* ป้ายกำกับหน้า (เช่น หน้า/หลัง ของนามบัตร) — โชว์เสมอในพรีวิว ไม่เข้าไฟล์ผลิต */}
       {dieline.captions?.map((c, i) => (
         <text

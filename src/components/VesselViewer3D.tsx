@@ -8,7 +8,7 @@ import { FitViewerCamera } from './FitViewerCamera'
 import { cameraPosition, vesselCameraFit } from './viewerCamera'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
-import {
+import { tubeTemplatePoint,
   capShape,
   CORK_COLOR,
   defaultCapColor,
@@ -77,7 +77,8 @@ function useLabelTexture(
 
 // พันรอบ: โชว์เฉพาะช่วงเส้นรอบวงจริง — ใช้ร่วม texture ลายกับแผนที่ผิวงานพิเศษ (ต้องตรงกัน)
 function labelTextureConfigure(vessel: Vessel, t: THREE.CanvasTexture) {
-  t.repeat.x = Math.min(1, (vessel.labelArc * vessel.labelR) / vessel.label.width)
+  // หลอดครีม: UV ชี้ตำแหน่งบนแม่แบบหน้า-หลังทั้งแผ่นตรง ๆ ไม่ครอปช่วงรอบวง
+  t.repeat.x = vessel.tubeTemplate ? 1 : Math.min(1, (vessel.labelArc * vessel.labelR) / vessel.label.width)
   t.wrapS = THREE.ClampToEdgeWrapping
 }
 
@@ -135,6 +136,28 @@ export function rectLabelGeometry(rs: RectSection, y0: number, y1: number, L: nu
   g.setIndex(idx)
   g.computeVertexNormals()
   return g
+}
+
+// ครึ่งวงรี a×b จาก θ0 ไปอีก π (ลดลง) แบ่งตามความยาวผิวจริงเท่า ๆ กัน — หลอดครีมด้านหน้า θ0 = π (ข้างซ้าย → กลางหน้า → ข้างขวา)
+export function halfRing(a: number, b: number, NU: number, th0: number): [number, number][] {
+  const M = 128
+  const th: number[] = []
+  const cum = [0]
+  for (let i = 0; i <= M; i++) {
+    th.push(th0 - (Math.PI * i) / M)
+    if (i) cum.push(cum[i - 1] + Math.hypot(a * (Math.cos(th[i]) - Math.cos(th[i - 1])), b * (Math.sin(th[i]) - Math.sin(th[i - 1]))))
+  }
+  const L = cum[M]
+  const out: [number, number][] = []
+  let j = 0
+  for (let k = 0; k <= NU; k++) {
+    const target = (L * k) / NU
+    while (j < M - 1 && cum[j + 1] < target) j++
+    const t = cum[j + 1] > cum[j] ? Math.min(1, (target - cum[j]) / (cum[j + 1] - cum[j])) : 0
+    const ang = th[j] + (th[j + 1] - th[j]) * t
+    out.push([a * Math.cos(ang), b * Math.sin(ang)])
+  }
+  return out
 }
 
 function VesselModel({
@@ -248,6 +271,41 @@ function VesselModel({
   }
   const range = (y0: number, y1: number, n: number) => Array.from({ length: n + 1 }, (_, i) => y0 + ((y1 - y0) * i) / n)
 
+  // ลายหลอดตามแม่แบบหน้า-หลัง: เปลือกสองครึ่ง (หน้า θ π→0, หลัง θ 0→−π) จุดไม่ใช้ร่วมกันที่สันข้าง
+  // ไม่งั้นสามเหลี่ยมคร่อมสันจะไล่ UV ข้ามช่องว่างระหว่างแผ่นหน้า-หลังเป็นแถบเลอะ; UV = ฉายตรงลงแม่แบบ (tubeTemplatePoint)
+  const templateTube = (ys: number[], grow: number) => {
+    const map = vessel.tubeTemplate!
+    const NU = 64
+    const stride = NU + 1
+    const pos: number[] = []
+    const uv: number[] = []
+    const idx: number[] = []
+    for (const front of [true, false]) {
+      const base = pos.length / 3
+      ys.forEach((y) => {
+        const { a, b } = tubeSection(tube!, y)
+        for (const [x, z] of halfRing(a + grow, b + grow, NU, front ? Math.PI : 0)) {
+          pos.push(x, y, z)
+          const p = tubeTemplatePoint(map, x, y, front)
+          uv.push(p.x / vessel.label.width, 1 - p.y / vessel.label.height)
+        }
+      })
+      for (let iv = 0; iv < ys.length - 1; iv++) {
+        for (let i = 0; i < NU; i++) {
+          const a0 = base + iv * stride + i
+          const b0 = base + (iv + 1) * stride + i
+          idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1)
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+    g.setIndex(idx)
+    g.computeVertexNormals()
+    return g
+  }
+
   const tubeBodyGeo = useMemo(() => {
     if (!tube) return null
     return loftTube([...range(tube.capTop, tube.bodyY0, 8), ...range(tube.bodyY0, tube.sealY0, 48).slice(1)], 0, false)
@@ -313,7 +371,10 @@ function VesselModel({
   // ฉลาก: หลอดครีมใช้เปลือก loft หุ้มตามผิวลำตัวในช่วงพิมพ์; ภาชนะอื่นใช้ทรงกระบอก
   const labelH = vessel.labelY1 - vessel.labelY0
   const labelGeo = useMemo(() => {
-    if (tube) return loftTube(range(vessel.labelY0, vessel.labelY1, 40), 0.25, true)
+    if (tube) {
+      if (vessel.tubeTemplate) return templateTube(range(vessel.labelY0, vessel.labelY1, 40), 0.25)
+      return loftTube(range(vessel.labelY0, vessel.labelY1, 40), 0.25, true)
+    }
     if (vessel.rect) return rectLabelGeometry(vessel.rect, vessel.labelY0, vessel.labelY1, vessel.labelArc * vessel.labelR)
     // ลอยเหนือผิว 0.3 มม. กัน z-fighting กับตัวภาชนะ
     // ฉลากแผ่นหน้า (ไม่พันรอบ): ส่วนโค้งกว้าง labelArc จัดกึ่งกลางที่ θ=π (หลังหมุนกลุ่ม π = ด้านหน้า)
