@@ -75,6 +75,8 @@ export const TEXT_FX_RANGE = {
 
 // ช่วงที่ UI/parse/schema cloud ยอมรับของระยะห่างตัวอักษร TextEl.ls (% ขนาดฟอนต์)
 export const LETTER_SPACING_RANGE = [-20, 100] as const
+// ช่วงของตัวคูณยืด/บีบตัวอักษรแนวนอน TextEl.sx (1 = ปกติ)
+export const TEXT_STRETCH_RANGE = [0.2, 5] as const
 
 // เส้นบางกว่านี้หายตอนพิมพ์ (ไดคัท/ออฟเซ็ตส่วนใหญ่รับเส้นบวก ≥ 0.15 มม.)
 export const MIN_PRINT_LINE_MM = 0.15

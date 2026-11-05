@@ -1029,3 +1029,36 @@ describe('ฟอนต์ที่ texture 3D ต้องรอ (textFontsKey /
   })
 })
 
+
+describe('ยืด/บีบข้อความ TextEl.sx', () => {
+  const base: TextEl = { id: 'st', type: 'text', text: 'ABCD', x: 10, y: 20, rot: 0, size: 10, w: 24, color: '#222222' }
+
+  it('ความกว้างที่วัดได้คูณตัวยืด (กรอบเลือก/snap/contour ใช้ค่าเดียวกัน)', () => {
+    const natural = withTextW(base).w
+    expect(withTextW({ ...base, sx: 1.5 }).w).toBeCloseTo(natural * 1.5, 9)
+    expect(withTextW({ ...base, sx: 0.4 }).w).toBeCloseTo(natural * 0.4, 9)
+  })
+
+  it('SVG วาดแบบไม่ยืดแล้ว scale แนวนอนรอบกึ่งกลางเดิม', () => {
+    const e = withTextW({ ...base, sx: 2 })
+    const svg = textInnerSVG(e)
+    const cx = e.x + e.w / 2
+    expect(svg.startsWith(`<g transform="translate(${cx} 0) scale(2 1) translate(${-cx} 0)">`)).toBe(true)
+    expect(textInnerSVG(base).startsWith('<g transform')).toBe(false)
+  })
+
+  it('canvas ยืดด้วย ctx.scale รอบกึ่งกลาง', () => {
+    const scale = vi.fn()
+    const ctx = { save: vi.fn(), restore: vi.fn(), scale, fillText: vi.fn(), fillRect: vi.fn(), measureText: () => ({ width: 24 }), font: '', textAlign: '', textBaseline: '' } as unknown as CanvasRenderingContext2D
+    drawText2D(ctx, withTextW({ ...base, sx: 0.5 }), 1)
+    expect(scale).toHaveBeenCalledWith(0.5, 1)
+  })
+
+  it('parse: เก็บ sx ที่ถูกต้อง, clamp ค่าสุดโต่ง, ตัดค่า 1/เพี้ยนทิ้ง', () => {
+    expect((parseDeco({ ...base, sx: 1.25 }) as TextEl).sx).toBe(1.25)
+    expect((parseDeco({ ...base, sx: 99 }) as TextEl).sx).toBe(5)
+    expect((parseDeco({ ...base, sx: 1 }) as TextEl).sx).toBeUndefined()
+    expect((parseDeco({ ...base, sx: 'x' }) as TextEl).sx).toBeUndefined()
+    expect((parseDeco({ ...base, sx: -2 }) as TextEl).sx).toBeUndefined()
+  })
+})

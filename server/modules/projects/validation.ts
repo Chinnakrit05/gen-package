@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { MATERIALS } from '../../../src/core/materials'
 import { TEMPLATES } from '../../../src/core/templates'
 import { FINISHES, type FinishKind } from '../../../src/core/finish'
-import { LETTER_SPACING_RANGE, TEXT_FX_KINDS, TEXT_FX_RANGE, type TextFxKind } from '../../../src/core/textFx'
+import { LETTER_SPACING_RANGE, TEXT_FX_KINDS, TEXT_FX_RANGE, TEXT_STRETCH_RANGE, type TextFxKind } from '../../../src/core/textFx'
 import {
   THUMBNAIL_BATCH_MAX,
   THUMBNAIL_KINDS,
@@ -98,6 +98,7 @@ const textSchema = z.object({
   ls: finite.min(LETTER_SPACING_RANGE[0]).max(LETTER_SPACING_RANGE[1]).optional(),
   grad: gradientSchema.optional(),
   curve: finite.min(-360).max(360).optional(),
+  sx: finite.min(TEXT_STRETCH_RANGE[0]).max(TEXT_STRETCH_RANGE[1]).optional(),
 }).strict()
 
 const shapeSchema = z.object({

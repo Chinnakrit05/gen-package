@@ -1,5 +1,5 @@
 import type { Dieline, Vec2 } from './types'
-import { LETTER_SPACING_RANGE, TEXT_GRAD_PAINT, parseTextFx, textFxPlan, type TextFx, type TextPaint } from './textFx'
+import { LETTER_SPACING_RANGE, TEXT_STRETCH_RANGE, TEXT_GRAD_PAINT, parseTextFx, textFxPlan, type TextFx, type TextPaint } from './textFx'
 export { TEXT_STROKE_MUL } from './textFx'
 import { finishDef, isFinishKind, printsCmyk, type FinishKind } from './finish'
 
@@ -63,6 +63,7 @@ export interface TextEl extends BaseEl {
   grad?: GradientDef // ไล่สีตัวอักษร (แทน color) — เอฟเฟกต์ที่ใช้ "สีตัวอักษร" ใช้ไล่สีนี้ด้วย
   fx?: TextFx // เอฟเฟกต์ข้อความ (เงา/พื้นหลัง/กลวง/ซ้อนเหลื่อม/ขอบสองชั้น) — ดู textFx.ts
   curve?: number // ดัดข้อความเป็นส่วนโค้ง: องศารวมของส่วนโค้ง (+ = โก่งขึ้น, − = โก่งลง; 0 = ตรง)
+  sx?: number // ยืด/บีบตัวอักษรแนวนอน (1 = ปกติ, ไม่ใส่ = 1) — w รวมการยืดแล้ว; มือจับกลางขอบซ้าย-ขวาตั้งค่านี้
 }
 
 // ฟอนต์ไทยจาก Google Fonts ที่โฮสต์ในแอป (น้ำหนัก 400/700 อยู่ใน main.tsx)
@@ -421,6 +422,13 @@ export const textFxFilterId = (id: string, i: number) => `tfx-${id}-${i}`
 // ข้อความพร้อมเอฟเฟกต์เป็นสตริง SVG (พิกัดสัมบูรณ์, ยังไม่หมุน/พลิก/ความทึบของชิ้น)
 // blueprint (DielineSVG) กับไฟล์ SVG ส่งออกใช้ฟังก์ชันนี้ตัวเดียว → หน้าจอกับไฟล์ตรงกัน
 export function textInnerSVG(e: TextEl): string {
+  const sx = textStretch(e)
+  if (sx === 1) return textInnerSVGNatural(e)
+  const c = elCenter(e)
+  return `<g transform="translate(${fmt(c.x)} 0) scale(${fmt(sx)} 1) translate(${fmt(-c.x)} 0)">${textInnerSVGNatural(unstretchedText(e))}</g>`
+}
+
+function textInnerSVGNatural(e: TextEl): string {
   const plan = textFxPlan(e)
   const c = elCenter(e)
   const runs = textRuns(e)
@@ -491,6 +499,15 @@ const CANVAS_ALIGN = { start: 'left', middle: 'center', end: 'right' } as const
 // วาดข้อความ (อาจหลายบรรทัด/โค้ง/เว้นระยะ) + เอฟเฟกต์ลง canvas — ctx ถูก translate ไปกึ่งกลาง+หมุน+พลิกไว้แล้ว
 // พิกัดท้องถิ่น: กึ่งกลางชิ้น = (0,0); ใช้ทั้ง Viewer3D และ export (drawDeco2D) — ลำดับชั้นเดียวกับ textInnerSVG
 export function drawText2D(ctx: CanvasRenderingContext2D, e: TextEl, s: number) {
+  const sx = textStretch(e)
+  if (sx === 1) return drawText2DNatural(ctx, e, s)
+  ctx.save()
+  ctx.scale(sx, 1) // ctx อยู่ที่กึ่งกลางชิ้นแล้ว → ยืดรอบกึ่งกลาง เหมือน SVG
+  drawText2DNatural(ctx, unstretchedText(e), s)
+  ctx.restore()
+}
+
+function drawText2DNatural(ctx: CanvasRenderingContext2D, e: TextEl, s: number) {
   const plan = textFxPlan(e)
   const runs = textRuns(e)
   ctx.font = textFont(e, s)
@@ -669,8 +686,19 @@ export function fontsReady(decos: readonly Deco[]): boolean {
 // = บรรทัดที่กว้างสุด (รองรับหลายบรรทัด)
 export const withTextW = (e: TextEl): TextEl => ({
   ...e,
-  w: Math.max(...(e.text ?? '').split('\n').map((ln) => textLineWidth(e, ln))),
+  w: Math.max(...(e.text ?? '').split('\n').map((ln) => textLineWidth(e, ln))) * textStretch(e),
 })
+
+// ตัวคูณยืดแนวนอนที่ใช้จริง (ค่าเพี้ยน/ไม่ใส่ = 1)
+export const textStretch = (e: TextEl): number =>
+  Number.isFinite(e.sx) && (e.sx as number) > 0 ? (e.sx as number) : 1
+
+// ข้อความเดียวกันแบบไม่ยืด กึ่งกลางเดิม — ตัววาดวางตัวอักษรตามนี้แล้ว scale แนวนอนรอบกึ่งกลาง
+function unstretchedText(e: TextEl): TextEl {
+  const sx = textStretch(e)
+  const w = e.w / sx
+  return { ...e, sx: undefined, w, x: e.x + (e.w - w) / 2 }
+}
 
 // --- โหลดไฟล์รูป ---
 // เก็บลง localStorage รวมกับข้อมูลงาน จึงต้องคุมขนาดไม่ให้ชน quota (~5MB ทั้ง origin)
@@ -2080,10 +2108,14 @@ export function parseDeco(v: unknown): Deco | null {
     const weight = Number(o.weight) === 700 ? 700 : undefined
     const align = o.align === 'center' || o.align === 'right' ? o.align : undefined
     const lh = Number(o.lh) > 0 && Number(o.lh) !== LINE ? clampNum(Number(o.lh), 0.8, 3) : undefined
+    const sxRaw = Number(o.sx)
+    const sx = Number.isFinite(sxRaw) && sxRaw > 0 && Math.abs(sxRaw - 1) > 1e-3
+      ? clampNum(sxRaw, TEXT_STRETCH_RANGE[0], TEXT_STRETCH_RANGE[1])
+      : undefined
     const wRaw = Number(o.w)
     const w = Number.isFinite(wRaw) && wRaw > 0
       ? wRaw
-      : finiteOr(Math.max(...text.split('\n').map((ln) => textLineWidth({ size, font, weight, italic: o.italic === true, ls: lsOk }, ln))), size * 4)
+      : finiteOr(Math.max(...text.split('\n').map((ln) => textLineWidth({ size, font, weight, italic: o.italic === true, ls: lsOk }, ln))) * (sx ?? 1), size * 4)
     const strokeColor = typeof o.strokeColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.strokeColor) ? o.strokeColor : undefined
     const strokeW = strokeColor && Number(o.strokeW) > 0 ? clampNum(Number(o.strokeW), 0, 10) : undefined
     // เอฟเฟกต์: งานเก่าที่มีแค่ shadow: true → เงาค่าเริ่มต้น (หน้าตาเดิม)
@@ -2108,6 +2140,7 @@ export function parseDeco(v: unknown): Deco | null {
       ...(Number.isFinite(Number(o.curve)) && Math.abs(Number(o.curve)) >= 1
         ? { curve: clampNum(Number(o.curve), -300, 300) }
         : {}),
+      ...(sx ? { sx } : {}),
       ...base,
     }
   }

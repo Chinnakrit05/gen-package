@@ -41,7 +41,7 @@ const DEL_R_PX = 8
 const ANCHOR_PX = 5.5 // จุด anchor/แขน bezier ของเส้น
 const EDGE_LONG_PX = 9 // ครึ่งความยาวแถบมือจับกลางขอบ (ตามแนวขอบ)
 const EDGE_SHORT_PX = 3.5 // ครึ่งความหนาแถบมือจับกลางขอบ
-const EDGE_MIN_SPAN_PX = 56 // ด้านสั้นกว่านี้บนจอ ไม่แสดงมือจับกลางขอบ (กันชนมือจับมุม)
+const EDGE_MIN_GAP_PX = 4 // ที่ว่างระหว่างพื้นที่กดของมุมสองข้างน้อยกว่านี้ (ครึ่งหนึ่ง) ไม่แสดงมือจับกลางขอบ
 
 // ชื่อด้านของแต่ละแผง (สำหรับป้ายกำกับจาง ๆ) — คืน null เมื่อไม่รู้จัก/ไม่ควรกำกับ
 function faceLabel(id: string): { th: string; en: string } | null {
@@ -1551,8 +1551,8 @@ export const DielineSVG = memo(function DielineSVG({
                   ))}
                 {/* มือจับกลางขอบ — ปรับกว้าง/สูงแกนเดียวอิสระ (รูปทรง/เส้นวาด/รูปที่ไม่ล็อกสัดส่วน);
                     ซ่อนเมื่อด้านนั้นสั้นบนจอจนมือจับจะชนมุม */}
-                {editable && single && onResize && !d.locked && resizeAspect == null
-                  && ((d.type === 'shape' && d.shape !== 'line') || d.type === 'path' || d.type === 'image') &&
+                {editable && single && onResize && !d.locked
+                  && (d.type === 'text' || (resizeAspect == null && ((d.type === 'shape' && d.shape !== 'line') || d.type === 'path' || d.type === 'image'))) &&
                   (
                     [
                       ['n', d.x + w / 2, d.y],
@@ -1561,14 +1561,20 @@ export const DielineSVG = memo(function DielineSVG({
                       ['e', d.x + w, d.y + h / 2],
                     ] as const
                   )
-                    .filter(([edge]) => (EDGE_AXIS[edge] === 'x' ? h : w) >= hpx(EDGE_MIN_SPAN_PX))
                     .map(([edge, hx, hy]) => {
                       const along = EDGE_AXIS[edge] === 'y' // n/s = แถบแนวนอน
-                      const hw = hpx(along ? EDGE_LONG_PX : EDGE_SHORT_PX)
-                      const hh = hpx(along ? EDGE_SHORT_PX : EDGE_LONG_PX)
+                      // ที่ว่างตามแนวขอบจากกึ่งกลางถึงพื้นที่กดของมุม — แถบหดสั้นลงตามที่ว่าง (ข้อความเตี้ย ๆ ก็ยังมี)
+                      // และพื้นที่กดไม่เกินเข้าไปในพื้นที่ของมุม
+                      const room = (along ? w : h) / 2 - hpx(HANDLE_HIT_PX)
+                      if (room < hpx(EDGE_MIN_GAP_PX)) return null
+                      const long = Math.min(hpx(EDGE_LONG_PX), room)
+                      const hw = along ? long : hpx(EDGE_SHORT_PX)
+                      const hh = along ? hpx(EDGE_SHORT_PX) : long
+                      const hitW = along ? room : hpx(HANDLE_HIT_PX)
+                      const hitH = along ? hpx(HANDLE_HIT_PX) : room
                       return (
                         <g key={edge} style={{ cursor: along ? 'ns-resize' : 'ew-resize' }} onPointerDown={(e) => startResize(e, d, edge)}>
-                          <rect x={hx - Math.max(hw, hpx(HANDLE_HIT_PX))} y={hy - Math.max(hh, hpx(HANDLE_HIT_PX))} width={Math.max(hw, hpx(HANDLE_HIT_PX)) * 2} height={Math.max(hh, hpx(HANDLE_HIT_PX)) * 2} fill="transparent" />
+                          <rect x={hx - hitW} y={hy - hitH} width={hitW * 2} height={hitH * 2} fill="transparent" />
                           <rect
                             className="resize-edge"
                             x={hx - hw}
