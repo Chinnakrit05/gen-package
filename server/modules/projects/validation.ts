@@ -99,6 +99,7 @@ const textSchema = z.object({
   grad: gradientSchema.optional(),
   curve: finite.min(-360).max(360).optional(),
   sx: finite.min(TEXT_STRETCH_RANGE[0]).max(TEXT_STRETCH_RANGE[1]).optional(),
+  boxW: finite.positive().max(2_000).optional(),
 }).strict()
 
 const shapeSchema = z.object({

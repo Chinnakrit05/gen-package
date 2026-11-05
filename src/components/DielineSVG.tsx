@@ -41,7 +41,8 @@ const DEL_R_PX = 8
 const ANCHOR_PX = 5.5 // จุด anchor/แขน bezier ของเส้น
 const EDGE_LONG_PX = 9 // ครึ่งความยาวแถบมือจับกลางขอบ (ตามแนวขอบ)
 const EDGE_SHORT_PX = 3.5 // ครึ่งความหนาแถบมือจับกลางขอบ
-const EDGE_MIN_GAP_PX = 4 // ที่ว่างระหว่างพื้นที่กดของมุมสองข้างน้อยกว่านี้ (ครึ่งหนึ่ง) ไม่แสดงมือจับกลางขอบ
+const EDGE_MIN_GAP_PX = 2 // ที่ว่าง (ครึ่งหนึ่ง) ระหว่างพื้นที่กดของมุมน้อยกว่านี้ ไม่แสดงมือจับกลางขอบ
+const EDGE_MIN_VISIBLE_PX = 3 // ครึ่งความยาวแถบกลางขอบอย่างน้อยเท่านี้ (มองเห็นได้แม้กล่องเตี้ย)
 
 // ชื่อด้านของแต่ละแผง (สำหรับป้ายกำกับจาง ๆ) — คืน null เมื่อไม่รู้จัก/ไม่ควรกำกับ
 function faceLabel(id: string): { th: string; en: string } | null {
@@ -1240,7 +1241,8 @@ export const DielineSVG = memo(function DielineSVG({
     const fontSize = Math.max(11, editText.size * ctm.a)
     const k = fontSize / editText.size
     // เผื่อที่ให้ caret + ความต่างเล็กน้อยระหว่าง measureText (canvas) กับการวาดใน textarea
-    const width = Math.max(80, editText.w * k + fontSize * 0.5)
+    // กล่องกว้างคงที่: textarea กว้างเท่ากล่อง (ตัดบรรทัดตรงกับ blueprint โดยประมาณ) + เผื่อ caret เล็กน้อย
+    const width = editText.boxW ? editText.boxW * k + fontSize * 0.15 : Math.max(80, editText.w * k + fontSize * 0.5)
     // ยึดตามการจัดชิด: ซ้าย = ขอบซ้ายนิ่ง, กลาง = กึ่งกลางนิ่ง, ขวา = ขอบขวานิ่ง → ตัวอักษรทับที่เดิม
     const align = editText.align ?? 'left'
     const x0 = Math.min(a.x, b.x)
@@ -1444,6 +1446,8 @@ export const DielineSVG = memo(function DielineSVG({
         const sel = selectedIds.includes(d.id)
         const single = sel && selectedIds.length === 1 // ก้านหมุน/กากบาทลบ โชว์เฉพาะตอนเลือกชิ้นเดียว
         const handleY = d.y - hpx(ROT_GAP_PX) // ก้านหมุนเหนือกล่อง (ระยะคงที่บนจอ)
+        // พื้นที่กดของมุมหดลงเมื่อกล่องเล็กบนจอ (≥ ขนาดที่เห็น) — เหลือที่ให้มือจับกลางขอบของข้อความบรรทัดเดียว
+        const cornerHitPx = Math.min(HANDLE_HIT_PX, Math.max(HANDLE_PX + 1, (Math.min(w, h) * (pxPerMm || 1)) / 4))
         return (
           <g
             key={d.id}
@@ -1535,7 +1539,7 @@ export const DielineSVG = memo(function DielineSVG({
                     ] as const
                   ).map(([corner, hx, hy]) => (
                     <g key={corner} style={{ cursor: corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize' }} onPointerDown={(e) => startResize(e, d, corner)}>
-                      <rect x={hx - hpx(HANDLE_HIT_PX)} y={hy - hpx(HANDLE_HIT_PX)} width={hpx(HANDLE_HIT_PX * 2)} height={hpx(HANDLE_HIT_PX * 2)} fill="transparent" />
+                      <rect x={hx - hpx(cornerHitPx)} y={hy - hpx(cornerHitPx)} width={hpx(cornerHitPx * 2)} height={hpx(cornerHitPx * 2)} fill="transparent" />
                       <rect
                         className="resize-handle"
                         x={hx - hpx(HANDLE_PX)}
@@ -1561,13 +1565,15 @@ export const DielineSVG = memo(function DielineSVG({
                       ['e', d.x + w, d.y + h / 2],
                     ] as const
                   )
+                    // ข้อความ: ซ้าย-ขวา = ความกว้างกล่อง (ตัดบรรทัดเอง) — ไม่มีบน-ล่าง ความสูงตามจำนวนบรรทัด
+                    .filter(([edge]) => d.type !== 'text' || EDGE_AXIS[edge] === 'x')
                     .map(([edge, hx, hy]) => {
                       const along = EDGE_AXIS[edge] === 'y' // n/s = แถบแนวนอน
                       // ที่ว่างตามแนวขอบจากกึ่งกลางถึงพื้นที่กดของมุม — แถบหดสั้นลงตามที่ว่าง (ข้อความเตี้ย ๆ ก็ยังมี)
                       // และพื้นที่กดไม่เกินเข้าไปในพื้นที่ของมุม
-                      const room = (along ? w : h) / 2 - hpx(HANDLE_HIT_PX)
+                      const room = (along ? w : h) / 2 - hpx(cornerHitPx)
                       if (room < hpx(EDGE_MIN_GAP_PX)) return null
-                      const long = Math.min(hpx(EDGE_LONG_PX), room)
+                      const long = Math.max(hpx(EDGE_MIN_VISIBLE_PX), Math.min(hpx(EDGE_LONG_PX), room))
                       const hw = along ? long : hpx(EDGE_SHORT_PX)
                       const hh = along ? hpx(EDGE_SHORT_PX) : long
                       const hitW = along ? room : hpx(HANDLE_HIT_PX)

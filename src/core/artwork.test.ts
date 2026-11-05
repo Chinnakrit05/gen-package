@@ -1062,3 +1062,45 @@ describe('ยืด/บีบข้อความ TextEl.sx', () => {
     expect((parseDeco({ ...base, sx: -2 }) as TextEl).sx).toBeUndefined()
   })
 })
+
+describe('กล่องข้อความกว้างคงที่ TextEl.boxW (แบบ Canva)', () => {
+  // stub วัดความกว้าง: ทุกอักขระกว้าง ch มม. (ดู beforeAll) — ตั้งกล่องเป็นจำนวนอักขระที่ใส่ได้ต่อบรรทัด
+  let ch = 0
+  beforeAll(() => {
+    ch = withTextW({ id: 'm', type: 'text', text: 'a', x: 0, y: 0, rot: 0, size: 10, w: 1, color: '#000000' }).w
+  })
+  const box = (text: string, chars: number): TextEl =>
+    withTextW({ id: 'b', type: 'text', text, x: 0, y: 0, rot: 0, size: 10, w: 1, color: '#000000', boxW: ch * chars })
+
+  it('ตัดบรรทัดที่ขอบคำ กว้างเท่ากล่อง สูงตามจำนวนบรรทัด ขนาดตัวอักษรคงเดิม', () => {
+    const e = box('hello world foo', 5)
+    expect(textRuns(e).map((r) => r.str)).toEqual(['hello', 'world', 'foo'])
+    expect(e.w).toBeCloseTo(ch * 5, 9)
+    expect(elH(e)).toBeCloseTo(3 * 10 * 1.25, 9)
+    expect(e.size).toBe(10)
+  })
+
+  it('คำเดียวยาวเกินกล่องตัดทีละกลุ่มอักษร และขึ้นบรรทัดใหม่ที่ผู้ใช้กด Enter ยังอยู่', () => {
+    expect(textRuns(box('abcdefghijkl', 5)).map((r) => r.str)).toEqual(['abcde', 'fghij', 'kl'])
+    expect(textRuns(box('ab\ncd', 10)).map((r) => r.str)).toEqual(['ab', 'cd'])
+  })
+
+  it('ข้อความไทย: ทุกบรรทัดไม่เกินกล่อง และไม่ตัดสระ/วรรณยุกต์ออกจากพยัญชนะ', () => {
+    const text = 'ชาดอกอัญชันออร์แกนิกจากเชียงใหม่'
+    const e = box(text, 8)
+    const lines = textRuns(e).map((r) => r.str)
+    expect(lines.length).toBeGreaterThan(1)
+    expect(lines.join('')).toBe(text)
+    for (const ln of lines) {
+      expect(ln.length * ch).toBeLessThanOrEqual(e.boxW! + 1e-6)
+      expect(/^[ัิ-ฺ็-๎]/.test(ln)).toBe(false)
+    }
+  })
+
+  it('parse เก็บ boxW และใช้แทน sx ถ้ามีทั้งคู่', () => {
+    const parsed = parseDeco({ id: 'p', type: 'text', text: 'abc', x: 0, y: 0, rot: 0, size: 10, w: 99, color: '#000000', boxW: 40, sx: 2 }) as TextEl
+    expect(parsed.boxW).toBe(40)
+    expect(parsed.sx).toBeUndefined()
+    expect(parsed.w).toBe(40)
+  })
+})

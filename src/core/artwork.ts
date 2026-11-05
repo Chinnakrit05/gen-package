@@ -63,7 +63,9 @@ export interface TextEl extends BaseEl {
   grad?: GradientDef // ไล่สีตัวอักษร (แทน color) — เอฟเฟกต์ที่ใช้ "สีตัวอักษร" ใช้ไล่สีนี้ด้วย
   fx?: TextFx // เอฟเฟกต์ข้อความ (เงา/พื้นหลัง/กลวง/ซ้อนเหลื่อม/ขอบสองชั้น) — ดู textFx.ts
   curve?: number // ดัดข้อความเป็นส่วนโค้ง: องศารวมของส่วนโค้ง (+ = โก่งขึ้น, − = โก่งลง; 0 = ตรง)
-  sx?: number // ยืด/บีบตัวอักษรแนวนอน (1 = ปกติ, ไม่ใส่ = 1) — w รวมการยืดแล้ว; มือจับกลางขอบซ้าย-ขวาตั้งค่านี้
+  sx?: number // ยืด/บีบตัวอักษรแนวนอน (1 = ปกติ, ไม่ใส่ = 1) — w รวมการยืดแล้ว (งานไฟล์ v26; UI ไม่ตั้งแล้ว)
+  boxW?: number // กล่องข้อความกว้างคงที่ (มม.) แบบ Canva: ข้อความตัดบรรทัดเองให้พอดีกล่อง ขนาดตัวอักษรไม่เปลี่ยน;
+  //              ไม่ใส่ = กว้างตามบรรทัดที่ยาวสุด — มือจับกลางขอบซ้าย-ขวาตั้งค่านี้
 }
 
 // ฟอนต์ไทยจาก Google Fonts ที่โฮสต์ในแอป (น้ำหนัก 400/700 อยู่ใน main.tsx)
@@ -218,7 +220,48 @@ export const elCenter = (e: Deco): Vec2 => ({ x: e.x + elW(e) / 2, y: e.y + elH(
 
 // --- ข้อความหลายบรรทัด: ตัวช่วยที่ทุกเส้นทางเรนเดอร์ (blueprint/3D/SVG/PDF) ใช้ร่วมกัน ---
 // ป้องกันไว้: ระหว่าง hot-reload อาจมีชิ้นที่ไม่ใช่ text หลุดเข้ามาชั่วขณะ — กันจอขาว
-export const textLinesOf = (e: TextEl): string[] => (e.text ?? '').split('\n')
+export const textLinesOf = (e: TextEl): string[] =>
+  e.boxW && e.boxW > 0 ? wrappedLines(e) : (e.text ?? '').split('\n')
+
+// --- กล่องข้อความกว้างคงที่: ตัดบรรทัดที่ขอบคำ (Intl.Segmenter แบบคำ — ไทยไม่มีช่องว่างระหว่างคำ) ---
+// คำที่ยาวเกินกล่องตัดทีละกลุ่มอักษร; ช่องว่างท้ายบรรทัดทิ้ง; แคชผลเพราะ elH/textRuns ถูกเรียกบ่อย
+type WordSegmenter = { segment(s: string): Iterable<{ segment: string }> }
+const WordSegmenterCtor = (Intl as unknown as { Segmenter?: new (loc: string, o: { granularity: 'word' }) => WordSegmenter }).Segmenter
+const wordSegmenter: WordSegmenter | null = WordSegmenterCtor ? new WordSegmenterCtor('th', { granularity: 'word' }) : null
+const words = (s: string): string[] => (wordSegmenter ? Array.from(wordSegmenter.segment(s), (x) => x.segment) : s.split(/(\s+)/).filter(Boolean))
+const wrapCache = new Map<string, string[]>()
+
+function wrappedLines(e: TextEl): string[] {
+  const box = e.boxW as number
+  const key = [e.text, e.size, e.font, e.weight, e.italic ? 1 : 0, e.ls ?? 0, box].join('\u0001')
+  const hit = wrapCache.get(key)
+  if (hit) return hit
+  const fits = (s: string) => textLineWidth(e, s.trimEnd()) <= box + 1e-6
+  const out: string[] = []
+  for (const para of (e.text ?? '').split('\n')) {
+    let line = ''
+    for (const word of words(para)) {
+      if (fits(line + word)) {
+        line += word
+        continue
+      }
+      if (line.trim()) out.push(line.trimEnd())
+      line = word.trimStart()
+      // คำเดียวยาวเกินกล่อง → ตัดทีละกลุ่มอักษร
+      while (line && !fits(line)) {
+        const gs = graphemes(line)
+        let k = 1
+        while (k < gs.length && fits(gs.slice(0, k + 1).join(''))) k++
+        out.push(gs.slice(0, k).join(''))
+        line = gs.slice(k).join('')
+      }
+    }
+    out.push(line.trimEnd())
+  }
+  if (wrapCache.size > 400) wrapCache.clear()
+  wrapCache.set(key, out)
+  return out
+}
 export const textLineH = (e: TextEl): number => e.size * (e.lh ?? LINE)
 // จุดยึด SVG ตามการจัดชิด (start/middle/end) + พิกัด x ของจุดยึด (มม. สัมบูรณ์)
 export const textAnchor = (e: TextEl): 'start' | 'middle' | 'end' =>
@@ -686,12 +729,13 @@ export function fontsReady(decos: readonly Deco[]): boolean {
 // = บรรทัดที่กว้างสุด (รองรับหลายบรรทัด)
 export const withTextW = (e: TextEl): TextEl => ({
   ...e,
-  w: Math.max(...(e.text ?? '').split('\n').map((ln) => textLineWidth(e, ln))) * textStretch(e),
+  // กล่องกว้างคงที่ = กว้างเท่ากล่องเสมอ (บรรทัดตัดเองข้างใน); ไม่งั้นกว้างตามบรรทัดที่ยาวสุด
+  w: e.boxW && e.boxW > 0 ? e.boxW : Math.max(...(e.text ?? '').split('\n').map((ln) => textLineWidth(e, ln))) * textStretch(e),
 })
 
 // ตัวคูณยืดแนวนอนที่ใช้จริง (ค่าเพี้ยน/ไม่ใส่ = 1)
 export const textStretch = (e: TextEl): number =>
-  Number.isFinite(e.sx) && (e.sx as number) > 0 ? (e.sx as number) : 1
+  !e.boxW && Number.isFinite(e.sx) && (e.sx as number) > 0 ? (e.sx as number) : 1
 
 // ข้อความเดียวกันแบบไม่ยืด กึ่งกลางเดิม — ตัววาดวางตัวอักษรตามนี้แล้ว scale แนวนอนรอบกึ่งกลาง
 function unstretchedText(e: TextEl): TextEl {
@@ -2112,10 +2156,12 @@ export function parseDeco(v: unknown): Deco | null {
     const sx = Number.isFinite(sxRaw) && sxRaw > 0 && Math.abs(sxRaw - 1) > 1e-3
       ? clampNum(sxRaw, TEXT_STRETCH_RANGE[0], TEXT_STRETCH_RANGE[1])
       : undefined
+    const boxRaw = Number(o.boxW)
+    const boxW = Number.isFinite(boxRaw) && boxRaw > 0 ? clampNum(boxRaw, 1, 2000) : undefined
     const wRaw = Number(o.w)
-    const w = Number.isFinite(wRaw) && wRaw > 0
+    const w = boxW ?? (Number.isFinite(wRaw) && wRaw > 0
       ? wRaw
-      : finiteOr(Math.max(...text.split('\n').map((ln) => textLineWidth({ size, font, weight, italic: o.italic === true, ls: lsOk }, ln))) * (sx ?? 1), size * 4)
+      : finiteOr(Math.max(...text.split('\n').map((ln) => textLineWidth({ size, font, weight, italic: o.italic === true, ls: lsOk }, ln))) * (sx ?? 1), size * 4))
     const strokeColor = typeof o.strokeColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.strokeColor) ? o.strokeColor : undefined
     const strokeW = strokeColor && Number(o.strokeW) > 0 ? clampNum(Number(o.strokeW), 0, 10) : undefined
     // เอฟเฟกต์: งานเก่าที่มีแค่ shadow: true → เงาค่าเริ่มต้น (หน้าตาเดิม)
@@ -2140,7 +2186,7 @@ export function parseDeco(v: unknown): Deco | null {
       ...(Number.isFinite(Number(o.curve)) && Math.abs(Number(o.curve)) >= 1
         ? { curve: clampNum(Number(o.curve), -300, 300) }
         : {}),
-      ...(sx ? { sx } : {}),
+      ...(boxW ? { boxW } : sx ? { sx } : {}),
       ...base,
     }
   }

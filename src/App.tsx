@@ -43,7 +43,6 @@ import {
   recenter,
   cloneDeco,
   withTextW,
-  textStretch,
   measureText,
   textInnerSVG,
   makePathEl,
@@ -66,7 +65,7 @@ import {
   type ShapeKind,
   type NutriRow,
 } from './core/artwork'
-import { TEXT_FX_KINDS, TEXT_FX_RANGE, LETTER_SPACING_RANGE, TEXT_STRETCH_RANGE, MIN_PRINT_LINE_MM, lightenHex, resolveTextFx, textFxAutoColor, textFxReach, type TextFx, type TextFxKind } from './core/textFx'
+import { TEXT_FX_KINDS, TEXT_FX_RANGE, LETTER_SPACING_RANGE, MIN_PRINT_LINE_MM, lightenHex, resolveTextFx, textFxAutoColor, textFxReach, type TextFx, type TextFxKind } from './core/textFx'
 import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import {
   DEFAULT_STICKER_CUT,
@@ -3085,21 +3084,19 @@ export default function App({
             next = { ...d, x, y, w: nw, h: r1(nw / d.aspect) }
           } else next = { ...d, x, y, w: Math.max(5, r1(w)), h: Math.max(5, r1(h)) }
         } else if (d.type === 'text') {
-          const sx0 = textStretch(d)
           if (anchor.sy === 0) {
-            // มือจับขอบซ้าย/ขวา: ยืด/บีบตัวอักษรแนวนอน ขนาดฟอนต์คงเดิม
-            const sx = clamp(Math.round(((sx0 * w) / (d.w || 1)) * 1000) / 1000, TEXT_STRETCH_RANGE[0], TEXT_STRETCH_RANGE[1])
-            next = withTextW({ ...d, x, y, sx: Math.abs(sx - 1) < 1e-3 ? undefined : sx })
-          } else if (anchor.sx === 0) {
-            // มือจับขอบบน/ล่าง: สูงขึ้น-เตี้ยลงโดยคงความกว้างเดิม = ขนาดฟอนต์ตามความสูง แล้วบีบแนวนอนชดเชย
-            const size = clamp(r1((d.size * h) / (elH(d) || 1)), 3, 120)
-            const sx = clamp(Math.round(((sx0 * d.size) / size) * 1000) / 1000, TEXT_STRETCH_RANGE[0], TEXT_STRETCH_RANGE[1])
-            next = withTextW({ ...d, x, y, size, sx: Math.abs(sx - 1) < 1e-3 ? undefined : sx })
-          } else {
-            const cur = elH(d) || 1
-            const size = clamp(Math.round((d.size * h) / cur), 3, 120)
-            next = withTextW({ ...d, size, x, y })
+            // มือจับขอบซ้าย/ขวา (แบบ Canva): กำหนดความกว้างกล่อง ข้อความตัดบรรทัดเอง ขนาดตัวอักษรไม่เปลี่ยน;
+            // ความสูงตามจำนวนบรรทัด → ตรึงขอบบนไว้ (ข้อความงอกลงล่าง) แทนกึ่งกลางแนวตั้ง
+            const boxW = Math.max(d.size * 0.8, r1(w))
+            const wrapped = withTextW({ ...d, x, y, boxW, sx: undefined })
+            const pos = reanchorBox({ x, y, w, h }, { w: elW(wrapped), h: elH(wrapped) }, d.rot, { sx: anchor.sx, sy: -1 })
+            return { ...wrapped, x: pos.x, y: pos.y }
           }
+          // มุม: ย่อขยายทั้งก้อน (ขนาดตัวอักษรตามความสูง) กล่องกว้างคงที่ขยายตามสัดส่วนเดียวกัน
+          const cur = elH(d) || 1
+          const size = clamp(Math.round((d.size * h) / cur), 3, 120)
+          const boxW = d.boxW ? r1((d.boxW * size) / d.size) : undefined
+          next = withTextW({ ...d, size, x, y, ...(boxW ? { boxW } : {}) })
         } else return d
         // ขนาดจริงต่างจากกรอบที่ลาก (ปัดฟอนต์/วัดความกว้างข้อความ/ล็อกสัดส่วน/สูงตามเนื้อหา) → วางใหม่ให้มุมตรึงไม่เลื่อน
         const pos = reanchorBox({ x, y, w, h }, { w: elW(next), h: elH(next) }, d.rot, anchor)
