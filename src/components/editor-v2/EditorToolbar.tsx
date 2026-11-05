@@ -42,7 +42,7 @@ export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced,
         </select>
         <div className="v2-font-size">
           <button type="button" aria-label={t('ลดขนาดตัวอักษร', 'Decrease font size')} disabled={blocked} onClick={() => changeSize((text?.size ?? 6) - .5)}><img src={assets.imgSectionDefaultIconMinusStateNormal} alt="" /></button>
-          <input type="number" min="1" max="400" step="0.5" aria-label={t('ขนาดตัวอักษร (มม.)', 'Font size (mm)')} disabled={blocked} value={text?.size ?? 6} onChange={e => changeSize(e.target.valueAsNumber)} />
+          <FontSizeInput key={selected?.id ?? 'none'} label={t('ขนาดตัวอักษร (มม.)', 'Font size (mm)')} disabled={blocked} value={text?.size ?? 6} onCommit={changeSize} />
           <button type="button" aria-label={t('เพิ่มขนาดตัวอักษร', 'Increase font size')} disabled={blocked} onClick={() => changeSize((text?.size ?? 6) + .5)}><img src={assets.imgSectionDefaultIconPlusStateNormal} alt="" /></button>
         </div><span className="v2-toolbar-divider" />
       </>}
@@ -69,5 +69,34 @@ export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced,
       {popover === 'opacity' && <div className="v2-toolbar-popover"><label>{t('ความทึบ', 'Opacity')} <input type="range" min="0" max="100" value={Math.round((selected?.opacity ?? 1) * 100)} onChange={e => onPatch(d => ({ ...d, opacity: Number(e.target.value) / 100 }))} />{Math.round((selected?.opacity ?? 1) * 100)}%</label></div>}
       {popover === 'align' && <div className="v2-toolbar-popover">{(['left', 'center', 'right'] as const).map((align, i) => <button key={align} type="button" aria-pressed={(text?.align ?? 'left') === align} onClick={() => { patchText({ align }); setPopover(null) }}>{[t('ชิดซ้าย', 'Left'), t('กึ่งกลาง', 'Center'), t('ชิดขวา', 'Right')][i]}</button>)}</div>}
     </div>
+  )
+}
+
+// ช่องขนาดตัวอักษร: เก็บข้อความที่กำลังพิมพ์แยกจากขนาดจริง — ลบจนว่าง/พิมพ์ "1" ก่อนจะเป็น "14" ได้
+// โดยข้อความบนแผ่นไม่หดตามตัวเลขครึ่งทาง; ใช้ค่าเมื่อกด Enter หรือออกจากช่อง, Esc = คืนค่าเดิม
+function FontSizeInput({ label, value, disabled, onCommit }: { label: string; value: number; disabled: boolean; onCommit: (size: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const commit = () => {
+    if (draft === null) return
+    const n = Number(draft)
+    if (draft.trim() !== '' && Number.isFinite(n)) onCommit(n)
+    setDraft(null)
+  }
+  return (
+    <input
+      type="number"
+      min="1"
+      max="400"
+      step="0.5"
+      aria-label={label}
+      disabled={disabled}
+      value={draft ?? value}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => {
+        if (e.key === 'Enter') commit()
+        else if (e.key === 'Escape') setDraft(null)
+      }}
+    />
   )
 }
