@@ -451,8 +451,10 @@ export const DielineSVG = memo(function DielineSVG({
   stock,
   watermark = null,
   studio = false,
+  previewControls = false,
 }: {
   studio?: boolean
+  previewControls?: boolean
   dieline: Dieline
   showDims: boolean
   lengthUnit?: LengthUnit
@@ -551,6 +553,7 @@ export const DielineSVG = memo(function DielineSVG({
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map())
   const pinch = useRef<{ dist: number } | null>(null)
   const editable = !!(onMove && onRotate && onSelect)
+  const viewControls = editable || previewControls
 
   // แปลงพิกัดหน้าจอเป็นพิกัดแผ่นคลี่ (มม.) — viewBox เป็นหน่วย มม. อยู่แล้ว
   const toSheet = (clientX: number, clientY: number) => {
@@ -1059,7 +1062,7 @@ export const DielineSVG = memo(function DielineSVG({
   // กดพื้นที่ว่าง = เริ่มลาก pan (ตอนซูม) หรือถ้าไม่ขยับก็ยกเลิกการเลือกตอนปล่อย
   const onBgDown = (e: React.PointerEvent) => {
     if (penMode) return penDown(e)
-    if (!editable || grab.current || pinch.current) return
+    if (!viewControls || grab.current || pinch.current) return
     if (editing) setEditing(null) // คลิกพื้นที่ว่าง = ออกจากโหมดแก้ข้อความ
     if (cropId) setCropId(null) // คลิกพื้นที่ว่าง = ออกจากโหมดครอป
     pan.current = { sx: e.clientX, sy: e.clientY, cx: viewCx, cy: viewCy, moved: false, over: spacePan }
@@ -1184,7 +1187,7 @@ export const DielineSVG = memo(function DielineSVG({
   // (non-passive เพื่อ preventDefault กันเบราว์เซอร์ซูมทั้งหน้า)
   useEffect(() => {
     const svg = svgRef.current
-    if (!svg || !editable) return
+    if (!svg || !viewControls) return
     const onWheel = (e: WheelEvent) => {
       // โหมดครอป: สกอลล์ = ซูมรูปในกรอบ (ไม่ต้องกด Ctrl)
       if (cropId) {
@@ -1205,7 +1208,7 @@ export const DielineSVG = memo(function DielineSVG({
     svg.addEventListener('wheel', onWheel, { passive: false })
     return () => svg.removeEventListener('wheel', onWheel)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoom, center, pad, dieline.width, dieline.height, cropId, decos, onCrop])
+  }, [zoom, center, pad, dieline.width, dieline.height, cropId, decos, onCrop, viewControls])
 
   // เส้นไกด์ที่กำลังโฟกัส (ลากอยู่ก่อน ไม่งั้นตัวที่ชี้) → ใช้เลือกว่าจะโชว์ถังขยะขอบไหน
   const activeGuide = guideLines.find((g) => g.id === (guideDrag.current?.id ?? hoverGuide)) ?? null
@@ -1287,17 +1290,19 @@ export const DielineSVG = memo(function DielineSVG({
         >
           🏷
         </button>
+        {editable && <>
         <button type="button" className="bp-tool" title={t('เพิ่มเส้นไกด์ตั้ง','Add vertical guide')} aria-label={t('เพิ่มเส้นไกด์ตั้ง','Add vertical guide')} onClick={() => addGuide('x')}>
           ￨＋
         </button>
         <button type="button" className="bp-tool" title={t('เพิ่มเส้นไกด์นอน','Add horizontal guide')} aria-label={t('เพิ่มเส้นไกด์นอน','Add horizontal guide')} onClick={() => addGuide('y')}>
           －＋
         </button>
+        </>}
   </>
 
   return (
     <div className="bp-canvas">
-    {editable && !studio && (
+    {viewControls && !studio && (
       <div className={`bp-tools${selectedIds.length > 0 ? ' below-topbar' : ''}`}>
         {canvasTools}
         {(onUndo || onRedo) && <span className="bp-tools-sep" />}
@@ -1315,13 +1320,13 @@ export const DielineSVG = memo(function DielineSVG({
         {toolsExtra}
       </div>
     )}
-    {!editable && toolsExtra && <div className="bp-tools">{toolsExtra}</div>}
-    {editable && studio && <>
+    {!viewControls && toolsExtra && <div className="bp-tools">{toolsExtra}</div>}
+    {viewControls && studio && <>
       <div className="v2-canvas-actions">
-        <div className="v2-history-actions">
+        {editable && <div className="v2-history-actions">
           <button type="button" title={t('เลิกทำ', 'Undo')} aria-label={t('เลิกทำ', 'Undo')} disabled={!canUndo} onClick={onUndo}><img src={studioAssets.imgIconButton17} alt="" /></button>
           <button type="button" title={t('ทำซ้ำ', 'Redo')} aria-label={t('ทำซ้ำ', 'Redo')} disabled={!canRedo} onClick={onRedo}><img src={studioAssets.imgIconButton18} alt="" /></button>
-        </div>{toolsExtra}
+        </div>}{toolsExtra}
       </div>
       <details className="v2-view-tools"><summary title={t('เครื่องมือมุมมอง', 'View tools')} aria-label={t('เครื่องมือมุมมอง', 'View tools')}><img src={studioAssets.imgIconButton} alt="" /></summary><div>{canvasTools}<button type="button" className="bp-tool" aria-label={t('เปิด-ปิดกริด', 'Toggle grid')} aria-pressed={showGrid} onClick={() => setShowGrid(g => !g)}>▦ {t('กริด', 'Grid')}</button></div></details>
     </>}
@@ -1944,7 +1949,7 @@ export const DielineSVG = memo(function DielineSVG({
         </svg>
       </button>
     )}
-    {editable && (
+    {viewControls && (
       <div className="zoom-toolbar">
         {!studio && <button
           type="button"

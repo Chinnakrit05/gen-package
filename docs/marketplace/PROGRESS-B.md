@@ -1,6 +1,14 @@
 # ความคืบหน้าคน B
 
-อัปเดต 2 พฤศจิกายน 2026: รับ origin/main **b6cb708** เข้า branch B ด้วย fast-forward แล้ว A ส่ง **A0-r2** พร้อมรับ b-phase0-r1 และตอบ R1–R5 ครบ B ตรวจรับใน [REVIEW-A0-r2-B.md](REVIEW-A0-r2-B.md) จึง **ปิด 0-J1/0-J2 และเริ่ม Phase 1 ฝั่ง B แล้ว** ผล local API/Auth/DB และ config/build ผ่านตาม [B-PHASE-1-RESULTS.md](B-PHASE-1-RESULTS.md) ยังรอ router/browser ของ A และ preview ก่อนปิด Phase 1 ร่วม
+อัปเดต 5 พฤศจิกายน 2026 — รับโค้ด router/Editor ของ A ที่รวมบน `main` แล้ว ตรวจร่วมบน branch `codex/marketplace-phase-1-integration` ฐาน `a85de8b` ใช้สัญญา `b-phase0-r1` ต่อ ดู [ผลตรวจร่วม A/B](B-PHASE-1-RESULTS.md#ตรวจรับร่วม-ab-5-พฤศจิกายน-2026)
+
+| งาน | ผลรอบนี้ |
+|---|---|
+| 1-B1 / 1-B2 | ตรวจ API และฐานข้อมูลจริงในเครื่องซ้ำ ผ่านรายการแบบแบ่งหน้า สิทธิ์ตาม workspace, create/save retry และ revision conflict |
+| 1-B3 | ตรวจ config และ Vercel adapter ในเครื่อง รวมถึงลิงก์ตรง รีเฟรช API JSON และเริ่ม OAuth บน staging ที่มีอยู่ การตรวจ callback ด้วยบัญชีทดสอบบน Preview ของชุดแก้ล่าสุดยังรอ |
+| 1-B4 | ตรวจสิทธิ์ร่วมกับ browser ฝั่ง A ด้วยบัญชี owner/editor/viewer/outsider ใน Supabase แยก รวมชุดทดสอบ Cloud regression และขั้นตอนรันซ้ำ |
+
+ผลและสถานะด้านล่างเป็นประวัติการส่งงานวันที่ 2 พฤศจิกายน ก่อนรับ router ของ A
 
 ## บริบทการทำงาน
 
@@ -92,7 +100,7 @@ Raw report ใน tmp อยู่เฉพาะเครื่อง B ใช�
 - รอบนี้ไม่แก้ source API/DTO/migrations หรือ frontend; build regenerate API snapshots เพื่อทดสอบแล้วเก็บสำเนาใต้ tmp และคืน tracked snapshots ที่ build เปลี่ยนเองให้ตรงฐาน ไม่มีงานค้างเดิมในสองไฟล์นั้น
 - Commands/ขอบเขต/ไฟล์ source hashes อยู่ [ผลตรวจ](B-PHASE-1-RESULTS.md) และ [evidence](evidence/B-PHASE-1.json) การเผยแพร่รอบนี้ได้รับคำสั่ง commit/push บน branch codex/marketplace-b-phase-1 ไม่รวมการ merge เข้า main หรือเปลี่ยน remote configuration
 
-## สิ่งที่รอและการเดินงานต่อ
+## สิ่งที่รอ ณ 2 พฤศจิกายน
 
 | สิ่งที่ต้องรับ | เจ้าของ | เหตุผล/จุดที่ปลดล็อก |
 |---|---|---|

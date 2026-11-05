@@ -1,5 +1,5 @@
 import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
-import type { Session } from '@supabase/supabase-js'
+import { isAuthApiError, isAuthSessionMissingError, type Session } from '@supabase/supabase-js'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { Navigate, Outlet, RouterProvider, createBrowserRouter, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { Login } from './components/Login'
@@ -7,6 +7,7 @@ import { LoadingStage } from './components/LoadingBoundary'
 import type { ClientConfig } from './config'
 import { LangCtx, loadLang } from './i18n'
 import { bootstrapSession, getMe } from './services/api/session'
+import { registerApiSessionRecovery } from './services/api/client'
 import { createBrowserSupabaseClient } from './services/auth/supabaseAuth'
 import { WorkspaceBootstrapController, type WorkspaceBootstrapState } from './services/auth/workspaceBootstrap'
 import type { CloudStartupVariant } from './services/auth/startupLoading'
@@ -51,6 +52,14 @@ function useCloudAuth(): CloudAuthValue {
 
 const LOADING_ACCOUNT = { title: 'กำลังตรวจสอบบัญชี', message: 'กำลังเตรียมพื้นที่ทำงานของคุณ…' }
 
+function isExpiredAuthSession(error: unknown): boolean {
+  return isAuthSessionMissingError(error) || (isAuthApiError(error) && (
+    error.status === 401 || error.status === 403
+    || error.code === 'refresh_token_not_found' || error.code === 'refresh_token_already_used'
+    || error.code === 'session_not_found' || error.code === 'session_expired'
+  ))
+}
+
 // routes ของ Phase 1 (ROUTES-PHASE-1.md §2.1) — หน้ารายการกับ Editor เป็นคนละ chunk; หน้ารายการไม่ import Editor
 const router = createBrowserRouter([
   {
@@ -93,20 +102,76 @@ export function CloudRoot({ config, startupVariant }: { config: ClientConfig; st
   const auth = useMemo(() => createBrowserSupabaseClient(config.supabase!), [config.supabase])
   const [session, setSession] = useState<Session | null | undefined>(undefined)
   const sessionRef = useRef<Session | null | undefined>(undefined)
-  sessionRef.current = session
+  const sessionEpoch = useRef(0)
+  const acceptSession = useCallback((next: Session | null) => {
+    if (sessionRef.current?.user.id !== next?.user.id) sessionEpoch.current += 1
+    // Auth event updates the identity before React commits, so old queues cannot pick up a new token.
+    sessionRef.current = next
+    setSession(next)
+  }, [])
   const [bootstrap, setBootstrap] = useState<WorkspaceBootstrapState>({ status: 'idle' })
   const [loginError, setLoginError] = useState<string | null>(null)
   const [loginBusy, setLoginBusy] = useState(false)
   const [explicitLogout, setExplicitLogout] = useState(false)
+  const expireSession = useCallback((accessToken: string) => {
+    if (sessionRef.current?.access_token !== accessToken) return
+    setLoginError('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่')
+    setLoginBusy(true)
+    // Clear this browser session, preserving sessions on other devices and the route return target.
+    const signOutExpired = auth.auth.signOut({ scope: 'local' })
+    acceptSession(null)
+    void signOutExpired.catch(() => undefined).finally(() => setLoginBusy(false))
+  }, [acceptSession, auth])
+
+  const refreshSession = useCallback(async () => {
+    const { data, error } = await auth.auth.refreshSession()
+    if (error && !isExpiredAuthSession(error)) throw new Error('ต่ออายุเซสชันไม่สำเร็จ กรุณาลองใหม่')
+    return data.session
+  }, [auth])
+
   const bootstrapController = useMemo(() => new WorkspaceBootstrapController<Session>({
     bootstrap: (accessToken, signal) => bootstrapSession(config.apiBaseUrl, accessToken, signal),
-    refreshSession: async () => {
-      const { data, error } = await auth.auth.refreshSession()
-      if (error) throw new Error('ต่ออายุ session ไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่')
-      return data.session
-    },
-    onSessionRefreshed: setSession,
-  }), [auth, config.apiBaseUrl])
+    refreshSession,
+    onSessionRefreshed: acceptSession,
+    onSessionExpired: (expired) => expireSession(expired.access_token),
+  }), [acceptSession, config.apiBaseUrl, expireSession, refreshSession])
+
+  useEffect(() => {
+    let active = true
+    let pending: { epoch: number; token: string; request: Promise<string | null> } | null = null
+    const dispose = registerApiSessionRecovery((url, accessToken) => {
+      // Bootstrap already performs its own single bounded refresh. Recover only current PackIt requests.
+      if (!url.startsWith(`${config.apiBaseUrl}/`) || url === `${config.apiBaseUrl}/session/bootstrap`
+        || sessionRef.current?.access_token !== accessToken) return null
+      const epoch = sessionEpoch.current
+      const current = () => active && sessionEpoch.current === epoch ? sessionRef.current : null
+      return {
+        isCurrent: (token) => current()?.access_token === token,
+        expire: (token) => { if (current()?.access_token === token) expireSession(token) },
+        refresh: () => {
+          const before = current()
+          if (!before || before.access_token !== accessToken) return Promise.resolve(before?.access_token ?? null)
+          if (pending?.epoch === epoch && pending.token === accessToken) return pending.request
+          const request = refreshSession().then((refreshed) => {
+            const latest = current()
+            if (!latest) return null
+            if (latest.access_token !== accessToken) return latest.access_token
+            if (!refreshed) {
+              expireSession(accessToken)
+              return null
+            }
+            if (refreshed.user.id !== latest.user.id) return null
+            acceptSession(refreshed)
+            return refreshed.access_token
+          }).catch(() => null)
+          pending = { epoch, token: accessToken, request }
+          void request.then(() => { if (pending?.request === request) pending = null })
+          return request
+        },
+      }
+    })
+    return () => { active = false; dispose() }
+  }, [acceptSession, config.apiBaseUrl, expireSession, refreshSession])
 
   useEffect(() => {
     let active = true
@@ -115,20 +180,20 @@ export function CloudRoot({ config, startupVariant }: { config: ClientConfig; st
       if (!active || authEventReceived) return
       if (error) {
         setLoginError('อ่าน session ไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่')
-        setSession(null)
+        acceptSession(null)
         return
       }
-      setSession(data.session)
+      acceptSession(data.session)
     })
     const { data: { subscription } } = auth.auth.onAuthStateChange((_event, nextSession) => {
       authEventReceived = true
-      if (active) setSession(nextSession)
+      if (active) acceptSession(nextSession)
     })
     return () => {
       active = false
       subscription.unsubscribe()
     }
-  }, [auth])
+  }, [acceptSession, auth])
 
   useEffect(() => {
     const unsubscribe = bootstrapController.subscribe(setBootstrap)
@@ -165,8 +230,8 @@ export function CloudRoot({ config, startupVariant }: { config: ClientConfig; st
       setBootstrap({ status: 'error', identityUserId: sessionRef.current?.user.id ?? '', message: error.message })
       return
     }
-    setSession(null)
-  }, [auth])
+    acceptSession(null)
+  }, [acceptSession, auth])
 
   useEffect(() => {
     if (session) setExplicitLogout(false)
@@ -230,7 +295,7 @@ function LoginRoute() {
     return <Navigate to={sanitizeReturnTo(requested, window.location.origin) ?? peekReturnTo()} replace />
   }
   const startLogin = () => {
-    storeReturnTo(requested)
+    storeReturnTo(requested ?? peekReturnTo())
     void auth.signIn()
   }
   if (pricingOpen) {
@@ -348,7 +413,12 @@ function SessionValue(props: {
     queryKey: ['cloud', props.appUserId, 'me'],
     queryFn: ({ signal }) => getMe(props.apiBaseUrl, getAccessToken(), signal),
     staleTime: 60_000,
+    refetchOnWindowFocus: true,
   })
+  const { refetch: refetchMembership } = meQuery
+  const refreshMembership = useCallback(() => {
+    void refetchMembership({ cancelRefetch: false })
+  }, [refetchMembership])
   const me = meQuery.data ?? null
   const [stored, setStored] = useState<string | null>(() => {
     try {
@@ -379,8 +449,9 @@ function SessionValue(props: {
     workspaceId,
     role,
     setWorkspaceId,
+    refreshMembership,
     signOut: props.signOut,
-  }), [getAccessToken, me, meQuery.isError, meQuery.isPending, props.accessToken, props.apiBaseUrl, props.appUserId, props.personalWorkspaceId, props.signOut, role, setWorkspaceId, workspaceId])
+  }), [getAccessToken, me, meQuery.isError, meQuery.isPending, props.accessToken, props.apiBaseUrl, props.appUserId, props.personalWorkspaceId, props.signOut, refreshMembership, role, setWorkspaceId, workspaceId])
   return (
     <CloudSessionContext.Provider value={value}>
       <Outlet />

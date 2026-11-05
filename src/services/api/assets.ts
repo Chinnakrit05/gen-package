@@ -96,5 +96,5 @@ export function createAssetDownloadTickets(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ assetIds }),
     signal,
-  })
+  }, { replaySafeRead: true })
 }

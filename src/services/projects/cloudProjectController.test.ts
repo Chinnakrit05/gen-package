@@ -109,6 +109,32 @@ describe('cloud project controller', () => {
     expect(noDownload.download).not.toHaveBeenCalled()
     restored.dispose()
   })
+
+  it('opens the server copy as a viewer and preserves a former editor’s pending draft without sending it', async () => {
+    const store = new MemoryProjectDraftStore()
+    const cloud = cloudProject('33333333-3333-4333-8333-333333333333', 500)
+    const clientId = 'tab-demoted'
+    const save = vi.fn(async () => { throw new Error('unexpected save') })
+    const editor = new CloudProjectController({ scope, clientId, store, transfer, save, isOnline: () => false })
+    const opened = await editor.open(cloud)
+    await editor.capture({ ...opened, qty: 1234 })
+    editor.dispose()
+    const key = projectDraftKey(scope, cloud.id, clientId)
+    const pendingDraft = await store.get(key)
+    expect(pendingDraft?.latestDraft.project.qty).toBe(1234)
+
+    const viewer = new CloudProjectController({ scope, clientId, store, transfer, save, readOnly: true })
+    await expect(viewer.open({ ...cloud, revision: 2 })).resolves.toMatchObject({ qty: 500 })
+    expect(viewer.getState()).toMatchObject({ status: 'ready', save: { state: 'clean', baseRevision: 2 } })
+    await expect(viewer.capture({ ...opened, qty: 600 })).rejects.toThrow()
+    await expect(viewer.discardDraft()).rejects.toThrow('พื้นที่งานนี้ดูได้อย่างเดียว')
+    viewer.setOnline(true)
+    await viewer.retry()
+    await viewer.flush()
+    expect(await store.get(key)).toEqual(pendingDraft)
+    expect(save).not.toHaveBeenCalled()
+    viewer.dispose()
+  })
 })
 
 function cloudProject(id: string, qty: number): CloudProject {

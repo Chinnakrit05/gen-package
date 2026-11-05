@@ -20,6 +20,7 @@ export interface CloudSessionValue {
   workspaceId: string
   role: WorkspaceRole | null
   setWorkspaceId(workspaceId: string): void
+  refreshMembership(): void
   signOut(): Promise<void>
 }
 

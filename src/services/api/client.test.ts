@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiClientError, NETWORK_ERROR, requestApi } from './client'
+import { createAssetDownloadTickets } from './assets'
+import { ApiClientError, NETWORK_ERROR, registerApiSessionRecovery, requestApi } from './client'
+import { getProjectThumbnails } from './projects'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -59,4 +61,85 @@ describe('requestApi', () => {
       code: 'INVALID_RESPONSE',
     })
   })
+
+  it('recovers one session failure and replays the same idempotent save payload', async () => {
+    const init = { method: 'PUT', body: JSON.stringify({ operationId: 'save-1', expectedRevision: 7 }) }
+    const response = vi.fn<(url: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(sessionFailure())
+      .mockResolvedValueOnce(Response.json({ data: { revision: 8 } }))
+    vi.stubGlobal('fetch', response)
+    const refresh = vi.fn(async () => 'rotated')
+    const dispose = registerApiSessionRecovery(() => ({ refresh, isCurrent: () => true, expire: vi.fn() }))
+    try {
+      await expect(requestApi('/api/v1/projects/p1', 'token', init)).resolves.toEqual({ revision: 8 })
+      expect(refresh).toHaveBeenCalledOnce()
+      expect(response.mock.calls.map(([, request]) => new Headers(request.headers).get('authorization')))
+        .toEqual(['Bearer token', 'Bearer rotated'])
+      expect(response.mock.calls.map(([, request]) => request.body)).toEqual([init.body, init.body])
+    } finally {
+      dispose()
+    }
+  })
+
+  it('never replays a mutation without an operation ID or a request whose account changed', async () => {
+    const response = vi.fn(async () => sessionFailure())
+    vi.stubGlobal('fetch', response)
+    const refresh = vi.fn(async () => 'rotated')
+    const isCurrent = vi.fn(() => true)
+    const expire = vi.fn()
+    const dispose = registerApiSessionRecovery(() => ({ refresh, isCurrent, expire }))
+    try {
+      await expect(requestApi('/api/v1/projects', 'token', { method: 'POST', body: '{}' })).rejects.toMatchObject({ status: 401 })
+      isCurrent.mockReturnValue(false)
+      await expect(requestApi('/api/v1/projects', 'token', { method: 'GET' })).rejects.toMatchObject({ status: 401 })
+      expect(response).toHaveBeenCalledTimes(2)
+      expect(expire).not.toHaveBeenCalled()
+    } finally {
+      dispose()
+    }
+  })
+
+  it.each([
+    ['thumbnail batch', () => getProjectThumbnails('/api/v1', 'token', { workspaceId: 'team', projectIds: ['p1'] }), { items: [] }],
+    ['asset download tickets', () => createAssetDownloadTickets('/api/v1', 'token', ['asset-1']), { tickets: [] }],
+  ] as const)('replays a read-only %s POST after refresh', async (_name, request, data) => {
+    const response = vi.fn<(url: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(sessionFailure())
+      .mockResolvedValueOnce(Response.json({ data }))
+    vi.stubGlobal('fetch', response)
+    const refresh = vi.fn(async () => 'rotated')
+    const dispose = registerApiSessionRecovery(() => ({ refresh, isCurrent: () => true, expire: vi.fn() }))
+    try {
+      await expect(request()).resolves.toEqual(data)
+      expect(refresh).toHaveBeenCalledOnce()
+      expect(response.mock.calls.map(([, init]) => init.method)).toEqual(['POST', 'POST'])
+      expect(response.mock.calls[1][1].body).toBe(response.mock.calls[0][1].body)
+      expect(new Headers(response.mock.calls[1][1].headers).get('authorization')).toBe('Bearer rotated')
+    } finally {
+      dispose()
+    }
+  })
+
+  it('does not recover an unrelated 401 and expires only after a second known session failure', async () => {
+    const response = vi.fn(async () => sessionFailure())
+      .mockResolvedValueOnce(new Response('Preview authorization required', { status: 401 }))
+    vi.stubGlobal('fetch', response)
+    const refresh = vi.fn(async () => 'rotated')
+    const expire = vi.fn()
+    const dispose = registerApiSessionRecovery(() => ({ refresh, isCurrent: () => true, expire }))
+    try {
+      await expect(requestApi('/api/v1/me', 'token', {})).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+      expect(refresh).not.toHaveBeenCalled()
+      await expect(requestApi('/api/v1/me', 'token', {})).rejects.toMatchObject({ code: 'SESSION_INVALID' })
+      expect(refresh).toHaveBeenCalledOnce()
+      expect(expire).toHaveBeenCalledExactlyOnceWith('rotated')
+      expect(response).toHaveBeenCalledTimes(3)
+    } finally {
+      dispose()
+    }
+  })
 })
+
+function sessionFailure(): Response {
+  return Response.json({ error: { code: 'SESSION_INVALID', message: 'Session expired' } }, { status: 401 })
+}

@@ -6,7 +6,11 @@ import { createClient } from '@supabase/supabase-js'
 import { chromium } from 'playwright-core'
 import postgres from 'postgres'
 
-const APP_ORIGIN = 'http://127.0.0.1:5174'
+const APP_PORT = Number(process.env.PACKIT_E2E_PORT ?? '5174')
+if (!Number.isInteger(APP_PORT) || APP_PORT < 1 || APP_PORT > 65535) {
+  throw new Error('PACKIT_E2E_PORT must be a valid port')
+}
+const APP_ORIGIN = `http://127.0.0.1:${APP_PORT}`
 const CHROME_PATH = process.env.PACKIT_E2E_CHROME
   ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 
@@ -73,6 +77,8 @@ try {
   const browserErrors = []
   page.on('pageerror', (error) => browserErrors.push(error.stack ?? String(error)))
   await page.goto(APP_ORIGIN, { waitUntil: 'networkidle' })
+  await page.waitForURL('**/app/projects')
+  await page.getByRole('button', { name: 'ย้ายงานเดิมขึ้น Cloud', exact: true }).click()
   try {
     await page.getByRole('dialog', { name: 'ย้ายงานเดิมขึ้น Cloud' }).waitFor({ state: 'visible', timeout: 15_000 })
   } catch (error) {
@@ -103,6 +109,14 @@ try {
   assert(rawBackedUp, 'legacy raw backup was not persisted before migration')
   await page.getByRole('dialog', { name: 'ย้ายงานเดิมขึ้น Cloud' })
     .getByRole('button', { name: 'ปิด', exact: true }).click()
+  await page.getByRole('button', { name: /งานเดิมจาก browser/ }).waitFor()
+  const [migrationCount] = await sql`select count(*)::integer as count
+    from app_private.projects where created_by = ${appUserId} and deleted_at is null`
+  assert(migrationCount.count === 1, 'gallery migration should not create a blank Editor project')
+
+  await page.getByRole('button', { name: 'สร้างงานใหม่', exact: true }).click()
+  await page.waitForURL(/\/editor\/[0-9a-f-]{36}$/)
+  const primaryEditorUrl = page.url()
 
   await page.getByRole('tab', { name: 'ตกแต่ง' }).click()
   await page.getByRole('button', { name: 'ไลบรารีลาย' }).click()
@@ -135,7 +149,7 @@ try {
 
   const secondPage = await context.newPage()
   secondPage.on('pageerror', (error) => browserErrors.push(error.stack ?? String(error)))
-  await secondPage.goto(APP_ORIGIN, { waitUntil: 'networkidle' })
+  await secondPage.goto(primaryEditorUrl, { waitUntil: 'networkidle' })
   await secondPage.getByRole('tab', { name: 'ออกแบบ' }).click()
   await page.getByRole('tab', { name: 'ออกแบบ' }).click()
   const firstWidth = page.getByLabel('กว้าง W').first()
@@ -261,12 +275,15 @@ try {
     return rows[0]?.app_user_id ?? null
   })
   assert(secondAppUserId !== appUserId, 'account switch reused the first app user')
+  await page.getByRole('heading', { name: 'ไม่พบงานนี้ หรือคุณไม่มีสิทธิ์เปิด' }).waitFor()
+  await page.getByRole('button', { name: 'กลับไปที่งานของฉัน' }).click()
+  await page.getByText('ยังไม่มีงานในพื้นที่นี้', { exact: true }).waitFor()
   assert(await page.getByText('งานเดิมจาก browser', { exact: true }).count() === 0, 'second account saw the first account project')
 
   await page.evaluate((session) => {
     localStorage.setItem('sb-127-auth-token', JSON.stringify(session))
   }, signedIn.data.session)
-  await page.reload({ waitUntil: 'networkidle' })
+  await page.goto(primaryEditorUrl, { waitUntil: 'networkidle' })
   await page.getByRole('tab', { name: 'ออกแบบ' }).click()
   await waitForInputValue(page.getByLabel('กว้าง W').first(), '92')
 
@@ -339,11 +356,11 @@ try {
   page.off('dialog', acceptDeleteDialogs)
   await page.unroute(deleteRouteUrl, deleteRoute)
   await page.reload({ waitUntil: 'networkidle' })
-  const afterDeleteGallery = await openGallery(page)
-  await waitForValue(async () => (
-    await galleryCard(afterDeleteGallery, durableName).count()
-  ) === 0 ? true : null)
-  await closeGallery(page)
+  await page.getByRole('heading', { name: 'ไม่พบงานนี้ หรือคุณไม่มีสิทธิ์เปิด' }).waitFor()
+  await page.getByRole('button', { name: 'กลับไปที่งานของฉัน' }).click()
+  await page.waitForURL('**/app/projects')
+  await page.locator('.project-card').first().waitFor()
+  assert(await page.getByRole('button', { name: new RegExp(escapeRegExp(durableName)) }).count() === 0, 'deleted project remained in the project list')
   const [deleteReplayEvidence] = await sql`
     select
       (select count(*)::integer from app_private.projects
@@ -355,15 +372,16 @@ try {
   const pendingMutations = await countPendingMutations(page, appUserId)
   assert(pendingMutations === 0, 'durable create/delete journal did not clear after replay')
 
-  // แพ็กเกจ (APP_ENV development = เปิดขาย + จำลองการชำระได้): Freemium ดาวน์โหลดไฟล์ผลิตไม่ได้ → paywall
-  // → สั่งซื้อรายแบบ → จำลองการชำระ → ได้ไฟล์จริงที่ไม่มีลายน้ำ; สิทธิ์/เครดิตตรวจจากฐานข้อมูล
+  // ซื้อรายแบบปลดล็อก PDF/DXF/ใบสเปก ส่วน SVG/AI ต้องสมัคร Pro
+  await page.goto(primaryEditorUrl, { waitUntil: 'networkidle' })
   await page.getByRole('tab', { name: 'ส่งออก' }).click()
   const downloadGroup = page.getByRole('button', { name: 'ดาวน์โหลดไฟล์' })
   if (await downloadGroup.getAttribute('aria-expanded') !== 'true') await downloadGroup.click()
   await waitForValue(async () => (await page.locator('.dieline-svg .watermark text').count()) > 0 ? true : null, 20_000)
-  assert(await page.locator('.export-item .export-lock').count() === 4, 'Freemium export buttons did not show the price badge')
-  const svgExport = page.locator('.export-item').filter({ hasText: 'dieline เวกเตอร์' })
-  await svgExport.click()
+  const designLocks = page.locator('.export-item .export-lock:not(.pro)')
+  const proLocks = page.locator('.export-item .export-lock.pro')
+  assert(await designLocks.count() === 3 && await proLocks.count() === 2, 'Freemium export badges did not match the design and Pro formats')
+  await page.locator('.export-item').filter({ hasText: 'แบบพิมพ์ 1:1' }).click()
   const paywall = page.locator('.paywall-modal')
   await paywall.waitFor({ state: 'visible', timeout: 20_000 })
   const [ordersBeforePay] = await sql`select count(*)::integer as count from app_private.orders where purchaser_user_id = ${appUserId}`
@@ -375,13 +393,11 @@ try {
     return rows[0] ?? null
   })
   assert(pendingOrder.status === 'pending' && pendingOrder.provider === 'none', 'design order was not created as pending without a provider')
-  const paidDownload = page.waitForEvent('download', { timeout: 30_000 })
+  const paidPdfDownload = page.waitForEvent('download', { timeout: 30_000 })
   await paywall.getByRole('button', { name: 'จำลองการชำระ (dev)' }).click()
-  const download = await paidDownload
-  assert(download.suggestedFilename().endsWith('.svg'), `paid download was not the SVG: ${download.suggestedFilename()}`)
-  const exportedSvg = await readFile(await download.path(), 'utf8')
-  assert(exportedSvg.includes('<svg'), 'paid download was not an SVG document')
-  assert(!exportedSvg.includes('PackIt · ตัวอย่าง') && !exportedSvg.includes('PackIt · PREVIEW'), 'exported SVG contained the preview watermark')
+  const pdf = await paidPdfDownload
+  assert(pdf.suggestedFilename().endsWith('.pdf'), 'paid design download was not the PDF')
+  assert((await readFile(await pdf.path())).subarray(0, 5).toString() === '%PDF-', 'paid design download did not contain a PDF document')
   const [billingEvidence] = await sql`
     select
       (select status from app_private.orders where id = ${pendingOrder.id}) as order_status,
@@ -394,14 +410,34 @@ try {
   assert(billingEvidence.license_source === 'purchase', 'dev fulfil did not grant the design license')
   assert(billingEvidence.credits === 10, `design purchase did not add the catalog credits (balance ${billingEvidence.credits})`)
   await waitForValue(async () => (await page.locator('.dieline-svg .watermark').count()) === 0 ? true : null, 20_000)
-  assert(await page.locator('.export-item .export-lock').count() === 0, 'price badges remained after purchase')
+  assert(await designLocks.count() === 0 && await proLocks.count() === 2, 'the design purchase did not unlock only its eligible formats')
   assert(await page.locator('.project-gallery-trigger .project-gallery-licensed').count() === 1, 'purchased tag missing on the active project')
   assert(/AI(?: credits)? 10\b|เครดิต AI 10\b/.test(await page.locator('.plan-chip').innerText()), 'plan chip did not show the bonus credits')
+
+  await page.locator('.export-item').filter({ hasText: 'dieline เวกเตอร์' }).click()
+  await page.getByRole('dialog', { name: 'สมัคร Pro รายเดือน' }).waitFor()
+  await paywall.getByRole('button', { name: /^ชำระ / }).click()
+  const proOrder = await waitForValue(async () => {
+    const rows = await sql`select id, status, provider from app_private.orders
+      where purchaser_user_id = ${appUserId} and kind = 'pro'`
+    return rows[0] ?? null
+  })
+  assert(proOrder.status === 'pending' && proOrder.provider === 'none', 'Pro order was not created as pending without a provider')
+  const paidSvgDownload = page.waitForEvent('download', { timeout: 30_000 })
+  await paywall.getByRole('button', { name: 'จำลองการชำระ (dev)' }).click()
+  const svg = await paidSvgDownload
+  assert(svg.suggestedFilename().endsWith('.svg'), 'Pro download was not the SVG')
+  const exportedSvg = await readFile(await svg.path(), 'utf8')
+  assert(exportedSvg.includes('<svg'), 'Pro download was not an SVG document')
+  assert(!exportedSvg.includes('PackIt · ตัวอย่าง') && !exportedSvg.includes('PackIt · PREVIEW'), 'exported SVG contained the preview watermark')
+  const [fulfilledPro] = await sql`select status, provider from app_private.orders where id = ${proOrder.id}`
+  assert(fulfilledPro.status === 'paid' && fulfilledPro.provider === 'dev', 'dev fulfil did not mark the Pro order paid')
+  assert(await proLocks.count() === 0, 'Pro export badges remained after subscribing')
   assert(browserErrors.length === 0, `browser page errors: ${browserErrors.join(' | ')}`)
 
   await context.close()
   process.stdout.write('Local cloud browser E2E: PASS\n')
-  process.stdout.write('Verified auth/account isolation, legacy migration, portable assets, cross-tab conflict, offline restrictions/reconnect, lost-response mutation replay, and the Freemium paywall → order → dev payment → watermark-free download flow.\n')
+  process.stdout.write('Verified auth/account isolation, legacy migration, portable assets, cross-tab conflict, offline restrictions/reconnect, lost-response mutation replay, and design PDF/Pro SVG downloads after simulated payments.\n')
 } finally {
   await browser?.close().catch(() => undefined)
   if (server) stopProcess(server)
@@ -422,17 +458,25 @@ try {
 
 function readLocalStatus() {
   const cli = path.resolve('node_modules', 'supabase', 'dist', 'supabase.js')
-  const result = spawnSync(process.execPath, [cli, 'status', '-o', 'json'], {
+  const workdir = process.env.PACKIT_E2E_SUPABASE_WORKDIR
+  const args = [cli, 'status', '-o', 'json', ...(workdir ? ['--workdir', path.resolve(workdir)] : [])]
+  const result = spawnSync(process.execPath, args, {
     cwd: process.cwd(),
     encoding: 'utf8',
   })
   if (result.status !== 0) throw new Error('Local Supabase stack is not running')
-  return JSON.parse(result.stdout)
+  const status = JSON.parse(result.stdout)
+  for (const value of [status.API_URL, status.DB_URL]) {
+    if (!['127.0.0.1', 'localhost', '[::1]'].includes(new URL(value).hostname)) {
+      throw new Error('Browser fixtures require a loopback local Supabase stack')
+    }
+  }
+  return status
 }
 
 function startVite(localStatus) {
   const vite = path.resolve('node_modules', 'vite', 'bin', 'vite.js')
-  return spawn(process.execPath, [vite, '--host', '127.0.0.1', '--port', '5174', '--strictPort'], {
+  return spawn(process.execPath, [vite, '--host', '127.0.0.1', '--port', String(APP_PORT), '--strictPort'], {
     cwd: process.cwd(),
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],

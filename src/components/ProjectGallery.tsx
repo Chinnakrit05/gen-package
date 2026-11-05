@@ -49,6 +49,7 @@ interface ProjectGalleryProps {
   activeId: string
   activeProject?: Project
   busy: boolean
+  readOnly?: boolean
   createDisabled: boolean
   deleteDisabled: boolean
   onCreate: () => void
@@ -98,7 +99,7 @@ function ProjectThumb({ project, shot, metaKind }: { project?: Project; shot?: s
 }
 
 export function ProjectGallery({
-  variant = 'classic', items, activeId, activeProject, busy, createDisabled, deleteDisabled,
+  variant = 'classic', items, activeId, activeProject, busy, readOnly = false, createDisabled, deleteDisabled,
   onCreate, onSwitch, onRename, onDelete, licensedIds, thumbUrl, onNeedThumbs,
 }: ProjectGalleryProps) {
   const t = useT()
@@ -201,10 +202,12 @@ export function ProjectGallery({
         <span className="project-gallery-count">{allItems.length} งาน</span>
         <ChevronDown className="project-gallery-chevron" size={17} aria-hidden="true" />
       </button>
-      {variant === 'studio' && <button type="button" className="v2-project-name" onClick={onRename} disabled={busy} title={t('ตั้งชื่องาน', 'Rename project')}>{current?.name ?? t('ชื่อชิ้นงาน', 'Project name')}</button>}
-      <button className="proj-new" disabled={createDisabled} onClick={onCreate} title="สร้างงานใหม่">
+      {variant === 'studio' && (readOnly
+        ? <span className="v2-project-name">{current?.name ?? t('ชื่อชิ้นงาน', 'Project name')}</span>
+        : <button type="button" className="v2-project-name" onClick={onRename} disabled={busy} title={t('ตั้งชื่องาน', 'Rename project')}>{current?.name ?? t('ชื่อชิ้นงาน', 'Project name')}</button>)}
+      {!readOnly && <button className="proj-new" disabled={createDisabled} onClick={onCreate} title="สร้างงานใหม่">
         {variant === 'studio' ? <img src={studioAssets.imgIconButton9} alt="" /> : <Plus size={17} aria-hidden="true" />}<span>{variant === 'studio' ? t('สร้างงานใหม่', 'New project') : 'สร้างงาน'}</span>
-      </button>
+      </button>}
       {open && createPortal(
         <div className="project-gallery-backdrop" onMouseDown={(event) => {
           if (event.target === event.currentTarget) close()
@@ -236,9 +239,9 @@ export function ProjectGallery({
                     onChange={(event) => { setQuery(event.target.value); setVisibleCount(PAGE_SIZE) }}
                   />
                 </label>
-                <button className="project-gallery-create" disabled={createDisabled} onClick={() => { close(); onCreate() }}>
+                {!readOnly && <button className="project-gallery-create" disabled={createDisabled} onClick={() => { close(); onCreate() }}>
                   <Plus size={16} aria-hidden="true" /> งานใหม่
-                </button>
+                </button>}
               </div>
             </div>
             <div className="project-gallery-results" aria-live="polite">
@@ -268,8 +271,8 @@ export function ProjectGallery({
                       </button>
                       <div className="project-gallery-card-actions">
                         <time dateTime={new Date(item.updatedAt).toISOString()}>{new Date(item.updatedAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</time>
-                        {active && <button title="ตั้งชื่องาน" aria-label={`ตั้งชื่องาน ${item.name}`} disabled={busy} onClick={() => { close(); onRename() }}><Pencil size={16} /></button>}
-                        <button title="ลบงาน" aria-label={`ลบงาน ${item.name}`} disabled={deleteDisabled} onClick={() => { close(); onDelete(item.id) }}><Trash2 size={16} /></button>
+                        {!readOnly && active && <button title="ตั้งชื่องาน" aria-label={`ตั้งชื่องาน ${item.name}`} disabled={busy} onClick={() => { close(); onRename() }}><Pencil size={16} /></button>}
+                        {!readOnly && <button title="ลบงาน" aria-label={`ลบงาน ${item.name}`} disabled={deleteDisabled} onClick={() => { close(); onDelete(item.id) }}><Trash2 size={16} /></button>}
                       </div>
                     </article>
                   )

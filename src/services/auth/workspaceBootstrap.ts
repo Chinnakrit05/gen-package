@@ -1,5 +1,5 @@
 import type { SessionBootstrapData } from '../../../shared/contracts/auth'
-import { ApiClientError } from '../api/client'
+import { isApiSessionError } from '../api/client'
 
 export interface WorkspaceSession {
   access_token: string
@@ -10,12 +10,14 @@ export type WorkspaceBootstrapState =
   | { status: 'idle' }
   | { status: 'loading'; identityUserId: string }
   | { status: 'ready'; identityUserId: string; data: SessionBootstrapData }
+  | { status: 'expired'; identityUserId: string }
   | { status: 'error'; identityUserId: string; message: string }
 
 interface WorkspaceBootstrapOptions<Session extends WorkspaceSession> {
   bootstrap(accessToken: string, signal: AbortSignal): Promise<SessionBootstrapData>
   refreshSession(): Promise<Session | null>
   onSessionRefreshed(session: Session): void
+  onSessionExpired?(session: Session): void
 }
 
 /** Bootstrap an account once, not every time Supabase confirms its session. */
@@ -23,6 +25,7 @@ export class WorkspaceBootstrapController<Session extends WorkspaceSession> {
   private state: WorkspaceBootstrapState = { status: 'idle' }
   private session: Session | null = null
   private pending: AbortController | null = null
+  private refreshing: AbortController | null = null
   private epoch = 0
   private readonly listeners = new Set<(state: WorkspaceBootstrapState) => void>()
 
@@ -51,7 +54,8 @@ export class WorkspaceBootstrapController<Session extends WorkspaceSession> {
     // SIGNED_IN fires again on tab focus. TOKEN_REFRESHED updates credentials,
     // but neither event should unmount an already verified account's editor.
     if (sameAccount && this.state.status === 'ready') return
-    if (sameAccount && this.pending && previous.access_token === session.access_token) return
+    if (sameAccount && this.pending
+      && (previous.access_token === session.access_token || this.refreshing === this.pending)) return
 
     this.cancel()
     const pending = new AbortController()
@@ -74,23 +78,36 @@ export class WorkspaceBootstrapController<Session extends WorkspaceSession> {
 
   private async run(session: Session, pending: AbortController, epoch: number): Promise<void> {
     const active = () => this.epoch === epoch && !pending.signal.aborted
+    let attempted = session
     try {
       let data: SessionBootstrapData
       try {
         data = await this.options.bootstrap(session.access_token, pending.signal)
       } catch (error) {
         if (!active()) return
-        if (!(error instanceof ApiClientError) || error.status !== 401) throw error
+        if (!isApiSessionError(error)) throw error
 
-        const refreshed = await this.options.refreshSession()
+        this.refreshing = pending
+        let refreshed: Session | null
+        try {
+          refreshed = await this.options.refreshSession()
+        } finally {
+          if (this.refreshing === pending) this.refreshing = null
+        }
         if (!active()) return
-        if (!refreshed) throw new Error('ต่ออายุ session ไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่')
+        if (!refreshed) {
+          this.pending = null
+          this.publish({ status: 'expired', identityUserId: session.user.id })
+          this.options.onSessionExpired?.(session)
+          return
+        }
         if (refreshed.user.id !== session.user.id) {
           this.acceptSession(refreshed)
           this.options.onSessionRefreshed(refreshed)
           return
         }
         this.session = refreshed
+        attempted = refreshed
         this.options.onSessionRefreshed(refreshed)
         // One bounded retry. Later Auth events with this token are deduplicated.
         data = await this.options.bootstrap(refreshed.access_token, pending.signal)
@@ -101,6 +118,11 @@ export class WorkspaceBootstrapController<Session extends WorkspaceSession> {
     } catch (error) {
       if (!active()) return
       this.pending = null
+      if (isApiSessionError(error)) {
+        this.publish({ status: 'expired', identityUserId: session.user.id })
+        this.options.onSessionExpired?.(attempted)
+        return
+      }
       this.publish({
         status: 'error',
         identityUserId: session.user.id,

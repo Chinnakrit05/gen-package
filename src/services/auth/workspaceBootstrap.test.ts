@@ -24,8 +24,9 @@ function fixture() {
     .mockResolvedValue(data())
   const refreshSession = vi.fn<() => Promise<WorkspaceSession | null>>().mockResolvedValue(session('a', 'fresh'))
   const onSessionRefreshed = vi.fn<(value: WorkspaceSession) => void>()
-  const controller = new WorkspaceBootstrapController({ bootstrap, refreshSession, onSessionRefreshed })
-  return { controller, bootstrap, refreshSession, onSessionRefreshed }
+  const onSessionExpired = vi.fn<(value: WorkspaceSession) => void>()
+  const controller = new WorkspaceBootstrapController({ bootstrap, refreshSession, onSessionRefreshed, onSessionExpired })
+  return { controller, bootstrap, refreshSession, onSessionRefreshed, onSessionExpired }
 }
 
 async function settle() {
@@ -149,13 +150,21 @@ describe('workspace bootstrap lifecycle', () => {
   })
 
   it('stops after one refresh retry instead of looping on an invalid session', async () => {
-    const { controller, bootstrap, refreshSession } = fixture()
+    const { controller, bootstrap, refreshSession, onSessionExpired } = fixture()
     bootstrap.mockRejectedValue(unauthorized())
+    refreshSession.mockImplementationOnce(async () => {
+      const refreshed = session('a', 'fresh')
+      // Supabase emits TOKEN_REFRESHED before refreshSession resolves.
+      controller.acceptSession(refreshed)
+      return refreshed
+    })
     controller.acceptSession(session())
     await settle()
     expect(bootstrap).toHaveBeenCalledTimes(2)
     expect(refreshSession).toHaveBeenCalledTimes(1)
-    expect(controller.getState()).toMatchObject({ status: 'error', identityUserId: 'a' })
+    expect(controller.getState()).toMatchObject({ status: 'expired', identityUserId: 'a' })
+    expect(onSessionExpired).toHaveBeenCalledOnce()
+    expect(onSessionExpired).toHaveBeenCalledWith(session('a', 'fresh'))
   })
 
   it('does not refresh credentials for ordinary server/network failures', async () => {

@@ -17,6 +17,7 @@ interface NewIntentState {
 
 export function EditorRoute() {
   const session = useCloudSession()
+  const readOnly = session.role !== 'owner' && session.role !== 'editor'
   const navigate = useNavigate()
   const location = useLocation()
   const { projectId } = useParams()
@@ -26,10 +27,10 @@ export function EditorRoute() {
 
   // /editor/new ที่ยังไม่มี intent ของ history entry นี้ → สร้าง id แล้วเขียนลง state (refresh/back ได้ intent เดิม)
   useEffect(() => {
-    if (isNew && !intentId) {
+    if (isNew && !intentId && !readOnly && session.meStatus !== 'loading') {
       navigate('/editor/new', { replace: true, state: { packitNewIntent: crypto.randomUUID() } })
     }
-  }, [intentId, isNew, navigate])
+  }, [intentId, isNew, navigate, readOnly, session.meStatus])
 
   const routeId = isNew ? (intentId ? `new:${intentId}` : null) : projectId ?? null
   // currentRef = งานที่ workspace ที่ mount อยู่เป็นตัวแทน (เปลี่ยนตาม follow โดยไม่ remount)
@@ -47,6 +48,7 @@ export function EditorRoute() {
   const allowPathRef = useRef<string | null>(null)
   const leaveRef = useRef<(() => Promise<LeaveOutcome>) | null>(null)
   const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    if (readOnly) return false
     if (currentLocation.pathname === nextLocation.pathname) return false
     if (allowPathRef.current === nextLocation.pathname) return false
     return true
@@ -98,10 +100,11 @@ export function EditorRoute() {
 
   if (!isNew && !projectId) return <Navigate to="/app/projects" replace />
   if (projectId && !UUID.test(projectId)) return <EditorMessage title="ไม่พบงานนี้" message="ลิงก์ของงานไม่ถูกต้อง" />
-  if (!routeId || session.meStatus === 'loading') return <LoadingStage title="กำลังเปิดงาน" message="กำลังโหลดเครื่องมือออกแบบ…" />
-  if (isNew && session.role === 'viewer') {
+  if (session.meStatus === 'loading') return <LoadingStage title="กำลังเปิดงาน" message="กำลังโหลดเครื่องมือออกแบบ…" />
+  if (isNew && readOnly) {
     return <EditorMessage title="สร้างงานไม่ได้" message="บทบาทดูอย่างเดียวในพื้นที่งานนี้สร้างงานใหม่ไม่ได้" />
   }
+  if (!routeId) return <LoadingStage title="กำลังเปิดงาน" message="กำลังโหลดเครื่องมือออกแบบ…" />
 
   const target = isNew
     ? { kind: 'new' as const, intentId: intentId! }
@@ -110,18 +113,21 @@ export function EditorRoute() {
   return (
     <>
       <CloudWorkspace
-        key={`${session.workspaceId}:${keyRef.current}`}
+        key={`${session.workspaceId}:${readOnly}:${keyRef.current}`}
         apiBaseUrl={session.apiBaseUrl}
         accessToken={session.accessToken}
         getAccessToken={session.getAccessToken}
         appUserId={session.appUserId}
         workspaceId={session.workspaceId}
-        readOnly={session.role === 'viewer'}
+        readOnly={readOnly}
+        isPersonalWorkspace={session.workspaceId === session.personalWorkspaceId}
+        onProjectAccessRejected={session.refreshMembership}
         target={target}
         onLogout={session.signOut}
         onOpened={(id) => follow(id, false)}
         onAdopted={(id) => follow(id, true)}
         onExit={exit}
+        onBackToProjects={() => navigate('/app/projects')}
         onWorkspaceMismatch={onWorkspaceMismatch}
         registerLeave={registerLeave}
       />

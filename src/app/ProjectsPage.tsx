@@ -1,21 +1,24 @@
 // /app/projects — รายการงานแบบแบ่งหน้า (1-A3) ห้าม import Editor/core engine/three/exporter
 // ใช้ summary + ภาพย่อตาม contract b-phase0-r1: หน้าละ 24, cursor opaque, batch ภาพย่อ ≤ 24 จับคู่ด้วย projectId
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import type { ProjectSummary, ThumbnailKind } from '../../shared/contracts/projects'
 import { PackItMark } from '../components/Login'
 import { thumbNeedsFetch } from '../core/thumbnail'
+import { hasLegacyMigrationSource } from '../features/projects/legacyStorage'
 import { getProjectThumbnails, listProjects } from '../services/api/projects'
 import { IndexedDbCreateIntentStore, type CreateIntentRecord } from '../services/drafts/createIntentStore'
-import { IndexedDbProjectDraftStore } from '../services/drafts/projectDraftStore'
-import { IndexedDbThumbStore, ThumbnailCache, base64ToBlob } from '../services/thumbnails/thumbnailCache'
+import { getCloudDraftClientId, IndexedDbProjectDraftStore } from '../services/drafts/projectDraftStore'
+import { IndexedDbThumbStore, ThumbnailCache, base64ToBlob, cloudThumbnailScope } from '../services/thumbnails/thumbnailCache'
 import { useCloudSession } from './cloudSession'
 import { takeFlash } from './flash'
 import { PROJECT_PAGE_SIZE, mergeProjectPages } from './projectList'
 import './projects.css'
 
 const THUMB_BATCH = 24
+const LegacyMigrationFlow = lazy(() => import('../features/projects/LegacyMigrationFlow')
+  .then((module) => ({ default: module.LegacyMigrationFlow })))
 
 export function ProjectsPage() {
   const session = useCloudSession()
@@ -24,6 +27,9 @@ export function ProjectsPage() {
   const { appUserId, workspaceId } = session
   const [notice] = useState(() => takeFlash())
   const [online, setOnline] = useState(() => navigator.onLine)
+  const [migrationOpen, setMigrationOpen] = useState(false)
+  const [hasLegacySource] = useState(hasLegacyMigrationSource)
+  const migrationScope = useMemo(() => ({ appUserId, workspaceId }), [appUserId, workspaceId])
   useEffect(() => {
     const update = () => setOnline(navigator.onLine)
     window.addEventListener('online', update)
@@ -54,17 +60,20 @@ export function ProjectsPage() {
     void queryClient.resetQueries({ queryKey })
   }, [queryClient, queryKey])
 
-  const thumbs = useThumbnails(workspaceId, items, session)
-  const pending = useLocalPending(session.appUserId, workspaceId)
+  const canCreate = session.role === 'owner' || session.role === 'editor'
+  const canMigrate = hasLegacySource && workspaceId === session.personalWorkspaceId && canCreate
+  const thumbs = useThumbnails(appUserId, workspaceId, items, session)
+  const pending = useLocalPending(appUserId, workspaceId, canCreate)
+  const offlineDrafts = online ? [] : pending.localDrafts.filter((draft) => !items.some((item) => item.id === draft.id))
 
   const changeWorkspace = (next: string) => {
     if (next === workspaceId) return
+    setMigrationOpen(false)
     // คำขอของ workspace เดิมที่ค้างอยู่ถูกยกเลิก; ผลที่มาช้าลง key เดิม ไม่ปนกับรายการใหม่
     void queryClient.cancelQueries({ queryKey: ['cloud', appUserId, workspaceId] })
     session.setWorkspaceId(next)
   }
 
-  const canCreate = session.role === 'owner' || session.role === 'editor'
   const teamWorkspaces = session.me?.workspaces ?? []
 
   return (
@@ -89,6 +98,11 @@ export function ProjectsPage() {
         )}
         <div className="projects-actions">
           <button className="projects-refresh" onClick={refresh} disabled={!online || projects.isFetching}>รีเฟรช</button>
+          {canMigrate && (
+            <button className="projects-refresh" disabled={!online} onClick={() => setMigrationOpen(true)}>
+              ย้ายงานเดิมขึ้น Cloud
+            </button>
+          )}
           <button
             className="primary projects-new"
             disabled={!canCreate}
@@ -128,8 +142,30 @@ export function ProjectsPage() {
         </section>
       )}
 
+      {offlineDrafts.length > 0 && (
+        <section className="projects-section">
+          <h2>งานที่เก็บร่างไว้ในแท็บนี้</h2>
+          <div className="projects-grid">
+            {offlineDrafts.map((draft) => (
+              <button key={draft.id} className="project-card is-pending" onClick={() => navigate(`/editor/${draft.id}`)}>
+                <div className="project-thumb"><KindIcon /></div>
+                <div className="project-meta">
+                  <span className="project-name">{draft.name}</span>
+                  <span className="project-sub">บันทึกไว้ในเครื่อง รอส่งขึ้น Cloud</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="projects-section">
-        {projects.isPending ? (
+        {!online && !projects.data ? (
+          <div className="projects-empty" role="status">
+            <p>ออฟไลน์ — ยังโหลดรายการงานไม่ได้</p>
+            <p>เชื่อมต่ออินเทอร์เน็ตเพื่อโหลดรายการของพื้นที่นี้</p>
+          </div>
+        ) : projects.isPending ? (
           <div className="projects-grid" aria-busy="true">
             {Array.from({ length: 8 }, (_, index) => <div className="project-card is-skeleton" key={index} />)}
           </div>
@@ -172,20 +208,32 @@ export function ProjectsPage() {
           </>
         )}
       </section>
+      {canMigrate && migrationOpen && (
+        <Suspense fallback={<div className="projects-banner" role="status">กำลังเปิดเครื่องมือย้ายงาน…</div>}>
+          <LegacyMigrationFlow
+            scope={migrationScope}
+            apiBaseUrl={session.apiBaseUrl}
+            getAccessToken={session.getAccessToken}
+            onMigrated={refresh}
+            onClose={() => setMigrationOpen(false)}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }
 
 // ภาพย่อ: อ่านแคช IndexedDB ก่อน แล้วขอ server เฉพาะ version ไม่ตรง ทีละ ≤ 24 id ไม่ซ้ำ — ไม่ mount 3D
 function useThumbnails(
+  appUserId: string,
   workspaceId: string,
   items: readonly ProjectSummary[],
   session: { apiBaseUrl: string; getAccessToken(): string },
 ) {
-  const cache = useMemo(() => new ThumbnailCache(workspaceId, new IndexedDbThumbStore()), [workspaceId])
+  const cache = useMemo(() => new ThumbnailCache(cloudThumbnailScope(appUserId, workspaceId), new IndexedDbThumbStore()), [appUserId, workspaceId])
   useEffect(() => () => cache.dispose(), [cache])
   useSyncExternalStore(cache.subscribe, cache.version)
-  const requested = useRef(new Map<string, string>())
+  const requested = useMemo(() => new Map<string, string>(), [cache])
   useEffect(() => {
     const controller = new AbortController()
     const withMeta = items.filter((item) => item.thumbnail)
@@ -194,18 +242,18 @@ function useThumbnails(
       if (controller.signal.aborted) return
       const due = withMeta.filter((item) => {
         const version = item.thumbnail!.version
-        if (requested.current.get(item.id) === version) return false
+        if (requested.get(item.id) === version) return false
         return thumbNeedsFetch(version, cache.record(item.id))
       })
       for (let index = 0; index < due.length; index += THUMB_BATCH) {
         const batch = due.slice(index, index + THUMB_BATCH)
-        batch.forEach((item) => requested.current.set(item.id, item.thumbnail!.version))
         try {
           const result = await getProjectThumbnails(session.apiBaseUrl, session.getAccessToken(), {
             workspaceId,
             projectIds: batch.map((item) => item.id),
           }, controller.signal)
           if (controller.signal.aborted) return
+          batch.forEach((item) => requested.set(item.id, item.thumbnail!.version))
           const meta = new Map(batch.map((item) => [item.id, item.thumbnail!]))
           for (const image of result.items) {
             const info = meta.get(image.projectId)
@@ -220,23 +268,28 @@ function useThumbnails(
           }
         } catch {
           // ไม่มีภาพ = ไอคอนตามชนิดงาน
-          batch.forEach((item) => requested.current.delete(item.id))
           return
         }
       }
     })()
     return () => controller.abort()
-  }, [cache, items, session, workspaceId])
+  }, [cache, items, requested, session, workspaceId])
   return cache
 }
 
 // งานที่ยังรอส่งในเครื่องนี้ (draft ค้าง + งานใหม่ที่ยังไม่มี server ID) ของบัญชี/workspace นี้เท่านั้น — ไม่ส่งเบื้องหลัง
-function useLocalPending(appUserId: string, workspaceId: string) {
-  const [state, setState] = useState<{ projectIds: Set<string>; intents: CreateIntentRecord[] }>({
-    projectIds: new Set(),
-    intents: [],
-  })
+const EMPTY_PENDING = {
+  projectIds: new Set<string>(),
+  localDrafts: [] as Array<{ id: string; name: string }>,
+  intents: [] as CreateIntentRecord[],
+}
+
+function useLocalPending(appUserId: string, workspaceId: string, canWrite: boolean) {
+  const [clientId] = useState(getCloudDraftClientId)
+  const scopeKey = `${appUserId}:${workspaceId}`
+  const [state, setState] = useState<(typeof EMPTY_PENDING & { scopeKey: string }) | null>(null)
   useEffect(() => {
+    if (!canWrite) return
     let active = true
     const scope = { appUserId, workspaceId }
     void Promise.all([
@@ -244,16 +297,18 @@ function useLocalPending(appUserId: string, workspaceId: string) {
       new IndexedDbCreateIntentStore().list(scope).catch(() => []),
     ]).then(([drafts, intents]) => {
       if (!active) return
+      const dirty = drafts.filter((draft) => draft.inFlight !== null || draft.savedGeneration < draft.latestDraft.generation)
       setState({
-        projectIds: new Set(drafts
-          .filter((draft) => draft.inFlight !== null || draft.savedGeneration < draft.latestDraft.generation)
-          .map((draft) => draft.projectId)),
+        scopeKey,
+        projectIds: new Set(dirty.map((draft) => draft.projectId)),
+        localDrafts: dirty.filter((draft) => draft.clientId === clientId)
+          .map((draft) => ({ id: draft.projectId, name: draft.latestDraft.project.name })),
         intents: intents.filter((intent) => intent.status !== 'created'),
       })
     })
     return () => { active = false }
-  }, [appUserId, workspaceId])
-  return state
+  }, [appUserId, canWrite, clientId, scopeKey, workspaceId])
+  return canWrite && state?.scopeKey === scopeKey ? state : EMPTY_PENDING
 }
 
 function formatUpdated(value: string): string {
