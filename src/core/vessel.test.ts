@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TUBE_OVAL_ASPECT, TUBE_OVAL_CAP_FRAC, BODY_MIN, CAP_STYLES, capShape, LABEL_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
+import { TUBE_OVAL_ASPECT, TUBE_OVAL_CAP_FRAC, BODY_MIN, CAP_STYLES, capShape, LABEL_MIN, LABEL_OVERLAP, NECK_MIN, SHOULDER_MIN, defaultShoulderH, resolveShoulderH, shoulderMax, TUBE_CAP_FRAC, TUBE_SEAL, TUBE_FRONT_U, defaultNeckH, generateVessel, isVessel, resolveNeckH, tubeSection } from './vessel'
 import { ellipsePerimeter } from './pouch'
 import { MATERIALS, getMaterial } from './materials'
 import { computeGuides } from './guides'
@@ -120,6 +120,17 @@ describe('vessel: รูปแบบฉลาก (label style)', () => {
 describe('vessel: หลอดครีม (tube-laminate)', () => {
   const tbox = { W: 40, D: 16, H: 150, handle: false }
   const v = generateVessel(tbox, getMaterial('tube-laminate'))
+
+  it('รอยต่ออยู่ด้านข้าง: กึ่งกลางด้านหน้าอยู่ ¼ รอบจากรอยต่อ พร้อมรอยบาก ▼ ขอบบน/ล่าง และป้ายด้านหน้า', () => {
+    const d = v.label
+    expect(d.frontX).toBeCloseTo(v.circ * TUBE_FRONT_U, 9)
+    expect(TUBE_FRONT_U).toBe(0.25)
+    const marks = d.segments.filter((s) => s.kind === 'crease' && s.d.includes(` ${d.frontX} `))
+    expect(marks).toHaveLength(2)
+    expect(d.dims.some((m) => m.label.startsWith('ด้านหน้า') && m.a.x === 0 && Math.abs(m.b.x - v.circ / 2) < 1e-9)).toBe(true)
+    // ขวดทั่วไปยังด้านหน้ากลางแผง (รอยต่อกลางหลัง) — ไม่มี frontX
+    expect(generateVessel({ W: 65, D: 28, H: 205, handle: false }, getMaterial('pet-bottle')).label.frontX).toBeUndefined()
+  })
 
   it('profile = ฝา/คอกลม (ทรงหมุน) เริ่มแกนกลางก้น จบเปิดที่ยอดฝา (rcap, capTop)', () => {
     expect(v.profile[0].x).toBe(0)

@@ -622,12 +622,13 @@ export const FRONT_GAP_MM = 1
 
 // ฉลากพันรอบ (มีแผง glue): หน้า = กึ่งกลางเส้นรอบวง (UV เริ่มกลางหลัง); ฉลากแผ่นหน้า (ไม่มี glue) = กึ่งกลางแผ่นเอง
 // diameter = ⌀ตัวภาชนะ/ท่อ (W ของงาน) — คืน null ถ้าไม่มีแผง label (ไม่ใช่ภาชนะ)
-export function labelFrontZone(panels: PanelBox[], diameter: number): ArtFrontZone | null {
+// frontX = กึ่งกลางด้านหน้าบนแผ่นคลี่ถ้าไม่ใช่กลางแผง (Dieline.frontX — หลอดครีมรอยต่อข้าง)
+export function labelFrontZone(panels: PanelBox[], diameter: number, frontX?: number): ArtFrontZone | null {
   const label = panels.find((p) => p.id === 'label')
   if (!label || !(diameter > 0)) return null
   const circ = Math.PI * diameter
   const wrap = panels.some((p) => p.id === 'glue')
-  const center = (wrap ? Math.min(label.w, circ) : label.w) / 2
+  const center = frontX !== undefined ? frontX - label.x0 : (wrap ? Math.min(label.w, circ) : label.w) / 2
   const w = Math.min(label.w, circ * LABEL_FRONT_FRACTION)
   return { panel: label.id, x0: center - w / 2, x1: center + w / 2 }
 }

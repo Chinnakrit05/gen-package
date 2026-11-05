@@ -136,6 +136,8 @@ export const isVessel = (m: Material) => !m.foldable && m.form !== 'pouch'
 
 export const LABEL_OVERLAP = 8
 // ฝา flip-top ของหลอดครีมกว้างเกือบเท่าท่อ (⌀ ~0.8–0.92 W); D (⌀ปาก) ปรับได้ในช่วงนี้
+// หลอดครีม: กึ่งกลางด้านหน้าอยู่ ¼ รอบจากรอยต่อข้าง (สัดส่วนความยาวผิว) — ใช้ร่วม dieline และ UV ของ 3D
+export const TUBE_FRONT_U = 0.25
 export const tubeCapR = (R: number, rn: number) => Math.min(Math.max(rn, R * 0.8), R * 0.92) // ระยะทับซ้อนปลายฉลากสำหรับทากาว (มม.)
 
 // หลอดครีม: สัดส่วนความสูง (×H) ของฝา/คอกลมที่ก้น (ลำตัว loft เริ่มเหนือจุดนี้)
@@ -562,11 +564,24 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
     ...(wrap ? [crease(`M ${circ} 0 L ${circ} ${h}`)] : []), // แนวทับซ้อน/ทากาว
   ]
 
+  // หลอดครีม: รอยต่อ (ทับกาว) อยู่ด้านข้างซ้ายของหลอดเมื่อมองจากหน้า — แผ่นคลี่เริ่มที่รอยต่อ → ด้านหน้า (กึ่งกลาง ¼ รอบ)
+  // → ข้างขวา → หลัง → กลับรอยต่อ; หมายกึ่งกลางหน้าด้วยรอยบาก ▼ ที่ขอบบน/ล่าง (เส้นไกด์ ไม่ใช่เส้นตัด)
+  const tubeFront = mat.id === 'tube-laminate' && wrap ? circ * TUBE_FRONT_U : undefined
+  if (tubeFront !== undefined) {
+    const m = Math.min(3, h * 0.04)
+    segments.push(
+      crease(`M ${tubeFront - m} 0 L ${tubeFront} ${m * 1.4} L ${tubeFront + m} 0`),
+      crease(`M ${tubeFront - m} ${h} L ${tubeFront} ${h - m * 1.4} L ${tubeFront + m} ${h}`),
+    )
+  }
   const dims: DimMark[] = wrap
     ? [
         { a: P(0, h + 12), b: P(circ, h + 12), label: `รอบวง ${fmt(circ)}` },
         { a: P(circ, h + 12), b: P(w, h + 12), label: `กาว ${fmt(LABEL_OVERLAP)}` },
         { a: P(w + 10, 0), b: P(w + 10, h), label: `สูงฉลาก ${fmt(h)}` },
+        ...(tubeFront !== undefined
+          ? [{ a: P(0, -10), b: P(circ / 2, -10), label: 'ด้านหน้า (▼ กึ่งกลาง)' }]
+          : []),
       ]
     : [
         { a: P(0, h + 12), b: P(w, h + 12), label: `ยาวฉลาก ${fmt(w)}` },
@@ -575,7 +590,7 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
 
   const vessel: Vessel = {
     profile: pts,
-    label: { width: w, height: h, segments, panels, dims },
+    label: { width: w, height: h, segments, panels, dims, ...(tubeFront !== undefined ? { frontX: tubeFront } : {}) },
     labelR,
     labelY0,
     labelY1,

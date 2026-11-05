@@ -846,7 +846,9 @@ function showFace(dieline: Dieline) {
 // วางกึ่งกลางหน้าโชว์ ให้กล่องขนาด w×h อยู่กลางแผง
 function centerOnFace(dieline: Dieline, w: number, h: number): Vec2 {
   const b = bbox(showFace(dieline).outline)
-  return { x: (b.x0 + b.x1) / 2 - w / 2, y: (b.y0 + b.y1) / 2 - h / 2 }
+  // ด้านหน้าไม่อยู่กลางแผง (หลอดรอยต่อข้าง) → วางที่กึ่งกลางด้านหน้าจริง
+  const cx = dieline.frontX ?? (b.x0 + b.x1) / 2
+  return { x: cx - w / 2, y: (b.y0 + b.y1) / 2 - h / 2 }
 }
 
 let seq = 0

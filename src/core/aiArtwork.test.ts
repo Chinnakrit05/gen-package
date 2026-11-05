@@ -253,6 +253,10 @@ describe('labelFrontZone + compile front zone (ภาชนะทรงกระ
     expect(frontLabel.x1 - frontLabel.x0).toBeCloseTo(C / 3, 6)
     expect(labelFrontZone([{ ...panels[0], x1: 20, w: 20 }], 30)).toEqual({ panel: 'label', x0: 0, x1: 20 })
     expect(labelFrontZone([{ id: 'front', x0: 0, y0: 0, x1: 80, y1: 120, w: 80, h: 120, role: 'x', print: true }], 30)).toBeNull()
+    // หลอดครีมรอยต่อข้าง: ด้านหน้าอยู่ที่ frontX (¼ รอบ) ไม่ใช่กลางแผง
+    const tube = labelFrontZone(panels, 30, C / 4)!
+    expect((tube.x0 + tube.x1) / 2).toBeCloseTo(C / 4, 6)
+    expect(tube.x1 - tube.x0).toBeCloseTo(C / 3, 6)
   })
 
   it('หัวข้อหน้าภาชนะย่อเป็นบรรทัดเดียวให้อยู่ในด้านหน้า; ข้อความยาวตัดบรรทัด; ข้อความข้าง/แถบสีไม่ถูกจำกัด; รูปกว้างย่อตาม', () => {

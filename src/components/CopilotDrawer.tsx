@@ -230,7 +230,7 @@ export function CopilotDrawer({
       ...(logo ? [{ data: logo.ref.base64, mediaType: 'image/jpeg', role: 'logo' as const, assetId: 'logo', note: logo.ref.name }] : []),
     ]
     // ภาชนะทรงกระบอก: ช่วงด้านหน้าที่อ่านได้ตรง — บอก AI และใช้จำกัดความกว้างชื่อแบรนด์/โลโก้ตอน compile
-    const front = artwork.kind === 'vessel' ? labelFrontZone(panels, artwork.box.W) : null
+    const front = artwork.kind === 'vessel' ? labelFrontZone(panels, artwork.box.W, artwork.dieline.frontX) : null
     const input: ArtworkRequestInput = {
       prompt,
       kind: artwork.kind,
