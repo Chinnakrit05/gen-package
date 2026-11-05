@@ -524,6 +524,11 @@ export const DielineSVG = memo(function DielineSVG({
   const [showGrid, setShowGrid] = useState(false)
   const [rot, setRot] = useState(0) // หมุนมุมมอง blueprint (0/90/180/270) — เฉพาะการแสดงผล
   const [showFaces, setShowFaces] = useState(false) // ป้ายกำกับด้าน (หน้า/ข้าง/หลัง) จาง ๆ
+  // ป้ายที่มากับแผ่นคลี่เอง (captions เช่น รอยต่อ/กลางหน้า/สันพับ ของหลอด, หน้า/หลัง ของนามบัตร) โชว์เป็นค่าเริ่มต้น
+  // แผ่นที่มี captions ปุ่ม 🏷 จะเปิด-ปิดชุดนี้แทนป้ายกลางแผง (ไม่ให้ หน้า/หลัง ซ้ำสองชุด)
+  const [showCaptions, setShowCaptions] = useState(true)
+  const hasCaptions = !!dieline.captions?.length
+  const labelsOn = hasCaptions ? showCaptions : showFaces
   const [cropId, setCropId] = useState<string | null>(null) // รูปที่กำลังอยู่โหมดครอป (ลากเลื่อนในกรอบ)
   const cropZoomRef = useRef(1) // ซูมครอปปัจจุบัน (กัน stale ตอนสกอลล์/พินช์รัว ๆ ก่อน re-render)
   // เส้นไกด์ที่ผู้ใช้ลากวางเอง — axis 'x' = เส้นตั้ง (คงค่า x), 'y' = เส้นนอน (คงค่า y)
@@ -1280,10 +1285,10 @@ export const DielineSVG = memo(function DielineSVG({
         <button
           type="button"
           className="bp-tool"
-          title={showFaces ? t('ซ่อนป้ายด้าน','Hide face labels') : t('แสดงป้ายด้าน (หน้า/ข้าง/หลัง)','Show face labels (front/side/back)')}
+          title={labelsOn ? t('ซ่อนป้ายด้าน','Hide face labels') : t('แสดงป้ายด้าน (หน้า/ข้าง/หลัง)','Show face labels (front/side/back)')}
           aria-label={t('เปิด-ปิดป้ายกำกับด้าน','Toggle face labels')}
-          aria-pressed={showFaces}
-          onClick={() => setShowFaces((s) => !s)}
+          aria-pressed={labelsOn}
+          onClick={() => (hasCaptions ? setShowCaptions((s) => !s) : setShowFaces((s) => !s))}
         >
           🏷
         </button>
@@ -1849,8 +1854,8 @@ export const DielineSVG = memo(function DielineSVG({
           ))}
         </g>
       )}
-      {/* ป้ายกำกับหน้า (เช่น หน้า/หลัง ของนามบัตร) — โชว์เสมอในพรีวิว ไม่เข้าไฟล์ผลิต */}
-      {dieline.captions?.map((c, i) => (
+      {/* ป้ายกำกับหน้า (เช่น หน้า/หลัง ของนามบัตร, เส้นกลางหลอด) — พรีวิวเท่านั้น ปิดได้ด้วยปุ่ม 🏷 ไม่เข้าไฟล์ผลิต */}
+      {showCaptions && dieline.captions?.map((c, i) => (
         <text
           key={`cap${i}`}
           x={c.x}
@@ -1868,6 +1873,7 @@ export const DielineSVG = memo(function DielineSVG({
 
       {/* ป้ายกำกับด้าน (หน้า/ข้าง/หลัง/ฝา ...) จาง ๆ เปิด-ปิดได้ — ช่วยผู้ใช้อ่านแผ่นคลี่ ไม่เข้าไฟล์ผลิต */}
       {showFaces &&
+        !hasCaptions &&
         dieline.panels.map((p) => {
           const label = faceLabel(p.id)
           if (!label) return null
