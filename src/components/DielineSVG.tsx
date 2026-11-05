@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark, PaperSurface } from '../core/types'
 import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imageMaskSVG, imageDrawAttrs, imageCoverRect, maskId, panelsBBox, fillImageRect, shapeVertices, isPolyShape, dashArray, textInnerSVG, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type ImageEl, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
@@ -30,7 +30,14 @@ const GUIDE_COLOR = '#0aa5c9'
 let guideSeq = 0
 const SNAP_PX = 6 // ระยะดูดบนจอ (พิกเซล) — แปลงเป็น มม. ตามซูมปัจจุบัน จะได้รู้สึกคงที่ทุกขนาดแผ่น
 const MIN_SIZE = 3 // ขนาดต่ำสุดตอนย่อ (มม.) — App คุมต่ำสุดตามชนิดอีกชั้น
-const HANDLE_HS = 2.6 // ครึ่งขนาดมือจับมุม (มม.)
+// มือจับของชิ้นที่เลือก กำหนดเป็นพิกเซลบนจอ (แปลงเป็น มม. ตามซูมด้วย hpx) — ไม่โตตามการซูมเข้า
+const HANDLE_PX = 4 // ครึ่งขนาดมือจับมุม
+const HANDLE_HIT_PX = 8 // ครึ่งขนาดพื้นที่กดของมือจับมุม (ใหญ่กว่าที่เห็น ให้จับง่าย)
+const ROT_GAP_PX = 22 // ระยะก้านหมุนเหนือกรอบ
+const ROT_R_PX = 5
+const DEL_GAP_PX = 13 // กากบาทลบเยื้องออกนอกมุมขวาบน
+const DEL_R_PX = 6
+const ANCHOR_PX = 3.5 // จุด anchor/แขน bezier ของเส้น
 
 // ชื่อด้านของแต่ละแผง (สำหรับป้ายกำกับจาง ๆ) — คืน null เมื่อไม่รู้จัก/ไม่ควรกำกับ
 function faceLabel(id: string): { th: string; en: string } | null {
@@ -471,6 +478,21 @@ export const DielineSVG = memo(function DielineSVG({
   const t = useT()
   const pad = showDims || showRuler ? 26 : 12
   const svgRef = useRef<SVGSVGElement>(null)
+  // ขนาด SVG บนจอ (px) — ใช้แปลงพิกเซลเป็น มม. ของ viewBox ปัจจุบันให้มือจับคงขนาดทุกระดับซูม
+  const [svgPx, setSvgPx] = useState({ w: 0, h: 0 })
+  useLayoutEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const measure = () => {
+      const r = el.getBoundingClientRect()
+      setSvgPx((cur) => (cur.w === r.width && cur.h === r.height ? cur : { w: r.width, h: r.height }))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const grab = useRef<Grab | null>(null)
   const snapT = useRef<SnapTargets | null>(null)
   const [active, setActive] = useState(false)
@@ -1061,6 +1083,9 @@ export const DielineSVG = memo(function DielineSVG({
   const baseH = (rotSwap ? dieline.width : dieline.height) + pad * 2
   const vw = baseW / zoom
   const vh = baseH / zoom
+  // พิกเซลบนจอ → มม. ของ viewBox (preserveAspectRatio meet = ด้านที่แคบกว่าเป็นตัวกำหนด)
+  const pxPerMm = svgPx.w > 0 && svgPx.h > 0 ? Math.min(svgPx.w / vw, svgPx.h / vh) : 0
+  const hpx = (n: number) => (pxPerMm > 0 ? n / pxPerMm : n * 0.6)
   const viewCx = center?.x ?? dieline.width / 2
   const viewCy = center?.y ?? dieline.height / 2
   const clampCenter = (x: number, y: number) => ({
@@ -1404,7 +1429,7 @@ export const DielineSVG = memo(function DielineSVG({
         const c = elCenter(d)
         const sel = selectedIds.includes(d.id)
         const single = sel && selectedIds.length === 1 // ก้านหมุน/กากบาทลบ โชว์เฉพาะตอนเลือกชิ้นเดียว
-        const handleY = d.y - Math.max(8, h * 0.25) // ก้านหมุนเหนือกล่อง
+        const handleY = d.y - hpx(ROT_GAP_PX) // ก้านหมุนเหนือกล่อง (ระยะคงที่บนจอ)
         return (
           <g
             key={d.id}
@@ -1481,7 +1506,8 @@ export const DielineSVG = memo(function DielineSVG({
                       strokeWidth={1}
                       vectorEffect="non-scaling-stroke"
                     />
-                    <circle cx={c.x} cy={handleY} r={3} fill={HANDLE_FILL} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                    <circle cx={c.x} cy={handleY} r={hpx(HANDLE_HIT_PX)} fill="transparent" />
+                    <circle cx={c.x} cy={handleY} r={hpx(ROT_R_PX)} fill={HANDLE_FILL} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
                   </g>
                 )}
                 {/* มือจับ 4 มุม — ลากย่อ-ขยาย (มุมตรงข้ามตรึง) */}
@@ -1494,20 +1520,20 @@ export const DielineSVG = memo(function DielineSVG({
                       ['se', d.x + w, d.y + h],
                     ] as const
                   ).map(([corner, hx, hy]) => (
-                    <rect
-                      key={corner}
-                      className="resize-handle"
-                      x={hx - HANDLE_HS}
-                      y={hy - HANDLE_HS}
-                      width={HANDLE_HS * 2}
-                      height={HANDLE_HS * 2}
-                      fill={HANDLE_FILL}
-                      stroke={SEL_COLOR}
-                      strokeWidth={1}
-                      vectorEffect="non-scaling-stroke"
-                      style={{ cursor: corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize' }}
-                      onPointerDown={(e) => startResize(e, d, corner)}
-                    />
+                    <g key={corner} style={{ cursor: corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize' }} onPointerDown={(e) => startResize(e, d, corner)}>
+                      <rect x={hx - hpx(HANDLE_HIT_PX)} y={hy - hpx(HANDLE_HIT_PX)} width={hpx(HANDLE_HIT_PX * 2)} height={hpx(HANDLE_HIT_PX * 2)} fill="transparent" />
+                      <rect
+                        className="resize-handle"
+                        x={hx - hpx(HANDLE_PX)}
+                        y={hy - hpx(HANDLE_PX)}
+                        width={hpx(HANDLE_PX * 2)}
+                        height={hpx(HANDLE_PX * 2)}
+                        fill={HANDLE_FILL}
+                        stroke={SEL_COLOR}
+                        strokeWidth={1}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    </g>
                   ))}
                 {editable && single && onRemove && !d.locked && (
                   // กากบาทลบ — เยื้องออกนอกมุมขวาบนเล็กน้อยให้พ้นมือจับปรับขนาด
@@ -1520,13 +1546,16 @@ export const DielineSVG = memo(function DielineSVG({
                     }}
                   >
                     {(() => {
-                      const dx = d.x + w + HANDLE_HS * 2.2
-                      const dy = d.y - HANDLE_HS * 2.2
+                      const dx = d.x + w + hpx(DEL_GAP_PX)
+                      const dy = d.y - hpx(DEL_GAP_PX)
+                      const r = hpx(DEL_R_PX)
+                      const k = r * 0.5
                       return (
                         <>
-                          <circle cx={dx} cy={dy} r={3.4} fill={HANDLE_FILL} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-                          <line x1={dx - 1.7} y1={dy - 1.7} x2={dx + 1.7} y2={dy + 1.7} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-                          <line x1={dx - 1.7} y1={dy + 1.7} x2={dx + 1.7} y2={dy - 1.7} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                          <circle cx={dx} cy={dy} r={hpx(HANDLE_HIT_PX + 1)} fill="transparent" />
+                          <circle cx={dx} cy={dy} r={r} fill={HANDLE_FILL} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                          <line x1={dx - k} y1={dy - k} x2={dx + k} y2={dy + k} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                          <line x1={dx - k} y1={dy + k} x2={dx + k} y2={dy - k} stroke={DEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
                         </>
                       )
                     })()}
@@ -1541,16 +1570,16 @@ export const DielineSVG = memo(function DielineSVG({
                         {a.ox != null && a.oy != null && (
                           <>
                             <line x1={ap.x} y1={ap.y} x2={nAbsLocal(d, a.ox, a.oy).x} y2={nAbsLocal(d, a.ox, a.oy).y} stroke={SEL_COLOR} strokeWidth={0.8} vectorEffect="non-scaling-stroke" opacity={0.6} />
-                            <circle cx={nAbsLocal(d, a.ox, a.oy).x} cy={nAbsLocal(d, a.ox, a.oy).y} r={2.2} fill={HANDLE_FILL} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startHandleDrag(e, d, i, 'o')} />
+                            <circle cx={nAbsLocal(d, a.ox, a.oy).x} cy={nAbsLocal(d, a.ox, a.oy).y} r={hpx(ANCHOR_PX)} fill={HANDLE_FILL} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startHandleDrag(e, d, i, 'o')} />
                           </>
                         )}
                         {a.ix != null && a.iy != null && (
                           <>
                             <line x1={ap.x} y1={ap.y} x2={nAbsLocal(d, a.ix, a.iy).x} y2={nAbsLocal(d, a.ix, a.iy).y} stroke={SEL_COLOR} strokeWidth={0.8} vectorEffect="non-scaling-stroke" opacity={0.6} />
-                            <circle cx={nAbsLocal(d, a.ix, a.iy).x} cy={nAbsLocal(d, a.ix, a.iy).y} r={2.2} fill={HANDLE_FILL} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startHandleDrag(e, d, i, 'i')} />
+                            <circle cx={nAbsLocal(d, a.ix, a.iy).x} cy={nAbsLocal(d, a.ix, a.iy).y} r={hpx(ANCHOR_PX)} fill={HANDLE_FILL} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startHandleDrag(e, d, i, 'i')} />
                           </>
                         )}
-                        <rect x={ap.x - 2.4} y={ap.y - 2.4} width={4.8} height={4.8} fill={i === 0 ? HANDLE_FILL : SEL_COLOR} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startAnchorDrag(e, d, i)} />
+                        <rect x={ap.x - hpx(ANCHOR_PX)} y={ap.y - hpx(ANCHOR_PX)} width={hpx(ANCHOR_PX * 2)} height={hpx(ANCHOR_PX * 2)} fill={i === 0 ? HANDLE_FILL : SEL_COLOR} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={(e) => startAnchorDrag(e, d, i)} />
                       </g>
                     )
                   })}
