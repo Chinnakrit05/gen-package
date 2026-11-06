@@ -531,6 +531,9 @@ export const DielineSVG = memo(function DielineSVG({
   const [showCaptions, setShowCaptions] = useState(true)
   const hasCaptions = !!dieline.captions?.length
   const labelsOn = hasCaptions ? showCaptions : showFaces
+  // ซ่อนป้ายของแผ่นที่มี captions = ดูลายโล่ง ๆ: ซ่อนเส้นประ (รอยพับ/เขตห้ามพิมพ์ + เส้นอ้างอิงประ) และเส้นบอกขนาดไปด้วย
+  // (เฉพาะพรีวิว; แผ่นกล่องที่ไม่มี captions ไม่กระทบ — ปุ่มนั้นคุมป้ายกลางแผงอย่างเดียว)
+  const sheetMarks = !hasCaptions || showCaptions
   const [cropId, setCropId] = useState<string | null>(null) // รูปที่กำลังอยู่โหมดครอป (ลากเลื่อนในกรอบ)
   const cropZoomRef = useRef(1) // ซูมครอปปัจจุบัน (กัน stale ตอนสกอลล์/พินช์รัว ๆ ก่อน re-render)
   // เส้นไกด์ที่ผู้ใช้ลากวางเอง — axis 'x' = เส้นตั้ง (คงค่า x), 'y' = เส้นนอน (คงค่า y)
@@ -1436,7 +1439,7 @@ export const DielineSVG = memo(function DielineSVG({
           ))}
         </g>
       )}
-      {dieline.segments.map((s, i) => (
+      {dieline.segments.map((s, i) => (sheetMarks || s.kind !== 'crease') && (
         <path
           key={i}
           d={s.d}
@@ -1847,6 +1850,7 @@ export const DielineSVG = memo(function DielineSVG({
       )}
 
       {showDims &&
+        sheetMarks &&
         dieline.dims.map((d, i) => (
           <Dim key={i} d={d} lengthUnit={lengthUnit} fs={dimTextSize(dieline.width, dieline.height)} />
         ))}
@@ -1854,7 +1858,7 @@ export const DielineSVG = memo(function DielineSVG({
       {/* ภาพอ้างอิง (เช่น ฝา/ไหล่หลอด ลอนซีล) — พรีวิวเท่านั้น ไม่รับคลิก ไม่เข้าไฟล์ผลิต */}
       {dieline.refs && (
         <g className="bp-refs" pointerEvents="none" fill="none" stroke="#9aa6a8" strokeWidth={0.8} vectorEffect="non-scaling-stroke">
-          {dieline.refs.map((r, i) => (
+          {dieline.refs.map((r, i) => (sheetMarks || !r.dash) && (
             <path key={`ref${i}`} d={r.d} stroke={r.stroke} strokeDasharray={r.dash ? '4 3' : undefined} vectorEffect="non-scaling-stroke" />
           ))}
         </g>
