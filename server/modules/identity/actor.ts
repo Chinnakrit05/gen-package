@@ -4,4 +4,5 @@ export interface Actor {
   identitySubject: string
   requestId: string
   hasVerifiedMfa?: boolean
+  verifiedEmail?: string
 }

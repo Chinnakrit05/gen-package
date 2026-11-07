@@ -4,7 +4,7 @@ import type { MeData, SessionBootstrapData } from '../../../shared/contracts/aut
 import type { ServerConfig } from '../../config'
 import { HttpError } from '../../http/errors'
 import type { Actor } from '../../modules/identity/actor'
-import type { SessionService } from '../../modules/identity/sessionService'
+import type { ActorAuthenticationOptions, SessionService } from '../../modules/identity/sessionService'
 
 interface BootstrapRow {
   app_user_id: string
@@ -99,7 +99,7 @@ export class SupabaseSessionService implements SessionService {
     }
   }
 
-  async authenticate(accessToken: string, requestId: string, options?: { verifyMfa: boolean }): Promise<Actor> {
+  async authenticate(accessToken: string, requestId: string, options?: ActorAuthenticationOptions): Promise<Actor> {
     const user = await this.verifiedUser(accessToken)
     const { data, error } = await this.client.rpc('resolve_app_actor', {
       p_identity_issuer: this.issuer,
@@ -126,12 +126,16 @@ export class SupabaseSessionService implements SessionService {
       }
       hasVerifiedMfa = verified.claims.aal === 'aal2'
     }
+    const verifiedEmail = options?.includeVerifiedEmail && user.email_confirmed_at
+      ? normalizedEmail(user)?.toLowerCase()
+      : undefined
     return {
       userId: row.app_user_id,
       identityIssuer: this.issuer,
       identitySubject: user.id,
       requestId,
       ...(options?.verifyMfa ? { hasVerifiedMfa } : {}),
+      ...(verifiedEmail ? { verifiedEmail } : {}),
     }
   }
 

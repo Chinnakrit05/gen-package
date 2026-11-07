@@ -144,6 +144,29 @@
   gap: 8px;
 }
 
+.marketplace-list .marketplace-team-row {
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-block: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.marketplace-list .marketplace-team-row:last-child {
+  border-bottom: 0;
+}
+
+.marketplace-team-actions {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 .marketplace-badge,
 .marketplace-capabilities li,
 .marketplace-notice {

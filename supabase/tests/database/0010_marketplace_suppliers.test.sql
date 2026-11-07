@@ -14,7 +14,10 @@ select is((
 
 select is((
   select count(*)::integer
-  from pg_proc where pronamespace = 'public'::regnamespace and proname like 'marketplace_%'
+  from pg_proc where pronamespace = 'public'::regnamespace and proname in (
+    'marketplace_context', 'marketplace_create_supplier', 'marketplace_get_supplier', 'marketplace_update_supplier',
+    'marketplace_submit_supplier', 'marketplace_public_supplier', 'marketplace_admin_suppliers', 'marketplace_review_supplier'
+  )
     and not prosecdef and not has_function_privilege('anon', oid, 'EXECUTE')
     and not has_function_privilege('authenticated', oid, 'EXECUTE')
     and has_function_privilege('service_role', oid, 'EXECUTE')

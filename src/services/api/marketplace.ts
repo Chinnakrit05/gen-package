@@ -1,5 +1,7 @@
 import type {
+  CreatedSupplierInvite,
   MarketplaceContextData,
+  MarketplaceRole,
   SupplierAccess,
   SupplierAdminPage,
   SupplierProfile,
@@ -7,6 +9,8 @@ import type {
   SupplierPublicProfile,
   SupplierReviewAction,
   SupplierStatus,
+  SupplierTeam,
+  SupplierTeamMember,
 } from '../../../shared/contracts/marketplace'
 import { requestApi, requestPublicApi } from './client'
 
@@ -37,6 +41,32 @@ export function updateSupplier(base: string, token: string, id: string, input: S
 
 export function submitSupplier(base: string, token: string, id: string, expectedRevision: number): Promise<SupplierAccess> {
   return requestApi(`${base}/suppliers/${encodeURIComponent(id)}/submit`, token, json('POST', { expectedRevision }))
+}
+
+const supplierTeamUrl = (base: string, id: string) => `${base}/suppliers/${encodeURIComponent(id)}/team`
+
+export function getSupplierTeam(base: string, token: string, id: string, signal?: AbortSignal): Promise<SupplierTeam> {
+  return requestApi(supplierTeamUrl(base, id), token, { method: 'GET', signal })
+}
+
+export function inviteSupplierMember(base: string, token: string, id: string, input: { email: string; role: MarketplaceRole }): Promise<CreatedSupplierInvite> {
+  return requestApi(`${supplierTeamUrl(base, id)}/invitations`, token, json('POST', input))
+}
+
+export function updateSupplierMember(base: string, token: string, id: string, userId: string, role: MarketplaceRole): Promise<SupplierTeamMember> {
+  return requestApi(`${supplierTeamUrl(base, id)}/members/${encodeURIComponent(userId)}`, token, json('PUT', { role }))
+}
+
+export function removeSupplierMember(base: string, token: string, id: string, userId: string): Promise<{ userId: string }> {
+  return requestApi(`${supplierTeamUrl(base, id)}/members/${encodeURIComponent(userId)}`, token, { method: 'DELETE' })
+}
+
+export function revokeSupplierInvite(base: string, token: string, id: string, inviteId: string): Promise<{ id: string }> {
+  return requestApi(`${supplierTeamUrl(base, id)}/invitations/${encodeURIComponent(inviteId)}`, token, { method: 'DELETE' })
+}
+
+export function acceptSupplierInvite(base: string, token: string, invitationToken: string): Promise<SupplierAccess> {
+  return requestApi(`${base}/suppliers/invitations/accept`, token, json('POST', { token: invitationToken }))
 }
 
 export function getPublicSupplier(base: string, slug: string, signal?: AbortSignal): Promise<SupplierPublicProfile> {

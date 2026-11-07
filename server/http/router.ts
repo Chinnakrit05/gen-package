@@ -413,9 +413,9 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
         const result = await serveMarketplaceRoute(marketplaceRoute, {
           method: req.method,
           query: requestUrl(req).searchParams,
-          authenticate: (verifyMfa) => {
+          authenticate: (options) => {
             if (!sessionService) throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Supabase')
-            return sessionService.authenticate(bearerToken(req), requestId, { verifyMfa })
+            return sessionService.authenticate(bearerToken(req), requestId, options)
           },
           readBody: () => {
             requireJsonContentType(req)

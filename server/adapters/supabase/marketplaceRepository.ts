@@ -1,17 +1,22 @@
 import { createClient, type PostgrestError, type SupabaseClient } from '@supabase/supabase-js'
 import type { ZodType } from 'zod'
 import type { ApiErrorCode } from '../../../shared/contracts/errors'
-import type { SupplierProfileInput, SupplierReviewAction, SupplierStatus } from '../../../shared/contracts/marketplace'
+import type { MarketplaceRole, SupplierProfileInput, SupplierReviewAction, SupplierStatus } from '../../../shared/contracts/marketplace'
 import type { ServerConfig } from '../../config'
 import { HttpError } from '../../http/errors'
 import type { Actor } from '../../modules/identity/actor'
 import type { MarketplaceRepository } from '../../modules/marketplace/marketplaceRepository'
 import {
   marketplaceContext,
+  removedSupplierMember,
+  revokedSupplierInvite,
   supplierAccess,
   supplierAdminPage,
+  supplierInvite,
   supplierProfile,
   supplierPublicProfile,
+  supplierTeam,
+  supplierTeamMember,
 } from '../../modules/marketplace/validation'
 
 const databaseErrors = new Map<string, [number, ApiErrorCode, string]>([
@@ -19,6 +24,11 @@ const databaseErrors = new Map<string, [number, ApiErrorCode, string]>([
   ['MARKETPLACE_NOT_FOUND', [404, 'NOT_FOUND', 'ไม่พบกิจการนี้']],
   ['MARKETPLACE_FORBIDDEN', [403, 'MARKETPLACE_FORBIDDEN', 'คุณไม่มีสิทธิ์ทำรายการนี้']],
   ['MARKETPLACE_CONFLICT', [409, 'MARKETPLACE_CONFLICT', 'ชื่อ URL ถูกใช้แล้วหรือสถานะกิจการเปลี่ยนไป กรุณาตรวจข้อมูลล่าสุด']],
+  ['MARKETPLACE_INVITE_INVALID', [404, 'NOT_FOUND', 'ใช้คำเชิญนี้ไม่ได้ กรุณาตรวจบัญชีที่ใช้หรือขอลิงก์ใหม่']],
+  ['MARKETPLACE_INVITE_EXISTS', [409, 'MARKETPLACE_CONFLICT', 'อีเมลนี้มีคำเชิญที่ยังใช้ได้อยู่แล้ว']],
+  ['MARKETPLACE_MEMBER_EXISTS', [409, 'MARKETPLACE_CONFLICT', 'บัญชีนี้เป็นสมาชิกของผู้รับผลิตแล้ว']],
+  ['MARKETPLACE_MANAGER_REQUIRED', [409, 'MARKETPLACE_CONFLICT', 'ต้องมีผู้จัดการที่ใช้งานได้อย่างน้อยหนึ่งคน']],
+  ['MARKETPLACE_OWNER_PROTECTED', [409, 'MARKETPLACE_CONFLICT', 'เปลี่ยนสิทธิ์หรือนำเจ้าของพื้นที่ออกจากทีมไม่ได้']],
   ['IDEMPOTENCY_KEY_REUSED', [409, 'IDEMPOTENCY_KEY_REUSED', 'คำขอนี้ถูกใช้กับข้อมูลอื่นแล้ว']],
   ['VALIDATION_ERROR', [422, 'VALIDATION_ERROR', 'ข้อมูลกิจการไม่ถูกต้องหรือยังไม่ครบ']],
 ])
@@ -85,6 +95,56 @@ export class SupabaseMarketplaceRepository implements MarketplaceRepository {
       p_supplier_id: supplierId,
       p_expected_revision: expectedRevision,
     }, supplierAccess)
+  }
+
+  team(actor: Actor, supplierId: string) {
+    return this.rpc('marketplace_supplier_team', {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+    }, supplierTeam)
+  }
+
+  invite(actor: Actor, supplierId: string, email: string, role: MarketplaceRole, tokenHash: string) {
+    return this.rpc('marketplace_create_supplier_invite', {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_email: email,
+      p_role: role,
+      p_token_hash: tokenHash,
+    }, supplierInvite)
+  }
+
+  acceptInvite(actor: Actor, verifiedEmail: string, tokenHash: string) {
+    return this.rpc('marketplace_accept_supplier_invite', {
+      p_actor_user_id: actor.userId,
+      p_verified_email: verifiedEmail,
+      p_token_hash: tokenHash,
+    }, supplierAccess)
+  }
+
+  changeMember(actor: Actor, supplierId: string, userId: string, role: MarketplaceRole) {
+    return this.rpc('marketplace_change_supplier_member', {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_member_user_id: userId,
+      p_role: role,
+    }, supplierTeamMember)
+  }
+
+  removeMember(actor: Actor, supplierId: string, userId: string) {
+    return this.rpc('marketplace_remove_supplier_member', {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_member_user_id: userId,
+    }, removedSupplierMember)
+  }
+
+  revokeInvite(actor: Actor, supplierId: string, inviteId: string) {
+    return this.rpc('marketplace_revoke_supplier_invite', {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_invite_id: inviteId,
+    }, revokedSupplierInvite)
   }
 
   publicProfile(slug: string) {

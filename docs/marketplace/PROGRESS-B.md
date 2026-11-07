@@ -22,7 +22,13 @@ API ผู้รับผลิตเปิดเมื่อ runtime ตั้�
 
 - pgTAP ผ่าน 426 ข้อจาก 10 ไฟล์ รวม 67 ข้อใหม่ ใช้ Supabase local ที่แยกพอร์ต API 55421 และ DB 55422 คำสั่ง `supabase test db --local --workdir tmp/marketplace-phase2-local` ชุด integration เดิมผ่าน 25 เทสต์จาก 8 ไฟล์บน instance เดียวกัน
 - `node scripts/marketplace/suppliers-local.mjs tmp/marketplace-phase2-local` ผ่านบน Auth, HTTP และ PostgreSQL จริงในเครื่อง ตรวจสมัครพร้อมกันและส่งซ้ำ การถอนสมาชิก การกันสิทธิ์เจ้าหน้าที่ที่ยังไม่ยืนยัน TOTP การปฏิเสธ revision เก่า การเผยแพร่และพักโปรไฟล์ และ audit/outbox ใช้บัญชีสังเคราะห์และเปิด TOTP เฉพาะ config ของ instance ทดสอบ
-- ส่วนที่เหลือของเฟส 2 คือการเชิญและจัดการสมาชิกในหน้าเว็บ เอกสารประกอบการตรวจที่เก็บแยกจากไฟล์ Editor และการส่งแจ้งเตือนจาก outbox
+- ส่วนที่เหลือของเฟส 2 คือเอกสารประกอบการตรวจที่เก็บแยกจากไฟล์ Editor และการส่งแจ้งเตือนจาก outbox
+
+บน branch `codex/marketplace-supplier-team` เพิ่ม migration `20261107001100_supplier_team_invites.sql` และ API จัดการทีมผู้รับผลิต ผู้จัดการสร้างลิงก์อายุ 7 วันแล้วส่งเอง ฐานเก็บแฮชของโทเคน ผู้รับต้องใช้บัญชีที่ Supabase Auth ยืนยันอีเมลตรงกับคำเชิญ และคำเชิญใช้เพิ่มสมาชิกได้ครั้งเดียว สมาชิกใหม่ได้รับบทบาท Marketplace `manager`, `staff` หรือ `viewer` ส่วนการเข้าถึง Editor ยังใช้สมาชิก workspace ชุดเดิม ฐานรักษาเจ้าของพื้นที่และตรวจว่าการลดสิทธิ์หรือถอดผู้จัดการยังเหลือผู้จัดการที่ใช้งานได้
+
+ลง migration 011 และตรวจบน Supabase แยกในเครื่องด้วย `supabase test db --local --workdir tmp/marketplace-supplier-team-local` ผ่าน pgTAP 484 ข้อจาก 11 ไฟล์ รวม 58 ข้อใหม่ ครอบคลุม RLS, สิทธิ์ `service_role`, การแยกทีมและ Editor, สิทธิ์เจ้าของพื้นที่และผู้จัดการคนสุดท้าย, การปฏิเสธคำเชิญค้างหลังผู้สร้างเสียสิทธิ์ และการปฏิเสธคำเชิญที่ออกก่อนถอดสมาชิก ชุด integration เดิมผ่าน 25 เทสต์ การทดสอบ HTTP กับ Auth และ PostgREST จริงผ่านการเทียบอีเมลยืนยันกับอีเมลโปรไฟล์ที่ค้าง การตอบรับพร้อมกัน และการถอดสิทธิ์จนลิงก์เดิมใช้ไม่ได้ ผลอยู่ใน `tmp/marketplace-supplier-team-local/http.log` ชุดแอป `npm test -- --maxWorkers=4` ผ่าน 1,513 รายการ
+
+วันที่ 8 พฤศจิกายน 2026 ลง migration `20261107001100` บน Supabase staging ก่อน deploy โค้ดทีม Dry-run แสดง migration นี้เพียงไฟล์เดียว และประวัติหลังลงยืนยัน 011 แล้ว ตรวจ RLS ของสองตาราง สิทธิ์ RPC ทั้งหกที่จำกัดไว้กับ `service_role` และ trigger บันทึกการถอดสมาชิก API health เดิมยังตอบ `200`
 
 ## เฟส 1
 

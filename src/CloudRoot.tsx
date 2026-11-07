@@ -21,6 +21,7 @@ import {
   type CloudSessionValue,
 } from './app/cloudSession'
 import { clearReturnTo, peekReturnTo, sanitizeReturnTo, storeReturnTo } from './app/returnTo'
+import { SUPPLIER_INVITE_PATH, isSupplierInvitePath, readSupplierInviteFragment, storeSupplierInvite } from './app/supplierInviteRoute'
 
 // หน้าแพ็กเกจของผู้เยี่ยมชมโหลดเมื่อกดเท่านั้น
 const PricingPage = lazy(() => import('./components/PricingPage').then((m) => ({ default: m.PricingPage })))
@@ -30,6 +31,8 @@ const ProjectsPage = lazy(() => import('./app/ProjectsPage').then((m) => ({ defa
 const EditorRoute = lazy(() => import('./app/EditorRoute').then((m) => ({ default: m.EditorRoute })))
 const SupplierOnboarding = lazy(() => import('./features/suppliers/SupplierOnboarding').then((m) => ({ default: m.SupplierOnboarding })))
 const SupplierProfilePage = lazy(() => import('./features/suppliers/SupplierProfilePage').then((m) => ({ default: m.SupplierProfilePage })))
+const SupplierTeamPage = lazy(() => import('./features/suppliers/SupplierTeamPage').then((m) => ({ default: m.SupplierTeamPage })))
+const SupplierInviteAccept = lazy(() => import('./features/suppliers/SupplierInviteAccept').then((m) => ({ default: m.SupplierInviteAccept })))
 const PublicSupplierPage = lazy(() => import('./features/suppliers/PublicSupplierPage').then((m) => ({ default: m.PublicSupplierPage })))
 const AdminSupplierReview = lazy(() => import('./features/admin/AdminSupplierReview').then((m) => ({ default: m.AdminSupplierReview })))
 
@@ -105,6 +108,14 @@ const router = createBrowserRouter([
             {
               path: '/factory/:supplierId/profile',
               element: <Suspense fallback={<MarketplaceLoading />}><SupplierProfilePage /></Suspense>,
+            },
+            {
+              path: '/factory/:supplierId/team',
+              element: <Suspense fallback={<MarketplaceLoading />}><SupplierTeamPage /></Suspense>,
+            },
+            {
+              path: SUPPLIER_INVITE_PATH,
+              element: <Suspense fallback={<MarketplaceLoading />}><SupplierInviteAccept /></Suspense>,
             },
             { path: '/admin/suppliers', element: <AdminSupplierRoute /> },
           ] : []),
@@ -256,6 +267,7 @@ export function CloudRoot({ config, startupVariant }: { config: ClientConfig; st
   const signOut = useCallback(async () => {
     setExplicitLogout(true)
     clearReturnTo()
+    storeSupplierInvite(null)
     const { error } = await auth.auth.signOut()
     if (error) {
       setExplicitLogout(false)
@@ -381,6 +393,16 @@ function BootstrapGate() {
 function RequireSession() {
   const auth = useCloudAuth()
   const location = useLocation()
+  const invitationRoute = marketplaceSuppliersEnabled && isSupplierInvitePath(location.pathname)
+  useEffect(() => {
+    if (marketplaceSuppliersEnabled && !invitationRoute) storeSupplierInvite(null)
+  }, [invitationRoute])
+  if (invitationRoute && (location.search || location.hash)) {
+    return <CaptureSupplierInvite
+      token={location.search ? null : readSupplierInviteFragment(location.hash)}
+      signedIn={Boolean(auth.session)}
+    />
+  }
   if (!auth.session) {
     if (auth.explicitLogout) return <Navigate to="/login" replace />
     const returnTo = sanitizeReturnTo(`${location.pathname}${location.search}`, window.location.origin)
@@ -401,6 +423,17 @@ function RequireSession() {
       signOut={auth.signOut}
     />
   )
+}
+
+function CaptureSupplierInvite({ token, signedIn }: { token: string | null; signedIn: boolean }) {
+  const navigate = useNavigate()
+  useEffect(() => {
+    // Keep the invite separate from OAuth returnTo and replace the original history entry.
+    storeSupplierInvite(token)
+    const path = signedIn ? SUPPLIER_INVITE_PATH : `/login?returnTo=${encodeURIComponent(SUPPLIER_INVITE_PATH)}`
+    void navigate(path, { replace: true })
+  }, [navigate, signedIn, token])
+  return <MarketplaceLoading />
 }
 
 function SessionProvider(props: {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_RETURN_TO, returnToOrDefault, sanitizeReturnTo } from './returnTo'
+import { readSupplierInviteFragment, supplierInviteLink } from './supplierInviteRoute'
 
 const ORIGIN = 'https://packit.example'
 
@@ -46,9 +47,26 @@ describe('sanitizeReturnTo', () => {
     expect(sanitizeReturnTo('/factory/onboarding', ORIGIN)).toBe('/factory/onboarding')
     expect(sanitizeReturnTo('/factory/0b2f2c8e-1111-4222-8333-444455556666/profile', ORIGIN))
       .toBe('/factory/0b2f2c8e-1111-4222-8333-444455556666/profile')
+    expect(sanitizeReturnTo('/factory/0b2f2c8e-1111-4222-8333-444455556666/team', ORIGIN))
+      .toBe('/factory/0b2f2c8e-1111-4222-8333-444455556666/team')
     expect(sanitizeReturnTo('/admin/suppliers?status=pending', ORIGIN)).toBe('/admin/suppliers?status=pending')
     for (const path of ['/factory/invalid/profile', '/factory/%2Fexample/profile', '/factory/../login', '/admin/other', '/suppliers/first-shop']) {
       expect(sanitizeReturnTo(path, ORIGIN)).toBeNull()
+    }
+  })
+
+  it('allows only a token-free invitation return path', () => {
+    const path = '/factory/invitations/accept'
+    const token = 'A-_'.repeat(14) + 'X'
+    const link = new URL(supplierInviteLink(ORIGIN, token))
+    expect(link.pathname).toBe(path)
+    expect(link.search).toBe('')
+    expect(readSupplierInviteFragment(link.hash)).toBe(token)
+    expect(sanitizeReturnTo(path + '/', ORIGIN)).toBe(path)
+    expect(sanitizeReturnTo(path + link.hash, ORIGIN)).toBeNull()
+    expect(sanitizeReturnTo(path + '?token=' + token, ORIGIN)).toBeNull()
+    for (const hash of ['', '#token=short', '#token=' + token + '&token=' + token, '#token=' + token.slice(1) + '+']) {
+      expect(readSupplierInviteFragment(hash)).toBeNull()
     }
   })
 })

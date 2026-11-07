@@ -48,3 +48,25 @@ export const supplierAccess = z.object({ profile: supplierProfile, role: z.enum(
 export const marketplaceContext = z.object({ suppliers: z.array(supplierAccess), isSupplierReviewer: z.boolean() }).strict()
 export const supplierPublicProfile = z.object({ ...publicFields, id: z.uuid() }).strict()
 export const supplierAdminPage = z.object({ items: z.array(supplierProfile).max(24), nextCursor: z.uuid().nullable() }).strict()
+
+const inviteEmail = z.string().trim().toLowerCase().max(254).pipe(z.email())
+const marketplaceRole = z.enum(MARKETPLACE_ROLES)
+export const createSupplierInviteInput = z.object({ email: inviteEmail, role: marketplaceRole }).strict()
+export const acceptSupplierInviteInput = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict()
+export const changeSupplierMemberInput = z.object({ role: marketplaceRole }).strict()
+export const supplierTeamMember = z.object({
+  userId: z.uuid(),
+  displayName: z.string().min(1),
+  role: marketplaceRole,
+  isWorkspaceOwner: z.boolean(),
+}).strict()
+export const supplierInvite = z.object({
+  id: z.uuid(),
+  email: inviteEmail,
+  role: marketplaceRole,
+  createdAt: z.iso.datetime({ offset: true }),
+  expiresAt: z.iso.datetime({ offset: true }),
+}).strict()
+export const supplierTeam = z.object({ members: z.array(supplierTeamMember), invites: z.array(supplierInvite) }).strict()
+export const removedSupplierMember = z.object({ userId: z.uuid() }).strict()
+export const revokedSupplierInvite = z.object({ id: z.uuid() }).strict()

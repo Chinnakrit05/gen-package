@@ -54805,6 +54805,27 @@ var supplierAccess = external_exports.object({ profile: supplierProfile, role: e
 var marketplaceContext = external_exports.object({ suppliers: external_exports.array(supplierAccess), isSupplierReviewer: external_exports.boolean() }).strict();
 var supplierPublicProfile = external_exports.object({ ...publicFields, id: external_exports.uuid() }).strict();
 var supplierAdminPage = external_exports.object({ items: external_exports.array(supplierProfile).max(24), nextCursor: external_exports.uuid().nullable() }).strict();
+var inviteEmail = external_exports.string().trim().toLowerCase().max(254).pipe(external_exports.email());
+var marketplaceRole = external_exports.enum(MARKETPLACE_ROLES);
+var createSupplierInviteInput = external_exports.object({ email: inviteEmail, role: marketplaceRole }).strict();
+var acceptSupplierInviteInput = external_exports.object({ token: external_exports.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict();
+var changeSupplierMemberInput = external_exports.object({ role: marketplaceRole }).strict();
+var supplierTeamMember = external_exports.object({
+  userId: external_exports.uuid(),
+  displayName: external_exports.string().min(1),
+  role: marketplaceRole,
+  isWorkspaceOwner: external_exports.boolean()
+}).strict();
+var supplierInvite = external_exports.object({
+  id: external_exports.uuid(),
+  email: inviteEmail,
+  role: marketplaceRole,
+  createdAt: external_exports.iso.datetime({ offset: true }),
+  expiresAt: external_exports.iso.datetime({ offset: true })
+}).strict();
+var supplierTeam = external_exports.object({ members: external_exports.array(supplierTeamMember), invites: external_exports.array(supplierInvite) }).strict();
+var removedSupplierMember = external_exports.object({ userId: external_exports.uuid() }).strict();
+var revokedSupplierInvite = external_exports.object({ id: external_exports.uuid() }).strict();
 
 // server/adapters/supabase/marketplaceRepository.ts
 var databaseErrors = /* @__PURE__ */ new Map([
@@ -54812,6 +54833,11 @@ var databaseErrors = /* @__PURE__ */ new Map([
   ["MARKETPLACE_NOT_FOUND", [404, "NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E01\u0E34\u0E08\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49"]],
   ["MARKETPLACE_FORBIDDEN", [403, "MARKETPLACE_FORBIDDEN", "\u0E04\u0E38\u0E13\u0E44\u0E21\u0E48\u0E21\u0E35\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E17\u0E33\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49"]],
   ["MARKETPLACE_CONFLICT", [409, "MARKETPLACE_CONFLICT", "\u0E0A\u0E37\u0E48\u0E2D URL \u0E16\u0E39\u0E01\u0E43\u0E0A\u0E49\u0E41\u0E25\u0E49\u0E27\u0E2B\u0E23\u0E37\u0E2D\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E01\u0E34\u0E08\u0E01\u0E32\u0E23\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E44\u0E1B \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E23\u0E27\u0E08\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14"]],
+  ["MARKETPLACE_INVITE_INVALID", [404, "NOT_FOUND", "\u0E43\u0E0A\u0E49\u0E04\u0E33\u0E40\u0E0A\u0E34\u0E0D\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E23\u0E27\u0E08\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E17\u0E35\u0E48\u0E43\u0E0A\u0E49\u0E2B\u0E23\u0E37\u0E2D\u0E02\u0E2D\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E43\u0E2B\u0E21\u0E48"]],
+  ["MARKETPLACE_INVITE_EXISTS", [409, "MARKETPLACE_CONFLICT", "\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E19\u0E35\u0E49\u0E21\u0E35\u0E04\u0E33\u0E40\u0E0A\u0E34\u0E0D\u0E17\u0E35\u0E48\u0E22\u0E31\u0E07\u0E43\u0E0A\u0E49\u0E44\u0E14\u0E49\u0E2D\u0E22\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27"]],
+  ["MARKETPLACE_MEMBER_EXISTS", [409, "MARKETPLACE_CONFLICT", "\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E19\u0E35\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01\u0E02\u0E2D\u0E07\u0E1C\u0E39\u0E49\u0E23\u0E31\u0E1A\u0E1C\u0E25\u0E34\u0E15\u0E41\u0E25\u0E49\u0E27"]],
+  ["MARKETPLACE_MANAGER_REQUIRED", [409, "MARKETPLACE_CONFLICT", "\u0E15\u0E49\u0E2D\u0E07\u0E21\u0E35\u0E1C\u0E39\u0E49\u0E08\u0E31\u0E14\u0E01\u0E32\u0E23\u0E17\u0E35\u0E48\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E44\u0E14\u0E49\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E19\u0E49\u0E2D\u0E22\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E04\u0E19"]],
+  ["MARKETPLACE_OWNER_PROTECTED", [409, "MARKETPLACE_CONFLICT", "\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E2B\u0E23\u0E37\u0E2D\u0E19\u0E33\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E07\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E35\u0E48\u0E2D\u0E2D\u0E01\u0E08\u0E32\u0E01\u0E17\u0E35\u0E21\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49"]],
   ["IDEMPOTENCY_KEY_REUSED", [409, "IDEMPOTENCY_KEY_REUSED", "\u0E04\u0E33\u0E02\u0E2D\u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2D\u0E37\u0E48\u0E19\u0E41\u0E25\u0E49\u0E27"]],
   ["VALIDATION_ERROR", [422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E01\u0E34\u0E08\u0E01\u0E32\u0E23\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E2B\u0E23\u0E37\u0E2D\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E04\u0E23\u0E1A"]]
 ]);
@@ -54874,6 +54900,50 @@ var SupabaseMarketplaceRepository = class {
       p_supplier_id: supplierId,
       p_expected_revision: expectedRevision
     }, supplierAccess);
+  }
+  team(actor, supplierId) {
+    return this.rpc("marketplace_supplier_team", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId
+    }, supplierTeam);
+  }
+  invite(actor, supplierId, email3, role, tokenHash) {
+    return this.rpc("marketplace_create_supplier_invite", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_email: email3,
+      p_role: role,
+      p_token_hash: tokenHash
+    }, supplierInvite);
+  }
+  acceptInvite(actor, verifiedEmail, tokenHash) {
+    return this.rpc("marketplace_accept_supplier_invite", {
+      p_actor_user_id: actor.userId,
+      p_verified_email: verifiedEmail,
+      p_token_hash: tokenHash
+    }, supplierAccess);
+  }
+  changeMember(actor, supplierId, userId, role) {
+    return this.rpc("marketplace_change_supplier_member", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_member_user_id: userId,
+      p_role: role
+    }, supplierTeamMember);
+  }
+  removeMember(actor, supplierId, userId) {
+    return this.rpc("marketplace_remove_supplier_member", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_member_user_id: userId
+    }, removedSupplierMember);
+  }
+  revokeInvite(actor, supplierId, inviteId) {
+    return this.rpc("marketplace_revoke_supplier_invite", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_invite_id: inviteId
+    }, revokedSupplierInvite);
   }
   publicProfile(slug) {
     return this.rpc("marketplace_public_supplier", { p_slug: slug }, supplierPublicProfile);
@@ -59567,12 +59637,14 @@ var SupabaseSessionService = class {
       }
       hasVerifiedMfa = verified.claims.aal === "aal2";
     }
+    const verifiedEmail = options?.includeVerifiedEmail && user.email_confirmed_at ? normalizedEmail(user)?.toLowerCase() : void 0;
     return {
       userId: row.app_user_id,
       identityIssuer: this.issuer,
       identitySubject: user.id,
       requestId,
-      ...options?.verifyMfa ? { hasVerifiedMfa } : {}
+      ...options?.verifyMfa ? { hasVerifiedMfa } : {},
+      ...verifiedEmail ? { verifiedEmail } : {}
     };
   }
   async getMe(actor) {
@@ -61373,11 +61445,17 @@ async function readJsonBody(req, maxBytes = MAX_JSON_BODY_BYTES) {
 }
 
 // server/http/marketplace.ts
+import { createHash as createHash3, randomBytes } from "node:crypto";
 var marketplacePaths = [
   ["context", /^\/api\/v1\/marketplace\/context$/, ["GET"]],
   ["create", /^\/api\/v1\/suppliers$/, ["POST"]],
   ["supplier", /^\/api\/v1\/suppliers\/([^/]+)$/, ["GET", "PUT"]],
   ["submit", /^\/api\/v1\/suppliers\/([^/]+)\/submit$/, ["POST"]],
+  ["team", /^\/api\/v1\/suppliers\/([^/]+)\/team$/, ["GET"]],
+  ["invite", /^\/api\/v1\/suppliers\/([^/]+)\/team\/invitations$/, ["POST"]],
+  ["revokeInvite", /^\/api\/v1\/suppliers\/([^/]+)\/team\/invitations\/([^/]+)$/, ["DELETE"]],
+  ["member", /^\/api\/v1\/suppliers\/([^/]+)\/team\/members\/([^/]+)$/, ["PUT", "DELETE"]],
+  ["acceptInvite", /^\/api\/v1\/suppliers\/invitations\/accept$/, ["POST"]],
   ["publicProfile", /^\/api\/v1\/suppliers\/public\/([^/]+)$/, ["GET"]],
   ["adminList", /^\/api\/v1\/admin\/suppliers$/, ["GET"]],
   ["review", /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review$/, ["POST"]]
@@ -61385,9 +61463,12 @@ var marketplacePaths = [
 function matchMarketplaceRoute(path6) {
   for (const [kind, pattern, methods] of marketplacePaths) {
     const match = pattern.exec(path6);
-    if (match) return { kind, methods, parameter: match[1] };
+    if (match) return { kind, methods, parameter: match[1], childId: match[2] };
   }
   return null;
+}
+function hashInviteToken(token) {
+  return createHash3("sha256").update(token).digest("hex");
 }
 function validated(schema, input2) {
   const result = schema.safeParse(input2);
@@ -61397,12 +61478,15 @@ function validated(schema, input2) {
   });
 }
 async function serveMarketplaceRoute(route, request, repository) {
-  const { kind, parameter } = route;
+  const { kind, parameter, childId } = route;
   if (kind === "publicProfile") {
     return { status: 200, data: await repository.publicProfile(validated(supplierSlugSchema, parameter)) };
   }
   const isAdminRoute = kind === "adminList" || kind === "review";
-  const actor = await request.authenticate(isAdminRoute || kind === "context");
+  const actor = await request.authenticate({
+    verifyMfa: isAdminRoute || kind === "context",
+    ...kind === "acceptInvite" ? { includeVerifiedEmail: true } : {}
+  });
   if (isAdminRoute && actor.hasVerifiedMfa !== true) {
     throw new HttpError(403, "MARKETPLACE_MFA_REQUIRED", "\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E15\u0E31\u0E27\u0E15\u0E19\u0E2A\u0E2D\u0E07\u0E02\u0E31\u0E49\u0E19\u0E15\u0E2D\u0E19\u0E01\u0E48\u0E2D\u0E19\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E41\u0E2D\u0E14\u0E21\u0E34\u0E19");
   }
@@ -61429,6 +61513,32 @@ async function serveMarketplaceRoute(route, request, repository) {
       const supplierId = validated(supplierIdSchema, parameter);
       const { expectedRevision } = validated(expectedSupplierRevision, await request.readBody());
       return { status: 200, data: await repository.submit(actor, supplierId, expectedRevision) };
+    }
+    case "team":
+      return { status: 200, data: await repository.team(actor, validated(supplierIdSchema, parameter)) };
+    case "invite": {
+      const supplierId = validated(supplierIdSchema, parameter);
+      const { email: email3, role } = validated(createSupplierInviteInput, await request.readBody());
+      const token = randomBytes(32).toString("base64url");
+      const invite = await repository.invite(actor, supplierId, email3, role, hashInviteToken(token));
+      return { status: 201, data: { invite, token } };
+    }
+    case "revokeInvite": {
+      const supplierId = validated(supplierIdSchema, parameter);
+      const inviteId = validated(supplierIdSchema, childId);
+      return { status: 200, data: await repository.revokeInvite(actor, supplierId, inviteId) };
+    }
+    case "member": {
+      const supplierId = validated(supplierIdSchema, parameter);
+      const memberId = validated(supplierIdSchema, childId);
+      if (request.method === "DELETE") return { status: 200, data: await repository.removeMember(actor, supplierId, memberId) };
+      const { role } = validated(changeSupplierMemberInput, await request.readBody());
+      return { status: 200, data: await repository.changeMember(actor, supplierId, memberId, role) };
+    }
+    case "acceptInvite": {
+      const { token } = validated(acceptSupplierInviteInput, await request.readBody());
+      if (!actor.verifiedEmail) throw new HttpError(404, "NOT_FOUND", "\u0E43\u0E0A\u0E49\u0E04\u0E33\u0E40\u0E0A\u0E34\u0E0D\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E23\u0E27\u0E08\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E17\u0E35\u0E48\u0E43\u0E0A\u0E49\u0E2B\u0E23\u0E37\u0E2D\u0E02\u0E2D\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E43\u0E2B\u0E21\u0E48");
+      return { status: 200, data: await repository.acceptInvite(actor, actor.verifiedEmail, hashInviteToken(token)) };
     }
     case "adminList": {
       const { status, after } = validated(supplierAdminQuery, Object.fromEntries(request.query));
@@ -61687,9 +61797,9 @@ function createApiRouter(config2, dependencies = {}) {
         const result = await serveMarketplaceRoute(marketplaceRoute, {
           method: req.method,
           query: requestUrl(req).searchParams,
-          authenticate: (verifyMfa) => {
+          authenticate: (options) => {
             if (!sessionService) throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Supabase");
-            return sessionService.authenticate(bearerToken(req), requestId, { verifyMfa });
+            return sessionService.authenticate(bearerToken(req), requestId, options);
           },
           readBody: () => {
             requireJsonContentType(req);

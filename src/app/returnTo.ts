@@ -2,6 +2,8 @@
 // OAuth ยังกลับ origin เดิม (redirectTo = origin + PKCE) แล้วแอปอ่านปลายทางจาก sessionStorage ของแท็บ
 // ไม่ใส่ token หรือ returnTo ลง redirect URL เอง
 
+import { SUPPLIER_INVITE_PATH, isSupplierInvitePath } from './supplierInviteRoute'
+
 export const DEFAULT_RETURN_TO = '/app/projects'
 export const RETURN_TO_KEY = 'packit-return-to'
 const MAX_LENGTH = 512
@@ -21,7 +23,8 @@ export function sanitizeReturnTo(value: unknown, origin: string): string | null 
     return null
   }
   if (url.origin !== new URL(origin).origin) return null
-  const supplierPath = /^\/factory\/(?:onboarding|[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}\/profile)\/?$/i.test(url.pathname)
+  if (isSupplierInvitePath(url.pathname)) return url.search || url.hash ? null : SUPPLIER_INVITE_PATH
+  const supplierPath = /^\/factory\/(?:onboarding|[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}\/(?:profile|team))\/?$/i.test(url.pathname)
   const adminPath = /^\/admin\/suppliers\/?$/.test(url.pathname)
   if (!supplierPath && !adminPath && !ALLOWED_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) return null
   return `${url.pathname}${url.search}${url.hash}`

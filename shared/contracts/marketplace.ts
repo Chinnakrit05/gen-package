@@ -51,3 +51,28 @@ export interface SupplierAdminPage {
   items: SupplierProfile[]
   nextCursor: string | null
 }
+
+export interface SupplierTeamMember {
+  userId: string
+  displayName: string
+  role: MarketplaceRole
+  isWorkspaceOwner: boolean
+}
+
+export interface SupplierInvite {
+  id: string
+  email: string
+  role: MarketplaceRole
+  createdAt: string
+  expiresAt: string
+}
+
+export interface SupplierTeam {
+  members: SupplierTeamMember[]
+  invites: SupplierInvite[]
+}
+
+export interface CreatedSupplierInvite {
+  invite: SupplierInvite
+  token: string
+}
