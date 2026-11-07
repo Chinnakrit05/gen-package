@@ -126,3 +126,11 @@ Vercel request logs ของ deployment เดียวกันช่วง 23
 พบ `PUT /api/v1/projects/:id/thumbnail` ตอบ `503` บน Preview เดียวกัน ตรวจ migration history และ catalog ของ `gen-package-staging` ด้วย `SELECT` พบว่าฐานข้อมูลใช้ migrations ถึง `20261015000700` และยังไม่มีตาราง `app_private.project_thumbnails` หรือ RPC สำหรับบันทึกและอ่านภาพย่อทั้งสามตัว ส่วนภาพย่อของ `P1-03` และ `P1-08` บน Preview จึงยังรอ migration `20261024000800_project_thumbnails.sql` ผลทดสอบภาพย่อในเครื่องยังใช้เป็นหลักฐานของ local เท่านั้น
 
 Supabase CLI `db push --linked --project-ref <staging-ref> --workdir <temp> --skip-vault --dry-run` ผ่าน โดยโฟลเดอร์ชั่วคราวใช้ migrations 001–008 จาก commit ที่ deploy และตรวจชื่อโครงการปลายทางก่อนรัน Dry-run แสดงเฉพาะไฟล์ภาพย่อ `20261024000800_project_thumbnails.sql` การรันจริงยังรออนุญาต เพราะเปลี่ยน schema ของฐาน staging ที่ Preview และเว็บ staging ใช้ร่วมกัน
+
+### ตรวจภาพย่อบน staging 6 พฤศจิกายน 2026
+
+หลังผู้ใช้อนุญาต ตรวจชื่อโครงการ `gen-package-staging` และเทียบ migration กับ `main` แล้วรัน dry-run อีกครั้งก่อน apply เฉพาะ `20261024000800_project_thumbnails.sql` ประวัติ migration ตรงกับไฟล์ 001–008 ตาราง `app_private.project_thumbnails` เปิด RLS และฟังก์ชันภาพย่อทั้งสามให้สิทธิ์เรียกเฉพาะ `service_role` ตรวจด้วย catalog ของ staging แล้ว
+
+ก่อนทดสอบ งานเดิมมีแคชภาพในแท็บ Preview จากรอบที่อัปโหลดไม่ผ่าน และฐาน staging ยังไม่มีแถวภาพย่อของงานนี้ เปิดงานเดียวกันที่ `packit-design.vercel.app` ด้วยบัญชีทดสอบที่มีสิทธิ์แก้ไข Editor สร้างภาพอัตโนมัติและ `PUT /api/v1/projects/:id/thumbnail` ตอบ `200` เวลา 22:22 น. จาก deployment `dpl_Eo1SP8BEZdXwwJaxU4YxXgupS6Ub` ตรวจแถวของงานใน staging แบบอ่านอย่างเดียว พบ JPEG 10,164 ไบต์ เวอร์ชันภาพตรงกับช่วงทดสอบ ตรวจ revision ของงานได้ 14 ทั้งก่อนและหลังทดสอบ
+
+เปิดหน้ารวมงานผ่าน Preview ซึ่งใช้แคชอีกชุด พบ `POST /api/v1/projects/thumbnails` ตอบ `200` เวลา 22:23 น. รีเฟรช `/app/projects` ใน Safari บน `packit-design.vercel.app` แล้วเห็นภาพจริงบนการ์ดงานเดิม การบันทึกและอ่านภาพย่อของ `P1-03` ผ่านบน staging ด้วยงานทดสอบหนึ่งงาน ส่วนสิทธิ์แต่ละบทบาทของ `P1-08` อ้างอิงผลตรวจฐานจริงในเครื่องและ catalog ข้างต้น การทดสอบผ่านเว็บรอบนี้ใช้บัญชีที่มีสิทธิ์แก้ไข [หน้ารวมงาน staging](https://packit-design.vercel.app/app/projects)

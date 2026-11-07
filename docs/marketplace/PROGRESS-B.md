@@ -8,7 +8,7 @@
 | 1-B3 | ผ่าน `P1-10` บน Preview ของ `66a3fb2` เชื่อม Supabase staging, Google callback กลับ Editor ของงานเดิมและรีเฟรชได้ ตรวจ API health และคำขอ list/detail/bootstrap จาก deployment เดียวกัน |
 | 1-B4 | ตรวจสิทธิ์ร่วมกับ browser ฝั่ง A ด้วยบัญชี owner/editor/viewer/outsider ใน Supabase แยก รวมชุดทดสอบ Cloud regression และขั้นตอนรันซ้ำ |
 
-บน Preview พบ API บันทึกภาพย่อตอบ `503` ตรวจฐานข้อมูล staging แบบอ่านอย่างเดียวแล้วยืนยันว่าขาด migration `20261024000800_project_thumbnails.sql` กระทบการตรวจภาพย่อของ `P1-03` และ `P1-08` [ผลตรวจ Preview](B-PHASE-1-RESULTS.md#ผลตรวจหลัง-redeploy-จาก-commit-เดิม)
+ลง migration `20261024000800_project_thumbnails.sql` ใน Supabase staging วันที่ 6 พฤศจิกายน 2026 แล้ว ตรวจพบ API บันทึกและดึงภาพตอบ `200` รูปของงานทดสอบอยู่ในฐานและแสดงบนหน้ารวมงานหลังรีเฟรช `P1-03` ผ่านสำหรับการบันทึกและอ่านภาพบน staging ส่วนการตรวจสิทธิ์แยกบทบาทของ `P1-08` ใช้หลักฐานจากชุด integration ในเครื่อง [ผลตรวจภาพย่อ](B-PHASE-1-RESULTS.md#ตรวจภาพย่อบน-staging-6-พฤศจิกายน-2026)
 
 ผลและสถานะด้านล่างเป็นประวัติการส่งงานวันที่ 2 พฤศจิกายน ก่อนรับ router ของ A
 
