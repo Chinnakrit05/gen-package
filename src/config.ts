@@ -1,5 +1,7 @@
 import { APP_MODES, type AppMode } from '../shared/contracts/system'
 
+export const marketplaceSuppliersEnabled = import.meta.env.VITE_MARKETPLACE_SUPPLIERS_ENABLED === 'true'
+
 interface ClientEnvironment {
   VITE_APP_MODE?: unknown
   VITE_API_BASE_URL?: unknown

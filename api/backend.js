@@ -26072,7 +26072,8 @@ function loadServerConfig(env = process.env) {
   } : null;
   const anthropicApiKey = optionalString(env.ANTHROPIC_API_KEY);
   const ai = anthropicApiKey ? { anthropicApiKey, model: optionalString(env.BOX_SPEC_MODEL) ?? DEFAULT_AI_MODEL } : null;
-  return { appEnv, allowedOrigins, supabase, ai };
+  const marketplaceSuppliersEnabled = env.VITE_MARKETPLACE_SUPPLIERS_ENABLED === "true";
+  return { appEnv, allowedOrigins, supabase, ai, marketplaceSuppliersEnabled };
 }
 
 // server/http/router.ts
@@ -54750,6 +54751,157 @@ function createSupabaseStorageQuotaRepository(config2) {
   return new SupabaseBillingRepository(client);
 }
 
+// shared/contracts/marketplace.ts
+var SUPPLIER_KINDS = ["factory", "print_shop"];
+var SUPPLIER_CAPABILITIES = [
+  "offset_printing",
+  "digital_printing",
+  "flexographic_printing",
+  "die_cutting",
+  "lamination",
+  "foil_stamping"
+];
+var SUPPLIER_STATUSES = ["draft", "pending", "approved", "suspended"];
+var SUPPLIER_REVIEW_ACTIONS = ["approve", "request_changes", "suspend", "resume"];
+var MARKETPLACE_ROLES = ["manager", "staff", "viewer"];
+
+// server/modules/marketplace/validation.ts
+var supplierIdSchema = external_exports.uuid();
+var supplierSlugSchema = external_exports.string().min(3).max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+var capabilityList = external_exports.array(external_exports.enum(SUPPLIER_CAPABILITIES)).max(SUPPLIER_CAPABILITIES.length).refine((items) => new Set(items).size === items.length, "\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E43\u0E19\u0E01\u0E32\u0E23\u0E1C\u0E25\u0E34\u0E15\u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E0B\u0E49\u0E33\u0E01\u0E31\u0E19");
+var publicFields = {
+  kind: external_exports.enum(SUPPLIER_KINDS),
+  name: external_exports.string().trim().min(1).max(100),
+  slug: supplierSlugSchema,
+  description: external_exports.string().trim().max(1e3),
+  capabilities: capabilityList
+};
+var privateFields = { ...publicFields, contactEmail: external_exports.string().trim().max(254).pipe(external_exports.email()) };
+var editableFields = {
+  ...privateFields,
+  capabilities: capabilityList.transform((items) => SUPPLIER_CAPABILITIES.filter((item) => items.includes(item)))
+};
+var expectedSupplierRevision = external_exports.object({ expectedRevision: external_exports.int().min(1).max(2147483647) }).strict();
+var createSupplierInput = external_exports.object({ ...editableFields, operationId: external_exports.uuid() }).strict();
+var updateSupplierInput = expectedSupplierRevision.extend(editableFields).strict();
+var reviewSupplierInput = expectedSupplierRevision.extend({
+  action: external_exports.enum(SUPPLIER_REVIEW_ACTIONS),
+  reason: external_exports.string().trim().min(1).max(500)
+}).strict();
+var supplierAdminQuery = external_exports.object({
+  status: external_exports.enum(SUPPLIER_STATUSES).default("pending"),
+  after: external_exports.uuid().optional()
+}).strict();
+var supplierProfile = external_exports.object({
+  ...privateFields,
+  id: external_exports.uuid(),
+  workspaceId: external_exports.uuid(),
+  status: external_exports.enum(SUPPLIER_STATUSES),
+  revision: external_exports.int().min(1),
+  reviewNote: external_exports.string().max(500).nullable(),
+  updatedAt: external_exports.iso.datetime({ offset: true })
+}).strict();
+var supplierAccess = external_exports.object({ profile: supplierProfile, role: external_exports.enum(MARKETPLACE_ROLES) }).strict();
+var marketplaceContext = external_exports.object({ suppliers: external_exports.array(supplierAccess), isSupplierReviewer: external_exports.boolean() }).strict();
+var supplierPublicProfile = external_exports.object({ ...publicFields, id: external_exports.uuid() }).strict();
+var supplierAdminPage = external_exports.object({ items: external_exports.array(supplierProfile).max(24), nextCursor: external_exports.uuid().nullable() }).strict();
+
+// server/adapters/supabase/marketplaceRepository.ts
+var databaseErrors = /* @__PURE__ */ new Map([
+  ["APP_USER_NOT_ACTIVE", [403, "USER_NOT_ACTIVE", "\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19"]],
+  ["MARKETPLACE_NOT_FOUND", [404, "NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E01\u0E34\u0E08\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49"]],
+  ["MARKETPLACE_FORBIDDEN", [403, "MARKETPLACE_FORBIDDEN", "\u0E04\u0E38\u0E13\u0E44\u0E21\u0E48\u0E21\u0E35\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E17\u0E33\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49"]],
+  ["MARKETPLACE_CONFLICT", [409, "MARKETPLACE_CONFLICT", "\u0E0A\u0E37\u0E48\u0E2D URL \u0E16\u0E39\u0E01\u0E43\u0E0A\u0E49\u0E41\u0E25\u0E49\u0E27\u0E2B\u0E23\u0E37\u0E2D\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E01\u0E34\u0E08\u0E01\u0E32\u0E23\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E44\u0E1B \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E23\u0E27\u0E08\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14"]],
+  ["IDEMPOTENCY_KEY_REUSED", [409, "IDEMPOTENCY_KEY_REUSED", "\u0E04\u0E33\u0E02\u0E2D\u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2D\u0E37\u0E48\u0E19\u0E41\u0E25\u0E49\u0E27"]],
+  ["VALIDATION_ERROR", [422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E01\u0E34\u0E08\u0E01\u0E32\u0E23\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E2B\u0E23\u0E37\u0E2D\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E04\u0E23\u0E1A"]]
+]);
+function mapDatabaseError(error62) {
+  if (error62.message === "REVISION_CONFLICT") {
+    let currentRevision;
+    try {
+      currentRevision = JSON.parse(error62.details)?.currentRevision;
+    } catch {
+      currentRevision = void 0;
+    }
+    return new HttpError(
+      409,
+      "REVISION_CONFLICT",
+      "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E01\u0E34\u0E08\u0E01\u0E32\u0E23\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E41\u0E25\u0E49\u0E27 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E42\u0E2B\u0E25\u0E14\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14",
+      typeof currentRevision === "number" && Number.isSafeInteger(currentRevision) && currentRevision > 0 ? { currentRevision } : void 0
+    );
+  }
+  const mapped = databaseErrors.get(error62.message);
+  return mapped ? new HttpError(...mapped) : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 Marketplace \u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
+}
+var SupabaseMarketplaceRepository = class {
+  constructor(client) {
+    this.client = client;
+  }
+  async rpc(name, args, schema) {
+    const { data, error: error62 } = await this.client.rpc(name, args);
+    if (error62) throw mapDatabaseError(error62);
+    const parsed = schema.safeParse(data);
+    if (!parsed.success) throw new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E37\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 Marketplace \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+    return parsed.data;
+  }
+  context(actor) {
+    return this.rpc("marketplace_context", { p_actor_user_id: actor.userId }, marketplaceContext);
+  }
+  create(actor, operationId, profile) {
+    return this.rpc("marketplace_create_supplier", {
+      p_actor_user_id: actor.userId,
+      p_operation_id: operationId,
+      p_profile: profile
+    }, supplierAccess);
+  }
+  get(actor, supplierId) {
+    return this.rpc("marketplace_get_supplier", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId
+    }, supplierAccess);
+  }
+  update(actor, supplierId, expectedRevision, profile) {
+    return this.rpc("marketplace_update_supplier", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_expected_revision: expectedRevision,
+      p_profile: profile
+    }, supplierAccess);
+  }
+  submit(actor, supplierId, expectedRevision) {
+    return this.rpc("marketplace_submit_supplier", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_expected_revision: expectedRevision
+    }, supplierAccess);
+  }
+  publicProfile(slug) {
+    return this.rpc("marketplace_public_supplier", { p_slug: slug }, supplierPublicProfile);
+  }
+  adminList(actor, status, after) {
+    return this.rpc("marketplace_admin_suppliers", {
+      p_actor_user_id: actor.userId,
+      p_status: status,
+      p_after: after ?? null
+    }, supplierAdminPage);
+  }
+  review(actor, supplierId, expectedRevision, action, reason) {
+    return this.rpc("marketplace_review_supplier", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_expected_revision: expectedRevision,
+      p_action: action,
+      p_reason: reason
+    }, supplierProfile);
+  }
+};
+function createSupabaseMarketplaceRepository(config2) {
+  const client = createClient(config2.url, config2.secretKey, {
+    auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false }
+  });
+  return new SupabaseMarketplaceRepository(client);
+}
+
 // src/core/materials.ts
 var MATERIALS = [
   {
@@ -58734,6 +58886,7 @@ var TEXT_FX_RANGE = {
   round: [0, 100]
 };
 var LETTER_SPACING_RANGE = [-20, 100];
+var TEXT_STRETCH_RANGE = [0.2, 5];
 
 // shared/contracts/projects.ts
 var THUMBNAIL_KINDS = ["box", "vessel", "pouch", "card"];
@@ -58830,7 +58983,9 @@ var textSchema = external_exports.object({
   fx: textFxSchema.optional(),
   ls: finite.min(LETTER_SPACING_RANGE[0]).max(LETTER_SPACING_RANGE[1]).optional(),
   grad: gradientSchema.optional(),
-  curve: finite.min(-360).max(360).optional()
+  curve: finite.min(-360).max(360).optional(),
+  sx: finite.min(TEXT_STRETCH_RANGE[0]).max(TEXT_STRETCH_RANGE[1]).optional(),
+  boxW: finite.positive().max(2e3).optional()
 }).strict();
 var shapeSchema = external_exports.object({
   ...baseFields,
@@ -59123,7 +59278,7 @@ var projectThumbnailImageRowSchema = external_exports.object({
 }).strict();
 
 // server/adapters/supabase/projectRepository.ts
-function mapDatabaseError(error62) {
+function mapDatabaseError2(error62) {
   if (error62.message.includes("ASSET_NOT_READY")) {
     return new HttpError(422, "ASSET_NOT_READY", "\u0E23\u0E39\u0E1B\u0E17\u0E35\u0E48\u0E2D\u0E49\u0E32\u0E07\u0E16\u0E36\u0E07\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
   }
@@ -59169,7 +59324,7 @@ var SupabaseProjectRepository = class {
       p_cursor_id: query.cursor?.id ?? null,
       p_limit: query.limit + 1
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = projectListRowSchema.array().safeParse(data);
     if (!parsed.success) throw providerContractError();
     const hasMore = parsed.data.length > query.limit;
@@ -59192,7 +59347,7 @@ var SupabaseProjectRepository = class {
       p_actor_user_id: actor.userId,
       p_project_id: projectId
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = cloudProjectSchema.safeParse(data);
     if (!parsed.success) throw providerContractError();
     return parsed.data;
@@ -59207,7 +59362,7 @@ var SupabaseProjectRepository = class {
       p_document_schema_version: input2.documentSchemaVersion,
       p_document: input2.document
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = cloudProjectSchema.safeParse(data);
     if (!parsed.success) throw providerContractError();
     return parsed.data;
@@ -59225,7 +59380,7 @@ var SupabaseProjectRepository = class {
       p_document_schema_version: input2.documentSchemaVersion,
       p_document: input2.document
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = legacyImportReceiptSchema.safeParse(data);
     if (!parsed.success) throw providerContractError();
     return parsed.data;
@@ -59241,7 +59396,7 @@ var SupabaseProjectRepository = class {
       p_document_schema_version: input2.documentSchemaVersion,
       p_document: input2.document
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = saveReceiptSchema.safeParse(data);
     if (!parsed.success) throw providerContractError();
     return parsed.data;
@@ -59254,7 +59409,7 @@ var SupabaseProjectRepository = class {
       p_request_hash: hash2,
       p_expected_revision: input2.expectedRevision
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = deleteReceiptSchema.safeParse(data);
     if (!parsed.success) throw providerContractError();
     return parsed.data;
@@ -59268,7 +59423,7 @@ var SupabaseProjectRepository = class {
       p_kind: input2.kind,
       p_label: input2.label
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = projectThumbnailReceiptSchema.safeParse(data);
     if (!parsed.success) throw providerContractError();
     return { ...parsed.data, version: thumbnailVersion(parsed.data.version) };
@@ -59279,7 +59434,7 @@ var SupabaseProjectRepository = class {
       p_workspace_id: workspaceId,
       p_project_ids: projectIds
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = projectThumbnailMetaRowSchema.array().safeParse(data);
     if (!parsed.success) throw providerContractError();
     return new Map(parsed.data.map((row) => [
@@ -59293,7 +59448,7 @@ var SupabaseProjectRepository = class {
       p_workspace_id: workspaceId,
       p_project_ids: projectIds
     });
-    if (error62) throw mapDatabaseError(error62);
+    if (error62) throw mapDatabaseError2(error62);
     const parsed = projectThumbnailImageRowSchema.array().safeParse(data);
     if (!parsed.success) throw providerContractError();
     return parsed.data.map((row) => ({
@@ -59385,7 +59540,7 @@ var SupabaseSessionService = class {
       }
     };
   }
-  async authenticate(accessToken, requestId) {
+  async authenticate(accessToken, requestId, options) {
     const user = await this.verifiedUser(accessToken);
     const { data, error: error62 } = await this.client.rpc("resolve_app_actor", {
       p_identity_issuer: this.issuer,
@@ -59404,11 +59559,20 @@ var SupabaseSessionService = class {
     if (!row || row.user_status !== "active") {
       throw new HttpError(403, "USER_NOT_ACTIVE", "\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
     }
+    let hasVerifiedMfa = false;
+    if (options?.verifyMfa) {
+      const { data: verified, error: verificationError } = await this.client.auth.getClaims(accessToken);
+      if (verificationError || verified?.claims.sub !== user.id) {
+        throw new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E01\u0E32\u0E23\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E15\u0E31\u0E27\u0E15\u0E19\u0E2A\u0E2D\u0E07\u0E02\u0E31\u0E49\u0E19\u0E15\u0E2D\u0E19\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+      }
+      hasVerifiedMfa = verified.claims.aal === "aal2";
+    }
     return {
       userId: row.app_user_id,
       identityIssuer: this.issuer,
       identitySubject: user.id,
-      requestId
+      requestId,
+      ...options?.verifyMfa ? { hasVerifiedMfa } : {}
     };
   }
   async getMe(actor) {
@@ -59729,6 +59893,8 @@ var FONTS = [
   { id: "pridi", nameTh: "Pridi", css: "'Pridi'" },
   { id: "kodchasan", nameTh: "Kodchasan", css: "'Kodchasan'" }
 ];
+var WordSegmenterCtor = Intl.Segmenter;
+var wordSegmenter = WordSegmenterCtor ? new WordSegmenterCtor("th", { granularity: "word" }) : null;
 var SegmenterCtor = Intl.Segmenter;
 var segmenter = SegmenterCtor ? new SegmenterCtor("th", { granularity: "grapheme" }) : null;
 var FRAMES = [
@@ -61206,6 +61372,76 @@ async function readJsonBody(req, maxBytes = MAX_JSON_BODY_BYTES) {
   return parseJson(Buffer.concat(chunks).toString("utf8"));
 }
 
+// server/http/marketplace.ts
+var marketplacePaths = [
+  ["context", /^\/api\/v1\/marketplace\/context$/, ["GET"]],
+  ["create", /^\/api\/v1\/suppliers$/, ["POST"]],
+  ["supplier", /^\/api\/v1\/suppliers\/([^/]+)$/, ["GET", "PUT"]],
+  ["submit", /^\/api\/v1\/suppliers\/([^/]+)\/submit$/, ["POST"]],
+  ["publicProfile", /^\/api\/v1\/suppliers\/public\/([^/]+)$/, ["GET"]],
+  ["adminList", /^\/api\/v1\/admin\/suppliers$/, ["GET"]],
+  ["review", /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review$/, ["POST"]]
+];
+function matchMarketplaceRoute(path6) {
+  for (const [kind, pattern, methods] of marketplacePaths) {
+    const match = pattern.exec(path6);
+    if (match) return { kind, methods, parameter: match[1] };
+  }
+  return null;
+}
+function validated(schema, input2) {
+  const result = schema.safeParse(input2);
+  if (result.success) return result.data;
+  throw new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 Marketplace \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07", {
+    fields: [...new Set(result.error.issues.map((issue2) => issue2.path.join(".")).filter(Boolean))]
+  });
+}
+async function serveMarketplaceRoute(route, request, repository) {
+  const { kind, parameter } = route;
+  if (kind === "publicProfile") {
+    return { status: 200, data: await repository.publicProfile(validated(supplierSlugSchema, parameter)) };
+  }
+  const isAdminRoute = kind === "adminList" || kind === "review";
+  const actor = await request.authenticate(isAdminRoute || kind === "context");
+  if (isAdminRoute && actor.hasVerifiedMfa !== true) {
+    throw new HttpError(403, "MARKETPLACE_MFA_REQUIRED", "\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E15\u0E31\u0E27\u0E15\u0E19\u0E2A\u0E2D\u0E07\u0E02\u0E31\u0E49\u0E19\u0E15\u0E2D\u0E19\u0E01\u0E48\u0E2D\u0E19\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E41\u0E2D\u0E14\u0E21\u0E34\u0E19");
+  }
+  switch (kind) {
+    case "context": {
+      const { suppliers, isSupplierReviewer } = await repository.context(actor);
+      const data = {
+        suppliers,
+        staff: { canReviewSuppliers: isSupplierReviewer, requiresMfa: isSupplierReviewer && actor.hasVerifiedMfa !== true }
+      };
+      return { status: 200, data };
+    }
+    case "create": {
+      const { operationId, ...profile } = validated(createSupplierInput, await request.readBody());
+      return { status: 201, data: await repository.create(actor, operationId, profile) };
+    }
+    case "supplier": {
+      const supplierId = validated(supplierIdSchema, parameter);
+      if (request.method === "GET") return { status: 200, data: await repository.get(actor, supplierId) };
+      const { expectedRevision, ...profile } = validated(updateSupplierInput, await request.readBody());
+      return { status: 200, data: await repository.update(actor, supplierId, expectedRevision, profile) };
+    }
+    case "submit": {
+      const supplierId = validated(supplierIdSchema, parameter);
+      const { expectedRevision } = validated(expectedSupplierRevision, await request.readBody());
+      return { status: 200, data: await repository.submit(actor, supplierId, expectedRevision) };
+    }
+    case "adminList": {
+      const { status, after } = validated(supplierAdminQuery, Object.fromEntries(request.query));
+      return { status: 200, data: await repository.adminList(actor, status, after) };
+    }
+    case "review": {
+      const supplierId = validated(supplierIdSchema, parameter);
+      const { expectedRevision, action, reason } = validated(reviewSupplierInput, await request.readBody());
+      return { status: 200, data: await repository.review(actor, supplierId, expectedRevision, action, reason) };
+    }
+  }
+}
+
 // server/http/router.ts
 function requestPath(req) {
   try {
@@ -61384,6 +61620,7 @@ function createApiRouter(config2, dependencies = {}) {
   const aiService = dependencies.aiService === void 0 ? new AnthropicAiService(config2.ai?.model) : dependencies.aiService;
   const billingRepository = dependencies.billingRepository === void 0 ? config2.supabase && createSupabaseBillingRepository(config2.supabase) : dependencies.billingRepository;
   const billingService = dependencies.billingService === void 0 ? billingRepository && new BillingService(billingRepository, billingFlags(config2)) : dependencies.billingService;
+  const marketplaceRepository = config2.marketplaceSuppliersEnabled ? dependencies.marketplaceRepository === void 0 ? config2.supabase && createSupabaseMarketplaceRepository(config2.supabase) : dependencies.marketplaceRepository : null;
   return async (req, res) => {
     const requestId = randomUUID3();
     const path6 = requestPath(req);
@@ -61433,6 +61670,35 @@ function createApiRouter(config2, dependencies = {}) {
         sendJson(res, 200, { data, requestId }, requestId);
       } catch (error63) {
         const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E42\u0E2B\u0E25\u0E14\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
+    const marketplaceRoute = config2.marketplaceSuppliersEnabled ? matchMarketplaceRoute(path6) : null;
+    if (marketplaceRoute) {
+      try {
+        if (!req.method || !marketplaceRoute.methods.includes(req.method)) {
+          res.setHeader("allow", marketplaceRoute.methods.join(", "));
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!marketplaceRepository) {
+          throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Marketplace");
+        }
+        const result = await serveMarketplaceRoute(marketplaceRoute, {
+          method: req.method,
+          query: requestUrl(req).searchParams,
+          authenticate: (verifyMfa) => {
+            if (!sessionService) throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Supabase");
+            return sessionService.authenticate(bearerToken(req), requestId, { verifyMfa });
+          },
+          readBody: () => {
+            requireJsonContentType(req);
+            return readJsonBody(req, 16 * 1024);
+          }
+        }, marketplaceRepository);
+        sendJson(res, result.status, { data: result.data, requestId }, requestId);
+      } catch (error63) {
+        const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E14\u0E33\u0E40\u0E19\u0E34\u0E19\u0E01\u0E32\u0E23 Marketplace \u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
       }
       return;

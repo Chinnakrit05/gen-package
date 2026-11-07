@@ -4,13 +4,14 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 import { Navigate, Outlet, RouterProvider, createBrowserRouter, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { Login } from './components/Login'
 import { LoadingStage } from './components/LoadingBoundary'
-import type { ClientConfig } from './config'
+import { marketplaceSuppliersEnabled, type ClientConfig } from './config'
 import { LangCtx, loadLang } from './i18n'
 import { bootstrapSession, getMe } from './services/api/session'
 import { registerApiSessionRecovery } from './services/api/client'
 import { createBrowserSupabaseClient } from './services/auth/supabaseAuth'
 import { WorkspaceBootstrapController, type WorkspaceBootstrapState } from './services/auth/workspaceBootstrap'
 import type { CloudStartupVariant } from './services/auth/startupLoading'
+import type { ReviewerMfaClient } from './features/admin/ReviewerMfa'
 import {
   CloudSessionContext,
   SessionChangedError,
@@ -27,6 +28,10 @@ const PricingPage = lazy(() => import('./components/PricingPage').then((m) => ({
 // เพราะ router โหลด lazy ของทุก route ที่ match ก่อน guard (ลิงก์ /editor/:id ตอนยังไม่ login ดึง Editor 2 MB มาเปล่า ๆ)
 const ProjectsPage = lazy(() => import('./app/ProjectsPage').then((m) => ({ default: m.ProjectsPage })))
 const EditorRoute = lazy(() => import('./app/EditorRoute').then((m) => ({ default: m.EditorRoute })))
+const SupplierOnboarding = lazy(() => import('./features/suppliers/SupplierOnboarding').then((m) => ({ default: m.SupplierOnboarding })))
+const SupplierProfilePage = lazy(() => import('./features/suppliers/SupplierProfilePage').then((m) => ({ default: m.SupplierProfilePage })))
+const PublicSupplierPage = lazy(() => import('./features/suppliers/PublicSupplierPage').then((m) => ({ default: m.PublicSupplierPage })))
+const AdminSupplierReview = lazy(() => import('./features/admin/AdminSupplierReview').then((m) => ({ default: m.AdminSupplierReview })))
 
 // สถานะ auth (ก่อน/หลัง bootstrap) ที่ route ทุกตัวอ่าน — อยู่เหนือ RouterProvider
 interface CloudAuthValue {
@@ -38,6 +43,7 @@ interface CloudAuthValue {
   explicitLogout: boolean
   loginBusy: boolean
   loginError: string | null
+  reviewerMfa: ReviewerMfaClient
   signIn(): Promise<void>
   signOut(): Promise<void>
 }
@@ -62,6 +68,7 @@ function isExpiredAuthSession(error: unknown): boolean {
 
 // routes ของ Phase 1 (ROUTES-PHASE-1.md §2.1) — หน้ารายการกับ Editor เป็นคนละ chunk; หน้ารายการไม่ import Editor
 const router = createBrowserRouter([
+  ...(marketplaceSuppliersEnabled ? [{ path: '/suppliers/:slug', element: <PublicSupplierRoute /> }] : []),
   {
     element: <AuthLayout />,
     HydrateFallback: StartupLoading,
@@ -90,12 +97,37 @@ const router = createBrowserRouter([
             // เนื้อหาทั้งหมดอยู่ใน EditorRoute (อ่าน params เอง) — ลูกมีไว้ให้ match path เท่านั้น
             children: [{ path: 'new', Component: EmptyOutlet }, { path: ':projectId', Component: EmptyOutlet }],
           },
+          ...(marketplaceSuppliersEnabled ? [
+            {
+              path: '/factory/onboarding',
+              element: <Suspense fallback={<MarketplaceLoading />}><SupplierOnboarding /></Suspense>,
+            },
+            {
+              path: '/factory/:supplierId/profile',
+              element: <Suspense fallback={<MarketplaceLoading />}><SupplierProfilePage /></Suspense>,
+            },
+            { path: '/admin/suppliers', element: <AdminSupplierRoute /> },
+          ] : []),
         ],
       },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
 ])
+
+function MarketplaceLoading() {
+  return <LoadingStage title="กำลังเปิด Marketplace" message="กำลังโหลดข้อมูลผู้รับผลิต…" />
+}
+
+function PublicSupplierRoute() {
+  const { config } = useCloudAuth()
+  return <Suspense fallback={<MarketplaceLoading />}><PublicSupplierPage apiBaseUrl={config.apiBaseUrl} /></Suspense>
+}
+
+function AdminSupplierRoute() {
+  const { reviewerMfa } = useCloudAuth()
+  return <Suspense fallback={<MarketplaceLoading />}><AdminSupplierReview mfa={reviewerMfa} /></Suspense>
+}
 
 export function CloudRoot({ config, startupVariant }: { config: ClientConfig; startupVariant: CloudStartupVariant }) {
   if (!config.supabase) throw new Error('CloudRoot ต้องมี Supabase client config')
@@ -246,9 +278,10 @@ export function CloudRoot({ config, startupVariant }: { config: ClientConfig; st
     explicitLogout,
     loginBusy,
     loginError,
+    reviewerMfa: auth.auth.mfa,
     signIn,
     signOut,
-  }), [bootstrap, config, explicitLogout, loginBusy, loginError, session, signIn, signOut, startupVariant])
+  }), [auth, bootstrap, config, explicitLogout, loginBusy, loginError, session, signIn, signOut, startupVariant])
 
   return (
     <CloudAuthContext.Provider value={value}>

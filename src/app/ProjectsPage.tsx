@@ -5,6 +5,7 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import type { ProjectSummary, ThumbnailKind } from '../../shared/contracts/projects'
 import { PackItMark } from '../components/Login'
+import { marketplaceSuppliersEnabled } from '../config'
 import { thumbNeedsFetch } from '../core/thumbnail'
 import { hasLegacyMigrationSource } from '../features/projects/legacyStorage'
 import { getProjectThumbnails, listProjects } from '../services/api/projects'
@@ -97,6 +98,9 @@ export function ProjectsPage() {
           </label>
         )}
         <div className="projects-actions">
+          {marketplaceSuppliersEnabled && (
+            <button type="button" onClick={() => void navigate('/factory/onboarding')}>พื้นที่ผู้รับผลิต</button>
+          )}
           <button className="projects-refresh" onClick={refresh} disabled={!online || projects.isFetching}>รีเฟรช</button>
           {canMigrate && (
             <button className="projects-refresh" disabled={!online} onClick={() => setMigrationOpen(true)}>

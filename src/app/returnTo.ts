@@ -21,7 +21,9 @@ export function sanitizeReturnTo(value: unknown, origin: string): string | null 
     return null
   }
   if (url.origin !== new URL(origin).origin) return null
-  if (!ALLOWED_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) return null
+  const supplierPath = /^\/factory\/(?:onboarding|[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}\/profile)\/?$/i.test(url.pathname)
+  const adminPath = /^\/admin\/suppliers\/?$/.test(url.pathname)
+  if (!supplierPath && !adminPath && !ALLOWED_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) return null
   return `${url.pathname}${url.search}${url.hash}`
 }
 

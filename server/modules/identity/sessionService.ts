@@ -3,6 +3,6 @@ import type { Actor } from './actor'
 
 export interface SessionService {
   bootstrap(accessToken: string, requestId: string): Promise<SessionBootstrapData>
-  authenticate(accessToken: string, requestId: string): Promise<Actor>
+  authenticate(accessToken: string, requestId: string, options?: { verifyMfa: boolean }): Promise<Actor>
   getMe(actor: Actor): Promise<MeData>
 }

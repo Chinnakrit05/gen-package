@@ -5,6 +5,7 @@ export type AppEnvironment = (typeof APP_ENVIRONMENTS)[number]
 export interface ServerConfig {
   appEnv: AppEnvironment
   allowedOrigins: readonly string[]
+  marketplaceSuppliersEnabled?: boolean
   supabase: null | {
     url: string
     secretKey: string
@@ -99,5 +100,6 @@ export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
     ? { anthropicApiKey, model: optionalString(env.BOX_SPEC_MODEL) ?? DEFAULT_AI_MODEL }
     : null
 
-  return { appEnv, allowedOrigins, supabase, ai }
+  const marketplaceSuppliersEnabled = env.VITE_MARKETPLACE_SUPPLIERS_ENABLED === 'true'
+  return { appEnv, allowedOrigins, supabase, ai, marketplaceSuppliersEnabled }
 }

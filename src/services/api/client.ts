@@ -81,12 +81,12 @@ export async function requestApi<T>(
 
 async function requestOnce<T>(
   url: string,
-  accessToken: string,
+  accessToken: string | null,
   init: RequestInit,
 ): Promise<T> {
   const headers = new Headers(init.headers)
   headers.set('accept', 'application/json')
-  headers.set('authorization', `Bearer ${accessToken}`)
+  if (accessToken !== null) headers.set('authorization', `Bearer ${accessToken}`)
   let response: Response
   try {
     response = await fetch(url, { ...init, headers, cache: 'no-store' })
@@ -107,4 +107,8 @@ async function requestOnce<T>(
     )
   }
   return payload.data
+}
+
+export function requestPublicApi<T>(url: string, signal?: AbortSignal): Promise<T> {
+  return requestOnce<T>(url, null, { method: 'GET', credentials: 'omit', signal })
 }

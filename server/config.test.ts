@@ -3,7 +3,7 @@ import { loadServerConfig, ServerConfigError } from './config'
 
 describe('loadServerConfig', () => {
   it('uses safe development defaults without credentials', () => {
-    expect(loadServerConfig({})).toEqual({ appEnv: 'development', allowedOrigins: [], supabase: null, ai: null })
+    expect(loadServerConfig({})).toEqual({ appEnv: 'development', allowedOrigins: [], supabase: null, ai: null, marketplaceSuppliersEnabled: false })
   })
 
   it('reads the optional server AI key and model without requiring them anywhere', () => {

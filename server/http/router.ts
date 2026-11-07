@@ -8,11 +8,13 @@ import type { DeleteProjectInput, SaveProjectInput } from '../../shared/contract
 import { EXPORT_FORMATS, type ExportFormat } from '../../shared/contracts/billing'
 import { createSupabaseAssetService } from '../adapters/supabase/assetService'
 import { createSupabaseBillingRepository, createSupabaseStorageQuotaRepository } from '../adapters/supabase/billingRepository'
+import { createSupabaseMarketplaceRepository } from '../adapters/supabase/marketplaceRepository'
 import { createSupabaseProjectRepository } from '../adapters/supabase/projectRepository'
 import { createSupabaseSessionService } from '../adapters/supabase/sessionService'
 import type { ServerConfig } from '../config'
 import { errorMessageForLog, logServerEvent } from '../logging'
 import type { SessionService } from '../modules/identity/sessionService'
+import type { MarketplaceRepository } from '../modules/marketplace/marketplaceRepository'
 import { AssetService } from '../modules/assets/assetService'
 import { AiProviderError, AnthropicAiService, type AiService, type AiUsage } from '../modules/ai/aiService'
 import { parseArtworkRequest, type ArtworkRequest } from '../aiArtwork'
@@ -52,6 +54,7 @@ import {
 } from '../modules/projects/validation'
 import { readJsonBody } from './body'
 import { HttpError, toApiFailure } from './errors'
+import { matchMarketplaceRoute, serveMarketplaceRoute } from './marketplace'
 
 export interface HttpRequest {
   method?: string
@@ -75,6 +78,7 @@ export interface ApiRouterDependencies {
   assetService?: AssetService | null
   aiService?: AiService | null
   billingService?: BillingService | null
+  marketplaceRepository?: MarketplaceRepository | null
   // ส่ง repository แทน service ได้ (เทสต์) — router สร้าง BillingService เองด้วย billingFlags(config)
   // เทสต์จึงตรวจเงื่อนไขเปิดขาย/จำลองจ่ายตัวจริง ไม่ใช่สำเนาสูตรในเทสต์
   billingRepository?: BillingRepository | null
@@ -329,6 +333,11 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
   const billingService = dependencies.billingService === undefined
     ? billingRepository && new BillingService(billingRepository, billingFlags(config))
     : dependencies.billingService
+  const marketplaceRepository = config.marketplaceSuppliersEnabled
+    ? (dependencies.marketplaceRepository === undefined
+      ? config.supabase && createSupabaseMarketplaceRepository(config.supabase)
+      : dependencies.marketplaceRepository)
+    : null
 
   return async (req, res) => {
     const requestId = randomUUID()
@@ -386,6 +395,38 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
         const httpError = error instanceof HttpError
           ? error
           : new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'โหลดข้อมูลบัญชีไม่สำเร็จ')
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
+    const marketplaceRoute = config.marketplaceSuppliersEnabled ? matchMarketplaceRoute(path) : null
+    if (marketplaceRoute) {
+      try {
+        if (!req.method || !marketplaceRoute.methods.includes(req.method)) {
+          res.setHeader('allow', marketplaceRoute.methods.join(', '))
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!marketplaceRepository) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Marketplace')
+        }
+        const result = await serveMarketplaceRoute(marketplaceRoute, {
+          method: req.method,
+          query: requestUrl(req).searchParams,
+          authenticate: (verifyMfa) => {
+            if (!sessionService) throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Supabase')
+            return sessionService.authenticate(bearerToken(req), requestId, { verifyMfa })
+          },
+          readBody: () => {
+            requireJsonContentType(req)
+            return readJsonBody(req, 16 * 1024)
+          },
+        }, marketplaceRepository)
+        sendJson(res, result.status, { data: result.data, requestId }, requestId)
+      } catch (error) {
+        const httpError = error instanceof HttpError
+          ? error
+          : new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'ดำเนินการ Marketplace ไม่สำเร็จ')
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
       }
       return

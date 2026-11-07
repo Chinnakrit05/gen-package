@@ -41,4 +41,14 @@ describe('sanitizeReturnTo', () => {
     expect(returnToOrDefault('//evil.example', ORIGIN)).toBe(DEFAULT_RETURN_TO)
     expect(returnToOrDefault('/editor/new', ORIGIN)).toBe('/editor/new')
   })
+
+  it('allows the protected Marketplace routes while keeping other destinations outside the allowlist', () => {
+    expect(sanitizeReturnTo('/factory/onboarding', ORIGIN)).toBe('/factory/onboarding')
+    expect(sanitizeReturnTo('/factory/0b2f2c8e-1111-4222-8333-444455556666/profile', ORIGIN))
+      .toBe('/factory/0b2f2c8e-1111-4222-8333-444455556666/profile')
+    expect(sanitizeReturnTo('/admin/suppliers?status=pending', ORIGIN)).toBe('/admin/suppliers?status=pending')
+    for (const path of ['/factory/invalid/profile', '/factory/%2Fexample/profile', '/factory/../login', '/admin/other', '/suppliers/first-shop']) {
+      expect(sanitizeReturnTo(path, ORIGIN)).toBeNull()
+    }
+  })
 })

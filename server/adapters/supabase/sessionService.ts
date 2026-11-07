@@ -99,7 +99,7 @@ export class SupabaseSessionService implements SessionService {
     }
   }
 
-  async authenticate(accessToken: string, requestId: string): Promise<Actor> {
+  async authenticate(accessToken: string, requestId: string, options?: { verifyMfa: boolean }): Promise<Actor> {
     const user = await this.verifiedUser(accessToken)
     const { data, error } = await this.client.rpc('resolve_app_actor', {
       p_identity_issuer: this.issuer,
@@ -118,11 +118,20 @@ export class SupabaseSessionService implements SessionService {
     if (!row || row.user_status !== 'active') {
       throw new HttpError(403, 'USER_NOT_ACTIVE', 'บัญชีนี้ไม่พร้อมใช้งาน')
     }
+    let hasVerifiedMfa = false
+    if (options?.verifyMfa) {
+      const { data: verified, error: verificationError } = await this.client.auth.getClaims(accessToken)
+      if (verificationError || verified?.claims.sub !== user.id) {
+        throw new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'ตรวจสอบการยืนยันตัวตนสองขั้นตอนไม่สำเร็จ')
+      }
+      hasVerifiedMfa = verified.claims.aal === 'aal2'
+    }
     return {
       userId: row.app_user_id,
       identityIssuer: this.issuer,
       identitySubject: user.id,
       requestId,
+      ...(options?.verifyMfa ? { hasVerifiedMfa } : {}),
     }
   }
 
