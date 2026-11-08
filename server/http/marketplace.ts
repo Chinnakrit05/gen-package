@@ -3,7 +3,13 @@ import type { ZodType } from 'zod'
 import type { MarketplaceContextData } from '../../shared/contracts/marketplace'
 import type { Actor } from '../modules/identity/actor'
 import type { ActorAuthenticationOptions } from '../modules/identity/sessionService'
-import { createQuoteDraftInput, quoteDraftListQuery } from '../modules/marketplace/quoteRequestValidation'
+import {
+  createQuoteDraftInput,
+  publishQuoteRequestInput,
+  quoteDraftListQuery,
+  quoteEligibleSupplierListQuery,
+  supplierQuoteRequestListQuery,
+} from '../modules/marketplace/quoteRequestValidation'
 import type { MarketplaceRepository } from '../modules/marketplace/marketplaceRepository'
 import {
   acceptSupplierInviteInput,
@@ -45,6 +51,10 @@ const marketplacePaths = [
   ['adminReviewDocument', /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review-documents\/([^/]+)$/, ['GET']],
   ['quoteDrafts', /^\/api\/v1\/marketplace\/requests$/, ['GET', 'POST']],
   ['quoteDraft', /^\/api\/v1\/marketplace\/requests\/([^/]+)$/, ['GET']],
+  ['quotePublication', /^\/api\/v1\/marketplace\/requests\/([^/]+)\/publication$/, ['GET', 'POST']],
+  ['quoteEligibleSuppliers', /^\/api\/v1\/marketplace\/requests\/([^/]+)\/eligible-suppliers$/, ['GET']],
+  ['supplierQuoteRequests', /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests$/, ['GET']],
+  ['supplierQuoteRequest', /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests\/([^/]+)$/, ['GET']],
 ] as const
 
 interface MarketplaceRoute {
@@ -72,6 +82,12 @@ function validated<T>(schema: ZodType<T>, input: unknown): T {
   throw new HttpError(422, 'VALIDATION_ERROR', 'ข้อมูล Marketplace ไม่ถูกต้อง', {
     fields: [...new Set(result.error.issues.map((issue) => issue.path.join('.')).filter(Boolean))],
   })
+}
+
+function uniqueQuery(params: URLSearchParams): Record<string, string> {
+  const query = Object.fromEntries(params)
+  if (Object.keys(query).length !== params.size) throw new HttpError(422, 'VALIDATION_ERROR', 'query parameter ต้องไม่ซ้ำ')
+  return query
 }
 
 export async function serveMarketplaceRoute(
@@ -110,9 +126,7 @@ export async function serveMarketplaceRoute(
     }
     case 'notifications':
     case 'adminNotifications': {
-      const query = Object.fromEntries(request.query)
-      if (Object.keys(query).length !== request.query.size) throw new HttpError(422, 'VALIDATION_ERROR', 'query parameter ต้องไม่ซ้ำ')
-      const after = validated(supplierNotificationQuery, query)
+      const after = validated(supplierNotificationQuery, uniqueQuery(request.query))
       return { status: 200, data: await repository.listNotifications(actor, asReviewer, after) }
     }
     case 'markNotificationRead':
@@ -178,13 +192,32 @@ export async function serveMarketplaceRoute(
         const input = validated(createQuoteDraftInput, await request.readBody())
         return { status: 201, data: await repository.createQuoteRequestDraft(actor, input) }
       }
-      const query = Object.fromEntries(request.query)
-      if (Object.keys(query).length !== request.query.size) throw new HttpError(422, 'VALIDATION_ERROR', 'query parameter ต้องไม่ซ้ำ')
-      const { workspaceId, after } = validated(quoteDraftListQuery, query)
+      const { workspaceId, after } = validated(quoteDraftListQuery, uniqueQuery(request.query))
       return { status: 200, data: await repository.listQuoteRequestDrafts(actor, workspaceId, after) }
     }
     case 'quoteDraft':
       return { status: 200, data: await repository.getQuoteRequestDraft(actor, validated(supplierIdSchema, parameter)) }
+    case 'quotePublication': {
+      const id = validated(supplierIdSchema, parameter)
+      if (request.method === 'GET') return { status: 200, data: await repository.getQuoteRequestPublication(actor, id) }
+      const { supplierIds } = validated(publishQuoteRequestInput, await request.readBody())
+      return { status: 200, data: await repository.publishQuoteRequest(actor, id, supplierIds) }
+    }
+    case 'quoteEligibleSuppliers': {
+      const id = validated(supplierIdSchema, parameter)
+      const after = validated(quoteEligibleSupplierListQuery, uniqueQuery(request.query))
+      return { status: 200, data: await repository.listQuoteRequestEligibleSuppliers(actor, id, after) }
+    }
+    case 'supplierQuoteRequests': {
+      const supplierId = validated(supplierIdSchema, parameter)
+      const after = validated(supplierQuoteRequestListQuery, uniqueQuery(request.query))
+      return { status: 200, data: await repository.listSupplierQuoteRequests(actor, supplierId, after) }
+    }
+    case 'supplierQuoteRequest': {
+      const supplierId = validated(supplierIdSchema, parameter)
+      const id = validated(supplierIdSchema, childId)
+      return { status: 200, data: await repository.getSupplierQuoteRequest(actor, supplierId, id) }
+    }
     case 'adminList': {
       const { status, after } = validated(supplierAdminQuery, Object.fromEntries(request.query))
       return { status: 200, data: await repository.adminList(actor, status, after) }

@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { QUOTE_REQUEST_DRAFT_PAGE_SIZE } from '../../../shared/contracts/quoteRequests'
+import { QUOTE_REQUEST_DRAFT_PAGE_SIZE, QUOTE_REQUEST_MAX_SUPPLIERS, QUOTE_REQUEST_PUBLICATION_PAGE_SIZE } from '../../../shared/contracts/quoteRequests'
+import { supplierPublicProfile } from './validation'
 
 const timestamp = z.iso.datetime({ offset: true })
 const draftCursor = z.object({ createdAt: timestamp, id: z.uuid() }).strict()
@@ -18,31 +19,63 @@ export const createQuoteDraftInput = z.object({
   notes,
 }).strict()
 
-export const quoteDraftListQuery = z.object({
-  workspaceId: z.uuid(),
+const listCursorQuery = z.object({
   afterCreatedAt: timestamp.optional(),
   afterId: z.uuid().optional(),
-}).strict().refine((query) => Boolean(query.afterCreatedAt) === Boolean(query.afterId))
-  .transform(({ workspaceId, afterCreatedAt, afterId }) => ({
-    workspaceId,
-    after: afterCreatedAt && afterId ? { createdAt: afterCreatedAt, id: afterId } : null,
-  }))
+}).strict()
+const hasCompleteCursor = (query: z.infer<typeof listCursorQuery>) => Boolean(query.afterCreatedAt) === Boolean(query.afterId)
+const quoteRequestAfter = ({ afterCreatedAt, afterId }: z.infer<typeof listCursorQuery>) =>
+  afterCreatedAt && afterId ? { createdAt: afterCreatedAt, id: afterId } : null
+
+export const quoteDraftListQuery = listCursorQuery.extend({ workspaceId: z.uuid() }).refine(hasCompleteCursor)
+  .transform((query) => ({ workspaceId: query.workspaceId, after: quoteRequestAfter(query) }))
+
+export const supplierQuoteRequestListQuery = listCursorQuery.refine(hasCompleteCursor).transform(quoteRequestAfter)
+export const quoteEligibleSupplierListQuery = z.object({ after: z.uuid().optional() }).strict()
+  .transform(({ after }) => after ?? null)
 
 const draftSummary = draftCursor.extend({ projectName: z.string().min(1), title, quantity }).strict()
 const dimension = z.number().positive()
+const quoteSpec = z.object({
+  template: z.string().min(1),
+  materialId: z.string().min(1),
+  W: dimension,
+  D: dimension,
+  H: dimension,
+  handle: z.boolean(),
+}).strict()
 export const quoteDraft = draftSummary.extend({
   workspaceId: z.uuid(),
   projectId: z.uuid(),
   projectRevision,
   notes,
-  spec: z.object({
-    template: z.string().min(1),
-    materialId: z.string().min(1),
-    W: dimension,
-    D: dimension,
-    H: dimension,
-    handle: z.boolean(),
-  }).strict(),
+  spec: quoteSpec,
+}).strict()
+
+export const publishQuoteRequestInput = z.object({
+  supplierIds: z.array(z.uuid().toLowerCase()).min(1).max(QUOTE_REQUEST_MAX_SUPPLIERS)
+    .refine((ids) => new Set(ids).size === ids.length),
+}).strict()
+
+const publicationSupplier = supplierPublicProfile.pick({ id: true, name: true })
+const eligibleSupplier = supplierPublicProfile.pick({ id: true, name: true, kind: true, capabilities: true })
+export const quoteEligibleSupplierPage = z.object({
+  items: z.array(eligibleSupplier).max(QUOTE_REQUEST_PUBLICATION_PAGE_SIZE),
+  nextCursor: z.uuid().nullable(),
+}).strict()
+
+export const quoteRequestPublication = z.object({
+  revisionId: z.uuid(),
+  publishedAt: timestamp,
+  suppliers: z.array(publicationSupplier).min(1).max(QUOTE_REQUEST_MAX_SUPPLIERS),
+}).strict()
+export const quoteRequestPublicationState = z.object({ publication: quoteRequestPublication.nullable() }).strict()
+
+const supplierQuoteRequestSummary = z.object({ id: z.uuid(), revisionId: z.uuid(), title, quantity, publishedAt: timestamp }).strict()
+export const supplierQuoteRequest = supplierQuoteRequestSummary.extend({ notes, spec: quoteSpec })
+export const supplierQuoteRequestPage = z.object({
+  items: z.array(supplierQuoteRequestSummary).max(QUOTE_REQUEST_PUBLICATION_PAGE_SIZE),
+  nextCursor: draftCursor.nullable(),
 }).strict()
 export const quoteDraftPage = z.object({
   items: z.array(draftSummary).max(QUOTE_REQUEST_DRAFT_PAGE_SIZE),

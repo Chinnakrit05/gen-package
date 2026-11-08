@@ -103,7 +103,7 @@ export function ProjectsPage() {
             <button type="button" onClick={() => void navigate('/factory/onboarding')}>พื้นที่ผู้รับผลิต</button>
           )}
           {showQuoteRequests && (
-            <button type="button" onClick={() => void navigate('/app/requests')}>ฉบับร่างขอราคา</button>
+            <button type="button" onClick={() => void navigate('/app/requests')}>คำขอราคา</button>
           )}
           <button className="projects-refresh" onClick={refresh} disabled={!online || projects.isFetching}>รีเฟรช</button>
           {canMigrate && (

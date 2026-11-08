@@ -8,6 +8,8 @@ export const DEFAULT_RETURN_TO = '/app/projects'
 export const RETURN_TO_KEY = 'packit-return-to'
 const MAX_LENGTH = 512
 const ALLOWED_PREFIXES = ['/app/', '/editor/']
+const UUID_PATH = '[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
+const SUPPLIER_PATH = new RegExp(`^/factory/(?:onboarding|${UUID_PATH}/(?:profile|team|jobs(?:/${UUID_PATH})?))/?$`, 'i')
 
 // คืน path ภายในที่อนุญาต หรือ null — กัน open redirect: `//host`, `/\host`, scheme, อักขระควบคุม,
 // origin อื่นหลัง resolve และปลายทางที่วนกลับหน้า login/root
@@ -24,7 +26,7 @@ export function sanitizeReturnTo(value: unknown, origin: string): string | null 
   }
   if (url.origin !== new URL(origin).origin) return null
   if (isSupplierInvitePath(url.pathname)) return url.search || url.hash ? null : SUPPLIER_INVITE_PATH
-  const supplierPath = /^\/factory\/(?:onboarding|[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}\/(?:profile|team))\/?$/i.test(url.pathname)
+  const supplierPath = SUPPLIER_PATH.test(url.pathname)
   const adminPath = /^\/admin\/suppliers\/?$/.test(url.pathname)
   if (!supplierPath && !adminPath && !ALLOWED_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) return null
   return `${url.pathname}${url.search}${url.hash}`

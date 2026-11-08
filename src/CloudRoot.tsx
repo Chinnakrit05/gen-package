@@ -32,6 +32,8 @@ const EditorRoute = lazy(() => import('./app/EditorRoute').then((m) => ({ defaul
 const QuoteRequestListPage = lazy(() => import('./features/requests/QuoteRequestPages').then((m) => ({ default: m.QuoteRequestListPage })))
 const QuoteRequestNewPage = lazy(() => import('./features/requests/QuoteRequestPages').then((m) => ({ default: m.QuoteRequestNewPage })))
 const QuoteRequestDetailPage = lazy(() => import('./features/requests/QuoteRequestPages').then((m) => ({ default: m.QuoteRequestDetailPage })))
+const SupplierQuoteRequestsPage = lazy(() => import('./features/requests/SupplierQuoteRequestPages').then((m) => ({ default: m.SupplierQuoteRequestsPage })))
+const SupplierQuoteRequestDetailPage = lazy(() => import('./features/requests/SupplierQuoteRequestPages').then((m) => ({ default: m.SupplierQuoteRequestDetailPage })))
 const SupplierOnboarding = lazy(() => import('./features/suppliers/SupplierOnboarding').then((m) => ({ default: m.SupplierOnboarding })))
 const SupplierProfilePage = lazy(() => import('./features/suppliers/SupplierProfilePage').then((m) => ({ default: m.SupplierProfilePage })))
 const SupplierTeamPage = lazy(() => import('./features/suppliers/SupplierTeamPage').then((m) => ({ default: m.SupplierTeamPage })))
@@ -129,6 +131,14 @@ const router = createBrowserRouter([
               element: <Suspense fallback={<MarketplaceLoading />}><SupplierTeamPage /></Suspense>,
             },
             {
+              path: '/factory/:supplierId/jobs',
+              element: <Suspense fallback={<QuoteRequestLoading />}><SupplierQuoteRequestsPage /></Suspense>,
+            },
+            {
+              path: '/factory/:supplierId/jobs/:requestId',
+              element: <Suspense fallback={<QuoteRequestLoading />}><SupplierQuoteRequestDetailPage /></Suspense>,
+            },
+            {
               path: SUPPLIER_INVITE_PATH,
               element: <Suspense fallback={<MarketplaceLoading />}><SupplierInviteAccept /></Suspense>,
             },
@@ -142,7 +152,7 @@ const router = createBrowserRouter([
 ])
 
 function QuoteRequestLoading() {
-  return <LoadingStage title="กำลังเปิดคำขอราคา" message="กำลังโหลดข้อมูลฉบับร่าง…" />
+  return <LoadingStage title="กำลังเปิดคำขอราคา" message="กำลังโหลดข้อมูลคำขอราคา…" />
 }
 
 function MarketplaceLoading() {

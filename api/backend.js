@@ -54772,51 +54772,8 @@ var SUPPLIER_REVIEW_DOCUMENT_LIMIT = 3;
 
 // shared/contracts/quoteRequests.ts
 var QUOTE_REQUEST_DRAFT_PAGE_SIZE = 24;
-
-// server/modules/marketplace/quoteRequestValidation.ts
-var timestamp2 = external_exports.iso.datetime({ offset: true });
-var draftCursor = external_exports.object({ createdAt: timestamp2, id: external_exports.uuid() }).strict();
-var title = external_exports.string().trim().min(1).max(100);
-var quantity = external_exports.int().min(1).max(1e6);
-var notes = external_exports.string().trim().max(1e3);
-var projectRevision = external_exports.int().positive();
-var createQuoteDraftInput = external_exports.object({
-  workspaceId: external_exports.uuid(),
-  projectId: external_exports.uuid(),
-  expectedProjectRevision: projectRevision,
-  operationId: external_exports.uuid(),
-  title,
-  quantity,
-  notes
-}).strict();
-var quoteDraftListQuery = external_exports.object({
-  workspaceId: external_exports.uuid(),
-  afterCreatedAt: timestamp2.optional(),
-  afterId: external_exports.uuid().optional()
-}).strict().refine((query) => Boolean(query.afterCreatedAt) === Boolean(query.afterId)).transform(({ workspaceId, afterCreatedAt, afterId }) => ({
-  workspaceId,
-  after: afterCreatedAt && afterId ? { createdAt: afterCreatedAt, id: afterId } : null
-}));
-var draftSummary = draftCursor.extend({ projectName: external_exports.string().min(1), title, quantity }).strict();
-var dimension = external_exports.number().positive();
-var quoteDraft = draftSummary.extend({
-  workspaceId: external_exports.uuid(),
-  projectId: external_exports.uuid(),
-  projectRevision,
-  notes,
-  spec: external_exports.object({
-    template: external_exports.string().min(1),
-    materialId: external_exports.string().min(1),
-    W: dimension,
-    D: dimension,
-    H: dimension,
-    handle: external_exports.boolean()
-  }).strict()
-}).strict();
-var quoteDraftPage = external_exports.object({
-  items: external_exports.array(draftSummary).max(QUOTE_REQUEST_DRAFT_PAGE_SIZE),
-  nextCursor: draftCursor.nullable()
-}).strict();
+var QUOTE_REQUEST_PUBLICATION_PAGE_SIZE = 24;
+var QUOTE_REQUEST_MAX_SUPPLIERS = 5;
 
 // server/modules/marketplace/validation.ts
 var supplierIdSchema = external_exports.uuid();
@@ -54930,10 +54887,81 @@ var supplierReviewDocuments = external_exports.object({ documents: external_expo
 var supplierReviewDocumentDownload = external_exports.object({ document: supplierReviewDocument, dataBase64: reviewDocumentBase64 }).strict();
 var removedSupplierReviewDocument = external_exports.object({ id: external_exports.uuid() }).strict();
 
+// server/modules/marketplace/quoteRequestValidation.ts
+var timestamp2 = external_exports.iso.datetime({ offset: true });
+var draftCursor = external_exports.object({ createdAt: timestamp2, id: external_exports.uuid() }).strict();
+var title = external_exports.string().trim().min(1).max(100);
+var quantity = external_exports.int().min(1).max(1e6);
+var notes = external_exports.string().trim().max(1e3);
+var projectRevision = external_exports.int().positive();
+var createQuoteDraftInput = external_exports.object({
+  workspaceId: external_exports.uuid(),
+  projectId: external_exports.uuid(),
+  expectedProjectRevision: projectRevision,
+  operationId: external_exports.uuid(),
+  title,
+  quantity,
+  notes
+}).strict();
+var listCursorQuery = external_exports.object({
+  afterCreatedAt: timestamp2.optional(),
+  afterId: external_exports.uuid().optional()
+}).strict();
+var hasCompleteCursor = (query) => Boolean(query.afterCreatedAt) === Boolean(query.afterId);
+var quoteRequestAfter = ({ afterCreatedAt, afterId }) => afterCreatedAt && afterId ? { createdAt: afterCreatedAt, id: afterId } : null;
+var quoteDraftListQuery = listCursorQuery.extend({ workspaceId: external_exports.uuid() }).refine(hasCompleteCursor).transform((query) => ({ workspaceId: query.workspaceId, after: quoteRequestAfter(query) }));
+var supplierQuoteRequestListQuery = listCursorQuery.refine(hasCompleteCursor).transform(quoteRequestAfter);
+var quoteEligibleSupplierListQuery = external_exports.object({ after: external_exports.uuid().optional() }).strict().transform(({ after }) => after ?? null);
+var draftSummary = draftCursor.extend({ projectName: external_exports.string().min(1), title, quantity }).strict();
+var dimension = external_exports.number().positive();
+var quoteSpec = external_exports.object({
+  template: external_exports.string().min(1),
+  materialId: external_exports.string().min(1),
+  W: dimension,
+  D: dimension,
+  H: dimension,
+  handle: external_exports.boolean()
+}).strict();
+var quoteDraft = draftSummary.extend({
+  workspaceId: external_exports.uuid(),
+  projectId: external_exports.uuid(),
+  projectRevision,
+  notes,
+  spec: quoteSpec
+}).strict();
+var publishQuoteRequestInput = external_exports.object({
+  supplierIds: external_exports.array(external_exports.uuid().toLowerCase()).min(1).max(QUOTE_REQUEST_MAX_SUPPLIERS).refine((ids) => new Set(ids).size === ids.length)
+}).strict();
+var publicationSupplier = supplierPublicProfile.pick({ id: true, name: true });
+var eligibleSupplier = supplierPublicProfile.pick({ id: true, name: true, kind: true, capabilities: true });
+var quoteEligibleSupplierPage = external_exports.object({
+  items: external_exports.array(eligibleSupplier).max(QUOTE_REQUEST_PUBLICATION_PAGE_SIZE),
+  nextCursor: external_exports.uuid().nullable()
+}).strict();
+var quoteRequestPublication = external_exports.object({
+  revisionId: external_exports.uuid(),
+  publishedAt: timestamp2,
+  suppliers: external_exports.array(publicationSupplier).min(1).max(QUOTE_REQUEST_MAX_SUPPLIERS)
+}).strict();
+var quoteRequestPublicationState = external_exports.object({ publication: quoteRequestPublication.nullable() }).strict();
+var supplierQuoteRequestSummary = external_exports.object({ id: external_exports.uuid(), revisionId: external_exports.uuid(), title, quantity, publishedAt: timestamp2 }).strict();
+var supplierQuoteRequest = supplierQuoteRequestSummary.extend({ notes, spec: quoteSpec });
+var supplierQuoteRequestPage = external_exports.object({
+  items: external_exports.array(supplierQuoteRequestSummary).max(QUOTE_REQUEST_PUBLICATION_PAGE_SIZE),
+  nextCursor: draftCursor.nullable()
+}).strict();
+var quoteDraftPage = external_exports.object({
+  items: external_exports.array(draftSummary).max(QUOTE_REQUEST_DRAFT_PAGE_SIZE),
+  nextCursor: draftCursor.nullable()
+}).strict();
+
 // server/adapters/supabase/marketplaceRepository.ts
 var databaseErrors = /* @__PURE__ */ new Map([
   ["APP_USER_NOT_ACTIVE", [403, "USER_NOT_ACTIVE", "\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19"]],
   ["MARKETPLACE_NOT_FOUND", [404, "NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E01\u0E34\u0E08\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49"]],
+  ["QUOTE_REQUEST_NOT_FOUND", [404, "NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E04\u0E33\u0E02\u0E2D\u0E23\u0E32\u0E04\u0E32\u0E2B\u0E23\u0E37\u0E2D\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E07\u0E32\u0E19\u0E02\u0E2D\u0E07\u0E01\u0E34\u0E08\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49"]],
+  ["QUOTE_REQUEST_ALREADY_PUBLISHED", [409, "MARKETPLACE_CONFLICT", "\u0E04\u0E33\u0E02\u0E2D\u0E23\u0E32\u0E04\u0E32\u0E19\u0E35\u0E49\u0E40\u0E1C\u0E22\u0E41\u0E1E\u0E23\u0E48\u0E41\u0E25\u0E49\u0E27 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E23\u0E27\u0E08\u0E23\u0E32\u0E22\u0E0A\u0E37\u0E48\u0E2D\u0E1C\u0E39\u0E49\u0E23\u0E31\u0E1A\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14"]],
+  ["QUOTE_REQUEST_SUPPLIER_UNAVAILABLE", [409, "MARKETPLACE_CONFLICT", "\u0E1C\u0E39\u0E49\u0E23\u0E31\u0E1A\u0E1C\u0E25\u0E34\u0E15\u0E17\u0E35\u0E48\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E1A\u0E32\u0E07\u0E23\u0E32\u0E22\u0E22\u0E31\u0E07\u0E23\u0E31\u0E1A\u0E04\u0E33\u0E02\u0E2D\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E49\u0E32\u0E19\u0E08\u0E32\u0E01\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14"]],
   ["MARKETPLACE_FORBIDDEN", [403, "MARKETPLACE_FORBIDDEN", "\u0E04\u0E38\u0E13\u0E44\u0E21\u0E48\u0E21\u0E35\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E17\u0E33\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49"]],
   ["MARKETPLACE_CONFLICT", [409, "MARKETPLACE_CONFLICT", "\u0E0A\u0E37\u0E48\u0E2D URL \u0E16\u0E39\u0E01\u0E43\u0E0A\u0E49\u0E41\u0E25\u0E49\u0E27\u0E2B\u0E23\u0E37\u0E2D\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E01\u0E34\u0E08\u0E01\u0E32\u0E23\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E44\u0E1B \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E23\u0E27\u0E08\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14"]],
   ["MARKETPLACE_INVITE_INVALID", [404, "NOT_FOUND", "\u0E43\u0E0A\u0E49\u0E04\u0E33\u0E40\u0E0A\u0E34\u0E0D\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E23\u0E27\u0E08\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E17\u0E35\u0E48\u0E43\u0E0A\u0E49\u0E2B\u0E23\u0E37\u0E2D\u0E02\u0E2D\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E43\u0E2B\u0E21\u0E48"]],
@@ -55122,6 +55150,41 @@ var SupabaseMarketplaceRepository = class {
       p_actor_user_id: actor.userId,
       p_request_id: id
     }, quoteDraft);
+  }
+  getQuoteRequestPublication(actor, id) {
+    return this.rpc("marketplace_quote_request_publication", {
+      p_actor_user_id: actor.userId,
+      p_request_id: id
+    }, quoteRequestPublicationState);
+  }
+  listQuoteRequestEligibleSuppliers(actor, id, after) {
+    return this.rpc("marketplace_quote_request_eligible_suppliers", {
+      p_actor_user_id: actor.userId,
+      p_request_id: id,
+      p_after: after
+    }, quoteEligibleSupplierPage);
+  }
+  publishQuoteRequest(actor, id, supplierIds) {
+    return this.rpc("marketplace_publish_quote_request", {
+      p_actor_user_id: actor.userId,
+      p_request_id: id,
+      p_supplier_ids: supplierIds
+    }, quoteRequestPublication);
+  }
+  listSupplierQuoteRequests(actor, supplierId, after) {
+    return this.rpc("marketplace_list_supplier_quote_requests", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_after_created_at: after?.createdAt ?? null,
+      p_after_id: after?.id ?? null
+    }, supplierQuoteRequestPage);
+  }
+  getSupplierQuoteRequest(actor, supplierId, id) {
+    return this.rpc("marketplace_get_supplier_quote_request", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_request_id: id
+    }, supplierQuoteRequest);
   }
   publicProfile(slug) {
     return this.rpc("marketplace_public_supplier", { p_slug: slug }, supplierPublicProfile);
@@ -61646,7 +61709,11 @@ var marketplacePaths = [
   ["adminReviewDocuments", /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review-documents$/, ["GET"]],
   ["adminReviewDocument", /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review-documents\/([^/]+)$/, ["GET"]],
   ["quoteDrafts", /^\/api\/v1\/marketplace\/requests$/, ["GET", "POST"]],
-  ["quoteDraft", /^\/api\/v1\/marketplace\/requests\/([^/]+)$/, ["GET"]]
+  ["quoteDraft", /^\/api\/v1\/marketplace\/requests\/([^/]+)$/, ["GET"]],
+  ["quotePublication", /^\/api\/v1\/marketplace\/requests\/([^/]+)\/publication$/, ["GET", "POST"]],
+  ["quoteEligibleSuppliers", /^\/api\/v1\/marketplace\/requests\/([^/]+)\/eligible-suppliers$/, ["GET"]],
+  ["supplierQuoteRequests", /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests$/, ["GET"]],
+  ["supplierQuoteRequest", /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests\/([^/]+)$/, ["GET"]]
 ];
 function matchMarketplaceRoute(path6) {
   for (const [kind, pattern, methods] of marketplacePaths) {
@@ -61664,6 +61731,11 @@ function validated(schema, input2) {
   throw new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 Marketplace \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07", {
     fields: [...new Set(result.error.issues.map((issue2) => issue2.path.join(".")).filter(Boolean))]
   });
+}
+function uniqueQuery(params) {
+  const query = Object.fromEntries(params);
+  if (Object.keys(query).length !== params.size) throw new HttpError(422, "VALIDATION_ERROR", "query parameter \u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E0B\u0E49\u0E33");
+  return query;
 }
 async function serveMarketplaceRoute(route, request, repository) {
   const { kind, parameter, childId } = route;
@@ -61690,9 +61762,7 @@ async function serveMarketplaceRoute(route, request, repository) {
     }
     case "notifications":
     case "adminNotifications": {
-      const query = Object.fromEntries(request.query);
-      if (Object.keys(query).length !== request.query.size) throw new HttpError(422, "VALIDATION_ERROR", "query parameter \u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E0B\u0E49\u0E33");
-      const after = validated(supplierNotificationQuery, query);
+      const after = validated(supplierNotificationQuery, uniqueQuery(request.query));
       return { status: 200, data: await repository.listNotifications(actor, asReviewer, after) };
     }
     case "markNotificationRead":
@@ -61758,13 +61828,32 @@ async function serveMarketplaceRoute(route, request, repository) {
         const input2 = validated(createQuoteDraftInput, await request.readBody());
         return { status: 201, data: await repository.createQuoteRequestDraft(actor, input2) };
       }
-      const query = Object.fromEntries(request.query);
-      if (Object.keys(query).length !== request.query.size) throw new HttpError(422, "VALIDATION_ERROR", "query parameter \u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E0B\u0E49\u0E33");
-      const { workspaceId, after } = validated(quoteDraftListQuery, query);
+      const { workspaceId, after } = validated(quoteDraftListQuery, uniqueQuery(request.query));
       return { status: 200, data: await repository.listQuoteRequestDrafts(actor, workspaceId, after) };
     }
     case "quoteDraft":
       return { status: 200, data: await repository.getQuoteRequestDraft(actor, validated(supplierIdSchema, parameter)) };
+    case "quotePublication": {
+      const id = validated(supplierIdSchema, parameter);
+      if (request.method === "GET") return { status: 200, data: await repository.getQuoteRequestPublication(actor, id) };
+      const { supplierIds } = validated(publishQuoteRequestInput, await request.readBody());
+      return { status: 200, data: await repository.publishQuoteRequest(actor, id, supplierIds) };
+    }
+    case "quoteEligibleSuppliers": {
+      const id = validated(supplierIdSchema, parameter);
+      const after = validated(quoteEligibleSupplierListQuery, uniqueQuery(request.query));
+      return { status: 200, data: await repository.listQuoteRequestEligibleSuppliers(actor, id, after) };
+    }
+    case "supplierQuoteRequests": {
+      const supplierId = validated(supplierIdSchema, parameter);
+      const after = validated(supplierQuoteRequestListQuery, uniqueQuery(request.query));
+      return { status: 200, data: await repository.listSupplierQuoteRequests(actor, supplierId, after) };
+    }
+    case "supplierQuoteRequest": {
+      const supplierId = validated(supplierIdSchema, parameter);
+      const id = validated(supplierIdSchema, childId);
+      return { status: 200, data: await repository.getSupplierQuoteRequest(actor, supplierId, id) };
+    }
     case "adminList": {
       const { status, after } = validated(supplierAdminQuery, Object.fromEntries(request.query));
       return { status: 200, data: await repository.adminList(actor, status, after) };

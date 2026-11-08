@@ -1,4 +1,8 @@
+import type { SupplierPublicProfile } from './marketplace'
+
 export const QUOTE_REQUEST_DRAFT_PAGE_SIZE = 24
+export const QUOTE_REQUEST_PUBLICATION_PAGE_SIZE = 24
+export const QUOTE_REQUEST_MAX_SUPPLIERS = 5
 
 export interface QuoteRequestCursor {
   createdAt: string
@@ -39,4 +43,39 @@ export interface CreateQuoteRequestDraftInput {
   title: string
   quantity: number
   notes: string
+}
+
+export interface PublishQuoteRequestInput {
+  supplierIds: string[]
+}
+
+export interface QuoteRequestPublication {
+  revisionId: string
+  publishedAt: string
+  suppliers: Pick<SupplierPublicProfile, 'id' | 'name'>[]
+}
+
+export type QuoteRequestEligibleSupplier = Pick<SupplierPublicProfile, 'id' | 'name' | 'kind' | 'capabilities'>
+
+export interface QuoteRequestEligibleSupplierPage {
+  items: QuoteRequestEligibleSupplier[]
+  nextCursor: string | null
+}
+
+export interface SupplierQuoteRequestSummary {
+  id: string
+  revisionId: string
+  title: string
+  quantity: number
+  publishedAt: string
+}
+
+export interface SupplierQuoteRequest extends SupplierQuoteRequestSummary {
+  notes: string
+  spec: QuoteRequestDraft['spec']
+}
+
+export interface SupplierQuoteRequestPage {
+  items: SupplierQuoteRequestSummary[]
+  nextCursor: QuoteRequestCursor | null
 }

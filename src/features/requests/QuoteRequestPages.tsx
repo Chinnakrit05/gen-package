@@ -1,20 +1,19 @@
-import { useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useCallback, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import type { CreateQuoteRequestDraftInput, QuoteRequestCursor, QuoteRequestDraft } from '../../../shared/contracts/quoteRequests'
+import type { CreateQuoteRequestDraftInput, QuoteRequestCursor, QuoteRequestDraft, QuoteRequestPublication } from '../../../shared/contracts/quoteRequests'
 import { useCloudSession, type CloudSessionValue } from '../../app/cloudSession'
 import { ApiClientError } from '../../services/api/client'
 import { getProject } from '../../services/api/projects'
-import { createQuoteRequestDraft, getQuoteRequestDraft, listQuoteRequestDrafts } from '../../services/api/quoteRequests'
+import { createQuoteRequestDraft, getQuoteRequestDraft, getQuoteRequestPublication, listQuoteRequestDrafts } from '../../services/api/quoteRequests'
 import { MarketplaceError, MarketplaceShell } from '../suppliers/MarketplaceShell'
+import { QuoteRequestSpec, formatQuoteDate, quoteAccessUnavailable, quoteQuantity, quoteRequestId } from './QuoteRequestFacts'
+import { QuoteRequestPublicationReceipt, QuoteRequestPublishPanel } from './QuoteRequestPublishPanel'
 import './quoteRequests.css'
 
-const uuid = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i
 const TITLE_LIMIT = 100
 const QUANTITY_LIMIT = 1_000_000
 const NOTES_LIMIT = 1000
-const quantityFormat = new Intl.NumberFormat('th-TH')
-const dateFormat = new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
 
 type Source = {
   id: string
@@ -28,14 +27,6 @@ type Source = {
 const ownWorkspace = (session: CloudSessionValue, id: string) =>
   session.me?.workspaces.find((workspace) => workspace.id === id && workspace.role === 'owner')
 
-function unavailable(error: unknown): boolean {
-  return error instanceof ApiClientError && [401, 403, 404].includes(error.status)
-}
-
-function formattedDate(value: string): string {
-  return dateFormat.format(new Date(value.replace(/(\.\d{3})\d+Z$/, '$1Z')))
-}
-
 function RequestPage({ title, children, showListLink = false }: {
   title: string
   children: ReactNode
@@ -44,7 +35,7 @@ function RequestPage({ title, children, showListLink = false }: {
   const session = useCloudSession()
   return (
     <MarketplaceShell title={title}>
-      {showListLink && <div><Link to="/app/requests">กลับไปที่ฉบับร่างคำขอราคา</Link></div>}
+      {showListLink && <div><Link to="/app/requests">กลับไปที่คำขอราคา</Link></div>}
       {session.meStatus === 'loading' && <p role="status">กำลังตรวจสิทธิ์พื้นที่งาน…</p>}
       {session.meStatus === 'error' && <MarketplaceError message="ตรวจสิทธิ์พื้นที่งานไม่สำเร็จ" retry={session.refreshMembership} />}
       {session.meStatus === 'ready' && children}
@@ -56,10 +47,10 @@ export function QuoteRequestListPage() {
   const session = useCloudSession()
   const workspace = ownWorkspace(session, session.workspaceId)
   return (
-    <RequestPage title="ฉบับร่างคำขอราคา">
+    <RequestPage title="คำขอราคา">
       {workspace ? <OwnedDraftList key={workspace.id} workspaceId={workspace.id} workspaceName={workspace.name} /> : (
         <section className="marketplace-card">
-          <MarketplaceError message="เลือกพื้นที่งานที่คุณเป็นเจ้าของเพื่อเปิดฉบับร่างคำขอราคา" />
+          <MarketplaceError message="เลือกพื้นที่งานที่คุณเป็นเจ้าของเพื่อเปิดคำขอราคา" />
           <Link to="/app/projects">กลับไปเลือกพื้นที่งาน</Link>
         </section>
       )}
@@ -93,26 +84,26 @@ function OwnedDraftList({ workspaceId, workspaceName }: { workspaceId: string; w
         </div>
       </section>
       <section className="marketplace-card">
-        {(list.isPending || list.isFetching) && <p role="status">กำลังโหลดฉบับร่าง…</p>}
+        {(list.isPending || list.isFetching) && <p role="status">กำลังโหลดคำขอราคา…</p>}
         {list.isError && <MarketplaceError
-          message={unavailable(list.error) ? 'บัญชีนี้เปิดฉบับร่างของพื้นที่งานนี้ไม่ได้' : 'โหลดฉบับร่างไม่สำเร็จ'}
-          retry={unavailable(list.error) ? undefined : () => void list.refetch()}
+          message={quoteAccessUnavailable(list.error) ? 'บัญชีนี้เปิดคำขอราคาของพื้นที่งานนี้ไม่ได้' : 'โหลดคำขอราคาไม่สำเร็จ'}
+          retry={quoteAccessUnavailable(list.error) ? undefined : () => void list.refetch()}
         />}
-        {data && (data.items.length === 0 ? <p className="marketplace-muted">ยังไม่มีฉบับร่างในหน้านี้</p> : (
+        {data && (data.items.length === 0 ? <p className="marketplace-muted">ยังไม่มีคำขอราคาในหน้านี้</p> : (
           <ul className="marketplace-list">
             {data.items.map((draft) => (
               <li className="quote-request-row" key={draft.id}>
                 <div className="marketplace-description">
                   <Link to={`/app/requests/${draft.id}`}>{draft.title}</Link>
-                  <p>{draft.projectName} · {quantityFormat.format(draft.quantity)} ชิ้น</p>
+                  <p>{draft.projectName} · {quoteQuantity.format(draft.quantity)} ชิ้น</p>
                 </div>
-                <time className="marketplace-muted" dateTime={draft.createdAt}>{formattedDate(draft.createdAt)}</time>
+                <time className="marketplace-muted" dateTime={draft.createdAt}>{formatQuoteDate(draft.createdAt)}</time>
               </li>
             ))}
           </ul>
         ))}
         {data && (after || next) && (
-          <div className="marketplace-meta" role="group" aria-label="หน้าฉบับร่าง">
+          <div className="marketplace-meta" role="group" aria-label="หน้าคำขอราคา">
             <button type="button" disabled={!after} onClick={() => setCursors((previous) => previous.slice(0, -1))}>ใหม่กว่า</button>
             <button type="button" disabled={!next} onClick={() => {
               if (next) setCursors((previous) => [...previous, next])
@@ -130,7 +121,7 @@ export function QuoteRequestNewPage() {
   const projectId = projectIds.length === 1 ? projectIds[0] : ''
   return (
     <RequestPage title="สร้างฉบับร่างคำขอราคา" showListLink>
-      {uuid.test(projectId) ? <ProjectDraftSource key={projectId} projectId={projectId} /> : (
+      {quoteRequestId.test(projectId) ? <ProjectDraftSource key={projectId} projectId={projectId} /> : (
         <section className="marketplace-card">
           <MarketplaceError message="เลือกงาน Cloud ที่บันทึกไว้เพื่อเริ่มฉบับร่าง" />
           <Link to="/app/projects">เลือกงานที่บันทึกไว้</Link>
@@ -159,7 +150,7 @@ function ProjectDraftSource({ projectId }: { projectId: string }) {
     gcTime: 0,
   })
   const owned = source.data && ownWorkspace(session, source.data.workspaceId)
-  const denied = unavailable(source.error) || source.data === null || Boolean(source.data && !owned)
+  const denied = quoteAccessUnavailable(source.error) || source.data === null || Boolean(source.data && !owned)
   const reload = () => void source.refetch()
   return (
     <>
@@ -213,7 +204,7 @@ function CreateDraftForm({ source, reloadSource, sourceBusy }: {
       onSuccess: (draft) => void navigate(`/app/requests/${draft.id}`, { replace: true }),
     })
   }
-  if (unavailable(create.error)) return <MarketplaceError message="บัญชีนี้บันทึกฉบับร่างจากงานนี้ไม่ได้" />
+  if (quoteAccessUnavailable(create.error)) return <MarketplaceError message="บัญชีนี้บันทึกฉบับร่างจากงานนี้ไม่ได้" />
   return (
     <>
       <SourceSpec name={source.name} revision={source.revision} spec={source.spec} />
@@ -252,8 +243,8 @@ function CreateDraftForm({ source, reloadSource, sourceBusy }: {
 export function QuoteRequestDetailPage() {
   const { id } = useParams()
   return (
-    <RequestPage title="ฉบับร่างคำขอราคา" showListLink>
-      {id && uuid.test(id) ? <OwnedDraftDetail key={id} id={id} /> : <MarketplaceError message="ลิงก์ฉบับร่างไม่ถูกต้อง" />}
+    <RequestPage title="คำขอราคา" showListLink>
+      {id && quoteRequestId.test(id) ? <OwnedDraftDetail key={id} id={id} /> : <MarketplaceError message="ลิงก์คำขอราคาไม่ถูกต้อง" />}
     </RequestPage>
   )
 }
@@ -268,25 +259,57 @@ function OwnedDraftDetail({ id }: { id: string }) {
   const draft = detail.isSuccess && ownWorkspace(session, detail.data.workspaceId) ? detail.data : undefined
   return (
     <>
-      {detail.isPending && <p role="status">กำลังโหลดฉบับร่าง…</p>}
-      {detail.isSuccess && !draft && <MarketplaceError message="ไม่พบฉบับร่างหรือบัญชีนี้เปิดไม่ได้" />}
+      {detail.isPending && <p role="status">กำลังโหลดคำขอราคา…</p>}
+      {detail.isSuccess && !draft && <MarketplaceError message="ไม่พบคำขอราคาหรือบัญชีนี้เปิดไม่ได้" />}
       {detail.isError && <MarketplaceError
-        message={unavailable(detail.error) ? 'ไม่พบฉบับร่างหรือบัญชีนี้เปิดไม่ได้' : 'โหลดฉบับร่างไม่สำเร็จ'}
-        retry={unavailable(detail.error) ? undefined : () => void detail.refetch()}
+        message={quoteAccessUnavailable(detail.error) ? 'ไม่พบคำขอราคาหรือบัญชีนี้เปิดไม่ได้' : 'โหลดคำขอราคาไม่สำเร็จ'}
+        retry={quoteAccessUnavailable(detail.error) ? undefined : () => void detail.refetch()}
       />}
-      {draft && (
-        <>
-          <section className="marketplace-card">
-            <div className="marketplace-meta">
-              <h2>{draft.title}</h2>
-              <span className="marketplace-badge">ฉบับร่าง</span>
-            </div>
-            <p>จำนวนที่ต้องการผลิต {quantityFormat.format(draft.quantity)} ชิ้น</p>
-            {draft.notes && <p className="marketplace-description">{draft.notes}</p>}
-            <time className="marketplace-muted" dateTime={draft.createdAt}>บันทึกเมื่อ {formattedDate(draft.createdAt)}</time>
-          </section>
-          <SourceSpec name={draft.projectName} revision={draft.projectRevision} spec={draft.spec} />
-        </>
+      {draft && <OwnedQuoteRequest draft={draft} />}
+    </>
+  )
+}
+
+function OwnedQuoteRequest({ draft }: { draft: QuoteRequestDraft }) {
+  const session = useCloudSession()
+  const queryClient = useQueryClient()
+  const key = ['cloud', session.appUserId, draft.workspaceId, 'quote-request-publication', draft.id] as const
+  const publication = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => getQuoteRequestPublication(session.apiBaseUrl, session.getAccessToken(), draft.id, signal),
+    gcTime: 0,
+    refetchOnWindowFocus: true,
+  })
+  const { refetch } = publication
+  const reloadPublication = useCallback(async () => {
+    const current = await refetch()
+    return current.isSuccess && current.data.publication === null
+  }, [refetch])
+  const published = async (receipt: QuoteRequestPublication) => {
+    await queryClient.cancelQueries({ queryKey: key, exact: true })
+    if (queryClient.getQueryState(key)) queryClient.setQueryData(key, { publication: receipt })
+  }
+  if (quoteAccessUnavailable(publication.error)) return <MarketplaceError message="บัญชีนี้เปิดคำขอราคาไม่ได้" />
+  const receipt = publication.isSuccess ? publication.data.publication : undefined
+
+  return (
+    <>
+      <section className="marketplace-card">
+        <div className="marketplace-meta">
+          <h2>{draft.title}</h2>
+          {receipt !== undefined && <span className="marketplace-badge">{receipt ? 'ส่งแล้ว' : 'ฉบับร่าง'}</span>}
+        </div>
+        <p>จำนวนที่ต้องการผลิต {quoteQuantity.format(draft.quantity)} ชิ้น</p>
+        {draft.notes && <p className="marketplace-description">{draft.notes}</p>}
+        <time className="marketplace-muted" dateTime={draft.createdAt}>บันทึกเมื่อ {formatQuoteDate(draft.createdAt)}</time>
+      </section>
+      <SourceSpec name={draft.projectName} revision={draft.projectRevision} spec={draft.spec} />
+      {publication.isPending && <p role="status">กำลังตรวจสถานะการส่งคำขอ…</p>}
+      {publication.isError && <MarketplaceError message="โหลดสถานะการส่งคำขอไม่สำเร็จ" retry={() => void reloadPublication()} />}
+      {receipt && <QuoteRequestPublicationReceipt receipt={receipt} />}
+      {publication.data?.publication === null && (
+        <QuoteRequestPublishPanel requestId={draft.id} workspaceId={draft.workspaceId}
+          blocked={!publication.isSuccess || publication.isFetching} onPublished={published} reloadPublication={reloadPublication} />
       )}
     </>
   )
@@ -294,15 +317,8 @@ function OwnedDraftDetail({ id }: { id: string }) {
 
 function SourceSpec({ name, revision, spec }: { name: string; revision: number; spec: QuoteRequestDraft['spec'] }) {
   return (
-    <section className="marketplace-card">
-      <h2>สเปกงานต้นทาง</h2>
+    <QuoteRequestSpec spec={spec}>
       <p className="marketplace-description"><strong>{name}</strong> · Revision {revision}</p>
-      <dl className="quote-request-spec">
-        <div><dt>รหัสแบบ</dt><dd>{spec.template}</dd></div>
-        <div><dt>รหัสวัสดุ</dt><dd>{spec.materialId}</dd></div>
-        <div><dt>กว้าง × ลึก × สูง</dt><dd>{spec.W} × {spec.D} × {spec.H} มม.</dd></div>
-        <div><dt>หูหิ้ว</dt><dd>{spec.handle ? 'มี' : 'ไม่มี'}</dd></div>
-      </dl>
-    </section>
+    </QuoteRequestSpec>
   )
 }

@@ -55,6 +55,16 @@ describe('sanitizeReturnTo', () => {
     }
   })
 
+  it('allows exact supplier job paths for sign-in return', () => {
+    const supplier = '/factory/0b2f2c8e-1111-4222-8333-444455556666/jobs'
+    const detail = supplier + '/0b2f2c8e-aaaa-4222-8333-444455556666'
+    expect(sanitizeReturnTo(supplier, ORIGIN)).toBe(supplier)
+    expect(sanitizeReturnTo(detail, ORIGIN)).toBe(detail)
+    for (const path of ['/factory/unknown/jobs', supplier + '/unknown', detail + '/extra', supplier + '/%2Fexternal']) {
+      expect(sanitizeReturnTo(path, ORIGIN)).toBeNull()
+    }
+  })
+
   it('allows only a token-free invitation return path', () => {
     const path = '/factory/invitations/accept'
     const token = 'A-_'.repeat(14) + 'X'

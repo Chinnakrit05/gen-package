@@ -15,7 +15,15 @@ import type { ServerConfig } from '../../config'
 import { HttpError } from '../../http/errors'
 import type { Actor } from '../../modules/identity/actor'
 import type { MarketplaceRepository } from '../../modules/marketplace/marketplaceRepository'
-import { quoteDraft, quoteDraftPage } from '../../modules/marketplace/quoteRequestValidation'
+import {
+  quoteDraft,
+  quoteDraftPage,
+  quoteEligibleSupplierPage,
+  quoteRequestPublication,
+  quoteRequestPublicationState,
+  supplierQuoteRequest,
+  supplierQuoteRequestPage,
+} from '../../modules/marketplace/quoteRequestValidation'
 import {
   marketplaceContext,
   removedSupplierMember,
@@ -38,6 +46,9 @@ import {
 const databaseErrors = new Map<string, [number, ApiErrorCode, string]>([
   ['APP_USER_NOT_ACTIVE', [403, 'USER_NOT_ACTIVE', 'บัญชีนี้ไม่พร้อมใช้งาน']],
   ['MARKETPLACE_NOT_FOUND', [404, 'NOT_FOUND', 'ไม่พบกิจการนี้']],
+  ['QUOTE_REQUEST_NOT_FOUND', [404, 'NOT_FOUND', 'ไม่พบคำขอราคาหรือรายการงานของกิจการนี้']],
+  ['QUOTE_REQUEST_ALREADY_PUBLISHED', [409, 'MARKETPLACE_CONFLICT', 'คำขอราคานี้เผยแพร่แล้ว กรุณาตรวจรายชื่อผู้รับล่าสุด']],
+  ['QUOTE_REQUEST_SUPPLIER_UNAVAILABLE', [409, 'MARKETPLACE_CONFLICT', 'ผู้รับผลิตที่เลือกบางรายยังรับคำขอนี้ไม่ได้ กรุณาเลือกร้านจากรายการล่าสุด']],
   ['MARKETPLACE_FORBIDDEN', [403, 'MARKETPLACE_FORBIDDEN', 'คุณไม่มีสิทธิ์ทำรายการนี้']],
   ['MARKETPLACE_CONFLICT', [409, 'MARKETPLACE_CONFLICT', 'ชื่อ URL ถูกใช้แล้วหรือสถานะกิจการเปลี่ยนไป กรุณาตรวจข้อมูลล่าสุด']],
   ['MARKETPLACE_INVITE_INVALID', [404, 'NOT_FOUND', 'ใช้คำเชิญนี้ไม่ได้ กรุณาตรวจบัญชีที่ใช้หรือขอลิงก์ใหม่']],
@@ -245,6 +256,46 @@ export class SupabaseMarketplaceRepository implements MarketplaceRepository {
       p_actor_user_id: actor.userId,
       p_request_id: id,
     }, quoteDraft)
+  }
+
+  getQuoteRequestPublication(actor: Actor, id: string) {
+    return this.rpc('marketplace_quote_request_publication', {
+      p_actor_user_id: actor.userId,
+      p_request_id: id,
+    }, quoteRequestPublicationState)
+  }
+
+  listQuoteRequestEligibleSuppliers(actor: Actor, id: string, after: string | null) {
+    return this.rpc('marketplace_quote_request_eligible_suppliers', {
+      p_actor_user_id: actor.userId,
+      p_request_id: id,
+      p_after: after,
+    }, quoteEligibleSupplierPage)
+  }
+
+  publishQuoteRequest(actor: Actor, id: string, supplierIds: string[]) {
+    return this.rpc('marketplace_publish_quote_request', {
+      p_actor_user_id: actor.userId,
+      p_request_id: id,
+      p_supplier_ids: supplierIds,
+    }, quoteRequestPublication)
+  }
+
+  listSupplierQuoteRequests(actor: Actor, supplierId: string, after: QuoteRequestCursor | null) {
+    return this.rpc('marketplace_list_supplier_quote_requests', {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_after_created_at: after?.createdAt ?? null,
+      p_after_id: after?.id ?? null,
+    }, supplierQuoteRequestPage)
+  }
+
+  getSupplierQuoteRequest(actor: Actor, supplierId: string, id: string) {
+    return this.rpc('marketplace_get_supplier_quote_request', {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_request_id: id,
+    }, supplierQuoteRequest)
   }
 
   publicProfile(slug: string) {

@@ -45,6 +45,14 @@ const quoteDraft: QuoteRequestDraft = {
   title: 'Request boxes', quantity: 100, notes: '', createdAt: '2026-11-08T00:00:00.123456Z',
   spec: { template: 'tuck-end', materialId: 'carton-300', W: 80, D: 50, H: 120, handle: false },
 }
+const quotePublicationPath = `/marketplace/requests/${operationId}/publication`
+const quoteSuppliersPath = `/marketplace/requests/${operationId}/eligible-suppliers`
+const supplierRequestsPath = `/suppliers/${supplierId}/quote-requests`
+const receipt = { revisionId: workspaceId, publishedAt: quoteDraft.createdAt, suppliers: [{ id: supplierId, name: profile.name }] }
+const supplierQuote = {
+  id: quoteDraft.id, revisionId: receipt.revisionId, title: quoteDraft.title, quantity: quoteDraft.quantity,
+  publishedAt: receipt.publishedAt, notes: quoteDraft.notes, spec: quoteDraft.spec,
+}
 const { contactEmail: _email, ...publicProfile } = { id: supplierId, ...input }
 
 function harness({ reviewer = false, mfa = false, enabled = true, hasVerifiedEmail = true } = {}) {
@@ -70,6 +78,11 @@ function harness({ reviewer = false, mfa = false, enabled = true, hasVerifiedEma
     createQuoteRequestDraft: vi.fn(async () => quoteDraft),
     listQuoteRequestDrafts: vi.fn(async () => ({ items: [], nextCursor: null })),
     getQuoteRequestDraft: vi.fn(async () => quoteDraft),
+    getQuoteRequestPublication: vi.fn(async () => ({ publication: null })),
+    listQuoteRequestEligibleSuppliers: vi.fn(async () => ({ items: [], nextCursor: null })),
+    publishQuoteRequest: vi.fn(async () => receipt),
+    listSupplierQuoteRequests: vi.fn(async () => ({ items: [], nextCursor: null })),
+    getSupplierQuoteRequest: vi.fn(async () => supplierQuote),
     publicProfile: vi.fn(async () => publicProfile),
     adminList: vi.fn(async () => {
       if (!reviewer) throw new HttpError(403, 'MARKETPLACE_FORBIDDEN', 'Forbidden')
@@ -111,7 +124,7 @@ function harness({ reviewer = false, mfa = false, enabled = true, hasVerifiedEma
 describe('Marketplace HTTP boundaries', () => {
   it('keeps routes hidden until the deployment enables the feature', async () => {
     const { authenticate, repository, request } = harness({ enabled: false })
-    for (const path of ['/marketplace/context', '/suppliers/public/test-print-shop', '/admin/suppliers', documentsPath, `/admin${documentPath}`, notificationsPath, adminNotificationsPath]) {
+    for (const path of ['/marketplace/context', '/suppliers/public/test-print-shop', '/admin/suppliers', documentsPath, `/admin${documentPath}`, notificationsPath, adminNotificationsPath, quotePublicationPath, quoteSuppliersPath, supplierRequestsPath, `${supplierRequestsPath}/${operationId}`]) {
       expect(await request(path)).toMatchObject({ status: 404, payload: { error: { code: 'NOT_FOUND' } } })
     }
     expect(authenticate).not.toHaveBeenCalled()
@@ -164,6 +177,36 @@ describe('Marketplace HTTP boundaries', () => {
     expect((await request(path + '?workspaceId=' + workspaceId)).status).toBe(200)
     expect(repository.listQuoteRequestDrafts).toHaveBeenCalledWith(expect.objectContaining({ userId }), workspaceId, null)
     expect((await request(path + '/' + operationId)).payload.data).toEqual(quoteDraft)
+  })
+
+  it('publishes a saved request for the authenticated owner with an explicit bounded supplier set', async () => {
+    const { request, repository } = harness()
+    expect((await request(quotePublicationPath, 'POST', { supplierIds: [supplierId] }, false)).status).toBe(401)
+    for (const body of [
+      { supplierIds: [] }, { supplierIds: [supplierId, supplierId.toUpperCase()] },
+      { supplierIds: Array.from({ length: 6 }, (_, index) => `11111111-1111-4111-8111-11111111111${index}`) },
+      { supplierIds: [supplierId], userId }, { supplierIds: [supplierId], spec: quoteDraft.spec },
+    ]) expect((await request(quotePublicationPath, 'POST', body)).status).toBe(422)
+    expect(repository.publishQuoteRequest).not.toHaveBeenCalled()
+    expect((await request(quotePublicationPath)).payload.data).toEqual({ publication: null })
+    expect((await request(quotePublicationPath, 'POST', { supplierIds: [supplierId.toUpperCase()] })).payload.data).toEqual(receipt)
+    expect(repository.publishQuoteRequest).toHaveBeenCalledWith(expect.objectContaining({ userId }), operationId, [supplierId])
+    expect((await request(`${quoteSuppliersPath}?after=${supplierId}&after=${workspaceId}`)).status).toBe(422)
+    expect((await request(`${quoteSuppliersPath}?after=${supplierId}`)).status).toBe(200)
+    expect(repository.listQuoteRequestEligibleSuppliers).toHaveBeenCalledWith(expect.objectContaining({ userId }), operationId, supplierId)
+  })
+
+  it('authenticates and validates the supplier inbox and detail scope', async () => {
+    const { request, repository } = harness()
+    const detailPath = `${supplierRequestsPath}/${operationId}`
+    expect((await request(detailPath, 'GET', undefined, false)).status).toBe(401)
+    expect((await request(`${supplierRequestsPath}/invalid`)).status).toBe(422)
+    expect(repository.getSupplierQuoteRequest).not.toHaveBeenCalled()
+    expect((await request(`${supplierRequestsPath}?afterId=${operationId}`)).status).toBe(422)
+    expect((await request(`${supplierRequestsPath}?afterId=${operationId}&afterCreatedAt=${receipt.publishedAt}`)).status).toBe(200)
+    expect(repository.listSupplierQuoteRequests).toHaveBeenCalledWith(expect.objectContaining({ userId }), supplierId, { id: operationId, createdAt: receipt.publishedAt })
+    expect((await request(detailPath)).payload.data).toEqual(supplierQuote)
+    expect(repository.getSupplierQuoteRequest).toHaveBeenCalledWith(expect.objectContaining({ userId }), supplierId, operationId)
   })
 
   it('requires verified MFA as well as the independent platform reviewer grant', async () => {

@@ -25,3 +25,30 @@
   overflow-wrap: anywhere;
   font-weight: 600;
 }
+
+.quote-request-selection {
+  display: grid;
+  gap: 8px;
+}
+
+.quote-request-selection h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.marketplace-list .quote-request-eligible {
+  display: grid;
+  padding-block: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.marketplace-list .quote-request-eligible:last-child {
+  border-bottom: 0;
+}
+
+.marketplace-page .quote-request-supplier-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}

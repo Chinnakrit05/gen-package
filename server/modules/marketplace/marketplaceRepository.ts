@@ -17,7 +17,16 @@ import type {
   SupplierTeam,
   SupplierTeamMember,
 } from '../../../shared/contracts/marketplace'
-import type { CreateQuoteRequestDraftInput, QuoteRequestCursor, QuoteRequestDraft, QuoteRequestDraftPage } from '../../../shared/contracts/quoteRequests'
+import type {
+  CreateQuoteRequestDraftInput,
+  QuoteRequestCursor,
+  QuoteRequestDraft,
+  QuoteRequestDraftPage,
+  QuoteRequestEligibleSupplierPage,
+  QuoteRequestPublication,
+  SupplierQuoteRequest,
+  SupplierQuoteRequestPage,
+} from '../../../shared/contracts/quoteRequests'
 import type { Actor } from '../identity/actor'
 
 export interface MarketplaceRepository {
@@ -41,6 +50,11 @@ export interface MarketplaceRepository {
   createQuoteRequestDraft(actor: Actor, input: CreateQuoteRequestDraftInput): Promise<QuoteRequestDraft>
   listQuoteRequestDrafts(actor: Actor, workspaceId: string, after: QuoteRequestCursor | null): Promise<QuoteRequestDraftPage>
   getQuoteRequestDraft(actor: Actor, id: string): Promise<QuoteRequestDraft>
+  getQuoteRequestPublication(actor: Actor, id: string): Promise<{ publication: QuoteRequestPublication | null }>
+  listQuoteRequestEligibleSuppliers(actor: Actor, id: string, after: string | null): Promise<QuoteRequestEligibleSupplierPage>
+  publishQuoteRequest(actor: Actor, id: string, supplierIds: string[]): Promise<QuoteRequestPublication>
+  listSupplierQuoteRequests(actor: Actor, supplierId: string, after: QuoteRequestCursor | null): Promise<SupplierQuoteRequestPage>
+  getSupplierQuoteRequest(actor: Actor, supplierId: string, id: string): Promise<SupplierQuoteRequest>
   publicProfile(slug: string): Promise<SupplierPublicProfile>
   adminList(actor: Actor, status: SupplierStatus, after?: string): Promise<SupplierAdminPage>
   review(actor: Actor, supplierId: string, expectedRevision: number, action: SupplierReviewAction, reason: string): Promise<SupplierProfile>
