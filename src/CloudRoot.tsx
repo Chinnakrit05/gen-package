@@ -29,6 +29,9 @@ const PricingPage = lazy(() => import('./components/PricingPage').then((m) => ({
 // เพราะ router โหลด lazy ของทุก route ที่ match ก่อน guard (ลิงก์ /editor/:id ตอนยังไม่ login ดึง Editor 2 MB มาเปล่า ๆ)
 const ProjectsPage = lazy(() => import('./app/ProjectsPage').then((m) => ({ default: m.ProjectsPage })))
 const EditorRoute = lazy(() => import('./app/EditorRoute').then((m) => ({ default: m.EditorRoute })))
+const QuoteRequestListPage = lazy(() => import('./features/requests/QuoteRequestPages').then((m) => ({ default: m.QuoteRequestListPage })))
+const QuoteRequestNewPage = lazy(() => import('./features/requests/QuoteRequestPages').then((m) => ({ default: m.QuoteRequestNewPage })))
+const QuoteRequestDetailPage = lazy(() => import('./features/requests/QuoteRequestPages').then((m) => ({ default: m.QuoteRequestDetailPage })))
 const SupplierOnboarding = lazy(() => import('./features/suppliers/SupplierOnboarding').then((m) => ({ default: m.SupplierOnboarding })))
 const SupplierProfilePage = lazy(() => import('./features/suppliers/SupplierProfilePage').then((m) => ({ default: m.SupplierProfilePage })))
 const SupplierTeamPage = lazy(() => import('./features/suppliers/SupplierTeamPage').then((m) => ({ default: m.SupplierTeamPage })))
@@ -102,6 +105,18 @@ const router = createBrowserRouter([
           },
           ...(marketplaceSuppliersEnabled ? [
             {
+              path: '/app/requests',
+              element: <Suspense fallback={<QuoteRequestLoading />}><QuoteRequestListPage /></Suspense>,
+            },
+            {
+              path: '/app/requests/new',
+              element: <Suspense fallback={<QuoteRequestLoading />}><QuoteRequestNewPage /></Suspense>,
+            },
+            {
+              path: '/app/requests/:id',
+              element: <Suspense fallback={<QuoteRequestLoading />}><QuoteRequestDetailPage /></Suspense>,
+            },
+            {
               path: '/factory/onboarding',
               element: <Suspense fallback={<MarketplaceLoading />}><SupplierOnboarding /></Suspense>,
             },
@@ -125,6 +140,10 @@ const router = createBrowserRouter([
     ],
   },
 ])
+
+function QuoteRequestLoading() {
+  return <LoadingStage title="กำลังเปิดคำขอราคา" message="กำลังโหลดข้อมูลฉบับร่าง…" />
+}
 
 function MarketplaceLoading() {
   return <LoadingStage title="กำลังเปิด Marketplace" message="กำลังโหลดข้อมูลผู้รับผลิต…" />

@@ -56,6 +56,7 @@
 
 .marketplace-card,
 .marketplace-documents,
+.marketplace-notifications,
 .marketplace-form,
 .marketplace-form-fields {
   display: grid;
@@ -146,7 +147,8 @@
 }
 
 .marketplace-list .marketplace-team-row,
-.marketplace-list .marketplace-document-row {
+.marketplace-list .marketplace-document-row,
+.marketplace-list .marketplace-notification-row {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
@@ -155,7 +157,8 @@
 }
 
 .marketplace-list .marketplace-team-row:last-child,
-.marketplace-list .marketplace-document-row:last-child {
+.marketplace-list .marketplace-document-row:last-child,
+.marketplace-list .marketplace-notification-row:last-child {
   border-bottom: 0;
 }
 

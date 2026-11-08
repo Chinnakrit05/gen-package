@@ -104,6 +104,21 @@
   box-shadow: var(--shadow);
 }
 
+.project-card-with-action {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+}
+
+.project-card-with-action .project-card {
+  flex: 1;
+}
+
+.project-card-with-action > button:last-child {
+  align-self: flex-start;
+}
+
 .project-card:hover {
   border-color: var(--accent);
   background: var(--surface);

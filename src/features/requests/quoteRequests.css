@@ -1,0 +1,27 @@
+.marketplace-list .quote-request-row {
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.marketplace-list .quote-request-row:last-child {
+  border-bottom: 0;
+}
+
+.quote-request-spec {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.quote-request-spec dt {
+  color: var(--text-2);
+}
+
+.quote-request-spec dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}

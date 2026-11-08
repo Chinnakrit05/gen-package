@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import type { SupplierInvite, SupplierProfile, SupplierReviewDocument, SupplierTeamMember } from '../../shared/contracts/marketplace'
+import type { SupplierInvite, SupplierNotification, SupplierProfile, SupplierReviewDocument, SupplierTeamMember } from '../../shared/contracts/marketplace'
+import type { QuoteRequestDraft } from '../../shared/contracts/quoteRequests'
 import type { ActorAuthenticationOptions } from '../modules/identity/sessionService'
 import type { MarketplaceRepository } from '../modules/marketplace/marketplaceRepository'
 import { HttpError } from './errors'
@@ -17,6 +18,12 @@ const invitation: SupplierInvite = {
 }
 const teamPath = `/suppliers/${supplierId}/team`
 const acceptPath = '/suppliers/invitations/accept'
+const notificationsPath = '/marketplace/notifications'
+const adminNotificationsPath = '/admin/suppliers/notifications'
+const notification: SupplierNotification = {
+  id: operationId, supplierId, supplierName: 'Test Print Shop', action: 'approve',
+  createdAt: '2026-11-08T00:00:00.123456Z', readAt: null,
+}
 const documentsPath = `/suppliers/${supplierId}/review-documents`
 const documentPath = `${documentsPath}/${operationId}`
 const pdfBytes = Buffer.from('%PDF-1.4\n%%EOF\n')
@@ -32,6 +39,11 @@ const profile: SupplierProfile = {
 const input = {
   kind: profile.kind, name: profile.name, slug: profile.slug, description: profile.description,
   contactEmail: profile.contactEmail, capabilities: profile.capabilities,
+}
+const quoteDraft: QuoteRequestDraft = {
+  id: operationId, workspaceId, projectId: supplierId, projectName: 'Saved Project', projectRevision: 1,
+  title: 'Request boxes', quantity: 100, notes: '', createdAt: '2026-11-08T00:00:00.123456Z',
+  spec: { template: 'tuck-end', materialId: 'carton-300', W: 80, D: 50, H: 120, handle: false },
 }
 const { contactEmail: _email, ...publicProfile } = { id: supplierId, ...input }
 
@@ -49,10 +61,15 @@ function harness({ reviewer = false, mfa = false, enabled = true, hasVerifiedEma
     changeMember: vi.fn(async () => teamMember),
     removeMember: vi.fn(async () => ({ userId })),
     revokeInvite: vi.fn(async () => ({ id: invitation.id })),
+    listNotifications: vi.fn(async () => ({ items: [notification], nextCursor: null })),
+    markNotificationRead: vi.fn(async () => ({ id: notification.id, readAt: notification.createdAt })),
     listReviewDocuments: vi.fn(async () => ({ documents: [reviewDocument] })),
     getReviewDocument: vi.fn(async () => ({ document: reviewDocument, dataBase64: uploadDocument.dataBase64 })),
     addReviewDocument: vi.fn(async () => reviewDocument),
     removeReviewDocument: vi.fn(async () => ({ id: reviewDocument.id })),
+    createQuoteRequestDraft: vi.fn(async () => quoteDraft),
+    listQuoteRequestDrafts: vi.fn(async () => ({ items: [], nextCursor: null })),
+    getQuoteRequestDraft: vi.fn(async () => quoteDraft),
     publicProfile: vi.fn(async () => publicProfile),
     adminList: vi.fn(async () => {
       if (!reviewer) throw new HttpError(403, 'MARKETPLACE_FORBIDDEN', 'Forbidden')
@@ -94,7 +111,7 @@ function harness({ reviewer = false, mfa = false, enabled = true, hasVerifiedEma
 describe('Marketplace HTTP boundaries', () => {
   it('keeps routes hidden until the deployment enables the feature', async () => {
     const { authenticate, repository, request } = harness({ enabled: false })
-    for (const path of ['/marketplace/context', '/suppliers/public/test-print-shop', '/admin/suppliers', documentsPath, `/admin${documentPath}`]) {
+    for (const path of ['/marketplace/context', '/suppliers/public/test-print-shop', '/admin/suppliers', documentsPath, `/admin${documentPath}`, notificationsPath, adminNotificationsPath]) {
       expect(await request(path)).toMatchObject({ status: 404, payload: { error: { code: 'NOT_FOUND' } } })
     }
     expect(authenticate).not.toHaveBeenCalled()
@@ -128,6 +145,25 @@ describe('Marketplace HTTP boundaries', () => {
     expect(await request(`/suppliers/${supplierId}/submit`, 'POST', { expectedRevision: 0 })).toMatchObject({ status: 422 })
     expect((await request(`/suppliers/${supplierId}/submit`, 'POST', { expectedRevision: 1 })).status).toBe(200)
     expect(repository.submit).toHaveBeenCalledWith(expect.objectContaining({ userId }), supplierId, 1)
+  })
+
+  it('takes the quote snapshot source from the authenticated draft request', async () => {
+    const { request, repository } = harness()
+    const path = '/marketplace/requests'
+    const body = {
+      workspaceId, projectId: quoteDraft.projectId, expectedProjectRevision: 1, operationId,
+      title: quoteDraft.title, quantity: quoteDraft.quantity, notes: quoteDraft.notes,
+    }
+    expect((await request(path, 'POST', body, false)).status).toBe(401)
+    expect((await request(path, 'POST', { ...body, spec: quoteDraft.spec })).status).toBe(422)
+    expect((await request(path, 'POST', { ...body, expectedProjectRevision: 0 })).status).toBe(422)
+    expect(repository.createQuoteRequestDraft).not.toHaveBeenCalled()
+    expect((await request(path, 'POST', body)).status).toBe(201)
+    expect(repository.createQuoteRequestDraft).toHaveBeenCalledWith(expect.objectContaining({ userId }), body)
+    expect((await request(path + '?workspaceId=' + workspaceId + '&afterId=' + operationId)).status).toBe(422)
+    expect((await request(path + '?workspaceId=' + workspaceId)).status).toBe(200)
+    expect(repository.listQuoteRequestDrafts).toHaveBeenCalledWith(expect.objectContaining({ userId }), workspaceId, null)
+    expect((await request(path + '/' + operationId)).payload.data).toEqual(quoteDraft)
   })
 
   it('requires verified MFA as well as the independent platform reviewer grant', async () => {
@@ -168,6 +204,35 @@ describe('Marketplace HTTP boundaries', () => {
     expect(verified.repository.getReviewDocument).toHaveBeenCalledWith(expect.objectContaining({ userId, hasVerifiedMfa: true }), supplierId, operationId, true)
     expect((await verified.request(`/admin${documentPath}`, 'DELETE')).status).toBe(405)
     expect(verified.repository.removeReviewDocument).not.toHaveBeenCalled()
+  })
+
+  it('keeps notification audiences authenticated and requires MFA for reviewer list and read actions', async () => {
+    const unverified = harness({ reviewer: true })
+    const readPath = `${adminNotificationsPath}/${operationId}/read`
+    expect((await unverified.request(notificationsPath, 'GET', undefined, false)).status).toBe(401)
+    expect(await unverified.request(adminNotificationsPath)).toMatchObject({ status: 403, payload: { error: { code: 'MARKETPLACE_MFA_REQUIRED' } } })
+    expect(await unverified.request(readPath, 'POST')).toMatchObject({ status: 403, payload: { error: { code: 'MARKETPLACE_MFA_REQUIRED' } } })
+    expect(unverified.repository.listNotifications).not.toHaveBeenCalled()
+    expect(unverified.repository.markNotificationRead).not.toHaveBeenCalled()
+
+    const verified = harness({ reviewer: true, mfa: true })
+    expect(await verified.request(adminNotificationsPath)).toMatchObject({ status: 200, headers: { 'cache-control': 'no-store' } })
+    expect((await verified.request(readPath, 'POST')).status).toBe(200)
+    expect(verified.repository.listNotifications).toHaveBeenCalledWith(expect.objectContaining({ userId, hasVerifiedMfa: true }), true, null)
+    expect(verified.repository.markNotificationRead).toHaveBeenCalledWith(expect.objectContaining({ userId, hasVerifiedMfa: true }), true, operationId)
+  })
+
+  it('validates both cursor parts without rounding timestamp precision or allowing audience overrides', async () => {
+    const { request, repository } = harness()
+    for (const query of [`afterId=${operationId}`, 'asReviewer=true', `afterId=${operationId}&afterId=${operationId}`]) {
+      expect((await request(`${notificationsPath}?${query}`)).status).toBe(422)
+    }
+    expect(repository.listNotifications).not.toHaveBeenCalled()
+    const query = new URLSearchParams({ afterId: notification.id, afterCreatedAt: notification.createdAt })
+    expect((await request(`${notificationsPath}?${query}`)).status).toBe(200)
+    expect(repository.listNotifications).toHaveBeenCalledWith(expect.objectContaining({ userId }), false, {
+      id: notification.id, createdAt: notification.createdAt,
+    })
   })
 
   it('accepts only bounded document bytes that match the name and type', async () => {

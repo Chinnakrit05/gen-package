@@ -101,6 +101,7 @@ function SupplierProfilePanel({
           <span className={`marketplace-badge is-${profile.status}`}>{supplierStatusNames[profile.status]}</span>
           <span>{supplierKindNames[profile.kind]} · {supplierRoleNames[role]}</span>
           {role === 'manager' && <Link to={`/factory/${profile.id}/team`}>จัดการทีม</Link>}
+          <Link to="/factory/onboarding?notifications=open">ดูการแจ้งเตือน</Link>
           {profile.status === 'approved' && <Link to={`/suppliers/${profile.slug}`}>ดูโปรไฟล์สาธารณะ</Link>}
         </div>
         {profile.reviewNote && (

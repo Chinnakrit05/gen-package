@@ -1,11 +1,21 @@
 import { createClient, type PostgrestError, type SupabaseClient } from '@supabase/supabase-js'
 import type { ZodType } from 'zod'
 import type { ApiErrorCode } from '../../../shared/contracts/errors'
-import type { MarketplaceRole, SupplierProfileInput, SupplierReviewAction, SupplierReviewDocumentUpload, SupplierStatus } from '../../../shared/contracts/marketplace'
+import {
+  SUPPLIER_NOTIFICATION_PAGE_SIZE,
+  type MarketplaceRole,
+  type SupplierNotificationCursor,
+  type SupplierProfileInput,
+  type SupplierReviewAction,
+  type SupplierReviewDocumentUpload,
+  type SupplierStatus,
+} from '../../../shared/contracts/marketplace'
+import type { CreateQuoteRequestDraftInput, QuoteRequestCursor } from '../../../shared/contracts/quoteRequests'
 import type { ServerConfig } from '../../config'
 import { HttpError } from '../../http/errors'
 import type { Actor } from '../../modules/identity/actor'
 import type { MarketplaceRepository } from '../../modules/marketplace/marketplaceRepository'
+import { quoteDraft, quoteDraftPage } from '../../modules/marketplace/quoteRequestValidation'
 import {
   marketplaceContext,
   removedSupplierMember,
@@ -14,6 +24,8 @@ import {
   supplierAccess,
   supplierAdminPage,
   supplierInvite,
+  supplierNotificationPage,
+  supplierNotificationRead,
   supplierProfile,
   supplierPublicProfile,
   supplierReviewDocument,
@@ -152,6 +164,24 @@ export class SupabaseMarketplaceRepository implements MarketplaceRepository {
     }, revokedSupplierInvite)
   }
 
+  listNotifications(actor: Actor, asReviewer: boolean, after: SupplierNotificationCursor | null) {
+    return this.rpc('marketplace_list_supplier_notifications', {
+      p_actor_user_id: actor.userId,
+      p_as_reviewer: asReviewer,
+      p_limit: SUPPLIER_NOTIFICATION_PAGE_SIZE,
+      p_after_created_at: after?.createdAt ?? null,
+      p_after_id: after?.id ?? null,
+    }, supplierNotificationPage)
+  }
+
+  markNotificationRead(actor: Actor, asReviewer: boolean, id: string) {
+    return this.rpc('marketplace_mark_supplier_notification_read', {
+      p_actor_user_id: actor.userId,
+      p_notification_id: id,
+      p_as_reviewer: asReviewer,
+    }, supplierNotificationRead)
+  }
+
   listReviewDocuments(actor: Actor, supplierId: string, asReviewer: boolean) {
     return this.rpc('marketplace_list_supplier_review_documents', {
       p_actor_user_id: actor.userId,
@@ -186,6 +216,35 @@ export class SupabaseMarketplaceRepository implements MarketplaceRepository {
       p_supplier_id: supplierId,
       p_document_id: documentId,
     }, removedSupplierReviewDocument)
+  }
+
+  createQuoteRequestDraft(actor: Actor, input: CreateQuoteRequestDraftInput) {
+    return this.rpc('marketplace_create_quote_request_draft', {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: input.workspaceId,
+      p_project_id: input.projectId,
+      p_expected_project_revision: input.expectedProjectRevision,
+      p_operation_id: input.operationId,
+      p_title: input.title,
+      p_quantity: input.quantity,
+      p_notes: input.notes,
+    }, quoteDraft)
+  }
+
+  listQuoteRequestDrafts(actor: Actor, workspaceId: string, after: QuoteRequestCursor | null) {
+    return this.rpc('marketplace_list_quote_request_drafts', {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId,
+      p_after_created_at: after?.createdAt ?? null,
+      p_after_id: after?.id ?? null,
+    }, quoteDraftPage)
+  }
+
+  getQuoteRequestDraft(actor: Actor, id: string) {
+    return this.rpc('marketplace_get_quote_request_draft', {
+      p_actor_user_id: actor.userId,
+      p_request_id: id,
+    }, quoteDraft)
   }
 
   publicProfile(slug: string) {

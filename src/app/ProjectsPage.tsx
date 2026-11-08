@@ -62,6 +62,7 @@ export function ProjectsPage() {
   }, [queryClient, queryKey])
 
   const canCreate = session.role === 'owner' || session.role === 'editor'
+  const showQuoteRequests = marketplaceSuppliersEnabled && session.meStatus === 'ready' && session.role === 'owner'
   const canMigrate = hasLegacySource && workspaceId === session.personalWorkspaceId && canCreate
   const thumbs = useThumbnails(appUserId, workspaceId, items, session)
   const pending = useLocalPending(appUserId, workspaceId, canCreate)
@@ -100,6 +101,9 @@ export function ProjectsPage() {
         <div className="projects-actions">
           {marketplaceSuppliersEnabled && (
             <button type="button" onClick={() => void navigate('/factory/onboarding')}>พื้นที่ผู้รับผลิต</button>
+          )}
+          {showQuoteRequests && (
+            <button type="button" onClick={() => void navigate('/app/requests')}>ฉบับร่างขอราคา</button>
           )}
           <button className="projects-refresh" onClick={refresh} disabled={!online || projects.isFetching}>รีเฟรช</button>
           {canMigrate && (
@@ -186,20 +190,37 @@ export function ProjectsPage() {
         ) : (
           <>
             <div className="projects-grid">
-              {items.map((item) => (
-                <button key={item.id} className="project-card" onClick={() => navigate(`/editor/${item.id}`)}>
-                  <div className="project-thumb">
-                    {thumbs.url(item.id) ? <img src={thumbs.url(item.id)} alt="" /> : <KindIcon kind={item.thumbnail?.kind} />}
+              {items.map((item) => {
+                const awaitingSave = pending.projectIds.has(item.id)
+                const card = (
+                  <button key={item.id} className="project-card" onClick={() => navigate(`/editor/${item.id}`)}>
+                    <div className="project-thumb">
+                      {thumbs.url(item.id) ? <img src={thumbs.url(item.id)} alt="" /> : <KindIcon kind={item.thumbnail?.kind} />}
+                    </div>
+                    <div className="project-meta">
+                      <span className="project-name">{item.name}</span>
+                      <span className="project-sub">
+                        {item.thumbnail?.label ? `${item.thumbnail.label} · ` : ''}{formatUpdated(item.updatedAt)}
+                      </span>
+                    </div>
+                    {awaitingSave && <span className="project-badge">รอส่ง</span>}
+                  </button>
+                )
+                if (!showQuoteRequests) return card
+                return (
+                  <div key={item.id} className="project-card-with-action" role="group" aria-label={item.name}>
+                    {card}
+                    <button
+                      type="button"
+                      disabled={!online || awaitingSave}
+                      title={awaitingSave ? 'รอให้งานบันทึกขึ้น Cloud ก่อน' : undefined}
+                      onClick={() => void navigate(`/app/requests/new?projectId=${encodeURIComponent(item.id)}`)}
+                    >
+                      สร้างฉบับร่างขอราคา
+                    </button>
                   </div>
-                  <div className="project-meta">
-                    <span className="project-name">{item.name}</span>
-                    <span className="project-sub">
-                      {item.thumbnail?.label ? `${item.thumbnail.label} · ` : ''}{formatUpdated(item.updatedAt)}
-                    </span>
-                  </div>
-                  {pending.projectIds.has(item.id) && <span className="project-badge">รอส่ง</span>}
-                </button>
-              ))}
+                )
+              })}
             </div>
             {projects.isError && <div className="projects-banner is-error">โหลดเพิ่มไม่สำเร็จ ลองอีกครั้ง</div>}
             {projects.hasNextPage && (

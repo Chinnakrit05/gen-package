@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import type { SupplierProfileInput } from '../../../shared/contracts/marketplace'
 import { useCloudSession } from '../../app/cloudSession'
 import { createSupplier, marketplaceContextKey } from '../../services/api/marketplace'
+import { SupplierNotifications } from '../notifications/SupplierNotifications'
 import { MarketplaceError, MarketplaceShell } from './MarketplaceShell'
 import { SupplierForm } from './SupplierForm'
 import { supplierError, supplierRoleNames, supplierStatusNames } from './supplierUi'
@@ -12,6 +13,7 @@ import { useMarketplaceContext } from './useMarketplaceContext'
 export function SupplierOnboarding() {
   const session = useCloudSession()
   const navigate = useNavigate()
+  const [search] = useSearchParams()
   const queryClient = useQueryClient()
   const context = useMarketplaceContext()
   const [form, setForm] = useState<SupplierProfileInput>({
@@ -40,17 +42,20 @@ export function SupplierOnboarding() {
             </section>
           )}
           {context.data.suppliers.length > 0 && (
-            <section className="marketplace-card">
-              <h2>กิจการของคุณ</h2>
-              <ul className="marketplace-list">
-                {context.data.suppliers.map(({ profile, role }) => (
-                  <li key={profile.id}>
-                    <Link to={`/factory/${profile.id}/profile`}>{profile.name}</Link>
-                    <span className="marketplace-muted">{supplierRoleNames[role]} · {supplierStatusNames[profile.status]}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <>
+              <SupplierNotifications defaultOpen={search.get('notifications') === 'open'} />
+              <section className="marketplace-card">
+                <h2>กิจการของคุณ</h2>
+                <ul className="marketplace-list">
+                  {context.data.suppliers.map(({ profile, role }) => (
+                    <li key={profile.id}>
+                      <Link to={`/factory/${profile.id}/profile`}>{profile.name}</Link>
+                      <span className="marketplace-muted">{supplierRoleNames[role]} · {supplierStatusNames[profile.status]}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </>
           )}
           <section className="marketplace-card">
             <h2>สมัครเป็นผู้รับผลิต</h2>

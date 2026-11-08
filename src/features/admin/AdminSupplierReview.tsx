@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { SUPPLIER_STATUSES, type SupplierProfile, type SupplierReviewAction, type SupplierStatus } from '../../../shared/contracts/marketplace'
 import { useCloudSession } from '../../app/cloudSession'
 import { ApiClientError } from '../../services/api/client'
 import { listAdminSuppliers, marketplaceContextKey, reviewSupplier } from '../../services/api/marketplace'
+import { SupplierNotifications } from '../notifications/SupplierNotifications'
 import { CapabilityList, MarketplaceError, MarketplaceShell } from '../suppliers/MarketplaceShell'
 import { SupplierReviewDocuments } from '../suppliers/SupplierReviewDocuments'
 import { supplierError, supplierKindNames, supplierStatusNames } from '../suppliers/supplierUi'
@@ -54,6 +55,7 @@ function AdminQueue({
   const session = useCloudSession()
   const queryClient = useQueryClient()
   const [status, setStatus] = useState<SupplierStatus>('pending')
+  const statusFilter = useRef<HTMLSelectElement>(null)
   const key = ['cloud', session.appUserId, 'marketplace', 'admin-suppliers'] as const
   const page = useInfiniteQuery({
     queryKey: [...key, status],
@@ -64,13 +66,20 @@ function AdminQueue({
   })
   const items = [...new Map(page.data?.pages.flatMap((part) => part.items.map((profile) => [profile.id, profile] as const))).values()]
   const refresh = () => void queryClient.resetQueries({ queryKey: key })
+  const openPendingQueue = () => {
+    setStatus('pending')
+    setNotice(null)
+    void queryClient.resetQueries({ queryKey: [...key, 'pending'] })
+    statusFilter.current?.focus()
+  }
   const denied = page.error instanceof ApiClientError && page.error.status === 403
   return (
     <>
-      <section className="marketplace-card">
+      {!denied && <SupplierNotifications asReviewer openPendingQueue={openPendingQueue} />}
+      <section className="marketplace-card" id="supplier-review-queue">
         <label>
           สถานะโปรไฟล์
-          <select value={status} onChange={(event) => { setStatus(event.target.value as SupplierStatus); setNotice(null) }}>
+          <select ref={statusFilter} value={status} onChange={(event) => { setStatus(event.target.value as SupplierStatus); setNotice(null) }}>
             {SUPPLIER_STATUSES.map((item) => <option key={item} value={item}>{supplierStatusNames[item]}</option>)}
           </select>
         </label>

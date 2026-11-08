@@ -3,6 +3,8 @@ import {
   MARKETPLACE_ROLES,
   SUPPLIER_CAPABILITIES,
   SUPPLIER_KINDS,
+  SUPPLIER_NOTIFICATION_ACTIONS,
+  SUPPLIER_NOTIFICATION_PAGE_SIZE,
   SUPPLIER_REVIEW_ACTIONS,
   SUPPLIER_REVIEW_DOCUMENT_LIMIT,
   SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES,
@@ -73,6 +75,25 @@ export const supplierInvite = z.object({
 export const supplierTeam = z.object({ members: z.array(supplierTeamMember), invites: z.array(supplierInvite) }).strict()
 export const removedSupplierMember = z.object({ userId: z.uuid() }).strict()
 export const revokedSupplierInvite = z.object({ id: z.uuid() }).strict()
+
+const notificationTimestamp = z.iso.datetime({ offset: true })
+const notificationCursor = z.object({ createdAt: notificationTimestamp, id: z.uuid() }).strict()
+export const supplierNotificationQuery = z.object({
+  afterCreatedAt: notificationTimestamp.optional(),
+  afterId: z.uuid().optional(),
+}).strict().refine((query) => Boolean(query.afterCreatedAt) === Boolean(query.afterId))
+  .transform(({ afterCreatedAt, afterId }) => afterCreatedAt && afterId ? { createdAt: afterCreatedAt, id: afterId } : null)
+const supplierNotification = notificationCursor.extend({
+  supplierId: z.uuid(),
+  supplierName: z.string().min(1),
+  action: z.enum(SUPPLIER_NOTIFICATION_ACTIONS),
+  readAt: notificationTimestamp.nullable(),
+}).strict()
+export const supplierNotificationPage = z.object({
+  items: z.array(supplierNotification).max(SUPPLIER_NOTIFICATION_PAGE_SIZE),
+  nextCursor: notificationCursor.nullable(),
+}).strict()
+export const supplierNotificationRead = z.object({ id: z.uuid(), readAt: notificationTimestamp }).strict()
 
 const maxDocumentBase64Length = 4 * Math.ceil(SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES / 3)
 export const supplierReviewDocumentBodyLimit = maxDocumentBase64Length + 4096

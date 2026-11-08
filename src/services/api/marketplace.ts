@@ -4,6 +4,8 @@ import type {
   MarketplaceRole,
   SupplierAccess,
   SupplierAdminPage,
+  SupplierNotificationCursor,
+  SupplierNotificationPage,
   SupplierProfile,
   SupplierProfileInput,
   SupplierPublicProfile,
@@ -28,6 +30,18 @@ export const marketplaceContextKey = (appUserId: string) => ['cloud', appUserId,
 
 export function getMarketplaceContext(base: string, token: string, signal?: AbortSignal): Promise<MarketplaceContextData> {
   return requestApi(`${base}/marketplace/context`, token, { method: 'GET', signal })
+}
+
+const supplierNotificationsUrl = (base: string, asReviewer: boolean) =>
+  base + (asReviewer ? '/admin/suppliers/notifications' : '/marketplace/notifications')
+
+export function listSupplierNotifications(base: string, token: string, asReviewer: boolean, after: SupplierNotificationCursor | null, signal?: AbortSignal): Promise<SupplierNotificationPage> {
+  const query = after ? `?${new URLSearchParams({ afterCreatedAt: after.createdAt, afterId: after.id })}` : ''
+  return requestApi(supplierNotificationsUrl(base, asReviewer) + query, token, { method: 'GET', signal })
+}
+
+export function markSupplierNotificationRead(base: string, token: string, asReviewer: boolean, id: string, signal?: AbortSignal): Promise<{ id: string; readAt: string }> {
+  return requestApi(`${supplierNotificationsUrl(base, asReviewer)}/${encodeURIComponent(id)}/read`, token, { method: 'POST', signal })
 }
 
 export function createSupplier(base: string, token: string, input: SupplierProfileInput & { operationId: string }): Promise<SupplierAccess> {

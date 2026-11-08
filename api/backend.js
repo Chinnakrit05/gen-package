@@ -18228,8 +18228,8 @@ var require_dist = __commonJS({
         if (!msgSignature || !msgId || !msgTimestamp) {
           throw new WebhookVerificationError("Missing required headers");
         }
-        const timestamp2 = this.verifyTimestamp(msgTimestamp);
-        const computedSignature = this.sign(msgId, timestamp2, payload);
+        const timestamp3 = this.verifyTimestamp(msgTimestamp);
+        const computedSignature = this.sign(msgId, timestamp3, payload);
         const expectedSignature = computedSignature.split(",")[1];
         const passedSignatures = msgSignature.split(" ");
         const encoder2 = new globalThis.TextEncoder();
@@ -18244,7 +18244,7 @@ var require_dist = __commonJS({
         }
         throw new WebhookVerificationError("No matching signature found");
       }
-      sign(msgId, timestamp2, payload) {
+      sign(msgId, timestamp3, payload) {
         if (typeof payload === "string") {
         } else if (payload.constructor.name === "Buffer") {
           payload = payload.toString();
@@ -18252,24 +18252,24 @@ var require_dist = __commonJS({
           throw new Error("Expected payload to be of type string or Buffer.");
         }
         const encoder2 = new TextEncoder();
-        const timestampNumber = Math.floor(timestamp2.getTime() / 1e3);
+        const timestampNumber = Math.floor(timestamp3.getTime() / 1e3);
         const toSign = encoder2.encode(`${msgId}.${timestampNumber}.${payload}`);
         const expectedSignature = base643.encode(sha256.hmac(this.key, toSign));
         return `v1,${expectedSignature}`;
       }
       verifyTimestamp(timestampHeader) {
         const now = Math.floor(Date.now() / 1e3);
-        const timestamp2 = parseInt(timestampHeader, 10);
-        if (isNaN(timestamp2)) {
+        const timestamp3 = parseInt(timestampHeader, 10);
+        if (isNaN(timestamp3)) {
           throw new WebhookVerificationError("Invalid Signature Headers");
         }
-        if (now - timestamp2 > WEBHOOK_TOLERANCE_IN_SECONDS) {
+        if (now - timestamp3 > WEBHOOK_TOLERANCE_IN_SECONDS) {
           throw new WebhookVerificationError("Message timestamp too old");
         }
-        if (timestamp2 > now + WEBHOOK_TOLERANCE_IN_SECONDS) {
+        if (timestamp3 > now + WEBHOOK_TOLERANCE_IN_SECONDS) {
           throw new WebhookVerificationError("Message timestamp too new");
         }
-        return new Date(timestamp2 * 1e3);
+        return new Date(timestamp3 * 1e3);
       }
     };
     exports.Webhook = Webhook2;
@@ -54764,9 +54764,59 @@ var SUPPLIER_CAPABILITIES = [
 var SUPPLIER_STATUSES = ["draft", "pending", "approved", "suspended"];
 var SUPPLIER_REVIEW_ACTIONS = ["approve", "request_changes", "suspend", "resume"];
 var MARKETPLACE_ROLES = ["manager", "staff", "viewer"];
+var SUPPLIER_NOTIFICATION_ACTIONS = ["submitted", "approve", "request_changes", "suspend", "resume"];
+var SUPPLIER_NOTIFICATION_PAGE_SIZE = 24;
 var SUPPLIER_REVIEW_DOCUMENT_MIME_TYPES = ["application/pdf", "image/png", "image/jpeg"];
 var SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES = 2 * 1024 * 1024;
 var SUPPLIER_REVIEW_DOCUMENT_LIMIT = 3;
+
+// shared/contracts/quoteRequests.ts
+var QUOTE_REQUEST_DRAFT_PAGE_SIZE = 24;
+
+// server/modules/marketplace/quoteRequestValidation.ts
+var timestamp2 = external_exports.iso.datetime({ offset: true });
+var draftCursor = external_exports.object({ createdAt: timestamp2, id: external_exports.uuid() }).strict();
+var title = external_exports.string().trim().min(1).max(100);
+var quantity = external_exports.int().min(1).max(1e6);
+var notes = external_exports.string().trim().max(1e3);
+var projectRevision = external_exports.int().positive();
+var createQuoteDraftInput = external_exports.object({
+  workspaceId: external_exports.uuid(),
+  projectId: external_exports.uuid(),
+  expectedProjectRevision: projectRevision,
+  operationId: external_exports.uuid(),
+  title,
+  quantity,
+  notes
+}).strict();
+var quoteDraftListQuery = external_exports.object({
+  workspaceId: external_exports.uuid(),
+  afterCreatedAt: timestamp2.optional(),
+  afterId: external_exports.uuid().optional()
+}).strict().refine((query) => Boolean(query.afterCreatedAt) === Boolean(query.afterId)).transform(({ workspaceId, afterCreatedAt, afterId }) => ({
+  workspaceId,
+  after: afterCreatedAt && afterId ? { createdAt: afterCreatedAt, id: afterId } : null
+}));
+var draftSummary = draftCursor.extend({ projectName: external_exports.string().min(1), title, quantity }).strict();
+var dimension = external_exports.number().positive();
+var quoteDraft = draftSummary.extend({
+  workspaceId: external_exports.uuid(),
+  projectId: external_exports.uuid(),
+  projectRevision,
+  notes,
+  spec: external_exports.object({
+    template: external_exports.string().min(1),
+    materialId: external_exports.string().min(1),
+    W: dimension,
+    D: dimension,
+    H: dimension,
+    handle: external_exports.boolean()
+  }).strict()
+}).strict();
+var quoteDraftPage = external_exports.object({
+  items: external_exports.array(draftSummary).max(QUOTE_REQUEST_DRAFT_PAGE_SIZE),
+  nextCursor: draftCursor.nullable()
+}).strict();
 
 // server/modules/marketplace/validation.ts
 var supplierIdSchema = external_exports.uuid();
@@ -54829,6 +54879,23 @@ var supplierInvite = external_exports.object({
 var supplierTeam = external_exports.object({ members: external_exports.array(supplierTeamMember), invites: external_exports.array(supplierInvite) }).strict();
 var removedSupplierMember = external_exports.object({ userId: external_exports.uuid() }).strict();
 var revokedSupplierInvite = external_exports.object({ id: external_exports.uuid() }).strict();
+var notificationTimestamp = external_exports.iso.datetime({ offset: true });
+var notificationCursor = external_exports.object({ createdAt: notificationTimestamp, id: external_exports.uuid() }).strict();
+var supplierNotificationQuery = external_exports.object({
+  afterCreatedAt: notificationTimestamp.optional(),
+  afterId: external_exports.uuid().optional()
+}).strict().refine((query) => Boolean(query.afterCreatedAt) === Boolean(query.afterId)).transform(({ afterCreatedAt, afterId }) => afterCreatedAt && afterId ? { createdAt: afterCreatedAt, id: afterId } : null);
+var supplierNotification = notificationCursor.extend({
+  supplierId: external_exports.uuid(),
+  supplierName: external_exports.string().min(1),
+  action: external_exports.enum(SUPPLIER_NOTIFICATION_ACTIONS),
+  readAt: notificationTimestamp.nullable()
+}).strict();
+var supplierNotificationPage = external_exports.object({
+  items: external_exports.array(supplierNotification).max(SUPPLIER_NOTIFICATION_PAGE_SIZE),
+  nextCursor: notificationCursor.nullable()
+}).strict();
+var supplierNotificationRead = external_exports.object({ id: external_exports.uuid(), readAt: notificationTimestamp }).strict();
 var maxDocumentBase64Length = 4 * Math.ceil(SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES / 3);
 var supplierReviewDocumentBodyLimit = maxDocumentBase64Length + 4096;
 var reviewDocumentMime = external_exports.enum(SUPPLIER_REVIEW_DOCUMENT_MIME_TYPES);
@@ -54982,6 +55049,22 @@ var SupabaseMarketplaceRepository = class {
       p_invite_id: inviteId
     }, revokedSupplierInvite);
   }
+  listNotifications(actor, asReviewer, after) {
+    return this.rpc("marketplace_list_supplier_notifications", {
+      p_actor_user_id: actor.userId,
+      p_as_reviewer: asReviewer,
+      p_limit: SUPPLIER_NOTIFICATION_PAGE_SIZE,
+      p_after_created_at: after?.createdAt ?? null,
+      p_after_id: after?.id ?? null
+    }, supplierNotificationPage);
+  }
+  markNotificationRead(actor, asReviewer, id) {
+    return this.rpc("marketplace_mark_supplier_notification_read", {
+      p_actor_user_id: actor.userId,
+      p_notification_id: id,
+      p_as_reviewer: asReviewer
+    }, supplierNotificationRead);
+  }
   listReviewDocuments(actor, supplierId, asReviewer) {
     return this.rpc("marketplace_list_supplier_review_documents", {
       p_actor_user_id: actor.userId,
@@ -55013,6 +55096,32 @@ var SupabaseMarketplaceRepository = class {
       p_supplier_id: supplierId,
       p_document_id: documentId
     }, removedSupplierReviewDocument);
+  }
+  createQuoteRequestDraft(actor, input2) {
+    return this.rpc("marketplace_create_quote_request_draft", {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: input2.workspaceId,
+      p_project_id: input2.projectId,
+      p_expected_project_revision: input2.expectedProjectRevision,
+      p_operation_id: input2.operationId,
+      p_title: input2.title,
+      p_quantity: input2.quantity,
+      p_notes: input2.notes
+    }, quoteDraft);
+  }
+  listQuoteRequestDrafts(actor, workspaceId, after) {
+    return this.rpc("marketplace_list_quote_request_drafts", {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId,
+      p_after_created_at: after?.createdAt ?? null,
+      p_after_id: after?.id ?? null
+    }, quoteDraftPage);
+  }
+  getQuoteRequestDraft(actor, id) {
+    return this.rpc("marketplace_get_quote_request_draft", {
+      p_actor_user_id: actor.userId,
+      p_request_id: id
+    }, quoteDraft);
   }
   publicProfile(slug) {
     return this.rpc("marketplace_public_supplier", { p_slug: slug }, supplierPublicProfile);
@@ -61517,6 +61626,8 @@ async function readJsonBody(req, maxBytes = MAX_JSON_BODY_BYTES) {
 import { createHash as createHash3, randomBytes } from "node:crypto";
 var marketplacePaths = [
   ["context", /^\/api\/v1\/marketplace\/context$/, ["GET"]],
+  ["notifications", /^\/api\/v1\/marketplace\/notifications$/, ["GET"]],
+  ["markNotificationRead", /^\/api\/v1\/marketplace\/notifications\/([^/]+)\/read$/, ["POST"]],
   ["create", /^\/api\/v1\/suppliers$/, ["POST"]],
   ["supplier", /^\/api\/v1\/suppliers\/([^/]+)$/, ["GET", "PUT"]],
   ["submit", /^\/api\/v1\/suppliers\/([^/]+)\/submit$/, ["POST"]],
@@ -61529,9 +61640,13 @@ var marketplacePaths = [
   ["reviewDocument", /^\/api\/v1\/suppliers\/([^/]+)\/review-documents\/([^/]+)$/, ["GET", "DELETE"]],
   ["publicProfile", /^\/api\/v1\/suppliers\/public\/([^/]+)$/, ["GET"]],
   ["adminList", /^\/api\/v1\/admin\/suppliers$/, ["GET"]],
+  ["adminNotifications", /^\/api\/v1\/admin\/suppliers\/notifications$/, ["GET"]],
+  ["adminMarkNotificationRead", /^\/api\/v1\/admin\/suppliers\/notifications\/([^/]+)\/read$/, ["POST"]],
   ["review", /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review$/, ["POST"]],
   ["adminReviewDocuments", /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review-documents$/, ["GET"]],
-  ["adminReviewDocument", /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review-documents\/([^/]+)$/, ["GET"]]
+  ["adminReviewDocument", /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review-documents\/([^/]+)$/, ["GET"]],
+  ["quoteDrafts", /^\/api\/v1\/marketplace\/requests$/, ["GET", "POST"]],
+  ["quoteDraft", /^\/api\/v1\/marketplace\/requests\/([^/]+)$/, ["GET"]]
 ];
 function matchMarketplaceRoute(path6) {
   for (const [kind, pattern, methods] of marketplacePaths) {
@@ -61555,7 +61670,7 @@ async function serveMarketplaceRoute(route, request, repository) {
   if (kind === "publicProfile") {
     return { status: 200, data: await repository.publicProfile(validated(supplierSlugSchema, parameter)) };
   }
-  const asReviewer = kind === "adminReviewDocuments" || kind === "adminReviewDocument";
+  const asReviewer = kind === "adminReviewDocuments" || kind === "adminReviewDocument" || kind === "adminNotifications" || kind === "adminMarkNotificationRead";
   const isAdminRoute = kind === "adminList" || kind === "review" || asReviewer;
   const actor = await request.authenticate({
     verifyMfa: isAdminRoute || kind === "context",
@@ -61573,6 +61688,16 @@ async function serveMarketplaceRoute(route, request, repository) {
       };
       return { status: 200, data };
     }
+    case "notifications":
+    case "adminNotifications": {
+      const query = Object.fromEntries(request.query);
+      if (Object.keys(query).length !== request.query.size) throw new HttpError(422, "VALIDATION_ERROR", "query parameter \u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E0B\u0E49\u0E33");
+      const after = validated(supplierNotificationQuery, query);
+      return { status: 200, data: await repository.listNotifications(actor, asReviewer, after) };
+    }
+    case "markNotificationRead":
+    case "adminMarkNotificationRead":
+      return { status: 200, data: await repository.markNotificationRead(actor, asReviewer, validated(supplierIdSchema, parameter)) };
     case "create": {
       const { operationId, ...profile } = validated(createSupplierInput, await request.readBody());
       return { status: 201, data: await repository.create(actor, operationId, profile) };
@@ -61628,6 +61753,18 @@ async function serveMarketplaceRoute(route, request, repository) {
       if (request.method === "DELETE") return { status: 200, data: await repository.removeReviewDocument(actor, supplierId, documentId) };
       return { status: 200, data: await repository.getReviewDocument(actor, supplierId, documentId, asReviewer) };
     }
+    case "quoteDrafts": {
+      if (request.method === "POST") {
+        const input2 = validated(createQuoteDraftInput, await request.readBody());
+        return { status: 201, data: await repository.createQuoteRequestDraft(actor, input2) };
+      }
+      const query = Object.fromEntries(request.query);
+      if (Object.keys(query).length !== request.query.size) throw new HttpError(422, "VALIDATION_ERROR", "query parameter \u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E0B\u0E49\u0E33");
+      const { workspaceId, after } = validated(quoteDraftListQuery, query);
+      return { status: 200, data: await repository.listQuoteRequestDrafts(actor, workspaceId, after) };
+    }
+    case "quoteDraft":
+      return { status: 200, data: await repository.getQuoteRequestDraft(actor, validated(supplierIdSchema, parameter)) };
     case "adminList": {
       const { status, after } = validated(supplierAdminQuery, Object.fromEntries(request.query));
       return { status: 200, data: await repository.adminList(actor, status, after) };

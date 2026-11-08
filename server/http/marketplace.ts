@@ -3,6 +3,7 @@ import type { ZodType } from 'zod'
 import type { MarketplaceContextData } from '../../shared/contracts/marketplace'
 import type { Actor } from '../modules/identity/actor'
 import type { ActorAuthenticationOptions } from '../modules/identity/sessionService'
+import { createQuoteDraftInput, quoteDraftListQuery } from '../modules/marketplace/quoteRequestValidation'
 import type { MarketplaceRepository } from '../modules/marketplace/marketplaceRepository'
 import {
   acceptSupplierInviteInput,
@@ -14,6 +15,7 @@ import {
   reviewSupplierInput,
   supplierAdminQuery,
   supplierIdSchema,
+  supplierNotificationQuery,
   supplierReviewDocumentBodyLimit,
   supplierSlugSchema,
   updateSupplierInput,
@@ -22,6 +24,8 @@ import { HttpError } from './errors'
 
 const marketplacePaths = [
   ['context', /^\/api\/v1\/marketplace\/context$/, ['GET']],
+  ['notifications', /^\/api\/v1\/marketplace\/notifications$/, ['GET']],
+  ['markNotificationRead', /^\/api\/v1\/marketplace\/notifications\/([^/]+)\/read$/, ['POST']],
   ['create', /^\/api\/v1\/suppliers$/, ['POST']],
   ['supplier', /^\/api\/v1\/suppliers\/([^/]+)$/, ['GET', 'PUT']],
   ['submit', /^\/api\/v1\/suppliers\/([^/]+)\/submit$/, ['POST']],
@@ -34,9 +38,13 @@ const marketplacePaths = [
   ['reviewDocument', /^\/api\/v1\/suppliers\/([^/]+)\/review-documents\/([^/]+)$/, ['GET', 'DELETE']],
   ['publicProfile', /^\/api\/v1\/suppliers\/public\/([^/]+)$/, ['GET']],
   ['adminList', /^\/api\/v1\/admin\/suppliers$/, ['GET']],
+  ['adminNotifications', /^\/api\/v1\/admin\/suppliers\/notifications$/, ['GET']],
+  ['adminMarkNotificationRead', /^\/api\/v1\/admin\/suppliers\/notifications\/([^/]+)\/read$/, ['POST']],
   ['review', /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review$/, ['POST']],
   ['adminReviewDocuments', /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review-documents$/, ['GET']],
   ['adminReviewDocument', /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review-documents\/([^/]+)$/, ['GET']],
+  ['quoteDrafts', /^\/api\/v1\/marketplace\/requests$/, ['GET', 'POST']],
+  ['quoteDraft', /^\/api\/v1\/marketplace\/requests\/([^/]+)$/, ['GET']],
 ] as const
 
 interface MarketplaceRoute {
@@ -82,6 +90,7 @@ export async function serveMarketplaceRoute(
   }
 
   const asReviewer = kind === 'adminReviewDocuments' || kind === 'adminReviewDocument'
+    || kind === 'adminNotifications' || kind === 'adminMarkNotificationRead'
   const isAdminRoute = kind === 'adminList' || kind === 'review' || asReviewer
   const actor = await request.authenticate({
     verifyMfa: isAdminRoute || kind === 'context',
@@ -99,6 +108,16 @@ export async function serveMarketplaceRoute(
       }
       return { status: 200, data }
     }
+    case 'notifications':
+    case 'adminNotifications': {
+      const query = Object.fromEntries(request.query)
+      if (Object.keys(query).length !== request.query.size) throw new HttpError(422, 'VALIDATION_ERROR', 'query parameter ต้องไม่ซ้ำ')
+      const after = validated(supplierNotificationQuery, query)
+      return { status: 200, data: await repository.listNotifications(actor, asReviewer, after) }
+    }
+    case 'markNotificationRead':
+    case 'adminMarkNotificationRead':
+      return { status: 200, data: await repository.markNotificationRead(actor, asReviewer, validated(supplierIdSchema, parameter)) }
     case 'create': {
       const { operationId, ...profile } = validated(createSupplierInput, await request.readBody())
       return { status: 201, data: await repository.create(actor, operationId, profile) }
@@ -154,6 +173,18 @@ export async function serveMarketplaceRoute(
       if (request.method === 'DELETE') return { status: 200, data: await repository.removeReviewDocument(actor, supplierId, documentId) }
       return { status: 200, data: await repository.getReviewDocument(actor, supplierId, documentId, asReviewer) }
     }
+    case 'quoteDrafts': {
+      if (request.method === 'POST') {
+        const input = validated(createQuoteDraftInput, await request.readBody())
+        return { status: 201, data: await repository.createQuoteRequestDraft(actor, input) }
+      }
+      const query = Object.fromEntries(request.query)
+      if (Object.keys(query).length !== request.query.size) throw new HttpError(422, 'VALIDATION_ERROR', 'query parameter ต้องไม่ซ้ำ')
+      const { workspaceId, after } = validated(quoteDraftListQuery, query)
+      return { status: 200, data: await repository.listQuoteRequestDrafts(actor, workspaceId, after) }
+    }
+    case 'quoteDraft':
+      return { status: 200, data: await repository.getQuoteRequestDraft(actor, validated(supplierIdSchema, parameter)) }
     case 'adminList': {
       const { status, after } = validated(supplierAdminQuery, Object.fromEntries(request.query))
       return { status: 200, data: await repository.adminList(actor, status, after) }

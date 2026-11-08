@@ -4,6 +4,8 @@ import type {
   SupplierAccess,
   SupplierAdminPage,
   SupplierInvite,
+  SupplierNotificationCursor,
+  SupplierNotificationPage,
   SupplierProfile,
   SupplierProfileInput,
   SupplierPublicProfile,
@@ -15,6 +17,7 @@ import type {
   SupplierTeam,
   SupplierTeamMember,
 } from '../../../shared/contracts/marketplace'
+import type { CreateQuoteRequestDraftInput, QuoteRequestCursor, QuoteRequestDraft, QuoteRequestDraftPage } from '../../../shared/contracts/quoteRequests'
 import type { Actor } from '../identity/actor'
 
 export interface MarketplaceRepository {
@@ -29,10 +32,15 @@ export interface MarketplaceRepository {
   changeMember(actor: Actor, supplierId: string, userId: string, role: MarketplaceRole): Promise<SupplierTeamMember>
   removeMember(actor: Actor, supplierId: string, userId: string): Promise<{ userId: string }>
   revokeInvite(actor: Actor, supplierId: string, inviteId: string): Promise<{ id: string }>
+  listNotifications(actor: Actor, asReviewer: boolean, after: SupplierNotificationCursor | null): Promise<SupplierNotificationPage>
+  markNotificationRead(actor: Actor, asReviewer: boolean, id: string): Promise<{ id: string; readAt: string }>
   listReviewDocuments(actor: Actor, supplierId: string, asReviewer: boolean): Promise<{ documents: SupplierReviewDocument[] }>
   getReviewDocument(actor: Actor, supplierId: string, documentId: string, asReviewer: boolean): Promise<SupplierReviewDocumentDownload>
   addReviewDocument(actor: Actor, supplierId: string, input: SupplierReviewDocumentUpload): Promise<SupplierReviewDocument>
   removeReviewDocument(actor: Actor, supplierId: string, documentId: string): Promise<{ id: string }>
+  createQuoteRequestDraft(actor: Actor, input: CreateQuoteRequestDraftInput): Promise<QuoteRequestDraft>
+  listQuoteRequestDrafts(actor: Actor, workspaceId: string, after: QuoteRequestCursor | null): Promise<QuoteRequestDraftPage>
+  getQuoteRequestDraft(actor: Actor, id: string): Promise<QuoteRequestDraft>
   publicProfile(slug: string): Promise<SupplierPublicProfile>
   adminList(actor: Actor, status: SupplierStatus, after?: string): Promise<SupplierAdminPage>
   review(actor: Actor, supplierId: string, expectedRevision: number, action: SupplierReviewAction, reason: string): Promise<SupplierProfile>
