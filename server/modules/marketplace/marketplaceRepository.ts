@@ -8,6 +8,9 @@ import type {
   SupplierProfileInput,
   SupplierPublicProfile,
   SupplierReviewAction,
+  SupplierReviewDocument,
+  SupplierReviewDocumentDownload,
+  SupplierReviewDocumentUpload,
   SupplierStatus,
   SupplierTeam,
   SupplierTeamMember,
@@ -26,6 +29,10 @@ export interface MarketplaceRepository {
   changeMember(actor: Actor, supplierId: string, userId: string, role: MarketplaceRole): Promise<SupplierTeamMember>
   removeMember(actor: Actor, supplierId: string, userId: string): Promise<{ userId: string }>
   revokeInvite(actor: Actor, supplierId: string, inviteId: string): Promise<{ id: string }>
+  listReviewDocuments(actor: Actor, supplierId: string, asReviewer: boolean): Promise<{ documents: SupplierReviewDocument[] }>
+  getReviewDocument(actor: Actor, supplierId: string, documentId: string, asReviewer: boolean): Promise<SupplierReviewDocumentDownload>
+  addReviewDocument(actor: Actor, supplierId: string, input: SupplierReviewDocumentUpload): Promise<SupplierReviewDocument>
+  removeReviewDocument(actor: Actor, supplierId: string, documentId: string): Promise<{ id: string }>
   publicProfile(slug: string): Promise<SupplierPublicProfile>
   adminList(actor: Actor, status: SupplierStatus, after?: string): Promise<SupplierAdminPage>
   review(actor: Actor, supplierId: string, expectedRevision: number, action: SupplierReviewAction, reason: string): Promise<SupplierProfile>

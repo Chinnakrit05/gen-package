@@ -54764,6 +54764,9 @@ var SUPPLIER_CAPABILITIES = [
 var SUPPLIER_STATUSES = ["draft", "pending", "approved", "suspended"];
 var SUPPLIER_REVIEW_ACTIONS = ["approve", "request_changes", "suspend", "resume"];
 var MARKETPLACE_ROLES = ["manager", "staff", "viewer"];
+var SUPPLIER_REVIEW_DOCUMENT_MIME_TYPES = ["application/pdf", "image/png", "image/jpeg"];
+var SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES = 2 * 1024 * 1024;
+var SUPPLIER_REVIEW_DOCUMENT_LIMIT = 3;
 
 // server/modules/marketplace/validation.ts
 var supplierIdSchema = external_exports.uuid();
@@ -54826,6 +54829,39 @@ var supplierInvite = external_exports.object({
 var supplierTeam = external_exports.object({ members: external_exports.array(supplierTeamMember), invites: external_exports.array(supplierInvite) }).strict();
 var removedSupplierMember = external_exports.object({ userId: external_exports.uuid() }).strict();
 var revokedSupplierInvite = external_exports.object({ id: external_exports.uuid() }).strict();
+var maxDocumentBase64Length = 4 * Math.ceil(SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES / 3);
+var supplierReviewDocumentBodyLimit = maxDocumentBase64Length + 4096;
+var reviewDocumentMime = external_exports.enum(SUPPLIER_REVIEW_DOCUMENT_MIME_TYPES);
+var reviewDocumentName = external_exports.string().trim().min(1).max(240).refine((name) => Array.from(name).length <= 120 && !/[\u0000-\u001f\u007f/\\]/.test(name));
+var reviewDocumentBase64 = external_exports.string().min(4).max(maxDocumentBase64Length).regex(/^[A-Za-z0-9+/]+={0,2}$/);
+var reviewDocumentFormats = {
+  "application/pdf": { extension: /\.pdf$/i, signature: Buffer.from("%PDF-") },
+  "image/png": { extension: /\.png$/i, signature: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]) },
+  "image/jpeg": { extension: /\.jpe?g$/i, signature: Buffer.from([255, 216, 255]) }
+};
+var addSupplierReviewDocumentInput = external_exports.object({
+  operationId: external_exports.uuid(),
+  name: reviewDocumentName,
+  mimeType: reviewDocumentMime,
+  dataBase64: reviewDocumentBase64
+}).strict().superRefine(({ name, mimeType, dataBase64 }, context) => {
+  const format = reviewDocumentFormats[mimeType];
+  if (!format.extension.test(name)) context.addIssue({ code: "custom", path: ["name"], message: "\u0E19\u0E32\u0E21\u0E2A\u0E01\u0E38\u0E25\u0E44\u0E21\u0E48\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A\u0E0A\u0E19\u0E34\u0E14\u0E44\u0E1F\u0E25\u0E4C" });
+  const bytes = Buffer.from(dataBase64, "base64");
+  if (bytes.length > SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES || bytes.toString("base64") !== dataBase64 || !bytes.subarray(0, format.signature.length).equals(format.signature)) {
+    context.addIssue({ code: "custom", path: ["dataBase64"], message: "\u0E02\u0E19\u0E32\u0E14\u0E2B\u0E23\u0E37\u0E2D\u0E0A\u0E19\u0E34\u0E14\u0E44\u0E1F\u0E25\u0E4C\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07" });
+  }
+});
+var supplierReviewDocument = external_exports.object({
+  id: external_exports.uuid(),
+  name: reviewDocumentName,
+  mimeType: reviewDocumentMime,
+  byteSize: external_exports.int().min(1).max(SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES),
+  createdAt: external_exports.iso.datetime({ offset: true })
+}).strict();
+var supplierReviewDocuments = external_exports.object({ documents: external_exports.array(supplierReviewDocument).max(SUPPLIER_REVIEW_DOCUMENT_LIMIT) }).strict();
+var supplierReviewDocumentDownload = external_exports.object({ document: supplierReviewDocument, dataBase64: reviewDocumentBase64 }).strict();
+var removedSupplierReviewDocument = external_exports.object({ id: external_exports.uuid() }).strict();
 
 // server/adapters/supabase/marketplaceRepository.ts
 var databaseErrors = /* @__PURE__ */ new Map([
@@ -54838,6 +54874,7 @@ var databaseErrors = /* @__PURE__ */ new Map([
   ["MARKETPLACE_MEMBER_EXISTS", [409, "MARKETPLACE_CONFLICT", "\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E19\u0E35\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01\u0E02\u0E2D\u0E07\u0E1C\u0E39\u0E49\u0E23\u0E31\u0E1A\u0E1C\u0E25\u0E34\u0E15\u0E41\u0E25\u0E49\u0E27"]],
   ["MARKETPLACE_MANAGER_REQUIRED", [409, "MARKETPLACE_CONFLICT", "\u0E15\u0E49\u0E2D\u0E07\u0E21\u0E35\u0E1C\u0E39\u0E49\u0E08\u0E31\u0E14\u0E01\u0E32\u0E23\u0E17\u0E35\u0E48\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E44\u0E14\u0E49\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E19\u0E49\u0E2D\u0E22\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E04\u0E19"]],
   ["MARKETPLACE_OWNER_PROTECTED", [409, "MARKETPLACE_CONFLICT", "\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E2B\u0E23\u0E37\u0E2D\u0E19\u0E33\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E07\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E35\u0E48\u0E2D\u0E2D\u0E01\u0E08\u0E32\u0E01\u0E17\u0E35\u0E21\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49"]],
+  ["SUPPLIER_DOCUMENT_LIMIT", [409, "SUPPLIER_DOCUMENT_LIMIT", "\u0E41\u0E19\u0E1A\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E01\u0E32\u0E23\u0E15\u0E23\u0E27\u0E08\u0E44\u0E14\u0E49\u0E2A\u0E39\u0E07\u0E2A\u0E38\u0E14 3 \u0E44\u0E1F\u0E25\u0E4C"]],
   ["IDEMPOTENCY_KEY_REUSED", [409, "IDEMPOTENCY_KEY_REUSED", "\u0E04\u0E33\u0E02\u0E2D\u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2D\u0E37\u0E48\u0E19\u0E41\u0E25\u0E49\u0E27"]],
   ["VALIDATION_ERROR", [422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E01\u0E34\u0E08\u0E01\u0E32\u0E23\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E2B\u0E23\u0E37\u0E2D\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E04\u0E23\u0E1A"]]
 ]);
@@ -54944,6 +54981,38 @@ var SupabaseMarketplaceRepository = class {
       p_supplier_id: supplierId,
       p_invite_id: inviteId
     }, revokedSupplierInvite);
+  }
+  listReviewDocuments(actor, supplierId, asReviewer) {
+    return this.rpc("marketplace_list_supplier_review_documents", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_as_reviewer: asReviewer
+    }, supplierReviewDocuments);
+  }
+  getReviewDocument(actor, supplierId, documentId, asReviewer) {
+    return this.rpc("marketplace_get_supplier_review_document", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_document_id: documentId,
+      p_as_reviewer: asReviewer
+    }, supplierReviewDocumentDownload);
+  }
+  addReviewDocument(actor, supplierId, input2) {
+    return this.rpc("marketplace_add_supplier_review_document", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_operation_id: input2.operationId,
+      p_name: input2.name,
+      p_mime_type: input2.mimeType,
+      p_data_base64: input2.dataBase64
+    }, supplierReviewDocument);
+  }
+  removeReviewDocument(actor, supplierId, documentId) {
+    return this.rpc("marketplace_remove_supplier_review_document", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_document_id: documentId
+    }, removedSupplierReviewDocument);
   }
   publicProfile(slug) {
     return this.rpc("marketplace_public_supplier", { p_slug: slug }, supplierPublicProfile);
@@ -61456,9 +61525,13 @@ var marketplacePaths = [
   ["revokeInvite", /^\/api\/v1\/suppliers\/([^/]+)\/team\/invitations\/([^/]+)$/, ["DELETE"]],
   ["member", /^\/api\/v1\/suppliers\/([^/]+)\/team\/members\/([^/]+)$/, ["PUT", "DELETE"]],
   ["acceptInvite", /^\/api\/v1\/suppliers\/invitations\/accept$/, ["POST"]],
+  ["reviewDocuments", /^\/api\/v1\/suppliers\/([^/]+)\/review-documents$/, ["GET", "POST"]],
+  ["reviewDocument", /^\/api\/v1\/suppliers\/([^/]+)\/review-documents\/([^/]+)$/, ["GET", "DELETE"]],
   ["publicProfile", /^\/api\/v1\/suppliers\/public\/([^/]+)$/, ["GET"]],
   ["adminList", /^\/api\/v1\/admin\/suppliers$/, ["GET"]],
-  ["review", /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review$/, ["POST"]]
+  ["review", /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review$/, ["POST"]],
+  ["adminReviewDocuments", /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review-documents$/, ["GET"]],
+  ["adminReviewDocument", /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review-documents\/([^/]+)$/, ["GET"]]
 ];
 function matchMarketplaceRoute(path6) {
   for (const [kind, pattern, methods] of marketplacePaths) {
@@ -61482,7 +61555,8 @@ async function serveMarketplaceRoute(route, request, repository) {
   if (kind === "publicProfile") {
     return { status: 200, data: await repository.publicProfile(validated(supplierSlugSchema, parameter)) };
   }
-  const isAdminRoute = kind === "adminList" || kind === "review";
+  const asReviewer = kind === "adminReviewDocuments" || kind === "adminReviewDocument";
+  const isAdminRoute = kind === "adminList" || kind === "review" || asReviewer;
   const actor = await request.authenticate({
     verifyMfa: isAdminRoute || kind === "context",
     ...kind === "acceptInvite" ? { includeVerifiedEmail: true } : {}
@@ -61539,6 +61613,20 @@ async function serveMarketplaceRoute(route, request, repository) {
       const { token } = validated(acceptSupplierInviteInput, await request.readBody());
       if (!actor.verifiedEmail) throw new HttpError(404, "NOT_FOUND", "\u0E43\u0E0A\u0E49\u0E04\u0E33\u0E40\u0E0A\u0E34\u0E0D\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E23\u0E27\u0E08\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E17\u0E35\u0E48\u0E43\u0E0A\u0E49\u0E2B\u0E23\u0E37\u0E2D\u0E02\u0E2D\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E43\u0E2B\u0E21\u0E48");
       return { status: 200, data: await repository.acceptInvite(actor, actor.verifiedEmail, hashInviteToken(token)) };
+    }
+    case "reviewDocuments":
+    case "adminReviewDocuments": {
+      const supplierId = validated(supplierIdSchema, parameter);
+      if (request.method === "GET") return { status: 200, data: await repository.listReviewDocuments(actor, supplierId, asReviewer) };
+      const input2 = validated(addSupplierReviewDocumentInput, await request.readBody(supplierReviewDocumentBodyLimit));
+      return { status: 201, data: await repository.addReviewDocument(actor, supplierId, input2) };
+    }
+    case "reviewDocument":
+    case "adminReviewDocument": {
+      const supplierId = validated(supplierIdSchema, parameter);
+      const documentId = validated(supplierIdSchema, childId);
+      if (request.method === "DELETE") return { status: 200, data: await repository.removeReviewDocument(actor, supplierId, documentId) };
+      return { status: 200, data: await repository.getReviewDocument(actor, supplierId, documentId, asReviewer) };
     }
     case "adminList": {
       const { status, after } = validated(supplierAdminQuery, Object.fromEntries(request.query));
@@ -61801,9 +61889,9 @@ function createApiRouter(config2, dependencies = {}) {
             if (!sessionService) throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Supabase");
             return sessionService.authenticate(bearerToken(req), requestId, options);
           },
-          readBody: () => {
+          readBody: (maxBytes = 16 * 1024) => {
             requireJsonContentType(req);
-            return readJsonBody(req, 16 * 1024);
+            return readJsonBody(req, maxBytes);
           }
         }, marketplaceRepository);
         sendJson(res, result.status, { data: result.data, requestId }, requestId);

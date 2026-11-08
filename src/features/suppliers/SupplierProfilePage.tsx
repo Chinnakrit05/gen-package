@@ -7,6 +7,7 @@ import { ApiClientError } from '../../services/api/client'
 import { getSupplier, marketplaceContextKey, submitSupplier, updateSupplier } from '../../services/api/marketplace'
 import { CapabilityList, MarketplaceError, MarketplaceShell } from './MarketplaceShell'
 import { SupplierForm } from './SupplierForm'
+import { SupplierReviewDocuments } from './SupplierReviewDocuments'
 import { SUPPLIER_ID, supplierError, supplierInput, supplierKindNames, supplierRoleNames, supplierStatusNames } from './supplierUi'
 
 export function SupplierProfilePage() {
@@ -74,6 +75,7 @@ function SupplierProfilePanel({
   const { profile, role } = access
   const { apiBaseUrl, getAccessToken } = useCloudSession()
   const [form, setForm] = useState(() => supplierInput(profile))
+  const [documentWriteBusy, setDocumentWriteBusy] = useState(false)
   const canEdit = role === 'manager' && (profile.status === 'draft' || profile.status === 'approved')
   const changed = JSON.stringify(supplierInput(form)) !== JSON.stringify(supplierInput(profile))
   const write = useMutation({
@@ -83,7 +85,8 @@ function SupplierProfilePanel({
         : submitSupplier(apiBaseUrl, getAccessToken(), profile.id, profile.revision)
     ),
   })
-  const busy = write.isPending || refreshing
+  const profileBusy = write.isPending || refreshing
+  const busy = profileBusy || documentWriteBusy
   const changedRevision = write.error instanceof ApiClientError && write.error.code === 'REVISION_CONFLICT'
   const save = (input: SupplierProfileInput) => write.mutate({ kind: 'save', input }, {
     onSuccess: (next) => updated(next, next.profile.status === 'draft' && profile.status === 'approved'
@@ -130,6 +133,19 @@ function SupplierProfilePanel({
             busy={busy || changedRevision}
             saveLabel="บันทึกโปรไฟล์"
             onSave={save}
+          />
+        </section>
+      )}
+      {role === 'manager' && (
+        <section className="marketplace-card">
+          <h2>เอกสารประกอบการตรวจ</h2>
+          <p>เอกสารนี้เปิดให้ผู้จัดการกิจการและเจ้าหน้าที่ PackIt ที่กำลังตรวจโปรไฟล์เข้าถึงได้</p>
+          {profile.status !== 'draft' && <p className="marketplace-muted">เพิ่มหรือนำเอกสารออกได้เมื่อโปรไฟล์อยู่ในฉบับร่าง</p>}
+          <SupplierReviewDocuments
+            supplierId={profile.id}
+            canWrite={profile.status === 'draft'}
+            blocked={profileBusy}
+            onWriteBusyChange={setDocumentWriteBusy}
           />
         </section>
       )}

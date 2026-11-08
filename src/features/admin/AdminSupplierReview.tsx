@@ -6,6 +6,7 @@ import { useCloudSession } from '../../app/cloudSession'
 import { ApiClientError } from '../../services/api/client'
 import { listAdminSuppliers, marketplaceContextKey, reviewSupplier } from '../../services/api/marketplace'
 import { CapabilityList, MarketplaceError, MarketplaceShell } from '../suppliers/MarketplaceShell'
+import { SupplierReviewDocuments } from '../suppliers/SupplierReviewDocuments'
 import { supplierError, supplierKindNames, supplierStatusNames } from '../suppliers/supplierUi'
 import { useMarketplaceContext } from '../suppliers/useMarketplaceContext'
 import { ReviewerMfa, type ReviewerMfaClient } from './ReviewerMfa'
@@ -103,6 +104,7 @@ function ReviewCard({ profile, reviewed, reload }: {
   const actions = availableActions[profile.status]
   const [action, setAction] = useState<SupplierReviewAction | undefined>(actions[0])
   const [reason, setReason] = useState('')
+  const [documentsOpen, setDocumentsOpen] = useState(false)
   const review = useMutation({
     mutationFn: (input: { action: SupplierReviewAction; reason: string }) => reviewSupplier(
       session.apiBaseUrl,
@@ -132,6 +134,14 @@ function ReviewCard({ profile, reviewed, reload }: {
       <p className="marketplace-muted"><strong>ชื่อในลิงก์</strong> {profile.slug}</p>
       <CapabilityList capabilities={profile.capabilities} />
       {profile.reviewNote && <p className="marketplace-notice"><strong>ข้อความจากผู้ตรวจ</strong> {profile.reviewNote}</p>}
+      {profile.status === 'pending' && (
+        <div className="marketplace-documents">
+          <button type="button" aria-expanded={documentsOpen} onClick={() => setDocumentsOpen((open) => !open)}>
+            {documentsOpen ? 'ซ่อนเอกสารประกอบ' : 'ดูเอกสารประกอบ'}
+          </button>
+          {documentsOpen && <SupplierReviewDocuments supplierId={profile.id} asReviewer blocked={review.isPending} />}
+        </div>
+      )}
       {action && (
         <form className="marketplace-form" onSubmit={submit}>
           <fieldset className="marketplace-form-fields" disabled={review.isPending || changedRevision}>

@@ -1,7 +1,7 @@
 import { createClient, type PostgrestError, type SupabaseClient } from '@supabase/supabase-js'
 import type { ZodType } from 'zod'
 import type { ApiErrorCode } from '../../../shared/contracts/errors'
-import type { MarketplaceRole, SupplierProfileInput, SupplierReviewAction, SupplierStatus } from '../../../shared/contracts/marketplace'
+import type { MarketplaceRole, SupplierProfileInput, SupplierReviewAction, SupplierReviewDocumentUpload, SupplierStatus } from '../../../shared/contracts/marketplace'
 import type { ServerConfig } from '../../config'
 import { HttpError } from '../../http/errors'
 import type { Actor } from '../../modules/identity/actor'
@@ -9,12 +9,16 @@ import type { MarketplaceRepository } from '../../modules/marketplace/marketplac
 import {
   marketplaceContext,
   removedSupplierMember,
+  removedSupplierReviewDocument,
   revokedSupplierInvite,
   supplierAccess,
   supplierAdminPage,
   supplierInvite,
   supplierProfile,
   supplierPublicProfile,
+  supplierReviewDocument,
+  supplierReviewDocumentDownload,
+  supplierReviewDocuments,
   supplierTeam,
   supplierTeamMember,
 } from '../../modules/marketplace/validation'
@@ -29,6 +33,7 @@ const databaseErrors = new Map<string, [number, ApiErrorCode, string]>([
   ['MARKETPLACE_MEMBER_EXISTS', [409, 'MARKETPLACE_CONFLICT', 'บัญชีนี้เป็นสมาชิกของผู้รับผลิตแล้ว']],
   ['MARKETPLACE_MANAGER_REQUIRED', [409, 'MARKETPLACE_CONFLICT', 'ต้องมีผู้จัดการที่ใช้งานได้อย่างน้อยหนึ่งคน']],
   ['MARKETPLACE_OWNER_PROTECTED', [409, 'MARKETPLACE_CONFLICT', 'เปลี่ยนสิทธิ์หรือนำเจ้าของพื้นที่ออกจากทีมไม่ได้']],
+  ['SUPPLIER_DOCUMENT_LIMIT', [409, 'SUPPLIER_DOCUMENT_LIMIT', 'แนบเอกสารประกอบการตรวจได้สูงสุด 3 ไฟล์']],
   ['IDEMPOTENCY_KEY_REUSED', [409, 'IDEMPOTENCY_KEY_REUSED', 'คำขอนี้ถูกใช้กับข้อมูลอื่นแล้ว']],
   ['VALIDATION_ERROR', [422, 'VALIDATION_ERROR', 'ข้อมูลกิจการไม่ถูกต้องหรือยังไม่ครบ']],
 ])
@@ -145,6 +150,42 @@ export class SupabaseMarketplaceRepository implements MarketplaceRepository {
       p_supplier_id: supplierId,
       p_invite_id: inviteId,
     }, revokedSupplierInvite)
+  }
+
+  listReviewDocuments(actor: Actor, supplierId: string, asReviewer: boolean) {
+    return this.rpc('marketplace_list_supplier_review_documents', {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_as_reviewer: asReviewer,
+    }, supplierReviewDocuments)
+  }
+
+  getReviewDocument(actor: Actor, supplierId: string, documentId: string, asReviewer: boolean) {
+    return this.rpc('marketplace_get_supplier_review_document', {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_document_id: documentId,
+      p_as_reviewer: asReviewer,
+    }, supplierReviewDocumentDownload)
+  }
+
+  addReviewDocument(actor: Actor, supplierId: string, input: SupplierReviewDocumentUpload) {
+    return this.rpc('marketplace_add_supplier_review_document', {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_operation_id: input.operationId,
+      p_name: input.name,
+      p_mime_type: input.mimeType,
+      p_data_base64: input.dataBase64,
+    }, supplierReviewDocument)
+  }
+
+  removeReviewDocument(actor: Actor, supplierId: string, documentId: string) {
+    return this.rpc('marketplace_remove_supplier_review_document', {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_document_id: documentId,
+    }, removedSupplierReviewDocument)
   }
 
   publicProfile(slug: string) {

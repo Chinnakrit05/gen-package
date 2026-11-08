@@ -8,6 +8,9 @@ import type {
   SupplierProfileInput,
   SupplierPublicProfile,
   SupplierReviewAction,
+  SupplierReviewDocument,
+  SupplierReviewDocumentDownload,
+  SupplierReviewDocumentUpload,
   SupplierStatus,
   SupplierTeam,
   SupplierTeamMember,
@@ -67,6 +70,25 @@ export function revokeSupplierInvite(base: string, token: string, id: string, in
 
 export function acceptSupplierInvite(base: string, token: string, invitationToken: string): Promise<SupplierAccess> {
   return requestApi(`${base}/suppliers/invitations/accept`, token, json('POST', { token: invitationToken }))
+}
+
+const reviewDocumentsUrl = (base: string, id: string, asReviewer = false) =>
+  `${base}${asReviewer ? '/admin' : ''}/suppliers/${encodeURIComponent(id)}/review-documents`
+
+export function listSupplierReviewDocuments(base: string, token: string, supplierId: string, asReviewer: boolean, signal?: AbortSignal): Promise<{ documents: SupplierReviewDocument[] }> {
+  return requestApi(reviewDocumentsUrl(base, supplierId, asReviewer), token, { method: 'GET', signal })
+}
+
+export function getSupplierReviewDocument(base: string, token: string, supplierId: string, id: string, asReviewer: boolean, signal?: AbortSignal): Promise<SupplierReviewDocumentDownload> {
+  return requestApi(`${reviewDocumentsUrl(base, supplierId, asReviewer)}/${encodeURIComponent(id)}`, token, { method: 'GET', signal })
+}
+
+export function addSupplierReviewDocument(base: string, token: string, supplierId: string, input: SupplierReviewDocumentUpload, signal?: AbortSignal): Promise<SupplierReviewDocument> {
+  return requestApi(reviewDocumentsUrl(base, supplierId), token, json('POST', input, signal))
+}
+
+export function removeSupplierReviewDocument(base: string, token: string, supplierId: string, id: string, signal?: AbortSignal): Promise<{ id: string }> {
+  return requestApi(`${reviewDocumentsUrl(base, supplierId)}/${encodeURIComponent(id)}`, token, { method: 'DELETE', signal })
 }
 
 export function getPublicSupplier(base: string, slug: string, signal?: AbortSignal): Promise<SupplierPublicProfile> {

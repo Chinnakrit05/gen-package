@@ -417,9 +417,9 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
             if (!sessionService) throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Supabase')
             return sessionService.authenticate(bearerToken(req), requestId, options)
           },
-          readBody: () => {
+          readBody: (maxBytes = 16 * 1024) => {
             requireJsonContentType(req)
-            return readJsonBody(req, 16 * 1024)
+            return readJsonBody(req, maxBytes)
           },
         }, marketplaceRepository)
         sendJson(res, result.status, { data: result.data, requestId }, requestId)

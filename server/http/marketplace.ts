@@ -6,6 +6,7 @@ import type { ActorAuthenticationOptions } from '../modules/identity/sessionServ
 import type { MarketplaceRepository } from '../modules/marketplace/marketplaceRepository'
 import {
   acceptSupplierInviteInput,
+  addSupplierReviewDocumentInput,
   changeSupplierMemberInput,
   createSupplierInput,
   createSupplierInviteInput,
@@ -13,6 +14,7 @@ import {
   reviewSupplierInput,
   supplierAdminQuery,
   supplierIdSchema,
+  supplierReviewDocumentBodyLimit,
   supplierSlugSchema,
   updateSupplierInput,
 } from '../modules/marketplace/validation'
@@ -28,9 +30,13 @@ const marketplacePaths = [
   ['revokeInvite', /^\/api\/v1\/suppliers\/([^/]+)\/team\/invitations\/([^/]+)$/, ['DELETE']],
   ['member', /^\/api\/v1\/suppliers\/([^/]+)\/team\/members\/([^/]+)$/, ['PUT', 'DELETE']],
   ['acceptInvite', /^\/api\/v1\/suppliers\/invitations\/accept$/, ['POST']],
+  ['reviewDocuments', /^\/api\/v1\/suppliers\/([^/]+)\/review-documents$/, ['GET', 'POST']],
+  ['reviewDocument', /^\/api\/v1\/suppliers\/([^/]+)\/review-documents\/([^/]+)$/, ['GET', 'DELETE']],
   ['publicProfile', /^\/api\/v1\/suppliers\/public\/([^/]+)$/, ['GET']],
   ['adminList', /^\/api\/v1\/admin\/suppliers$/, ['GET']],
   ['review', /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review$/, ['POST']],
+  ['adminReviewDocuments', /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review-documents$/, ['GET']],
+  ['adminReviewDocument', /^\/api\/v1\/admin\/suppliers\/([^/]+)\/review-documents\/([^/]+)$/, ['GET']],
 ] as const
 
 interface MarketplaceRoute {
@@ -66,7 +72,7 @@ export async function serveMarketplaceRoute(
     method: string
     query: URLSearchParams
     authenticate(options: ActorAuthenticationOptions): Promise<Actor>
-    readBody(): Promise<unknown>
+    readBody(maxBytes?: number): Promise<unknown>
   },
   repository: MarketplaceRepository,
 ): Promise<{ status: number; data: unknown }> {
@@ -75,7 +81,8 @@ export async function serveMarketplaceRoute(
     return { status: 200, data: await repository.publicProfile(validated(supplierSlugSchema, parameter)) }
   }
 
-  const isAdminRoute = kind === 'adminList' || kind === 'review'
+  const asReviewer = kind === 'adminReviewDocuments' || kind === 'adminReviewDocument'
+  const isAdminRoute = kind === 'adminList' || kind === 'review' || asReviewer
   const actor = await request.authenticate({
     verifyMfa: isAdminRoute || kind === 'context',
     ...(kind === 'acceptInvite' ? { includeVerifiedEmail: true } : {}),
@@ -132,6 +139,20 @@ export async function serveMarketplaceRoute(
       const { token } = validated(acceptSupplierInviteInput, await request.readBody())
       if (!actor.verifiedEmail) throw new HttpError(404, 'NOT_FOUND', 'ใช้คำเชิญนี้ไม่ได้ กรุณาตรวจบัญชีที่ใช้หรือขอลิงก์ใหม่')
       return { status: 200, data: await repository.acceptInvite(actor, actor.verifiedEmail, hashInviteToken(token)) }
+    }
+    case 'reviewDocuments':
+    case 'adminReviewDocuments': {
+      const supplierId = validated(supplierIdSchema, parameter)
+      if (request.method === 'GET') return { status: 200, data: await repository.listReviewDocuments(actor, supplierId, asReviewer) }
+      const input = validated(addSupplierReviewDocumentInput, await request.readBody(supplierReviewDocumentBodyLimit))
+      return { status: 201, data: await repository.addReviewDocument(actor, supplierId, input) }
+    }
+    case 'reviewDocument':
+    case 'adminReviewDocument': {
+      const supplierId = validated(supplierIdSchema, parameter)
+      const documentId = validated(supplierIdSchema, childId)
+      if (request.method === 'DELETE') return { status: 200, data: await repository.removeReviewDocument(actor, supplierId, documentId) }
+      return { status: 200, data: await repository.getReviewDocument(actor, supplierId, documentId, asReviewer) }
     }
     case 'adminList': {
       const { status, after } = validated(supplierAdminQuery, Object.fromEntries(request.query))

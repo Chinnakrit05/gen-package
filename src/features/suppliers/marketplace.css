@@ -55,6 +55,7 @@
 }
 
 .marketplace-card,
+.marketplace-documents,
 .marketplace-form,
 .marketplace-form-fields {
   display: grid;
@@ -144,7 +145,8 @@
   gap: 8px;
 }
 
-.marketplace-list .marketplace-team-row {
+.marketplace-list .marketplace-team-row,
+.marketplace-list .marketplace-document-row {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
@@ -152,7 +154,8 @@
   border-bottom: 1px solid var(--border);
 }
 
-.marketplace-list .marketplace-team-row:last-child {
+.marketplace-list .marketplace-team-row:last-child,
+.marketplace-list .marketplace-document-row:last-child {
   border-bottom: 0;
 }
 

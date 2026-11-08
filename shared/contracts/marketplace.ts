@@ -10,12 +10,16 @@ export const SUPPLIER_CAPABILITIES = [
 export const SUPPLIER_STATUSES = ['draft', 'pending', 'approved', 'suspended'] as const
 export const SUPPLIER_REVIEW_ACTIONS = ['approve', 'request_changes', 'suspend', 'resume'] as const
 export const MARKETPLACE_ROLES = ['manager', 'staff', 'viewer'] as const
+export const SUPPLIER_REVIEW_DOCUMENT_MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg'] as const
+export const SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES = 2 * 1024 * 1024
+export const SUPPLIER_REVIEW_DOCUMENT_LIMIT = 3
 
 export type SupplierKind = (typeof SUPPLIER_KINDS)[number]
 export type SupplierCapability = (typeof SUPPLIER_CAPABILITIES)[number]
 export type SupplierStatus = (typeof SUPPLIER_STATUSES)[number]
 export type SupplierReviewAction = (typeof SUPPLIER_REVIEW_ACTIONS)[number]
 export type MarketplaceRole = (typeof MARKETPLACE_ROLES)[number]
+export type SupplierReviewDocumentMime = (typeof SUPPLIER_REVIEW_DOCUMENT_MIME_TYPES)[number]
 
 export interface SupplierProfileInput {
   kind: SupplierKind
@@ -75,4 +79,24 @@ export interface SupplierTeam {
 export interface CreatedSupplierInvite {
   invite: SupplierInvite
   token: string
+}
+
+export interface SupplierReviewDocument {
+  id: string
+  name: string
+  mimeType: SupplierReviewDocumentMime
+  byteSize: number
+  createdAt: string
+}
+
+export interface SupplierReviewDocumentUpload {
+  operationId: string
+  name: string
+  mimeType: SupplierReviewDocumentMime
+  dataBase64: string
+}
+
+export interface SupplierReviewDocumentDownload {
+  document: SupplierReviewDocument
+  dataBase64: string
 }

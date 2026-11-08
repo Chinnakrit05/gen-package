@@ -4,6 +4,9 @@ import {
   SUPPLIER_CAPABILITIES,
   SUPPLIER_KINDS,
   SUPPLIER_REVIEW_ACTIONS,
+  SUPPLIER_REVIEW_DOCUMENT_LIMIT,
+  SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES,
+  SUPPLIER_REVIEW_DOCUMENT_MIME_TYPES,
   SUPPLIER_STATUSES,
 } from '../../../shared/contracts/marketplace'
 
@@ -70,3 +73,40 @@ export const supplierInvite = z.object({
 export const supplierTeam = z.object({ members: z.array(supplierTeamMember), invites: z.array(supplierInvite) }).strict()
 export const removedSupplierMember = z.object({ userId: z.uuid() }).strict()
 export const revokedSupplierInvite = z.object({ id: z.uuid() }).strict()
+
+const maxDocumentBase64Length = 4 * Math.ceil(SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES / 3)
+export const supplierReviewDocumentBodyLimit = maxDocumentBase64Length + 4096
+const reviewDocumentMime = z.enum(SUPPLIER_REVIEW_DOCUMENT_MIME_TYPES)
+const reviewDocumentName = z.string().trim().min(1).max(240)
+  .refine((name) => Array.from(name).length <= 120 && !/[\u0000-\u001f\u007f/\\]/.test(name))
+const reviewDocumentBase64 = z.string().min(4).max(maxDocumentBase64Length).regex(/^[A-Za-z0-9+/]+={0,2}$/)
+const reviewDocumentFormats = {
+  'application/pdf': { extension: /\.pdf$/i, signature: Buffer.from('%PDF-') },
+  'image/png': { extension: /\.png$/i, signature: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]) },
+  'image/jpeg': { extension: /\.jpe?g$/i, signature: Buffer.from([255, 216, 255]) },
+}
+
+export const addSupplierReviewDocumentInput = z.object({
+  operationId: z.uuid(),
+  name: reviewDocumentName,
+  mimeType: reviewDocumentMime,
+  dataBase64: reviewDocumentBase64,
+}).strict().superRefine(({ name, mimeType, dataBase64 }, context) => {
+  const format = reviewDocumentFormats[mimeType]
+  if (!format.extension.test(name)) context.addIssue({ code: 'custom', path: ['name'], message: 'นามสกุลไม่ตรงกับชนิดไฟล์' })
+  const bytes = Buffer.from(dataBase64, 'base64')
+  if (bytes.length > SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES || bytes.toString('base64') !== dataBase64
+    || !bytes.subarray(0, format.signature.length).equals(format.signature)) {
+    context.addIssue({ code: 'custom', path: ['dataBase64'], message: 'ขนาดหรือชนิดไฟล์ไม่ถูกต้อง' })
+  }
+})
+export const supplierReviewDocument = z.object({
+  id: z.uuid(),
+  name: reviewDocumentName,
+  mimeType: reviewDocumentMime,
+  byteSize: z.int().min(1).max(SUPPLIER_REVIEW_DOCUMENT_MAX_BYTES),
+  createdAt: z.iso.datetime({ offset: true }),
+}).strict()
+export const supplierReviewDocuments = z.object({ documents: z.array(supplierReviewDocument).max(SUPPLIER_REVIEW_DOCUMENT_LIMIT) }).strict()
+export const supplierReviewDocumentDownload = z.object({ document: supplierReviewDocument, dataBase64: reviewDocumentBase64 }).strict()
+export const removedSupplierReviewDocument = z.object({ id: z.uuid() }).strict()

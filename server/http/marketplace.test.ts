@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import type { SupplierInvite, SupplierProfile, SupplierTeamMember } from '../../shared/contracts/marketplace'
+import type { SupplierInvite, SupplierProfile, SupplierReviewDocument, SupplierTeamMember } from '../../shared/contracts/marketplace'
 import type { ActorAuthenticationOptions } from '../modules/identity/sessionService'
 import type { MarketplaceRepository } from '../modules/marketplace/marketplaceRepository'
 import { HttpError } from './errors'
@@ -17,6 +17,13 @@ const invitation: SupplierInvite = {
 }
 const teamPath = `/suppliers/${supplierId}/team`
 const acceptPath = '/suppliers/invitations/accept'
+const documentsPath = `/suppliers/${supplierId}/review-documents`
+const documentPath = `${documentsPath}/${operationId}`
+const pdfBytes = Buffer.from('%PDF-1.4\n%%EOF\n')
+const reviewDocument: SupplierReviewDocument = {
+  id: operationId, name: 'หลักฐาน.pdf', mimeType: 'application/pdf', byteSize: pdfBytes.length, createdAt: '2026-11-08T00:00:00Z',
+}
+const uploadDocument = { operationId, name: reviewDocument.name, mimeType: reviewDocument.mimeType, dataBase64: pdfBytes.toString('base64') }
 const profile: SupplierProfile = {
   id: supplierId, workspaceId, kind: 'print_shop', name: 'Test Print Shop', slug: 'test-print-shop',
   description: 'Synthetic shop', contactEmail: 'shop@example.test', capabilities: ['digital_printing'],
@@ -42,6 +49,10 @@ function harness({ reviewer = false, mfa = false, enabled = true, hasVerifiedEma
     changeMember: vi.fn(async () => teamMember),
     removeMember: vi.fn(async () => ({ userId })),
     revokeInvite: vi.fn(async () => ({ id: invitation.id })),
+    listReviewDocuments: vi.fn(async () => ({ documents: [reviewDocument] })),
+    getReviewDocument: vi.fn(async () => ({ document: reviewDocument, dataBase64: uploadDocument.dataBase64 })),
+    addReviewDocument: vi.fn(async () => reviewDocument),
+    removeReviewDocument: vi.fn(async () => ({ id: reviewDocument.id })),
     publicProfile: vi.fn(async () => publicProfile),
     adminList: vi.fn(async () => {
       if (!reviewer) throw new HttpError(403, 'MARKETPLACE_FORBIDDEN', 'Forbidden')
@@ -83,7 +94,7 @@ function harness({ reviewer = false, mfa = false, enabled = true, hasVerifiedEma
 describe('Marketplace HTTP boundaries', () => {
   it('keeps routes hidden until the deployment enables the feature', async () => {
     const { authenticate, repository, request } = harness({ enabled: false })
-    for (const path of ['/marketplace/context', '/suppliers/public/test-print-shop', '/admin/suppliers']) {
+    for (const path of ['/marketplace/context', '/suppliers/public/test-print-shop', '/admin/suppliers', documentsPath, `/admin${documentPath}`]) {
       expect(await request(path)).toMatchObject({ status: 404, payload: { error: { code: 'NOT_FOUND' } } })
     }
     expect(authenticate).not.toHaveBeenCalled()
@@ -140,6 +151,44 @@ describe('Marketplace HTTP boundaries', () => {
     expect(verifiedReviewer.repository.review).toHaveBeenCalledWith(
       expect.objectContaining({ userId, hasVerifiedMfa: true }), supplierId, 2, 'approve', 'Reviewed the application',
     )
+  })
+
+  it('checks reviewer MFA on both the document list and private download', async () => {
+    const unverified = harness({ reviewer: true })
+    for (const path of [`/admin${documentsPath}`, `/admin${documentPath}`]) {
+      expect(await unverified.request(path)).toMatchObject({ status: 403, payload: { error: { code: 'MARKETPLACE_MFA_REQUIRED' } } })
+    }
+    expect(unverified.repository.listReviewDocuments).not.toHaveBeenCalled()
+    expect(unverified.repository.getReviewDocument).not.toHaveBeenCalled()
+
+    const verified = harness({ reviewer: true, mfa: true })
+    expect(await verified.request(`/admin${documentsPath}`)).toMatchObject({ status: 200, payload: { data: { documents: [reviewDocument] } } })
+    const download = await verified.request(`/admin${documentPath}`)
+    expect(download).toMatchObject({ status: 200, headers: { 'cache-control': 'no-store' }, payload: { data: { document: reviewDocument } } })
+    expect(verified.repository.getReviewDocument).toHaveBeenCalledWith(expect.objectContaining({ userId, hasVerifiedMfa: true }), supplierId, operationId, true)
+    expect((await verified.request(`/admin${documentPath}`, 'DELETE')).status).toBe(405)
+    expect(verified.repository.removeReviewDocument).not.toHaveBeenCalled()
+  })
+
+  it('accepts only bounded document bytes that match the name and type', async () => {
+    const { repository, request } = harness()
+    expect((await request(documentsPath, 'POST', uploadDocument, false)).status).toBe(401)
+    for (const extra of [
+      { name: 'proof.html' },
+      { name: '../proof.pdf' },
+      { mimeType: 'image/png' },
+      { dataBase64: '%%%=' },
+      { dataBase64: Buffer.from('<html>content</html>').toString('base64') },
+      { asReviewer: true },
+    ]) {
+      expect((await request(documentsPath, 'POST', { ...uploadDocument, ...extra })).status).toBe(422)
+    }
+    expect((await request(documentsPath, 'POST', { ...uploadDocument, dataBase64: 'a'.repeat(3 * 1024 * 1024) })).status).toBe(413)
+    expect(repository.addReviewDocument).not.toHaveBeenCalled()
+    expect((await request(documentsPath, 'POST', uploadDocument)).status).toBe(201)
+    expect(repository.addReviewDocument).toHaveBeenCalledWith(expect.objectContaining({ userId }), supplierId, uploadDocument)
+    expect((await request(documentPath, 'DELETE')).status).toBe(200)
+    expect(repository.removeReviewDocument).toHaveBeenCalledWith(expect.objectContaining({ userId }), supplierId, operationId)
   })
 
   it('returns an invitation token only on creation and gives the repository its hash', async () => {
