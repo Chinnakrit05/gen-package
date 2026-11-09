@@ -25,3 +25,26 @@ export function assignOuterFaceGroups(geo: THREE.BufferGeometry, depth: number):
   }
   if (triCount > 0) geo.addGroup(start * 3, (triCount - start) * 3, cur)
 }
+
+// เส้นขอบ (EdgesGeometry) ของแผงลูกตามแนวบานพับ: หลังพับ ปลายแผงลูก (ฝา/ลิ้น/ปีก) ไปแนบผิวนอกของแผงแม่พอดี
+// เส้นขอบชั้นใน (z = ความหนา) จึงถูกวาด "บนหน้า" ผนังแม่ เป็นเส้นซ้อนต่ำกว่าขอบบนเท่าความหนา (เห็นเป็นเส้นคู่บนหน้ากล่อง)
+// ขอบจริงของกล่องตรงนั้นวาดโดยแผงแม่อยู่แล้ว → ตัดเส้นที่ทั้งสองปลายอยู่บนแนวบานพับทิ้ง (พิกัด geometry = (x, −y) ของแผ่นคลี่)
+export function dropHingeEdges(
+  positions: ArrayLike<number>,
+  hingeA: { x: number; y: number },
+  hingeB: { x: number; y: number },
+  tol = 1e-3,
+): Float32Array {
+  const ax = hingeA.x
+  const ay = -hingeA.y
+  const dx = hingeB.x - ax
+  const dy = -hingeB.y - ay
+  const len = Math.hypot(dx, dy)
+  const onHinge = (i: number) => len > 0 && Math.abs((positions[i] - ax) * dy - (positions[i + 1] - ay) * dx) / len < tol
+  const out: number[] = []
+  for (let i = 0; i + 5 < positions.length; i += 6) {
+    if (onHinge(i) && onHinge(i + 3)) continue
+    for (let k = 0; k < 6; k++) out.push(positions[i + k])
+  }
+  return new Float32Array(out)
+}

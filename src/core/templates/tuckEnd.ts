@@ -163,7 +163,7 @@ function buildTuckBox(box: BoxParams, mat: Material, reverse: boolean): Dieline 
     },
     {
       id: 'tongue-top', parentId: 'tuck-top', outline: tgTop.pts,
-      hingeA: P(topHost.x0 + tuckIn, tiTop), hingeB: P(topHost.x1 - tuckIn, tiTop), foldAngle: 90, stage: 3, zOffset: 0.15, tuck: true,
+      hingeA: P(topHost.x0 + tuckIn, tiTop), hingeB: P(topHost.x1 - tuckIn, tiTop), foldAngle: 90, stage: 3, zOffset: layer, tuck: true,
     },
     {
       id: 'tuck-bot', parentId: botHostId, outline: rect(botHost.x0 + tuckIn, bot, botHost.x1 - tuckIn, tiBot),
@@ -171,7 +171,7 @@ function buildTuckBox(box: BoxParams, mat: Material, reverse: boolean): Dieline 
     },
     {
       id: 'tongue-bot', parentId: 'tuck-bot', outline: tgBot.pts,
-      hingeA: P(botHost.x0 + tuckIn, tiBot), hingeB: P(botHost.x1 - tuckIn, tiBot), foldAngle: -90, stage: 3, zOffset: 0.15, tuck: true,
+      hingeA: P(botHost.x0 + tuckIn, tiBot), hingeB: P(botHost.x1 - tuckIn, tiBot), foldAngle: -90, stage: 3, zOffset: layer, tuck: true,
     },
   ]
 

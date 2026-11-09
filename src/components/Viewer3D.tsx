@@ -25,7 +25,7 @@ import {
   type FillImage,
 } from '../core/artwork'
 import { computeMatrices, rollBeads } from '../core/fold'
-import { assignOuterFaceGroups } from '../core/panelFaces'
+import { assignOuterFaceGroups, dropHingeEdges } from '../core/panelFaces'
 import { DimBadge3D, type Dim3D } from './DimBadge3D'
 import { SceneLighting, type LightMode } from './SceneLighting'
 
@@ -336,7 +336,12 @@ function FoldedModel({ dieline, mat, fold, depth, tilt, spin = 0, decos, fillCol
         // แยก group เพื่อพิมพ์ลายเฉพาะฝา "ด้านนอก" (สีวัสดุล้วนด้านใน) — ตรรกะเทสต์ใน panelFaces.test.ts
         assignOuterFaceGroups(geo, d)
 
-        return { geo, edges: new THREE.EdgesGeometry(geo, 25) }
+        const edges = new THREE.EdgesGeometry(geo, 25)
+        if (p.hingeA && p.hingeB) {
+          const kept = dropHingeEdges(edges.attributes.position.array, p.hingeA, p.hingeB)
+          edges.setAttribute('position', new THREE.BufferAttribute(kept, 3))
+        }
+        return { geo, edges }
       }),
     [dieline, mat.thickness],
   )
