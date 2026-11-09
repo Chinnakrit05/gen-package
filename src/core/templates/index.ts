@@ -1,5 +1,5 @@
 import type { BoxParams, Dieline, Material } from '../types'
-import { generateTuckEndBox } from './tuckEnd'
+import { generateReverseTuckBox, generateTuckEndBox } from './tuckEnd'
 import { generateMailerBox } from './mailer'
 import { generateFefco0427, FEFCO0427_SPIN as SPIN_0427 } from './fefco0427'
 import { generateSleeve } from './sleeve'
@@ -45,6 +45,17 @@ export const TEMPLATES: BoxTemplate[] = [
     supportsVents: true,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateTuckEndBox,
+  },
+  {
+    id: 'reverse-tuck',
+    nameTh: 'กล่องฝาเสียบสลับ (reverse tuck)',
+    detail: 'ผังมาตรฐานโรงพิมพ์ · ฝาบน-ล่างคนละด้าน · ยา/เครื่องสำอาง/ขนม',
+    defaults: { W: 80, D: 50, H: 120 },
+    tilt: 0,
+    supportsHandle: true,
+    supportsVents: true,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
+    generate: generateReverseTuckBox,
   },
   {
     id: 'mailer',

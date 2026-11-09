@@ -848,7 +848,9 @@ function centerOnFace(dieline: Dieline, w: number, h: number): Vec2 {
   const b = bbox(showFace(dieline).outline)
   // ด้านหน้าไม่อยู่กลางแผง (หลอดรอยต่อข้าง) → วางที่กึ่งกลางด้านหน้าจริง
   const cx = dieline.frontX ?? (b.x0 + b.x1) / 2
-  return { x: cx - w / 2, y: (b.y0 + b.y1) / 2 - h / 2 }
+  // ชิ้นสูงกว่าแผง (เช่น ตารางโภชนาการบนกล่องเตี้ย) → ชิดขอบบนแผงแทนกึ่งกลาง ไม่ให้หัวตารางล้นออกนอกแผ่น
+  const y = h > b.y1 - b.y0 ? b.y0 : (b.y0 + b.y1) / 2 - h / 2
+  return { x: cx - w / 2, y }
 }
 
 let seq = 0

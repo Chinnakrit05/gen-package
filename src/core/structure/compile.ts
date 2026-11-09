@@ -3,7 +3,7 @@
 // ปกติ (panels + segments จาก autoSegments) จึงเข้า 3D/blueprint/ไฟล์ส่งออกเดิมได้เลย
 import { Matrix4, Vector3 } from 'three'
 import type { BoxParams, Dieline, DimMark, Material, Panel, Vec2 } from '../types'
-import { P, autoSegments, fmt, obroundPts, roundedRectPts } from '../templates/shared'
+import { P, TONGUE_IN, autoSegments, dustFlap, fmt, obroundPts, roundedRectPts, tongueDepth, tongueFlap } from '../templates/shared'
 import { computeMatrices, to3D } from '../fold'
 import type { BoxStructure, Dim, Edge, FlapType, StructureIssue } from './grammar'
 import { inPoly } from './validate'
@@ -76,16 +76,6 @@ function edgeFrame(r: Placed['rect'], edge: Edge): EdgeFrame {
 
 const add = (p: Vec2, ...terms: [Vec2, number][]): Vec2 =>
   terms.reduce((acc, [v, k]) => P(acc.x + v.x * k, acc.y + v.y * k), p)
-
-// โค้งจาก c ตามทิศ d0 ไป d1 (ควอเตอร์วง) รัศมี r — n ช่วง เหมือน arcPts ของ template
-function quarterArc(c: Vec2, r: number, d0: Vec2, d1: Vec2, n = 5): Vec2[] {
-  const pts: Vec2[] = []
-  for (let i = 0; i <= n; i++) {
-    const s = (Math.PI / 2) * (i / n)
-    pts.push(add(c, [d0, r * Math.cos(s)], [d1, r * Math.sin(s)]))
-  }
-  return pts
-}
 
 export const SHEET_LIMIT = 600 // มม. — แผ่นคลี่ใหญ่กว่านี้เตือน (เครื่องตัด/แผ่นมาตรฐาน)
 const MAX_STAGES = 7 // fold.ts มีชุดจังหวะถึง 7 (WINDOWS_7)
@@ -241,6 +231,26 @@ export function compileStructure(structure: BoxStructure, box: BoxParams, mat: M
   }
   if (issues.some((i) => i.severity === 'error')) return fail()
 
+  // ไหล่ล็อกของลิ้นกันฝุ่น (เหมือน template ฝาเสียบ): อยู่ปลายที่ติดผนังซึ่งลิ้นเสียบสอดลง = ผนังลำตัวข้างเคียงที่ไม่มีฝาที่ขอบนี้;
+  // ถ้าบอกไม่ได้ (ไม่มีผนังข้างเคียงบนแผ่นคลี่ เช่นต่อผ่านปีกกาว) ใช้ปลายตรงข้ามกับผนังที่มีฝา; ไม่รู้ทั้งคู่ = ไหล่สองข้าง
+  const dustLock = (host: Placed, f: EdgeFrame, edge: Edge): 'a' | 'b' | null => {
+    const at = (end: Vec2, dir: number): 'wall' | 'lid' | 'none' => {
+      const probe = add(end, [f.along, dir], [f.out, -1])
+      const nb = [...placed.values()].find(
+        (q) => q.id !== host.id && q.kind === 'body' && probe.x > q.rect.x0 && probe.x < q.rect.x1 && probe.y > q.rect.y0 && probe.y < q.rect.y1,
+      )
+      if (!nb) return 'none'
+      return structure.panels.some((p) => p.kind === 'lid' && p.attach?.to === nb.id && p.attach.edge === edge) ? 'lid' : 'wall'
+    }
+    const ea = at(f.a, -1)
+    const eb = at(f.b, 1)
+    if (ea === 'wall' && eb !== 'wall') return 'a'
+    if (eb === 'wall' && ea !== 'wall') return 'b'
+    if (ea === 'lid' && eb !== 'lid') return 'b'
+    if (eb === 'lid' && ea !== 'lid') return 'a'
+    return null
+  }
+
   // --- 3. ลิ้นจากคลัง (ความลึกเริ่มต้นวัดจากช่องเปิด) ---
   for (const fl of structure.flaps) {
     const host = placed.get(fl.on)
@@ -249,7 +259,7 @@ export function compileStructure(structure: BoxStructure, box: BoxParams, mat: M
       continue
     }
     const f = edgeFrame(host.rect, fl.edge)
-    const inset = Math.max(0, (fl.type === 'dust' ? dustIn : tuckIn) - host.lateralInset)
+    const inset = Math.max(0, (fl.type === 'dust' ? dustIn : tuckIn) - host.lateralInset) + (fl.type === 'tuck' ? TONGUE_IN : 0)
     if (f.len - 2 * inset < 6) {
       err('flap-narrow', `ลิ้น "${fl.id}": ขอบ ${fl.edge} ของ "${fl.on}" ยาว ${fmt(f.len)} มม. แคบเกินกว่าจะมีลิ้น`, [fl.id])
       continue
@@ -261,7 +271,7 @@ export function compileStructure(structure: BoxStructure, box: BoxParams, mat: M
       const across = extent ?? 0.8 * f.len
       depth = Math.max(8, Math.min(0.75 * f.len, across / 2 - inset - 2) - t)
     } else if (fl.type === 'tuck') {
-      depth = Math.min(22, Math.max(10, 0.6 * (host.depth + t)))
+      depth = tongueDepth(host.depth + t)
     } else depth = Math.min(25, 0.6 * f.len)
     if (!(depth >= 5)) {
       err('flap-depth', `ลิ้น "${fl.id}" ลึก ${fmt(depth)} มม. สั้นเกินไป (อย่างน้อย 5)`, [fl.id])
@@ -275,14 +285,9 @@ export function compileStructure(structure: BoxStructure, box: BoxParams, mat: M
     const b = add(f.b, [f.along, -inset])
     let outline: Vec2[]
     if (fl.type === 'dust') {
-      const slant = Math.min(5, depth * 0.45)
-      outline = [a, add(a, [f.along, slant], [f.out, depth]), add(b, [f.along, -slant], [f.out, depth]), b]
+      outline = dustFlap(a, b, f.out, depth, dustLock(host, f, fl.edge)).pts
     } else if (fl.type === 'tuck') {
-      const r = Math.min(7, depth * 0.45, (f.len - 2 * inset) / 2)
-      const c1 = add(a, [f.along, r], [f.out, depth - r])
-      const c2 = add(b, [f.along, -r], [f.out, depth - r])
-      const back = P(-f.along.x, -f.along.y)
-      outline = [a, ...quarterArc(c1, r, back, f.out), ...quarterArc(c2, r, f.out, f.along), b]
+      outline = tongueFlap(a, b, f.out, depth).pts
     } else {
       const ch = Math.min(4, depth * 0.4)
       outline = [a, add(a, [f.along, ch], [f.out, depth]), add(b, [f.along, -ch], [f.out, depth]), b]

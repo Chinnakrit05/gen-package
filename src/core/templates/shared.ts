@@ -193,3 +193,93 @@ export function autoSegments(
   }
   return out
 }
+
+// --- ลิ้นของกล่องฝาเสียบ (ใช้ร่วม template tuck-end/reverse-tuck กับคอมไพเลอร์ภาษาแผง ให้รูปทรงตรงกันเป๊ะ) ---
+// ทุกฟังก์ชันรับแนวบานพับ a→b (หัก inset แล้ว) + ทิศยื่นออก out (unit) → คืนจุด (3D) และ path ต่อจาก a ถึง b (ไม่มี M; โค้งเป็น Q)
+
+type Flap = { pts: Vec2[]; d: string }
+const along2 = (a: Vec2, b: Vec2) => {
+  const len = Math.hypot(b.x - a.x, b.y - a.y)
+  return { len, u: P((b.x - a.x) / len, (b.y - a.y) / len) }
+}
+const num = (v: number) => String(Math.round(v * 1000) / 1000)
+
+// ลิ้นเสียบ (tuck tongue): ปลายมุมมนรัศมีใหญ่ ลึก 10–15 มม. ตามความลึกฝา
+export const tongueDepth = (lidSpan: number) => Math.min(15, Math.max(10, 0.25 * lidSpan))
+export const TONGUE_IN = 0.5 // ลิ้นแคบกว่าฝาข้างละเท่านี้ (ขั้นเล็กที่ปลายร่องล็อก ให้ลิ้นสอดผ่านไหล่ลิ้นกันฝุ่น)
+export const tuckSlit = (lidWidth: number) => Math.min(4.5, lidWidth * 0.12) // ร่องล็อกที่ปลายรอยพับลิ้น
+
+export function tongueFlap(a: Vec2, b: Vec2, out: Vec2, depth: number): Flap {
+  const { len, u } = along2(a, b)
+  const r = Math.min(6, depth * 0.5, len / 2)
+  const at = (s: number, h: number) => P(a.x + u.x * s + out.x * h, a.y + u.y * s + out.y * h)
+  const arc = (cs: number, s0: number, s1: number): Vec2[] => {
+    const pts: Vec2[] = []
+    for (let i = 0; i <= 5; i++) {
+      const th = s0 + ((s1 - s0) * i) / 5
+      pts.push(at(cs + r * Math.cos(th), depth - r + r * Math.sin(th)))
+    }
+    return pts
+  }
+  const pts = [a, ...arc(r, Math.PI, Math.PI / 2), ...arc(len - r, Math.PI / 2, 0), b]
+  const p = (s: number, h: number) => { const v = at(s, h); return `${num(v.x)} ${num(v.y)}` }
+  const d =
+    `L ${p(0, depth - r)} Q ${p(0, depth)} ${p(r, depth)} L ${p(len - r, depth)} ` +
+    `Q ${p(len, depth)} ${p(len, depth - r)} L ${p(len, 0)}`
+  return { pts, d }
+}
+
+// ลิ้นกันฝุ่น: มุมนอกมน + ด้านที่ติดผนังซึ่งลิ้นเสียบสอดลง (lock) มี "ไหล่" บากเข้าที่โคน — ร่องล็อกปลายรอยพับลิ้นเกี่ยวไหล่นี้
+// ไว้ (friction lock แบบกล่องฝาเสียบมาตรฐาน); อีกด้านเกือบตรง เอียงเข้าเล็กน้อย; lock null = มีไหล่ทั้งสองด้าน
+export function dustFlap(a: Vec2, b: Vec2, out: Vec2, depth: number, lock: 'a' | 'b' | null): Flap {
+  const { len, u } = along2(a, b)
+  const at = (s: number, h: number) => P(a.x + u.x * s + out.x * h, a.y + u.y * s + out.y * h)
+  const sh = Math.min(4, len * 0.12) // ไหล่: บากเข้า
+  const shY = sh * 1.1 // สูงจากโคน
+  const plain = Math.min(1.5, len * 0.05)
+  const isLock = (e: 'a' | 'b') => lock === null || lock === e
+  const cs = (e: 'a' | 'b') => (isLock(e) ? sh : plain) // ระยะเข้าของมุมบนจากปลาย
+  const csA = cs('a')
+  const csB = cs('b')
+  const R = Math.max(0, Math.min(4, depth * 0.35, (len - csA - csB) / 2 - 0.5, (depth - shY) * 0.8))
+  // ด้าน a ขึ้น → มุม a → ขอบบน → มุม b → ด้าน b ลง (พิกัด s ตามแนวบานพับ, h ตามทิศยื่น)
+  const sideA: [number, number][] = isLock('a') ? [[0, 0], [sh, shY]] : [[0, 0]]
+  const sideB: [number, number][] = isLock('b') ? [[len - sh, shY], [len, 0]] : [[len, 0]]
+  // จุดเริ่มโค้งบนด้านข้าง = ถอยจากมุมตามด้านนั้น R
+  const back = (from: [number, number], c: [number, number]): [number, number] => {
+    const dx = from[0] - c[0]
+    const dy = from[1] - c[1]
+    const l = Math.hypot(dx, dy) || 1
+    return [c[0] + (dx / l) * R, c[1] + (dy / l) * R]
+  }
+  const cA: [number, number] = [csA, depth]
+  const cB: [number, number] = [len - csB, depth]
+  const a1 = back(sideA[sideA.length - 1], cA)
+  const a2: [number, number] = [csA + R, depth]
+  const b1: [number, number] = [len - csB - R, depth]
+  const b2 = back(sideB[0], cB)
+  const quad = (p0: [number, number], c: [number, number], p1: [number, number]): Vec2[] => {
+    const pts: Vec2[] = []
+    for (let i = 1; i <= 4; i++) {
+      const t = i / 4
+      const m = (k: 0 | 1) => (1 - t) * (1 - t) * p0[k] + 2 * (1 - t) * t * c[k] + t * t * p1[k]
+      pts.push(at(m(0), m(1)))
+    }
+    return pts
+  }
+  const v = (q: [number, number]) => at(q[0], q[1])
+  const pts = [
+    ...sideA.map(v),
+    v(a1),
+    ...quad(a1, cA, a2),
+    v(b1),
+    ...quad(b1, cB, b2),
+    ...sideB.map(v),
+  ]
+  const p = (q: [number, number]) => { const w = v(q); return `${num(w.x)} ${num(w.y)}` }
+  const d =
+    sideA.slice(1).map((q) => `L ${p(q)} `).join('') +
+    `L ${p(a1)} Q ${p(cA)} ${p(a2)} L ${p(b1)} Q ${p(cB)} ${p(b2)} ` +
+    sideB.map((q) => `L ${p(q)}`).join(' ')
+  return { pts, d }
+}
