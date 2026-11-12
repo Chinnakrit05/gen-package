@@ -9,6 +9,7 @@ import { requestArtworkPlan, requestBoxSpec, type AiBoxSpec, type ArtworkImageIn
 import { approxThb, formatUsd, modelPriceLabel, usageRows } from '../core/aiUsage'
 import { compileArtworkPlan, labelFrontZone, panelBoxes, parseArtworkPlan, type ArtIssue } from '../core/aiArtwork'
 import { loadImageFile, loadTextFont, measureText, type Deco, type FillImage } from '../core/artwork'
+import { hexLabelFrontZone, type ArtworkAnchorPanel } from '../core/artworkResize'
 import type { Dieline } from '../core/types'
 import { useT } from '../i18n'
 import { ApiClientError } from '../services/api/client'
@@ -37,6 +38,8 @@ export interface CopilotArtworkContext {
   template: string
   materialId: string
   box: { W: number; D: number; H: number }
+  anchorRegions?: readonly ArtworkAnchorPanel[]
+  hexFaceWidth?: number
   fillColor: string | null
   existingCount: number
   onApply: (result: AiArtworkResult) => void
@@ -235,8 +238,10 @@ export function CopilotDrawer({
       ...refs.map((r) => ({ data: r.base64, mediaType: 'image/jpeg', role: 'reference' as const, note: r.name })),
       ...(logo ? [{ data: logo.ref.base64, mediaType: 'image/jpeg', role: 'logo' as const, assetId: 'logo', note: logo.ref.name }] : []),
     ]
-    // ภาชนะทรงกระบอก: ช่วงด้านหน้าที่อ่านได้ตรง — บอก AI และใช้จำกัดความกว้างชื่อแบรนด์/โลโก้ตอน compile
-    const front = artwork.kind === 'vessel' ? labelFrontZone(panels, artwork.box.W, artwork.dieline.frontX) : null
+    // ส่งช่วงด้านหน้าที่อ่านได้ตรงให้ AI และใช้จำกัดความกว้างชื่อแบรนด์/โลโก้ตอน compile
+    const front = artwork.hexFaceWidth !== undefined
+      ? hexLabelFrontZone(panels, artwork.hexFaceWidth)
+      : artwork.kind === 'vessel' ? labelFrontZone(panels, artwork.box.W, artwork.dieline.frontX) : null
     const input: ArtworkRequestInput = {
       prompt,
       kind: artwork.kind,
@@ -261,7 +266,8 @@ export function CopilotDrawer({
       measure: (txt, size, font, weight) => measureText(txt, size, font, weight),
       assets: logo ? { logo: logo.asset } : undefined,
       front,
-      anchorPanels: artwork.kind === 'box' && artwork.template === 'tuck-end',
+      anchorPanels: artwork.anchorRegions !== undefined || (artwork.kind === 'box' && artwork.template === 'tuck-end'),
+      anchorRegions: artwork.anchorRegions,
     })
     if (!compiled.decos.length) throw new Error(t('AI ไม่ได้วางชิ้นงานบนแผงที่พิมพ์ได้เลย ลองใหม่', 'The AI placed nothing on a printable panel, please retry'))
     let { decos, fillImage } = compiled

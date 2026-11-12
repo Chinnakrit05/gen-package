@@ -10,7 +10,7 @@
 import type { Dieline } from './types'
 import type { Deco, FillImage, GradientDef, NutriRow, PathAnchor, ShapeKind, TextEl } from './artwork'
 import { FONTS } from './artwork'
-import { captureArtworkPanelAnchor } from './artworkResize'
+import { captureArtworkPanelAnchor, type ArtworkAnchorPanel } from './artworkResize'
 import { FINISHES, type FinishKind } from './finish'
 import { presetById, presetDataUrl, PRESETS } from './presets'
 import { TEXT_FX_KINDS, type TextFx, type TextFxKind } from './textFx'
@@ -675,6 +675,7 @@ export interface CompileArtworkOptions {
   idPrefix?: string
   safe?: number
   anchorPanels?: boolean
+  anchorRegions?: readonly ArtworkAnchorPanel[]
   // ภาชนะทรงกระบอก: ข้อความ/รูปที่กึ่งกลางอยู่ในช่วงนี้ถูกจำกัดความกว้างไม่เกินช่วง (ข้อความ: fitFrontText, รูป: ย่อเท่าช่วง)
   // รูปทรง/เส้นไม่ถูกจำกัด (แถบสี/ลายพื้นพันรอบได้)
   front?: ArtFrontZone | null
@@ -706,7 +707,7 @@ export function compileArtworkPlan(plan: ArtworkPlan, panels: PanelBox[], opts: 
       warnings.push({ severity: 'warning', code: 'glue-panel', index: i, message: `ชิ้นที่ ${i + 1}: วางบนปีกทากาว "${panel.id}" — ตัดทิ้ง` })
       return
     }
-    const addDeco = (deco: Deco) => decos.push(opts.anchorPanels ? captureArtworkPanelAnchor(deco, panel) : deco)
+    const addDeco = (deco: Deco) => decos.push(opts.anchorPanels ? captureArtworkPanelAnchor(deco, panel, opts.anchorRegions) : deco)
     // ระยะเว้นขอบ: แผงเล็ก (ลิ้น) เว้นน้อยลง; แถบสี/เส้น (shape, path) ชนขอบแผงได้ (ลายพื้นถึงรอยพับเป็นเรื่องปกติ)
     const safe = e.type === 'shape' || e.type === 'path' ? 0 : Math.min(opts.safe ?? ART_SAFE_MM, Math.max(0.5, Math.min(panel.w, panel.h) / 6))
     const box = { x0: panel.x0 + safe, y0: panel.y0 + safe, x1: panel.x1 - safe, y1: panel.y1 - safe }
@@ -814,12 +815,16 @@ export function compileArtworkPlan(plan: ArtworkPlan, panels: PanelBox[], opts: 
     let h = keepLogoAspect ? e.w / resolved.aspect : e.h ?? e.w / resolved.aspect
     let left = panel.x0 + e.x
     const zone = frontZoneOf(panel.id)
-    if (zone && e.x + w / 2 >= zone.x0 && e.x + w / 2 <= zone.x1 && w > zone.x1 - zone.x0) {
+    const centerOnFront = zone && e.x + w / 2 >= zone.x0 && e.x + w / 2 <= zone.x1
+    if (centerOnFront && w > zone.x1 - zone.x0) {
       const k = (zone.x1 - zone.x0) / w
       w *= k
       h *= k
       left = panel.x0 + zone.x0
       warnings.push({ severity: 'warning', code: 'front-fit', index: i, message: `ชิ้นที่ ${i + 1}: รูปกว้างเกินด้านหน้าที่อ่านได้ของภาชนะ — ย่อเหลือ ${Math.floor(k * 100)}%` })
+    }
+    if (centerOnFront && keepLogoAspect) {
+      left = clamp(left, panel.x0 + zone.x0, panel.x0 + zone.x1 - w)
     }
     const pos = fit(w, h, left, panel.y0 + e.y, () => {})
     addDeco({

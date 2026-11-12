@@ -22,7 +22,7 @@ import { TEMPLATES, getTemplate } from './core/templates'
 import { TAPERED_LID_BOX_ID, taperedLidWidth } from './core/templates/taperedLidBox'
 import type { BoxParams, Dieline, Vec2 } from './core/types'
 import { ART_SAFE_MM, panelBoxes } from './core/aiArtwork'
-import { refreshArtworkPanelAnchors, resizePanelArtwork } from './core/artworkResize'
+import { hexLabelAnchorPanels, pouchAnchorPanels, refreshArtworkPanelAnchors, resizePanelArtwork } from './core/artworkResize'
 import type { AiBoxSpec, ArtworkRequestInput, ArtworkResponse, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
 import { dimTextSize } from './core/templates/shared'
@@ -113,7 +113,7 @@ import { isFreshWork, standardSizeFor, VESSEL_STANDARD, type StdSize } from './c
 import { hasDesignWork } from './core/designWork'
 import { freshProjectFor, type NewWorkTarget } from './core/newWork'
 import { SwitchGuardModal } from './components/SwitchGuardModal'
-import { BODY_MIN, canRectBottle, defaultRectDepth, RECT_DEPTH_MAX, rectDepthMin, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, defaultCapColor, TUBE_CAP_STYLES, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './core/vessel'
+import { BODY_MIN, canRectBottle, defaultRectDepth, RECT_DEPTH_MAX, rectDepthMin, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, defaultCapColor, TUBE_CAP_STYLES, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle, type VesselShape } from './core/vessel'
 import {
   generatePouch,
   POUCH_STYLES,
@@ -1734,7 +1734,7 @@ export default function App({
   const pickArtSnapshot = (id: string) => {
     const s = artSnapshots.find((x) => x.id === id)
     if (!s) return
-    setDecos(artworkFollowsPanels ? resizePanelArtwork(s.decos, panelBoxes(dieline), ART_SAFE_MM) : s.decos)
+    setDecos(artworkAnchorPanels ? resizePanelArtwork(s.decos, artworkAnchorPanels, ART_SAFE_MM) : s.decos)
     setFillColor(s.fillColor)
     setFillImage(s.fillImage)
     setArtCurrentId(id)
@@ -1948,16 +1948,6 @@ export default function App({
   const neckEff = showNeck ? resolveNeckH(mat.id, H, neckH) : 0
   const bodyH = H - neckEff
   const shoulderEff = showNeck ? resolveShoulderH(mat.id, bodyH, shoulderH) : 0
-  // ปรับสูงตัว: ตรึงคอที่ค่าปัจจุบัน (ไม่ให้คอเลื่อนตามสัดส่วน) แล้วสูงรวม = ตัว + คอ
-  const setBodyH = (v: number) => {
-    setNeckH(neckEff)
-    setH(clamp(v + neckEff, 30, 300))
-  }
-  // ปรับสูงคอ: ตัวคงเดิม สูงรวมเปลี่ยนตาม
-  const setNeckLen = (v: number) => {
-    setNeckH(v)
-    setH(clamp(bodyH + v, 30, 300))
-  }
   // หมุนฉลากรอบขวด (`labelBox.rot`) ถอด UI ออกก่อน (ตัดสินใจ 23 ต.ค. 2026: ยังไม่จำเป็น) — ไม่ใช้ค่าที่เคยตั้งไว้ด้วย
   // ฉลากจึงอยู่ด้านหน้าเสมอ ไม่ค้างมุมที่ผู้ใช้แก้คืนไม่ได้; engine (`Vessel.labelRot`) ยังรองรับไว้เผื่อเปิดกลับ
   const labelNoRot = useMemo(() => (labelBox?.rot === undefined ? labelBox : { ...labelBox, rot: undefined }), [labelBox])
@@ -2013,7 +2003,14 @@ export default function App({
           : pouch!.label,
     [W, D, H, handle, mat, template, vessel, pouch, kind, vents, isSticker, stickerLoops, stickerCut.shape],
   )
-  const artworkFollowsPanels = kind === 'box' && templateId === 'tuck-end'
+  const hexFaceWidth = vessel?.rect?.polygon ? vessel.rect.a : undefined
+  const artworkFollowsPanels = (kind === 'box' && templateId === 'tuck-end') || hexFaceWidth !== undefined || kind === 'pouch'
+  const artworkAnchorPanels = useMemo(() => {
+    if (!artworkFollowsPanels) return undefined
+    const panels = panelBoxes(dieline)
+    if (hexFaceWidth !== undefined) return hexLabelAnchorPanels(panels, hexFaceWidth)
+    return pouch ? pouchAnchorPanels(panels, pouch) : panels
+  }, [artworkFollowsPanels, dieline, hexFaceWidth, pouch])
   const hasAnchoredArtwork = artworkFollowsPanels && decos.some((deco) => deco.panelAnchor)
   const resizeArtworkForBox = (box: BoxParams, material = mat) => {
     if (!hasAnchoredArtwork) return
@@ -2339,25 +2336,78 @@ export default function App({
   })
 
   const endSizeEdit = () => { resizingArtwork.current = false }
+  const sizeEditBoundary = hasAnchoredArtwork ? endSizeEdit : undefined
+  const recordArtworkSizeEdit = () => {
+    if (!resizingArtwork.current) {
+      const before = snapshot()
+      const recorded = lastSnap.current
+      // Preserve a preceding edit that is still waiting for the regular undo debounce.
+      const pending = recorded && !sameSnap(recorded, before) ? [recorded, before] : [before]
+      setUndoStack((stack) => [...stack, ...pending].slice(-50))
+      setRedoStack([])
+      resizingArtwork.current = true
+    }
+    skipCapture.current = true
+  }
+  const resizeArtworkForVessel = (box: BoxParams, shape: VesselShape = {}, style = labelStyle) => {
+    if (!hasAnchoredArtwork || hexFaceWidth === undefined) return
+    const next = generateVessel(box, mat, style, {
+      neckH, shoulderH, shoulderStyle, label: labelNoRot, capStyle, rectDepth, polygon: vesselPolygon, ...shape,
+    })
+    recordArtworkSizeEdit()
+    setDecos(resizePanelArtwork(decos, hexLabelAnchorPanels(panelBoxes(next.label), next.rect!.a), ART_SAFE_MM))
+  }
+  const resizeArtworkForPouch = (box: BoxParams, addons = pouchAddons) => {
+    if (!hasAnchoredArtwork || kind !== 'pouch') return
+    const next = generatePouch(box, mat, { style: pouchStyle, zipper, addons })
+    recordArtworkSizeEdit()
+    setDecos(resizePanelArtwork(decos, pouchAnchorPanels(panelBoxes(next.label), next), ART_SAFE_MM))
+  }
   const changeDimension = (axis: 'W' | 'D' | 'H', value: number) => {
     const box = { W, D, H, handle }
     if (box[axis] === value) return
-    if (hasAnchoredArtwork) {
-      if (!resizingArtwork.current) {
-        const before = snapshot()
-        const recorded = lastSnap.current
-        // Preserve a preceding edit that is still waiting for the regular undo debounce.
-        const pending = recorded && !sameSnap(recorded, before) ? [recorded, before] : [before]
-        setUndoStack((stack) => [...stack, ...pending].slice(-50))
-        setRedoStack([])
-        resizingArtwork.current = true
-      }
-      skipCapture.current = true
-      resizeArtworkForBox({ ...box, [axis]: value })
+    const next = { ...box, [axis]: value }
+    if (kind === 'vessel') resizeArtworkForVessel(next)
+    else if (kind === 'pouch') resizeArtworkForPouch(next)
+    else if (hasAnchoredArtwork) {
+      recordArtworkSizeEdit()
+      resizeArtworkForBox(next)
     }
     if (axis === 'W') setW(value)
     else if (axis === 'D') setD(value)
     else setH(value)
+  }
+  // ปรับสูงตัวโดยตรึงคอ หรือปรับสูงคอโดยตรึงตัว
+  const changeVesselHeight = (height: number, neck: number) => {
+    const nextH = clamp(height + neck, 30, 300)
+    if (H === nextH && neckH === neck) return
+    resizeArtworkForVessel({ W, D, H: nextH, handle }, { neckH: neck })
+    setNeckH(neck)
+    setH(nextH)
+  }
+  const setBodyH = (value: number) => changeVesselHeight(value, neckEff)
+  const setNeckLen = (value: number) => changeVesselHeight(bodyH, value)
+  const changeShoulderHeight = (value: number) => {
+    if (shoulderH === value) return
+    resizeArtworkForVessel({ W, D, H, handle }, { shoulderH: value })
+    setShoulderH(value)
+  }
+  const changeShoulderStyle = (style: ShoulderStyle) => {
+    if (shoulderStyle === style) return
+    endSizeEdit()
+    resizeArtworkForVessel({ W, D, H, handle }, { shoulderStyle: style })
+    setShoulderStyle(style)
+    endSizeEdit()
+  }
+  const changeLabel = (label: LabelBox | undefined, style = labelStyle, discrete = false) => {
+    if (labelStyle === style && sameLabelBox(labelBox, label)) return
+    if (discrete) endSizeEdit()
+    resizeArtworkForVessel({ W, D, H, handle }, {
+      label: label?.rot === undefined ? label : { ...label, rot: undefined },
+    }, style)
+    setLabelBox(label)
+    setLabelStyle(style)
+    if (discrete) endSizeEdit()
   }
 
   // เก็บสถานะตั้งต้นทันทีเพื่อให้ย้อนการแก้ครั้งแรกได้ ส่วนการลาก slider/ลากลายรอให้ค่านิ่งก่อนลง undo
@@ -2764,7 +2814,7 @@ export default function App({
     cancelAnimationFrame(raf.current)
     // สลับวัสดุภาชนะ (PET ↔ แก้ว ↔ กระป๋อง) ตอนยังไม่เริ่มงาน → ขนาดมาตรฐานของวัสดุนั้น (ขวด 500 มล. ≠ กระป๋อง 330 มล.)
     const m = getMaterial(id)
-    if (hasAnchoredArtwork && id !== materialId && packKind(m) === 'box') {
+    if (hasAnchoredArtwork && kind === 'box' && id !== materialId && packKind(m) === 'box') {
       resizeArtworkForBox({ W, D, H, handle }, m)
     }
     if (id !== materialId && kind === 'vessel' && !isTube && packKind(m) === 'vessel' && m.form !== 'tube') {
@@ -3161,8 +3211,7 @@ export default function App({
       setDecos(edit)
       return
     }
-    const panels = panelBoxes(dieline)
-    setDecos((current) => refreshArtworkPanelAnchors(current, edit(current), panels))
+    setDecos((current) => refreshArtworkPanelAnchors(current, edit(current), artworkAnchorPanels!))
   }
 
   // แก้เฉพาะชิ้นที่เลือก (ชิ้นเดียว) ผ่านฟังก์ชันแปลง (คงชนิด image/text ไว้)
@@ -4212,11 +4261,11 @@ export default function App({
     const lower = Math.ceil(vessel.labelRange[0] * 2) / 2
     const upper = Math.max(lower, Math.floor((vessel.labelRange[1] - height) * 2) / 2)
     const y = Math.round(vessel.labelY0 * 2) / 2
-    const placeLabel = (position: number) => setLabelBox((box) => ({ ...box, y: position, h: height }))
+    const placeLabel = (position: number, discrete = false) =>
+      changeLabel({ ...labelBox, y: position, h: height }, labelStyle, discrete)
     const selectLabel = (style: LabelStyle) => {
       if (labelStyle === style) return
-      setLabelStyle(style)
-      setLabelBox((box) => box?.w === undefined ? undefined : { w: box.w })
+      changeLabel(labelBox?.w === undefined ? undefined : { w: labelBox.w }, style, true)
     }
     const positions = [
       { id: 'top', value: upper, label: t('ขอบบน', 'Top'), image: modelSizeAssets.labelTop },
@@ -4225,7 +4274,7 @@ export default function App({
     ]
     const labelHeightControl = <DimField compact lengthUnit={unit} label={t('ความกว้างฉลาก', 'Label height')} value={height}
       min={LABEL_MIN} max={Math.max(LABEL_MIN, Math.floor((vessel.labelRange[1] - vessel.labelRange[0]) * 2) / 2)}
-      disabled={modelBusy} onChange={(value) => setLabelBox((box) => ({ ...box, y, h: value }))} />
+      disabled={modelBusy} onChange={(value) => changeLabel({ ...labelBox, y, h: value })} onEditBoundary={sizeEditBoundary} />
     const rect = vessel.rect
     return (
       <section className="v2-model-section">
@@ -4240,7 +4289,7 @@ export default function App({
         <DimField compact lengthUnit={unit} label={t('ความยาวฉลาก', 'Label length')}
           value={vessel.labelArc >= 2 * Math.PI - 1e-9 ? Math.round(vessel.circ * 2) / 2 : vessel.label.width}
           min={LABEL_MIN} max={Math.max(LABEL_MIN, Math.round(vessel.circ * 2) / 2)}
-          disabled={modelBusy} onChange={(value) => setLabelBox((box) => ({ ...box, w: value }))} />
+          disabled={modelBusy} onChange={(value) => changeLabel({ ...labelBox, w: value })} onEditBoundary={sizeEditBoundary} />
         {short && (
           <>
             <div className="v2-label-position">
@@ -4248,13 +4297,16 @@ export default function App({
               <div role="group" aria-label={t('จัดตำแหน่งฉลาก', 'Align label')}>
                 {positions.map(({ id, value, label, image }) => (
                   <button key={id} type="button" aria-label={label} title={label} aria-pressed={y === value}
-                    disabled={modelBusy} onClick={() => placeLabel(value)}><img src={image} alt="" /></button>
+                    disabled={modelBusy} onClick={() => placeLabel(value, true)}><img src={image} alt="" /></button>
                 ))}
               </div>
             </div>
             <input type="range" className="v2-label-range" aria-label={t('ตำแหน่งฉลาก', 'Label position')}
               min={lower} max={upper} step={0.5} value={y} disabled={modelBusy || upper === lower}
-              onChange={(event) => placeLabel(Number(event.target.value))} />
+              onChange={(event) => placeLabel(Number(event.target.value))}
+              onPointerDown={sizeEditBoundary} onPointerUp={sizeEditBoundary}
+              onPointerCancel={sizeEditBoundary} onLostPointerCapture={sizeEditBoundary}
+              onKeyUp={sizeEditBoundary} onBlur={sizeEditBoundary} />
           </>
         )}
         <details className="v2-model-more">
@@ -4268,21 +4320,22 @@ export default function App({
           {!short && showNeck && <>
             {labelHeightControl}
             <DimField compact lengthUnit={unit} label={t('ตำแหน่งฉลาก', 'Label position')} value={y}
-              min={lower} max={upper} disabled={modelBusy || upper === lower} onChange={placeLabel} />
+              min={lower} max={upper} disabled={modelBusy || upper === lower}
+              onChange={placeLabel} onEditBoundary={sizeEditBoundary} />
           </>}
           {rect && <div className="unit-toggle" role="group" aria-label={t('แบบฉลาก', 'Label coverage')}>
             <button type="button" aria-pressed={vessel.labelArc >= 2 * Math.PI - 1e-9}
-              disabled={modelBusy} onClick={() => setLabelBox((box) => ({ ...box, w: undefined }))}>
+              disabled={modelBusy} onClick={() => changeLabel({ ...labelBox, w: undefined }, labelStyle, true)}>
               {t('พันรอบ', 'Wrap-around')}
             </button>
             <button type="button" aria-pressed={vessel.labelArc < 2 * Math.PI - 1e-9}
-              disabled={modelBusy} onClick={() => setLabelBox((box) => ({
-                ...box, w: Math.floor((rect.polygon ? rect.a : 2 * (rect.a - rect.rc)) * 0.9 * 2) / 2,
-              }))}>
+              disabled={modelBusy} onClick={() => changeLabel({
+                ...labelBox, w: Math.floor((rect.polygon ? rect.a : 2 * (rect.a - rect.rc)) * 0.9 * 2) / 2,
+              }, labelStyle, true)}>
               {t('หน้าเดียว', 'Front only')}
             </button>
           </div>}
-          {labelBox && <button type="button" className="link-btn" disabled={modelBusy} onClick={() => setLabelBox(undefined)}>
+          {labelBox && <button type="button" className="link-btn" disabled={modelBusy} onClick={() => changeLabel(undefined, labelStyle, true)}>
             {t('กลับเป็นขนาดตามรูปแบบฉลาก', 'Reset to label style')}
           </button>}
         </details>
@@ -4317,15 +4370,17 @@ export default function App({
               </select>
             </div>
             <h3>{t('ตัวขวด', 'Bottle body')}</h3>
-            <DimField compact lengthUnit={unit} label={t('ความกว้าง', 'Body width')} value={W} min={30} max={250} disabled={modelBusy} onChange={setW} />
+            <DimField compact lengthUnit={unit} label={t('ความกว้าง', 'Body width')} value={W} min={30} max={250}
+              disabled={modelBusy} onChange={(value) => changeDimension('W', value)} onEditBoundary={sizeEditBoundary} />
             <DimField compact lengthUnit={unit} label={t('ความยาว', 'Body height')} value={bodyH} min={Math.max(BODY_MIN, 30 - neckEff)}
-              max={300 - neckEff} disabled={modelBusy} onChange={setBodyH} />
+              max={300 - neckEff} disabled={modelBusy} onChange={setBodyH} onEditBoundary={sizeEditBoundary} />
             {vessel.rect && !vesselPolygon && <DimField compact lengthUnit={unit} label={t('ความลึก', 'Body depth')}
               value={Math.round(vessel.rect.b * 4) / 2} min={rectDepthMin(D)} max={RECT_DEPTH_MAX} disabled={modelBusy} onChange={setRectDepth} />}
             <h3>{t('คอขวด', 'Bottle neck')}</h3>
-            <DimField compact lengthUnit={unit} label={t('ความกว้างคอขวด', 'Neck width')} value={D} min={20} max={150} disabled={modelBusy} onChange={setD} />
+            <DimField compact lengthUnit={unit} label={t('ความกว้างคอขวด', 'Neck width')} value={D} min={20} max={150}
+              disabled={modelBusy} onChange={(value) => changeDimension('D', value)} onEditBoundary={sizeEditBoundary} />
             <DimField compact lengthUnit={unit} label={t('ความสูงคอขวด', 'Neck height')} value={neckEff} min={NECK_MIN}
-              max={Math.max(NECK_MIN, Math.min(150, 300 - bodyH))} disabled={modelBusy} onChange={setNeckLen} />
+              max={Math.max(NECK_MIN, Math.min(150, 300 - bodyH))} disabled={modelBusy} onChange={setNeckLen} onEditBoundary={sizeEditBoundary} />
           </section>
           <section className="v2-model-section">
             <h2>{t('ทรงไหล่', 'Shoulder shape')}</h2>
@@ -4335,11 +4390,11 @@ export default function App({
                 ['slope', t('ลาดตรง', 'Sloped'), modelSizeAssets.straightShoulder],
                 ['round', t('โค้งมน', 'Rounded'), modelSizeAssets.roundShoulder],
               ] as const).map(([id, title, image]) => (
-                <ModelTile key={id} title={title} image={image} selected={shoulderStyle === id} disabled={modelBusy} onClick={() => setShoulderStyle(id)} />
+                <ModelTile key={id} title={title} image={image} selected={shoulderStyle === id} disabled={modelBusy} onClick={() => changeShoulderStyle(id)} />
               ))}
             </div>
             <DimField compact lengthUnit={unit} label={t('ความสูงไหล่', 'Shoulder height')} value={shoulderEff} min={SHOULDER_MIN}
-              max={shoulderMax(mat.id, bodyH)} disabled={modelBusy} onChange={setShoulderH} />
+              max={shoulderMax(mat.id, bodyH)} disabled={modelBusy} onChange={changeShoulderHeight} onEditBoundary={sizeEditBoundary} />
           </section>
         </>
       ) : (
@@ -4810,9 +4865,8 @@ export default function App({
                     disabled={aiBusy}
                     aria-pressed={labelStyle === s.id}
                     onClick={() => {
-                      setLabelStyle(s.id)
-                      // เลือกรูปแบบ = กลับไปใช้ตำแหน่ง/สูงตามรูปแบบ (ความยาวรอบตัวที่ตั้งไว้คงเดิม)
-                      setLabelBox((b) => (b?.w !== undefined ? { w: b.w } : undefined))
+                      // กลับไปใช้ตำแหน่งและสูงตามรูปแบบ โดยคงความยาวรอบตัวที่ตั้งไว้
+                      changeLabel(labelBox?.w !== undefined ? { w: labelBox.w } : undefined, s.id, true)
                     }}
                   >
                     <span className="pick-name">{s.nameTh}</span>
@@ -4833,7 +4887,8 @@ export default function App({
                     min={Math.ceil(vessel.labelRange[0] * 2) / 2}
                     max={Math.max(Math.ceil(vessel.labelRange[0] * 2) / 2, Math.floor((vessel.labelRange[1] - (vessel.labelY1 - vessel.labelY0)) * 2) / 2)}
                     disabled={aiBusy}
-                    onChange={(v) => setLabelBox((b) => ({ ...b, y: v, h: Math.round((vessel.labelY1 - vessel.labelY0) * 2) / 2 }))}
+                    onChange={(v) => changeLabel({ ...labelBox, y: v, h: Math.round((vessel.labelY1 - vessel.labelY0) * 2) / 2 })}
+                    onEditBoundary={sizeEditBoundary}
                   />
                   <DimField
                     lengthUnit={unit}
@@ -4842,7 +4897,8 @@ export default function App({
                     min={LABEL_MIN}
                     max={Math.max(LABEL_MIN, Math.floor((vessel.labelRange[1] - vessel.labelRange[0]) * 2) / 2)}
                     disabled={aiBusy}
-                    onChange={(v) => setLabelBox((b) => ({ ...b, y: Math.round(vessel.labelY0 * 2) / 2, h: v }))}
+                    onChange={(v) => changeLabel({ ...labelBox, y: Math.round(vessel.labelY0 * 2) / 2, h: v })}
+                    onEditBoundary={sizeEditBoundary}
                   />
                   {vessel.rect && (
                     // ขวดเหลี่ยม: เลือกฉลากพันรอบ (ยาวเท่าเส้นรอบรูป) หรือหน้าเดียว (90% ของหน้าแบนด้านหน้า ไม่อ้อมมุมมน)
@@ -4852,7 +4908,7 @@ export default function App({
                         className={vessel.labelArc >= 2 * Math.PI - 1e-9 ? 'active' : ''}
                         aria-pressed={vessel.labelArc >= 2 * Math.PI - 1e-9}
                         disabled={aiBusy}
-                        onClick={() => setLabelBox((b) => ({ ...b, w: undefined }))}
+                        onClick={() => changeLabel({ ...labelBox, w: undefined }, labelStyle, true)}
                       >
                         {t('พันรอบ', 'Wrap-around')}
                       </button>
@@ -4863,7 +4919,7 @@ export default function App({
                         disabled={aiBusy}
                         onClick={() => {
                           const rs = vessel.rect!
-                          setLabelBox((b) => ({ ...b, w: Math.floor((rs.polygon ? rs.a : 2 * (rs.a - rs.rc)) * 0.9 * 2) / 2 }))
+                          changeLabel({ ...labelBox, w: Math.floor((rs.polygon ? rs.a : 2 * (rs.a - rs.rc)) * 0.9 * 2) / 2 }, labelStyle, true)
                         }}
                       >
                         {t('หน้าเดียว', 'Front only')}
@@ -4877,7 +4933,8 @@ export default function App({
                     min={LABEL_MIN}
                     max={Math.round(vessel.circ * 2) / 2}
                     disabled={aiBusy}
-                    onChange={(v) => setLabelBox((b) => ({ ...b, w: v }))}
+                    onChange={(v) => changeLabel({ ...labelBox, w: v })}
+                    onEditBoundary={sizeEditBoundary}
                   />
                   <p className="hint">
                     {vessel.labelArc >= 2 * Math.PI - 1e-9
@@ -4888,7 +4945,7 @@ export default function App({
                       : t('ฉลากแผ่นหน้า (ไม่พันรอบ) จัดกึ่งกลางด้านหน้าขวด', 'Front label (not wrap-around), centred on the front')}
                   </p>
                   {labelBox && (
-                    <button type="button" className="link-btn" disabled={aiBusy} onClick={() => setLabelBox(undefined)}>
+                    <button type="button" className="link-btn" disabled={aiBusy} onClick={() => changeLabel(undefined, labelStyle, true)}>
                       {t('กลับเป็นขนาดตามรูปแบบฉลาก', 'Reset to label style')}
                     </button>
                   )}
@@ -5018,7 +5075,7 @@ export default function App({
               max={250}
               disabled={aiBusy || perSheetLocked}
               onChange={(value) => changeDimension('W', value)}
-              onEditBoundary={artworkFollowsPanels ? endSizeEdit : undefined}
+              onEditBoundary={sizeEditBoundary}
             />
             {/* ขวดเหลี่ยม (แก้ว/PET): สลับทรงกลม/เหลี่ยม + ความลึกลำตัว (สี่เหลี่ยมผืนผ้า กว้าง W × ลึก) */}
             {kind === 'vessel' && canRectBottle(mat.id) && (
@@ -5066,6 +5123,7 @@ export default function App({
                 max={300 - neckEff}
                 disabled={aiBusy}
                 onChange={setBodyH}
+                onEditBoundary={sizeEditBoundary}
               />
             )}
             {/* ซองแบน/หลังกลางไม่มีก้น-จีบ, นามบัตร/สติกเกอร์เป็นแผ่นแบน → ซ่อนช่อง D */}
@@ -5089,7 +5147,7 @@ export default function App({
                 max={150}
                 disabled={aiBusy}
                 onChange={(value) => changeDimension('D', value)}
-                onEditBoundary={artworkFollowsPanels ? endSizeEdit : undefined}
+                onEditBoundary={sizeEditBoundary}
               />
             )}
             {showNeck ? (
@@ -5102,6 +5160,7 @@ export default function App({
                   max={Math.max(NECK_MIN, Math.min(150, 300 - bodyH))}
                   disabled={aiBusy}
                   onChange={setNeckLen}
+                  onEditBoundary={sizeEditBoundary}
                 />
                 {/* ไหล่ = รอยต่อตัว→คอ: สูงไหล่อยู่ในความสูงตัว (สูงรวมไม่เปลี่ยน) */}
                 <DimField
@@ -5111,7 +5170,8 @@ export default function App({
                   min={SHOULDER_MIN}
                   max={shoulderMax(mat.id, bodyH)}
                   disabled={aiBusy}
-                  onChange={setShoulderH}
+                  onChange={changeShoulderHeight}
+                  onEditBoundary={sizeEditBoundary}
                 />
                 <div className="field">
                   <span className="field-head">{t('ทรงไหล่', 'Shoulder shape')}</span>
@@ -5123,7 +5183,7 @@ export default function App({
                         className={shoulderStyle === st.id ? 'active' : ''}
                         aria-pressed={shoulderStyle === st.id}
                         disabled={aiBusy}
-                        onClick={() => setShoulderStyle(st.id)}
+                        onClick={() => changeShoulderStyle(st.id)}
                       >
                         {t(st.nameTh, st.nameEn)}
                       </button>
@@ -5143,7 +5203,7 @@ export default function App({
                 max={300}
                 disabled={aiBusy || perSheetLocked}
                 onChange={(value) => changeDimension('H', value)}
-                onEditBoundary={artworkFollowsPanels ? endSizeEdit : undefined}
+                onEditBoundary={sizeEditBoundary}
               />
             )}
             {perSheetLocked && (
@@ -5406,7 +5466,13 @@ export default function App({
                       type="checkbox"
                       checked={pouchAddons.hangHole ?? false}
                       disabled={aiBusy}
-                      onChange={(e) => setPouchAddons((a) => ({ ...a, hangHole: e.target.checked }))}
+                      onChange={(e) => {
+                        const addons = { ...pouchAddons, hangHole: e.target.checked }
+                        endSizeEdit()
+                        resizeArtworkForPouch({ W, D, H, handle }, addons)
+                        setPouchAddons(addons)
+                        endSizeEdit()
+                      }}
                     />
                     {t('รูแขวน (euro-hole)', 'Hang hole (euro-hole)')}
                   </label>
@@ -7338,7 +7404,11 @@ export default function App({
             onApplySpec={applySpec}
             requestSpec={cloud?.requestAiSpec}
             historySource={cloud}
-            artwork={dieline ? { dieline, kind, template: templateId, materialId, box: { W, D, H }, fillColor, existingCount: decos.length, onApply: applyAiArtwork, request: cloud?.requestAiArtwork, prepareImages: cloud ? rasterizeArtworkImages : undefined } : null}
+            artwork={dieline ? {
+              dieline, kind, template: templateId, materialId, box: { W, D, H }, fillColor, existingCount: decos.length,
+              anchorRegions: artworkAnchorPanels, hexFaceWidth, onApply: applyAiArtwork,
+              request: cloud?.requestAiArtwork, prepareImages: cloud ? rasterizeArtworkImages : undefined,
+            } : null}
             lastSnapshotId={artCurrentId}
             onOpenStage={() => setStageOpen(true)}
             onLoadingChange={setAiBusy}

@@ -1,21 +1,74 @@
 import { elCenter, elH, elW, scaleDecos, type Deco } from './artwork'
-import type { PanelBox } from './aiArtwork'
+import type { ArtFrontZone, PanelBox } from './aiArtwork'
+import type { Pouch } from './pouch'
+
+export type ArtworkAnchorPanel = PanelBox & { sourcePanelId?: string }
 
 function canAnchor(panel: PanelBox): boolean {
   return panel.print && panel.w > 0 && panel.h > 0
 }
 
-export function captureArtworkPanelAnchor(deco: Deco, panel: PanelBox): Deco {
+export function hexLabelFrontZone(panels: readonly PanelBox[], faceWidth: number): ArtFrontZone | null {
+  const label = panels.find((panel) => panel.id === 'label')
+  if (!label || !canAnchor(label) || !(faceWidth > 0)) return null
+  // The midpoint of the printable label maps to the middle of the flat front face
+  // in both a full wrap and a centered partial label. The glue overlap is separate.
+  const inset = Math.max(0, (label.w - faceWidth) / 2)
+  return { panel: label.id, x0: inset, x1: label.w - inset }
+}
+
+export function hexLabelAnchorPanels(panels: readonly PanelBox[], faceWidth: number): ArtworkAnchorPanel[] {
+  const zone = hexLabelFrontZone(panels, faceWidth)
+  const label = panels.find((panel) => panel.id === zone?.panel)
+  if (!zone || !label) return [...panels]
+  return [...panels, {
+    ...label,
+    id: 'label-front-face',
+    sourcePanelId: label.id,
+    x0: label.x0 + zone.x0,
+    x1: label.x0 + zone.x1,
+    w: zone.x1 - zone.x0,
+  }]
+}
+
+export function pouchAnchorPanels(
+  panels: readonly PanelBox[],
+  pouch: Pick<Pouch, 'frontRect' | 'backRect' | 'backRectL' | 'spoutCorner'>,
+): ArtworkAnchorPanel[] {
+  const film = panels.find((panel) => panel.id === 'film')
+  const regions: ArtworkAnchorPanel[] = [...panels]
+  const addBody = (id: string, source: PanelBox | undefined, rect: Pouch['frontRect']) => {
+    if (!source || !canAnchor(source)) return
+    const x0 = Math.max(source.x0, rect.x)
+    const x1 = Math.min(source.x1, rect.x + rect.w)
+    // A corner spout cuts away a triangle above this horizontal line.
+    const y0 = Math.max(source.y0, rect.y, pouch.spoutCorner?.c ?? 0)
+    const y1 = Math.min(source.y1, rect.y + rect.h)
+    if (x1 <= x0 || y1 <= y0) return
+    regions.push({ ...source, id, sourcePanelId: source.id, x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 })
+  }
+  addBody('pouch-front-body', panels.find((panel) => panel.id === 'front') ?? film, pouch.frontRect)
+  addBody('pouch-back-body', panels.find((panel) => panel.id === 'back') ?? film, pouch.backRect)
+  if (pouch.backRectL) addBody('pouch-back-left-body', film, pouch.backRectL)
+  return regions
+}
+
+export function captureArtworkPanelAnchor(
+  deco: Deco,
+  panel: PanelBox,
+  regions: readonly ArtworkAnchorPanel[] = [],
+): Deco {
   if (!canAnchor(panel)) return deco
   const center = elCenter(deco)
+  const anchorPanel = regions.find((region) => region.sourcePanelId === panel.id && containsArtwork(region, deco)) ?? panel
   return {
     ...deco,
     panelAnchor: {
-      panelId: panel.id,
-      panelW: panel.w,
-      panelH: panel.h,
-      u: clamp(center.x - panel.x0, 0, panel.w) / panel.w,
-      v: clamp(center.y - panel.y0, 0, panel.h) / panel.h,
+      panelId: anchorPanel.id,
+      panelW: anchorPanel.w,
+      panelH: anchorPanel.h,
+      u: clamp(center.x - anchorPanel.x0, 0, anchorPanel.w) / anchorPanel.w,
+      v: clamp(center.y - anchorPanel.y0, 0, anchorPanel.h) / anchorPanel.h,
       scale: 1,
     },
   }
@@ -32,6 +85,14 @@ function rotatedSize(deco: Deco): { width: number; height: number } {
   const width = elW(deco)
   const height = elH(deco)
   return { width: cos * width + sin * height, height: sin * width + cos * height }
+}
+
+function containsArtwork(panel: PanelBox, deco: Deco): boolean {
+  const { x, y } = elCenter(deco)
+  const { width, height } = rotatedSize(deco)
+  const tolerance = 1e-6
+  return x - width / 2 >= panel.x0 - tolerance && x + width / 2 <= panel.x1 + tolerance
+    && y - height / 2 >= panel.y0 - tolerance && y + height / 2 <= panel.y1 + tolerance
 }
 
 function fitCenter(value: number, min: number, max: number, halfSize: number): number {
@@ -78,10 +139,11 @@ export function resizePanelArtwork(decos: Deco[], panels: readonly PanelBox[], s
   return changed ? resized : decos
 }
 
-export function refreshArtworkPanelAnchors(previous: readonly Deco[], next: Deco[], panels: readonly PanelBox[]): Deco[] {
+export function refreshArtworkPanelAnchors(previous: readonly Deco[], next: Deco[], panels: readonly ArtworkAnchorPanel[]): Deco[] {
   if (!next.some((deco) => deco.panelAnchor)) return next
   const previousById = new Map(previous.map((deco) => [deco.id, deco]))
-  const printable = panels.filter(canAnchor)
+  const printable = panels.filter((panel) => !panel.sourcePanelId && canAnchor(panel))
+  const byId = new Map(panels.map((panel) => [panel.id, panel]))
   let changed = false
   const refreshed = next.map((deco): Deco => {
     const anchor = deco.panelAnchor
@@ -91,18 +153,17 @@ export function refreshArtworkPanelAnchors(previous: readonly Deco[], next: Deco
       && elW(prior) === elW(deco) && elH(prior) === elH(deco))) return deco
 
     const center = elCenter(deco)
-    const staysOnPanel = printable.find((panel) => panel.id === anchor.panelId
+    const previousPanelId = byId.get(anchor.panelId)?.sourcePanelId ?? anchor.panelId
+    const staysOnPanel = printable.find((panel) => panel.id === previousPanelId
       && center.x > panel.x0 && center.x < panel.x1 && center.y > panel.y0 && center.y < panel.y1)
     if (staysOnPanel) {
       changed = true
-      return captureArtworkPanelAnchor(deco, staysOnPanel)
+      return captureArtworkPanelAnchor(deco, staysOnPanel, panels)
     }
 
-    const { width, height } = rotatedSize(deco)
-    const candidates = printable.filter((panel) => center.x - width / 2 >= panel.x0 && center.x + width / 2 <= panel.x1
-      && center.y - height / 2 >= panel.y0 && center.y + height / 2 <= panel.y1)
+    const candidates = printable.filter((panel) => containsArtwork(panel, deco))
     changed = true
-    if (candidates.length === 1) return captureArtworkPanelAnchor(deco, candidates[0])
+    if (candidates.length === 1) return captureArtworkPanelAnchor(deco, candidates[0], panels)
     const { panelAnchor, ...unanchored } = deco
     return unanchored
   })

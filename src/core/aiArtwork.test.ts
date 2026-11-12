@@ -12,8 +12,11 @@ import {
   sanitizeSvg,
 } from './aiArtwork'
 import { parseDecos } from './artwork'
+import { hexLabelAnchorPanels, hexLabelFrontZone, pouchAnchorPanels } from './artworkResize'
 import { getMaterial } from './materials'
+import { generatePouch } from './pouch'
 import { TEMPLATES } from './templates'
+import { generateVessel } from './vessel'
 
 const tuckEnd = () => {
   const tp = TEMPLATES.find((t) => t.id === 'tuck-end')!
@@ -140,6 +143,58 @@ describe('compileArtworkPlan', () => {
   const d = tuckEnd()
   const boxes = panelBoxes(d)
   const front = boxes.find((b) => b.id === 'front')!
+
+  it('fits a logo to the hexagon front and retains its real aspect and print-panel identity', () => {
+    const bottle = generateVessel({ W: 80, D: 34, H: 160 }, getMaterial('glass'), 'body', {
+      polygon: true, label: { w: 120 },
+    })
+    const panels = panelBoxes(bottle.label)
+    const faceWidth = bottle.rect!.a
+    const front = hexLabelFrontZone(panels, faceWidth)
+    const parsed = parseArtworkPlan(plan([
+      { type: 'image', panel: 'label', x: 25, y: 10, w: 70, h: 70, fit: 'stretch', src: 'asset:logo' },
+      { type: 'image', panel: 'label', x: 35, y: 40, w: 20, src: 'asset:logo' },
+    ]))
+    if (!parsed.ok) throw new Error('parse')
+
+    const out = compileArtworkPlan(parsed.plan, panels, {
+      front,
+      anchorPanels: true,
+      anchorRegions: hexLabelAnchorPanels(panels, faceWidth),
+      assets: { logo: { src: 'data:image/png;base64,AAAA', aspect: 2 } },
+    })
+    expect(parsed.plan.elements[0].panel).toBe('label')
+    expect(out.decos).toEqual([
+      expect.objectContaining({
+        type: 'image', x: 40, w: 40, h: 20, fit: 'contain',
+        panelAnchor: expect.objectContaining({ panelId: 'label-front-face', u: 0.5 }),
+      }),
+      expect.objectContaining({
+        type: 'image', x: 40, w: 20, h: 10, fit: 'contain',
+        panelAnchor: expect.objectContaining({ panelId: 'label-front-face', u: 0.25 }),
+      }),
+    ])
+    expect(out.warnings.map(({ code }) => code)).toContain('front-fit')
+  })
+
+  it('captures fitted pouch art in its body region and retains the film panel for art outside it', () => {
+    const pouch = generatePouch({ W: 100, D: 30, H: 160 }, getMaterial('pouch-foil'), { style: 'stand' })
+    const panels = panelBoxes(pouch.label)
+    const parsed = parseArtworkPlan(plan([
+      { type: 'shape', panel: 'front', x: 12, y: 0, w: 20, h: 3, shape: 'rect', fill: '#000000', stroke: 'none', strokeW: 0 },
+      { type: 'shape', panel: 'back', x: 12, y: pouch.backRect.y + 15, w: 20, h: 10, shape: 'rect', fill: '#000000', stroke: 'none', strokeW: 0 },
+    ]))
+    if (!parsed.ok) throw new Error('parse')
+
+    const out = compileArtworkPlan(parsed.plan, panels, {
+      anchorPanels: true,
+      anchorRegions: pouchAnchorPanels(panels, pouch),
+    })
+    expect(out.decos).toEqual([
+      expect.objectContaining({ panelAnchor: expect.objectContaining({ panelId: 'front' }) }),
+      expect.objectContaining({ panelAnchor: expect.objectContaining({ panelId: 'pouch-back-body', v: 0.125 }) }),
+    ])
+  })
 
   it('แปลงพิกัดอ้างแผงเป็นพิกัดแผ่นคลี่ และ anchor center จัดกึ่งกลางด้วยความกว้างที่วัด', () => {
     const measure = () => 40

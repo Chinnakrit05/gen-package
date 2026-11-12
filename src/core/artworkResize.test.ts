@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { panelBoxes } from './aiArtwork'
 import { elCenter, type ImageEl, type ShapeEl } from './artwork'
-import { captureArtworkPanelAnchor, refreshArtworkPanelAnchors, resizePanelArtwork } from './artworkResize'
+import { captureArtworkPanelAnchor, hexLabelAnchorPanels, hexLabelFrontZone, pouchAnchorPanels, refreshArtworkPanelAnchors, resizePanelArtwork } from './artworkResize'
 import { getMaterial } from './materials'
+import { generatePouch } from './pouch'
 import { generateTuckEndBox } from './templates/tuckEnd'
+import { bottleSectionPoint, generateVessel } from './vessel'
 
 const panels = (W = 80, D = 30, H = 120) => panelBoxes(generateTuckEndBox({ W, D, H }, getMaterial('carton-300')))
 
@@ -93,5 +95,92 @@ describe('refreshArtworkPanelAnchors', () => {
     expect(resized.panelAnchor?.panelId).toBe('back')
     expect(elCenter(resized).x).toBeCloseTo(nextBack.x0 + nextBack.w / 2)
     expect(elCenter(resized).y).toBeCloseTo(nextBack.y0 + nextBack.h / 2)
+  })
+})
+
+describe('hexagonal bottle artwork', () => {
+  it('moves a logo within the flat front face across full and partial labels without stretching or losing its original placement', () => {
+    const wrap = generateVessel({ W: 82, D: 34, H: 216 }, getMaterial('glass'), 'body', { polygon: true })
+    const partial = generateVessel({ W: 100, D: 34, H: 216 }, getMaterial('glass'), 'body', {
+      polygon: true, label: { w: 28, h: 80 },
+    })
+    const sourcePanels = panelBoxes(wrap.label)
+    const sourceLabel = sourcePanels.find((panel) => panel.id === 'label')!
+    const sourceZone = hexLabelFrontZone(sourcePanels, wrap.rect!.a)!
+    const source = hexLabelAnchorPanels(sourcePanels, wrap.rect!.a)
+    const target = hexLabelAnchorPanels(panelBoxes(partial.label), partial.rect!.a)
+    const centerX = sourceLabel.x0 + sourceZone.x0 + 0.65 * (sourceZone.x1 - sourceZone.x0)
+    const logo: ImageEl = {
+      id: 'logo', type: 'image', src: 'data:image/png;base64,AA==', aspect: 2, w: 16, h: 8,
+      x: centerX - 8, y: sourceLabel.y0 + sourceLabel.h / 3 - 4, rot: 0,
+    }
+    const wide = { ...logo, id: 'wrap-art', x: sourceLabel.x0 + 12, w: sourceLabel.w - 24 }
+    const anchoredLogo = captureArtworkPanelAnchor(logo, sourceLabel, source)
+    const anchoredWide = captureArtworkPanelAnchor(wide, sourceLabel, source)
+    const [resized, resizedWide] = resizePanelArtwork([anchoredLogo, anchoredWide], target, 3)
+    const nextLogo = resized as ImageEl
+    const [restored] = resizePanelArtwork([resized], source, 3)
+
+    expect(sourceZone.x1 - sourceZone.x0).toBeCloseTo(41)
+    expect(sourceLabel.w).toBeCloseTo(wrap.circ)
+    expect(wrap.label.width).toBeGreaterThan(sourceLabel.w)
+    expect(anchoredLogo.panelAnchor?.panelId).toBe('label-front-face')
+    expect(anchoredWide.panelAnchor?.panelId).toBe('label')
+    expect(resizedWide.panelAnchor?.panelId).toBe('label')
+    expect(elCenter(nextLogo).x).toBeCloseTo(28 * 0.65)
+    expect(elCenter(nextLogo).y).toBeCloseTo(80 / 3)
+    expect(nextLogo.w / nextLogo.h).toBeCloseTo(2)
+    expect(nextLogo.x).toBeGreaterThanOrEqual(0)
+    expect(nextLogo.x + nextLogo.w).toBeLessThanOrEqual(28)
+    const faceZ = partial.rect!.b
+    for (const x of [nextLogo.x, nextLogo.x + nextLogo.w]) {
+      expect(bottleSectionPoint(partial.rect!, x - partial.label.width / 2)[1]).toBeCloseTo(faceZ)
+    }
+    expect(restored.x).toBeCloseTo(logo.x, 8)
+    expect(restored.y).toBeCloseTo(logo.y, 8)
+    expect(restored.w).toBeCloseTo(logo.w, 8)
+  })
+})
+
+describe('pouch artwork regions', () => {
+  const pouchMat = getMaterial('pouch-foil')
+
+  it('keeps artwork on each stand-up pouch body when only the bottom gusset grows', () => {
+    const initial = generatePouch({ W: 100, D: 25, H: 160 }, pouchMat)
+    const resized = generatePouch({ W: 100, D: 70, H: 160 }, pouchMat)
+    const source = pouchAnchorPanels(panelBoxes(initial.label), initial)
+    const target = pouchAnchorPanels(panelBoxes(resized.label), resized)
+    const sample = (id: 'front' | 'back') => {
+      const panel = source.find((entry) => entry.id === id)!
+      return captureArtworkPanelAnchor({
+        id, type: 'image', src: 'data:image/png;base64,AA==', aspect: 2, w: 20, h: 10,
+        x: panel.x0 + 40, y: initial.frontRect.y + 40, rot: 0,
+      }, panel, source)
+    }
+    const artwork = [sample('front'), sample('back')]
+    expect(artwork.map((deco) => deco.panelAnchor?.panelId)).toEqual(['pouch-front-body', 'pouch-back-body'])
+    expect(resized.label.height).toBeGreaterThan(initial.label.height)
+    expect(resizePanelArtwork(artwork, target, 3)).toBe(artwork)
+  })
+
+  it('keeps art on the correct half of a pillow pouch back and leaves seam-spanning art tied to the film', () => {
+    const initial = generatePouch({ W: 80, D: 20, H: 150 }, pouchMat, { style: 'pillow' })
+    const resized = generatePouch({ W: 120, D: 20, H: 160 }, pouchMat, { style: 'pillow' })
+    const source = pouchAnchorPanels(panelBoxes(initial.label), initial)
+    const target = pouchAnchorPanels(panelBoxes(resized.label), resized)
+    const film = source.find((panel) => panel.id === 'film')!
+    const original = initial.backRectL!
+    const mark: ShapeEl = {
+      id: 'mark', type: 'shape', shape: 'ellipse', fill: '#12ab34', stroke: 'none', strokeW: 0,
+      w: 8, h: 8, x: original.x + original.w / 2 - 4, y: original.y + original.h / 4 - 4, rot: 0,
+    }
+    const spanning = { ...mark, id: 'span', x: film.x0 + 4, w: film.w - 8 }
+    const artwork = [captureArtworkPanelAnchor(mark, film, source), captureArtworkPanelAnchor(spanning, film, source)]
+    const [nextMark, nextSpan] = resizePanelArtwork(artwork, target, 3)
+    const nextLeft = resized.backRectL!
+    expect(nextMark.panelAnchor?.panelId).toBe('pouch-back-left-body')
+    expect(elCenter(nextMark).x).toBeCloseTo(nextLeft.x + nextLeft.w / 2)
+    expect(elCenter(nextMark).y).toBeCloseTo(nextLeft.y + nextLeft.h / 4)
+    expect(nextSpan.panelAnchor?.panelId).toBe('film')
   })
 })
