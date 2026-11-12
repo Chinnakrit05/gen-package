@@ -1,3 +1,4 @@
+import './studio-suppliers.css'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
@@ -96,8 +97,9 @@ function SupplierProfilePanel({
 
   return (
     <>
-      <section className="marketplace-card">
-        <div className="marketplace-meta">
+      <section className="marketplace-card studio-profile-overview">
+        <div className="studio-section-heading"><span className="studio-company-avatar" aria-hidden="true">{profile.name.slice(0, 1)}</span><div><p className="studio-eyebrow">BUSINESS PROFILE</p><h2>ภาพรวมกิจการ</h2></div></div>
+        <div className="marketplace-meta studio-profile-actions">
           <span className={`marketplace-badge is-${profile.status}`}>{supplierStatusNames[profile.status]}</span>
           <span>{supplierKindNames[profile.kind]} · {supplierRoleNames[role]}</span>
           {role === 'manager' && <Link to={`/factory/${profile.id}/team`}>จัดการทีม</Link>}
@@ -127,7 +129,7 @@ function SupplierProfilePanel({
       </section>
       {canEdit && (
         <section className="marketplace-card">
-          <h2>แก้ไขข้อมูลกิจการ</h2>
+          <div className="studio-section-heading"><span className="studio-step">01</span><div><h2>ข้อมูลกิจการ</h2><p className="marketplace-muted">ข้อมูลที่จะปรากฏบนโปรไฟล์ผู้รับผลิต</p></div></div>
           {profile.status === 'approved' && (
             <p className="marketplace-notice">หากบันทึกการแก้ไข โปรไฟล์จะกลับเป็นฉบับร่างและซ่อนจากหน้าสาธารณะจนกว่าจะอนุมัติอีกครั้ง</p>
           )}
@@ -144,7 +146,7 @@ function SupplierProfilePanel({
       )}
       {role === 'manager' && (
         <section className="marketplace-card">
-          <h2>เอกสารประกอบการตรวจ</h2>
+          <div className="studio-section-heading"><span className="studio-step">02</span><h2>เอกสารประกอบการตรวจ</h2></div>
           <p>เอกสารนี้เปิดให้ผู้จัดการกิจการและเจ้าหน้าที่ PackIt ที่กำลังตรวจโปรไฟล์เข้าถึงได้</p>
           {profile.status !== 'draft' && <p className="marketplace-muted">เพิ่มหรือนำเอกสารออกได้เมื่อโปรไฟล์อยู่ในฉบับร่าง</p>}
           <SupplierReviewDocuments
@@ -156,8 +158,8 @@ function SupplierProfilePanel({
         </section>
       )}
       {role === 'manager' && profile.status === 'draft' && (
-        <section className="marketplace-card">
-          <h2>ส่งโปรไฟล์ให้ PackIt ตรวจ</h2>
+        <section className="marketplace-card studio-submit-card">
+          <div className="studio-section-heading"><span className="studio-step">03</span><h2>ส่งโปรไฟล์ให้ PackIt ตรวจ</h2></div>
           <p>{changed
             ? 'บันทึกการแก้ไขก่อนส่งตรวจ'
             : profile.capabilities.length === 0

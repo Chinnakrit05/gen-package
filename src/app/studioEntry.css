@@ -1,0 +1,14 @@
+/* Cloud sign-in and route/auth errors use the same Studio language. Local-demo and the design Editor remain independent. */
+.studio-entry {padding-bottom:0;background:#f6f7fa}
+.studio-entry .login-screen,.studio-entry.login-screen {background:radial-gradient(ellipse at 50% 35%,#eeebff 0%,#f6f7fa 68%);padding:32px 20px;min-height:100dvh}
+.studio-entry .login-card {border:1px solid #e5e1ef;border-radius:20px;background:#fff;box-shadow:0 14px 60px #4b427b0b;backdrop-filter:none;max-width:440px;padding:42px 38px}
+.studio-entry .login-mark {background:#eeebff;border-color:#e0d9f8;color:#6254cf;box-shadow:none;border-radius:13px}
+.studio-entry .login-name {font-family:Arial,sans-serif;letter-spacing:-1.1px;color:#1f293a}
+.studio-entry .login-title {color:#1f293a;font-size:27px;letter-spacing:-.7px}
+.studio-entry .login-sub {color:#758094;font-size:13px;line-height:1.9}
+.studio-entry .google-btn {width:100%;border:1px solid #ded9ec;border-radius:9px;background:white;color:#30384b;min-height:48px;box-shadow:0 2px 6px #2b194a04}
+.studio-entry .google-btn:hover {background:#f6f3ff;border-color:#b8abec;color:#5545b9}
+.studio-entry .login-fine {color:#8a829a;font-size:11px;line-height:1.8}
+.studio-entry .login-pricing {color:#6254cf;font-size:12px}
+.studio-entry .login-footer {color:#8e93a0;font-size:10px}
+@media(max-width:599px){.studio-entry .login-card{padding:32px 24px;width:100%}.studio-entry .login-screen,.studio-entry.login-screen{padding:24px 18px}}

@@ -1723,9 +1723,9 @@ var require_phoenix_cjs = __commonJS({
           this.pushBuffer.forEach((pushEvent) => pushEvent.send());
           this.pushBuffer = [];
         });
-        this.joinPush.receive("error", (reason) => {
+        this.joinPush.receive("error", (reason2) => {
           this.state = CHANNEL_STATES.errored;
-          if (this.socket.hasLogger()) this.socket.log("channel", `error ${this.topic}`, reason);
+          if (this.socket.hasLogger()) this.socket.log("channel", `error ${this.topic}`, reason2);
           if (this.socket.isConnected()) {
             this.rejoinTimer.scheduleTimeout();
           }
@@ -1736,8 +1736,8 @@ var require_phoenix_cjs = __commonJS({
           this.state = CHANNEL_STATES.closed;
           this.socket.remove(this);
         });
-        this.onError((reason) => {
-          if (this.socket.hasLogger()) this.socket.log("channel", `error ${this.topic}`, reason);
+        this.onError((reason2) => {
+          if (this.socket.hasLogger()) this.socket.log("channel", `error ${this.topic}`, reason2);
           if (this.isJoining()) {
             this.joinPush.reset();
           }
@@ -1801,7 +1801,7 @@ var require_phoenix_cjs = __commonJS({
        * @return {number}
        */
       onError(callback) {
-        return this.on(CHANNEL_EVENTS.error, (reason) => callback(reason));
+        return this.on(CHANNEL_EVENTS.error, (reason2) => callback(reason2));
       }
       /**
        * Subscribes on channel events
@@ -2148,8 +2148,8 @@ var require_phoenix_cjs = __commonJS({
       endpointURL() {
         return Ajax.appendParams(this.pollEndpoint, { token: this.token });
       }
-      closeAndRetry(code, reason, wasClean) {
-        this.close(code, reason, wasClean);
+      closeAndRetry(code, reason2, wasClean) {
+        this.close(code, reason2, wasClean);
         this.readyState = SOCKET_STATES.connecting;
       }
       ontimeout() {
@@ -2243,12 +2243,12 @@ var require_phoenix_cjs = __commonJS({
           }
         });
       }
-      close(code, reason, wasClean) {
+      close(code, reason2, wasClean) {
         for (let req of this.reqs) {
           req.abort();
         }
         this.readyState = SOCKET_STATES.closed;
-        let opts = Object.assign({ code: 1e3, reason: void 0, wasClean: true }, { code, reason, wasClean });
+        let opts = Object.assign({ code: 1e3, reason: void 0, wasClean: true }, { code, reason: reason2, wasClean });
         this.batchBuffer = [];
         clearTimeout(this.currentBatchTimer);
         this.currentBatchTimer = null;
@@ -2804,7 +2804,7 @@ var require_phoenix_cjs = __commonJS({
        * @param {number} [code] - A status code for disconnection (Optional).
        * @param {string} [reason] - A textual description of the reason to disconnect. (Optional)
        */
-      disconnect(callback, code, reason) {
+      disconnect(callback, code, reason2) {
         this.connectClock++;
         this.disconnecting = true;
         this.closeWasClean = true;
@@ -2813,7 +2813,7 @@ var require_phoenix_cjs = __commonJS({
         this.teardown(() => {
           this.disconnecting = false;
           callback && callback();
-        }, code, reason);
+        }, code, reason2);
       }
       /**
        * @param {Params} [params] - [DEPRECATED] The params to send when connecting, for example `{user_id: userToken}`
@@ -2967,8 +2967,8 @@ var require_phoenix_cjs = __commonJS({
         let primaryTransport = true;
         let openRef, errorRef;
         let fallbackTransportName = this.transportName(fallbackTransport);
-        let fallback = (reason) => {
-          this.log("transport", `falling back to ${fallbackTransportName}...`, reason);
+        let fallback = (reason2) => {
+          this.log("transport", `falling back to ${fallbackTransportName}...`, reason2);
           this.off([openRef, errorRef]);
           primaryTransport = false;
           this.replaceTransport(fallbackTransport);
@@ -2978,11 +2978,11 @@ var require_phoenix_cjs = __commonJS({
           return fallback("memorized");
         }
         this.fallbackTimer = setTimeout(fallback, fallbackThreshold);
-        errorRef = this.onError((reason) => {
-          this.log("transport", "error", reason);
+        errorRef = this.onError((reason2) => {
+          this.log("transport", "error", reason2);
           if (primaryTransport && !established) {
             clearTimeout(this.fallbackTimer);
-            fallback(reason);
+            fallback(reason2);
           }
         });
         if (this.fallbackRef) {
@@ -3051,14 +3051,14 @@ var require_phoenix_cjs = __commonJS({
         this.clearHeartbeats();
         this.heartbeatTimer = setTimeout(() => this.sendHeartbeat(), this.heartbeatIntervalMs);
       }
-      teardown(callback, code, reason) {
+      teardown(callback, code, reason2) {
         if (!this.conn) {
           return callback && callback();
         }
         const connToClose = this.conn;
         this.waitForBufferDone(connToClose, () => {
           if (code) {
-            connToClose.close(code, reason || "");
+            connToClose.close(code, reason2 || "");
           } else {
             connToClose.close();
           }
@@ -3127,10 +3127,10 @@ var require_phoenix_cjs = __commonJS({
        * @private
        * @param {unknown} [reason] underlying close/error event forwarded to channel error listeners
        */
-      triggerChanError(reason) {
+      triggerChanError(reason2) {
         this.channels.forEach((channel) => {
           if (!(channel.isErrored() || channel.isLeaving() || channel.isClosed())) {
-            channel.trigger(CHANNEL_EVENTS.error, reason);
+            channel.trigger(CHANNEL_EVENTS.error, reason2);
           }
         });
       }
@@ -3456,20 +3456,20 @@ var require_normalizeChannelError = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.normalizeChannelError = normalizeChannelError;
-    function normalizeChannelError(reason) {
-      if (reason instanceof Error) {
-        return reason;
+    function normalizeChannelError(reason2) {
+      if (reason2 instanceof Error) {
+        return reason2;
       }
-      if (typeof reason === "string") {
-        return new Error(reason);
+      if (typeof reason2 === "string") {
+        return new Error(reason2);
       }
-      if (reason && typeof reason === "object") {
-        const obj2 = reason;
+      if (reason2 && typeof reason2 === "object") {
+        const obj2 = reason2;
         if (typeof obj2.code === "number") {
           const detail = typeof obj2.reason === "string" && obj2.reason ? ` (${obj2.reason})` : "";
-          return new Error(`socket closed: ${obj2.code}${detail}`, { cause: reason });
+          return new Error(`socket closed: ${obj2.code}${detail}`, { cause: reason2 });
         }
-        return new Error("channel error: transport failure", { cause: reason });
+        return new Error("channel error: transport failure", { cause: reason2 });
       }
       return new Error("channel error: connection lost");
     }
@@ -3855,8 +3855,8 @@ var require_RealtimeChannel = __commonJS({
           if (this.socket.accessTokenValue) {
             accessTokenPayload.access_token = this.socket.accessTokenValue;
           }
-          this._onError((reason) => {
-            callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR, (0, normalizeChannelError_1.normalizeChannelError)(reason));
+          this._onError((reason2) => {
+            callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR, (0, normalizeChannelError_1.normalizeChannelError)(reason2));
           });
           this._onClose(() => callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES.CLOSED));
           this.updateJoinPayload(Object.assign({ config: config2 }, accessTokenPayload));
@@ -4521,13 +4521,13 @@ var require_socketAdapter = __commonJS({
       connect() {
         this.socket.connect();
       }
-      disconnect(callback, code, reason, timeout = 1e4) {
+      disconnect(callback, code, reason2, timeout = 1e4) {
         return new Promise((resolve4) => {
           setTimeout(() => resolve4("timeout"), timeout);
           this.socket.disconnect(() => {
             callback();
             resolve4("ok");
-          }, code, reason);
+          }, code, reason2);
         });
       }
       push(data) {
@@ -4803,7 +4803,7 @@ var require_RealtimeClient = __commonJS({
        *
        * @category Realtime
        */
-      async disconnect(code, reason) {
+      async disconnect(code, reason2) {
         this._cancelPendingDisconnect();
         if (this.isDisconnecting()) {
           return "ok";
@@ -4811,7 +4811,7 @@ var require_RealtimeClient = __commonJS({
         return await this.socketAdapter.disconnect(() => {
           clearInterval(this._workerHeartbeatTimer);
           this._terminateWorker();
-        }, code, reason);
+        }, code, reason2);
       }
       /**
        * Returns all created channels
@@ -6015,8 +6015,8 @@ var require_helpers = __commonJS({
         return null;
       }
       try {
-        const date5 = /* @__PURE__ */ new Date(`${apiVersion}T00:00:00.0Z`);
-        return date5;
+        const date6 = /* @__PURE__ */ new Date(`${apiVersion}T00:00:00.0Z`);
+        return date6;
       } catch (_e) {
         return null;
       }
@@ -14743,8 +14743,8 @@ var init_stringify = __esm({
       formatter: default_formatter,
       /** @deprecated */
       indices: false,
-      serializeDate(date5) {
-        return (toISOString ?? (toISOString = Function.prototype.call.bind(Date.prototype.toISOString)))(date5);
+      serializeDate(date6) {
+        return (toISOString ?? (toISOString = Function.prototype.call.bind(Date.prototype.toISOString)))(date6);
       },
       skipNulls: false,
       strictNullHandling: false
@@ -18083,12 +18083,12 @@ var require_sha256 = __commonJS({
       }
       exports2.hmac = hmac;
       function fillBuffer(buffer, hmac2, info, counter) {
-        var num2 = counter[0];
-        if (num2 === 0) {
+        var num3 = counter[0];
+        if (num3 === 0) {
           throw new Error("hkdf: cannot expand more");
         }
         hmac2.reset();
-        if (num2 > 1) {
+        if (num3 > 1) {
           hmac2.update(buffer);
         }
         if (info) {
@@ -19124,10 +19124,10 @@ var init_SessionToolRunner = __esm({
      * permission is held like `ask` and an unrecognized verdict is denied.
      */
     async function _SessionToolRunner_routeToolEvent2(ev) {
-      const permission = ev.evaluated_permission;
-      const verdict = permission === "deny" ? "deny" : __classPrivateFieldGet2(this, _SessionToolRunner_confirmationVerdicts, "f").get(ev.id);
+      const permission2 = ev.evaluated_permission;
+      const verdict = permission2 === "deny" ? "deny" : __classPrivateFieldGet2(this, _SessionToolRunner_confirmationVerdicts, "f").get(ev.id);
       if (verdict === void 0) {
-        if (permission === void 0 || permission === "allow") {
+        if (permission2 === void 0 || permission2 === "allow") {
           await __classPrivateFieldGet2(this, _SessionToolRunner_instances, "m", _SessionToolRunner_execute).call(this, ev, void 0);
         } else if (!__classPrivateFieldGet2(this, _SessionToolRunner_awaitingConfirmation, "f").has(ev.id)) {
           __classPrivateFieldGet2(this, _SessionToolRunner_logger, "f").info("tool call awaiting confirmation; holding", {
@@ -27924,18 +27924,18 @@ var validateAsync = async (schema, value, _ctx) => {
   return result.issues.length === 0;
 };
 var _encode = (_Err) => {
-  const parse4 = _parse(_Err);
+  const parse5 = _parse(_Err);
   const fn = (schema, value, _ctx, _params) => {
     const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
-    return parse4(schema, value, ctx, finalizeParams(fn, _params));
+    return parse5(schema, value, ctx, finalizeParams(fn, _params));
   };
   return fn;
 };
 var encode = /* @__PURE__ */ _encode($ZodRealError);
 var _decode = (_Err) => {
-  const parse4 = _parse(_Err);
+  const parse5 = _parse(_Err);
   const fn = (schema, value, _ctx, _params) => {
-    return parse4(schema, value, _ctx, finalizeParams(fn, _params));
+    return parse5(schema, value, _ctx, finalizeParams(fn, _params));
   };
   return fn;
 };
@@ -51107,12 +51107,12 @@ var StorageFileApi = class extends BaseApiClient {
   *   - `objects` table permissions: `select`
   * - Refer to the [Storage guide](/docs/guides/storage/security/access-control) on how access control works
   */
-  async createSignedUrls(paths, expiresIn, options) {
+  async createSignedUrls(paths3, expiresIn, options) {
     var _this9 = this;
     return _this9.handleOperation(async () => {
       const data = await post(_this9.fetch, `${_this9.url}/object/sign/${_this9.bucketId}`, {
         expiresIn,
-        paths
+        paths: paths3
       }, { headers: _this9.headers });
       const query = new URLSearchParams();
       if (options === null || options === void 0 ? void 0 : options.download) query.set("download", options.download === true ? "" : options.download);
@@ -51387,10 +51387,10 @@ var StorageFileApi = class extends BaseApiClient {
   *   - `objects` table permissions: `delete` and `select`
   * - Refer to the [Storage guide](/docs/guides/storage/security/access-control) on how access control works
   */
-  async remove(paths) {
+  async remove(paths3) {
     var _this12 = this;
     return _this12.handleOperation(async () => {
-      return await remove(_this12.fetch, `${_this12.url}/object/${_this12.bucketId}`, { prefixes: paths }, { headers: _this12.headers });
+      return await remove(_this12.fetch, `${_this12.url}/object/${_this12.bucketId}`, { prefixes: paths3 }, { headers: _this12.headers });
     });
   }
   /**
@@ -54950,6 +54950,25 @@ var supplierQuoteRequestPage = external_exports.object({
   items: external_exports.array(supplierQuoteRequestSummary).max(QUOTE_REQUEST_PUBLICATION_PAGE_SIZE),
   nextCursor: draftCursor.nullable()
 }).strict();
+var quoteRequestNotificationQuery = external_exports.object({
+  afterCreatedAt: timestamp2.optional(),
+  afterRequestId: external_exports.uuid().optional(),
+  afterSupplierId: external_exports.uuid().optional()
+}).strict().refine(
+  ({ afterCreatedAt, afterRequestId, afterSupplierId }) => Boolean(afterCreatedAt) === Boolean(afterRequestId) && Boolean(afterCreatedAt) === Boolean(afterSupplierId)
+).transform(({ afterCreatedAt, afterRequestId, afterSupplierId }) => afterCreatedAt && afterRequestId && afterSupplierId ? { createdAt: afterCreatedAt, requestId: afterRequestId, supplierId: afterSupplierId } : null);
+var quoteRequestNotificationCursor = external_exports.object({ createdAt: timestamp2, requestId: external_exports.uuid(), supplierId: external_exports.uuid() }).strict();
+var quoteRequestNotification = quoteRequestNotificationCursor.extend({
+  supplierName: publicationSupplier.shape.name,
+  requestTitle: title,
+  readAt: timestamp2.nullable()
+});
+var quoteRequestNotificationPage = external_exports.object({
+  items: external_exports.array(quoteRequestNotification).max(QUOTE_REQUEST_PUBLICATION_PAGE_SIZE),
+  nextCursor: quoteRequestNotificationCursor.nullable(),
+  hasUnread: external_exports.boolean()
+}).strict();
+var quoteRequestNotificationRead = external_exports.object({ requestId: external_exports.uuid(), supplierId: external_exports.uuid(), readAt: timestamp2 }).strict();
 var quoteDraftPage = external_exports.object({
   items: external_exports.array(draftSummary).max(QUOTE_REQUEST_DRAFT_PAGE_SIZE),
   nextCursor: draftCursor.nullable()
@@ -55186,6 +55205,21 @@ var SupabaseMarketplaceRepository = class {
       p_request_id: id
     }, supplierQuoteRequest);
   }
+  listQuoteRequestNotifications(actor, after) {
+    return this.rpc("marketplace_list_quote_request_notifications", {
+      p_actor_user_id: actor.userId,
+      p_after_created_at: after?.createdAt ?? null,
+      p_after_request_id: after?.requestId ?? null,
+      p_after_supplier_id: after?.supplierId ?? null
+    }, quoteRequestNotificationPage);
+  }
+  markQuoteRequestNotificationRead(actor, supplierId, requestId) {
+    return this.rpc("marketplace_mark_quote_request_notification_read", {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_request_id: requestId
+    }, quoteRequestNotificationRead);
+  }
   publicProfile(slug) {
     return this.rpc("marketplace_public_supplier", { p_slug: slug }, supplierPublicProfile);
   }
@@ -55196,13 +55230,13 @@ var SupabaseMarketplaceRepository = class {
       p_after: after ?? null
     }, supplierAdminPage);
   }
-  review(actor, supplierId, expectedRevision, action, reason) {
+  review(actor, supplierId, expectedRevision, action, reason2) {
     return this.rpc("marketplace_review_supplier", {
       p_actor_user_id: actor.userId,
       p_supplier_id: supplierId,
       p_expected_revision: expectedRevision,
       p_action: action,
-      p_reason: reason
+      p_reason: reason2
     }, supplierProfile);
   }
 };
@@ -55694,9 +55728,93 @@ function autoSegments(panels) {
   }
   return out;
 }
+var along2 = (a, b) => {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  return { len, u: P((b.x - a.x) / len, (b.y - a.y) / len) };
+};
+var num = (v) => String(Math.round(v * 1e3) / 1e3);
+var tongueDepth = (lidSpan) => Math.min(15, Math.max(10, 0.25 * lidSpan));
+var TONGUE_IN = 0.5;
+var tuckSlit = (lidWidth) => Math.min(4.5, lidWidth * 0.12);
+function tongueFlap(a, b, out, depth) {
+  const { len, u } = along2(a, b);
+  const r = Math.min(6, depth * 0.5, len / 2);
+  const at = (s, h) => P(a.x + u.x * s + out.x * h, a.y + u.y * s + out.y * h);
+  const arc = (cs, s0, s1) => {
+    const pts2 = [];
+    for (let i = 0; i <= 5; i++) {
+      const th = s0 + (s1 - s0) * i / 5;
+      pts2.push(at(cs + r * Math.cos(th), depth - r + r * Math.sin(th)));
+    }
+    return pts2;
+  };
+  const pts = [a, ...arc(r, Math.PI, Math.PI / 2), ...arc(len - r, Math.PI / 2, 0), b];
+  const p = (s, h) => {
+    const v = at(s, h);
+    return `${num(v.x)} ${num(v.y)}`;
+  };
+  const d = `L ${p(0, depth - r)} Q ${p(0, depth)} ${p(r, depth)} L ${p(len - r, depth)} Q ${p(len, depth)} ${p(len, depth - r)} L ${p(len, 0)}`;
+  return { pts, d };
+}
+function dustFlap(a, b, out, depth, lock) {
+  const { len, u } = along2(a, b);
+  const at = (s, h) => P(a.x + u.x * s + out.x * h, a.y + u.y * s + out.y * h);
+  const sh = Math.min(4, len * 0.12);
+  const shY = sh * 1.1;
+  const plain = Math.min(1.5, len * 0.05);
+  const isLock = (e) => lock === null || lock === e;
+  const cs = (e) => isLock(e) ? sh : plain;
+  const csA = cs("a");
+  const csB = cs("b");
+  const R = Math.max(0, Math.min(4, depth * 0.35, (len - csA - csB) / 2 - 0.5, (depth - shY) * 0.8));
+  const sideA = isLock("a") ? [[0, 0], [sh, shY]] : [[0, 0]];
+  const sideB = isLock("b") ? [[len - sh, shY], [len, 0]] : [[len, 0]];
+  const back = (from, c) => {
+    const dx = from[0] - c[0];
+    const dy = from[1] - c[1];
+    const l = Math.hypot(dx, dy) || 1;
+    return [c[0] + dx / l * R, c[1] + dy / l * R];
+  };
+  const cA = [csA, depth];
+  const cB = [len - csB, depth];
+  const a1 = back(sideA[sideA.length - 1], cA);
+  const a2 = [csA + R, depth];
+  const b1 = [len - csB - R, depth];
+  const b2 = back(sideB[0], cB);
+  const quad = (p0, c, p1) => {
+    const pts2 = [];
+    for (let i = 1; i <= 4; i++) {
+      const t = i / 4;
+      const m = (k) => (1 - t) * (1 - t) * p0[k] + 2 * (1 - t) * t * c[k] + t * t * p1[k];
+      pts2.push(at(m(0), m(1)));
+    }
+    return pts2;
+  };
+  const v = (q) => at(q[0], q[1]);
+  const pts = [
+    ...sideA.map(v),
+    v(a1),
+    ...quad(a1, cA, a2),
+    v(b1),
+    ...quad(b1, cB, b2),
+    ...sideB.map(v)
+  ];
+  const p = (q) => {
+    const w = v(q);
+    return `${num(w.x)} ${num(w.y)}`;
+  };
+  const d = sideA.slice(1).map((q) => `L ${p(q)} `).join("") + `L ${p(a1)} Q ${p(cA)} ${p(a2)} L ${p(b1)} Q ${p(cB)} ${p(b2)} ` + sideB.map((q) => `L ${p(q)}`).join(" ");
+  return { pts, d };
+}
 
 // src/core/templates/tuckEnd.ts
 function generateTuckEndBox(box, mat) {
+  return buildTuckBox(box, mat, false);
+}
+function generateReverseTuckBox(box, mat) {
+  return buildTuckBox(box, mat, true);
+}
+function buildTuckBox(box, mat, reverse) {
   const { W, D, H } = box;
   const t = mat.thickness;
   const Wp = W + 2 * t;
@@ -55705,61 +55823,98 @@ function generateTuckEndBox(box, mat) {
   const glueW = Math.max(12, 10 + 2 * t);
   const taper = 4;
   const cover = Math.max(6, Dp - t);
-  const tongue = Math.min(22, Math.max(10, 0.6 * Dp));
+  const tongue = tongueDepth(Dp);
   const dustIn = Math.max(1.5, 2 * t + 0.5);
   const tuckIn = Math.max(1, t + 0.5);
   const dustH = Math.max(8, Math.min(0.75 * Dp, Wp / 2 - dustIn - 2) - t);
-  const slant = Math.min(5, dustH * 0.45);
   const layer = t + 0.05;
   const x1 = glueW;
-  const x2 = x1 + Dp;
-  const x3 = x2 + Wp;
-  const x4 = x3 + Dp;
-  const x5 = x4 + Wp;
+  const seq = reverse ? [["back", Wp], ["side-left", Dp], ["front", Wp], ["side-right", Dp]] : [["side-left", Dp], ["front", Wp], ["side-right", Dp], ["back", Wp]];
+  const col = {};
+  let x = x1;
+  for (const [id, w] of seq) {
+    col[id] = { x0: x, x1: x + w };
+    x += w;
+  }
+  const x5 = x;
   const top = cover + tongue;
   const bot = top + Hp;
   const width = x5;
   const height = bot + cover + tongue;
+  const back = col["back"];
+  const front = col["front"];
+  const sideL = col["side-left"];
+  const sideR = col["side-right"];
+  const topHost = back;
+  const botHost = reverse ? front : back;
+  const botHostId = reverse ? "front" : "back";
+  const lockTop = { "side-left": "b", "side-right": "a" };
+  const lockBot = reverse ? { "side-left": "a", "side-right": "b" } : { "side-left": "b", "side-right": "a" };
   const holeLen = Math.min(90, (Wp - 2 * tuckIn) * 0.6);
   const holeThick = Math.min(22, cover * 0.45);
   const hasHandle = !!box.handle && holeLen >= 40 && holeThick >= 10;
-  const holeCx = (x4 + x5) / 2;
+  const holeCx = (topHost.x0 + topHost.x1) / 2;
   const holeCy = top - cover / 2;
-  const r = Math.min(7, tongue * 0.45, (Wp - 2 * tuckIn) / 2);
   const tiTop = top - cover;
   const tiBot = bot + cover;
-  const tongueTopOutline = [
-    P(x4 + tuckIn, tiTop),
-    ...arcPts(x4 + tuckIn + r, tiTop - tongue + r, r, Math.PI, Math.PI * 1.5),
-    ...arcPts(x5 - tuckIn - r, tiTop - tongue + r, r, Math.PI * 1.5, Math.PI * 2),
-    P(x5 - tuckIn, tiTop)
-  ];
-  const tongueBotOutline = [
-    P(x4 + tuckIn, tiBot),
-    ...arcPts(x4 + tuckIn + r, tiBot + tongue - r, r, Math.PI, Math.PI * 0.5),
-    ...arcPts(x5 - tuckIn - r, tiBot + tongue - r, r, Math.PI * 0.5, 0),
-    P(x5 - tuckIn, tiBot)
-  ];
-  const rect2 = (xa, ya, xb, yb) => [
-    P(xa, ya),
-    P(xb, ya),
-    P(xb, yb),
-    P(xa, yb)
-  ];
-  const dust = (xa, xb, y, dir) => [
-    P(xa + dustIn, y),
-    P(xa + dustIn + slant, y + dir * dustH),
-    P(xb - dustIn - slant, y + dir * dustH),
-    P(xb - dustIn, y)
-  ];
-  const panels = [
-    { id: "front", parentId: null, outline: rect2(x2, top, x3, bot), stage: 0 },
+  const rect2 = (xa, ya, xb, yb) => [P(xa, ya), P(xb, ya), P(xb, yb), P(xa, yb)];
+  const up = P(0, -1);
+  const down = P(0, 1);
+  const dust = (c, y, dir, lock) => dustFlap(P(c.x0 + dustIn, y), P(c.x1 - dustIn, y), dir === -1 ? up : down, dustH, lock);
+  const tongueOf = (c, y, dir) => tongueFlap(P(c.x0 + tuckIn + TONGUE_IN, y), P(c.x1 - tuckIn - TONGUE_IN, y), dir === -1 ? up : down, tongue);
+  const dTL = dust(sideL, top, -1, lockTop["side-left"]);
+  const dTR = dust(sideR, top, -1, lockTop["side-right"]);
+  const dBL = dust(sideL, bot, 1, lockBot["side-left"]);
+  const dBR = dust(sideR, bot, 1, lockBot["side-right"]);
+  const tgTop = tongueOf(topHost, tiTop, -1);
+  const tgBot = tongueOf(botHost, tiBot, 1);
+  const body = reverse ? [
+    { id: "front", parentId: null, outline: rect2(front.x0, top, front.x1, bot), stage: 0 },
     {
       id: "side-left",
       parentId: "front",
-      outline: rect2(x1, top, x2, bot),
-      hingeA: P(x2, top),
-      hingeB: P(x2, bot),
+      outline: rect2(sideL.x0, top, sideL.x1, bot),
+      hingeA: P(front.x0, top),
+      hingeB: P(front.x0, bot),
+      foldAngle: -90,
+      stage: 0
+    },
+    {
+      id: "back",
+      parentId: "side-left",
+      outline: rect2(back.x0, top, back.x1, bot),
+      hingeA: P(sideL.x0, top),
+      hingeB: P(sideL.x0, bot),
+      foldAngle: -90,
+      stage: 0
+    },
+    {
+      id: "glue",
+      parentId: "back",
+      outline: [P(x1, top), P(0, top + taper), P(0, bot - taper), P(x1, bot)],
+      hingeA: P(x1, top),
+      hingeB: P(x1, bot),
+      foldAngle: -90,
+      stage: 0,
+      zOffset: layer
+    },
+    {
+      id: "side-right",
+      parentId: "front",
+      outline: rect2(sideR.x0, top, sideR.x1, bot),
+      hingeA: P(front.x1, top),
+      hingeB: P(front.x1, bot),
+      foldAngle: 90,
+      stage: 0
+    }
+  ] : [
+    { id: "front", parentId: null, outline: rect2(front.x0, top, front.x1, bot), stage: 0 },
+    {
+      id: "side-left",
+      parentId: "front",
+      outline: rect2(sideL.x0, top, sideL.x1, bot),
+      hingeA: P(front.x0, top),
+      hingeB: P(front.x0, bot),
       foldAngle: -90,
       stage: 0
     },
@@ -55776,27 +55931,30 @@ function generateTuckEndBox(box, mat) {
     {
       id: "side-right",
       parentId: "front",
-      outline: rect2(x3, top, x4, bot),
-      hingeA: P(x3, top),
-      hingeB: P(x3, bot),
+      outline: rect2(sideR.x0, top, sideR.x1, bot),
+      hingeA: P(front.x1, top),
+      hingeB: P(front.x1, bot),
       foldAngle: 90,
       stage: 0
     },
     {
       id: "back",
       parentId: "side-right",
-      outline: rect2(x4, top, x5, bot),
-      hingeA: P(x4, top),
-      hingeB: P(x4, bot),
+      outline: rect2(back.x0, top, back.x1, bot),
+      hingeA: P(sideR.x1, top),
+      hingeB: P(sideR.x1, bot),
       foldAngle: 90,
       stage: 0
-    },
+    }
+  ];
+  const panels = [
+    ...body,
     {
       id: "dust-tl",
       parentId: "side-left",
-      outline: dust(x1, x2, top, -1),
-      hingeA: P(x1, top),
-      hingeB: P(x2, top),
+      outline: dTL.pts,
+      hingeA: P(sideL.x0, top),
+      hingeB: P(sideL.x1, top),
       foldAngle: 90,
       stage: 1,
       zOffset: layer
@@ -55804,9 +55962,9 @@ function generateTuckEndBox(box, mat) {
     {
       id: "dust-tr",
       parentId: "side-right",
-      outline: dust(x3, x4, top, -1),
-      hingeA: P(x3, top),
-      hingeB: P(x4, top),
+      outline: dTR.pts,
+      hingeA: P(sideR.x0, top),
+      hingeB: P(sideR.x1, top),
       foldAngle: 90,
       stage: 1,
       zOffset: layer
@@ -55814,9 +55972,9 @@ function generateTuckEndBox(box, mat) {
     {
       id: "dust-bl",
       parentId: "side-left",
-      outline: dust(x1, x2, bot, 1),
-      hingeA: P(x1, bot),
-      hingeB: P(x2, bot),
+      outline: dBL.pts,
+      hingeA: P(sideL.x0, bot),
+      hingeB: P(sideL.x1, bot),
       foldAngle: -90,
       stage: 1,
       zOffset: layer
@@ -55824,9 +55982,9 @@ function generateTuckEndBox(box, mat) {
     {
       id: "dust-br",
       parentId: "side-right",
-      outline: dust(x3, x4, bot, 1),
-      hingeA: P(x3, bot),
-      hingeB: P(x4, bot),
+      outline: dBR.pts,
+      hingeA: P(sideR.x0, bot),
+      hingeB: P(sideR.x1, bot),
       foldAngle: -90,
       stage: 1,
       zOffset: layer
@@ -55834,81 +55992,95 @@ function generateTuckEndBox(box, mat) {
     {
       id: "tuck-top",
       parentId: "back",
-      outline: rect2(x4 + tuckIn, tiTop, x5 - tuckIn, top),
+      outline: rect2(topHost.x0 + tuckIn, tiTop, topHost.x1 - tuckIn, top),
       holes: hasHandle ? [obroundPts(holeCx, holeCy, holeLen, holeThick)] : void 0,
-      hingeA: P(x4, top),
-      hingeB: P(x5, top),
+      hingeA: P(topHost.x0, top),
+      hingeB: P(topHost.x1, top),
       foldAngle: 90,
       stage: 2
     },
     {
       id: "tongue-top",
       parentId: "tuck-top",
-      outline: tongueTopOutline,
-      hingeA: P(x4 + tuckIn, tiTop),
-      hingeB: P(x5 - tuckIn, tiTop),
+      outline: tgTop.pts,
+      hingeA: P(topHost.x0 + tuckIn, tiTop),
+      hingeB: P(topHost.x1 - tuckIn, tiTop),
       foldAngle: 90,
       stage: 3,
-      zOffset: 0.15,
+      zOffset: layer,
       tuck: true
     },
     {
       id: "tuck-bot",
-      parentId: "back",
-      outline: rect2(x4 + tuckIn, bot, x5 - tuckIn, tiBot),
-      hingeA: P(x4, bot),
-      hingeB: P(x5, bot),
+      parentId: botHostId,
+      outline: rect2(botHost.x0 + tuckIn, bot, botHost.x1 - tuckIn, tiBot),
+      hingeA: P(botHost.x0, bot),
+      hingeB: P(botHost.x1, bot),
       foldAngle: -90,
       stage: 2
     },
     {
       id: "tongue-bot",
       parentId: "tuck-bot",
-      outline: tongueBotOutline,
-      hingeA: P(x4 + tuckIn, tiBot),
-      hingeB: P(x5 - tuckIn, tiBot),
+      outline: tgBot.pts,
+      hingeA: P(botHost.x0 + tuckIn, tiBot),
+      hingeB: P(botHost.x1 - tuckIn, tiBot),
       foldAngle: -90,
       stage: 3,
-      zOffset: 0.15,
+      zOffset: layer,
       tuck: true
     }
   ];
   const cut = (d) => ({ kind: "cut", d });
   const crease = (d) => ({ kind: "crease", d });
-  const dustCut = (xa, xb, y, dir) => `M ${xa} ${y} L ${xa + dustIn} ${y} L ${xa + dustIn + slant} ${y + dir * dustH} L ${xb - dustIn - slant} ${y + dir * dustH} L ${xb - dustIn} ${y} L ${xb} ${y}`;
-  const tuckCut = (y, dir) => {
+  const dustCut = (c, y, f) => `M ${c.x0} ${y} L ${c.x0 + dustIn} ${y} ${f.d} L ${c.x1} ${y}`;
+  const lidCuts = (c, y, dir, tg) => {
     const yi = y - dir * cover;
-    const yt = yi - dir * tongue;
-    return `M ${x4} ${y} L ${x4 + tuckIn} ${y} L ${x4 + tuckIn} ${yi} L ${x4 + tuckIn} ${yt + dir * r} Q ${x4 + tuckIn} ${yt} ${x4 + tuckIn + r} ${yt} L ${x5 - tuckIn - r} ${yt} Q ${x5 - tuckIn} ${yt} ${x5 - tuckIn} ${yt + dir * r} L ${x5 - tuckIn} ${yi} L ${x5 - tuckIn} ${y} L ${x5} ${y}`;
+    const l = c.x0 + tuckIn;
+    const r = c.x1 - tuckIn;
+    const tl = l + TONGUE_IN;
+    const slit = tuckSlit(r - l);
+    return [
+      cut(`M ${c.x0} ${y} L ${l} ${y} L ${l} ${yi} L ${l + slit} ${yi}`),
+      cut(`M ${tl} ${yi} ${tg.d}`),
+      cut(`M ${r - slit} ${yi} L ${r} ${yi} L ${r} ${y} L ${c.x1} ${y}`)
+    ];
   };
+  const tongueCrease = (c, yi) => {
+    const l = c.x0 + tuckIn;
+    const r = c.x1 - tuckIn;
+    const slit = tuckSlit(r - l);
+    return crease(`M ${l + slit} ${yi} L ${r - slit} ${yi}`);
+  };
+  const plainTop = [front];
+  const plainBot = reverse ? [back] : [front];
   const segments = [
     cut(`M ${x1} ${top} L 0 ${top + taper} L 0 ${bot - taper} L ${x1} ${bot}`),
-    cut(`M ${x2} ${top} L ${x3} ${top}`),
-    cut(`M ${x2} ${bot} L ${x3} ${bot}`),
+    ...plainTop.map((c) => cut(`M ${c.x0} ${top} L ${c.x1} ${top}`)),
+    ...plainBot.map((c) => cut(`M ${c.x0} ${bot} L ${c.x1} ${bot}`)),
     cut(`M ${x5} ${top} L ${x5} ${bot}`),
-    cut(dustCut(x1, x2, top, -1)),
-    cut(dustCut(x3, x4, top, -1)),
-    cut(dustCut(x1, x2, bot, 1)),
-    cut(dustCut(x3, x4, bot, 1)),
-    cut(tuckCut(top, 1)),
-    cut(tuckCut(bot, -1)),
-    crease(`M ${x1} ${top} L ${x1} ${bot}`),
-    crease(`M ${x2} ${top} L ${x2} ${bot}`),
-    crease(`M ${x3} ${top} L ${x3} ${bot}`),
-    crease(`M ${x4} ${top} L ${x4} ${bot}`),
-    crease(`M ${x1 + dustIn} ${top} L ${x2 - dustIn} ${top}`),
-    crease(`M ${x3 + dustIn} ${top} L ${x4 - dustIn} ${top}`),
-    crease(`M ${x4 + tuckIn} ${top} L ${x5 - tuckIn} ${top}`),
-    crease(`M ${x1 + dustIn} ${bot} L ${x2 - dustIn} ${bot}`),
-    crease(`M ${x3 + dustIn} ${bot} L ${x4 - dustIn} ${bot}`),
-    crease(`M ${x4 + tuckIn} ${bot} L ${x5 - tuckIn} ${bot}`),
-    crease(`M ${x4 + tuckIn} ${tiTop} L ${x5 - tuckIn} ${tiTop}`),
-    crease(`M ${x4 + tuckIn} ${tiBot} L ${x5 - tuckIn} ${tiBot}`)
+    cut(dustCut(sideL, top, dTL)),
+    cut(dustCut(sideR, top, dTR)),
+    cut(dustCut(sideL, bot, dBL)),
+    cut(dustCut(sideR, bot, dBR)),
+    ...lidCuts(topHost, top, 1, tgTop),
+    ...lidCuts(botHost, bot, -1, tgBot),
+    // รอยพับแนวตั้งระหว่างผนัง (ปีกกาว + 3 รอยระหว่าง 4 ผนัง)
+    ...[x1, ...seq.slice(0, 3).map(([id]) => col[id].x1)].map((xc) => crease(`M ${xc} ${top} L ${xc} ${bot}`)),
+    crease(`M ${sideL.x0 + dustIn} ${top} L ${sideL.x1 - dustIn} ${top}`),
+    crease(`M ${sideR.x0 + dustIn} ${top} L ${sideR.x1 - dustIn} ${top}`),
+    crease(`M ${topHost.x0 + tuckIn} ${top} L ${topHost.x1 - tuckIn} ${top}`),
+    crease(`M ${sideL.x0 + dustIn} ${bot} L ${sideL.x1 - dustIn} ${bot}`),
+    crease(`M ${sideR.x0 + dustIn} ${bot} L ${sideR.x1 - dustIn} ${bot}`),
+    crease(`M ${botHost.x0 + tuckIn} ${bot} L ${botHost.x1 - tuckIn} ${bot}`),
+    tongueCrease(topHost, tiTop),
+    tongueCrease(botHost, tiBot)
   ];
   if (hasHandle) segments.push(cut(obroundPath(holeCx, holeCy, holeLen, holeThick)));
+  const wCol = plainBot[0];
   const dims = [
-    { a: P(x2, bot + 12), b: P(x3, bot + 12), label: `W ${fmt(Wp)}` },
-    { a: P(x1, top - dustH - 8), b: P(x2, top - dustH - 8), label: `D ${fmt(Dp)}` },
+    { a: P(wCol.x0, bot + 12), b: P(wCol.x1, bot + 12), label: `W ${fmt(Wp)}` },
+    { a: P(sideL.x0, top - dustH - 8), b: P(sideL.x1, top - dustH - 8), label: `D ${fmt(Dp)}` },
     { a: P(-8, top), b: P(-8, bot), label: `H ${fmt(Hp)}` },
     { a: P(0, -10), b: P(x5, -10), label: fmt(width) },
     { a: P(x5 + 10, 0), b: P(x5 + 10, height), label: fmt(height) }
@@ -56184,9 +56356,9 @@ function placePath(d, pl) {
   const tok = d.match(/[MLQAZ]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? [];
   const out = [];
   let i = 0;
-  const num2 = () => Number(tok[i++]);
+  const num3 = () => Number(tok[i++]);
   const pt = () => {
-    const q = placePoint(pl, P(num2(), num2()));
+    const q = placePoint(pl, P(num3(), num3()));
     return `${fmt3(q.x)} ${fmt3(q.y)}`;
   };
   let cmd = "";
@@ -56207,11 +56379,11 @@ function placePath(d, pl) {
         out.push(pt(), pt());
         break;
       case "A": {
-        const rx = num2();
-        const ry = num2();
-        const rot = num2() + (pl.rot ? 90 : 0);
-        const large = num2();
-        const sweep = num2();
+        const rx = num3();
+        const ry = num3();
+        const rot = num3() + (pl.rot ? 90 : 0);
+        const large = num3();
+        const sweep = num3();
         out.push(`${rx} ${ry} ${rot} ${large} ${sweep}`, pt());
         break;
       }
@@ -58868,6 +59040,17 @@ var TEMPLATES = [
     generate: generateTuckEndBox
   },
   {
+    id: "reverse-tuck",
+    nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E2A\u0E25\u0E31\u0E1A (reverse tuck)",
+    detail: "\u0E1C\u0E31\u0E07\u0E21\u0E32\u0E15\u0E23\u0E10\u0E32\u0E19\u0E42\u0E23\u0E07\u0E1E\u0E34\u0E21\u0E1E\u0E4C \xB7 \u0E1D\u0E32\u0E1A\u0E19-\u0E25\u0E48\u0E32\u0E07\u0E04\u0E19\u0E25\u0E30\u0E14\u0E49\u0E32\u0E19 \xB7 \u0E22\u0E32/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07/\u0E02\u0E19\u0E21",
+    defaults: { W: 80, D: 50, H: 120 },
+    tilt: 0,
+    supportsHandle: true,
+    supportsVents: true,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
+    generate: generateReverseTuckBox
+  },
+  {
     id: "mailer",
     nameTh: "\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C\u0E1D\u0E32\u0E1E\u0E31\u0E1A (\u2248FEFCO 0426)",
     detail: "\u0E2A\u0E48\u0E07\u0E02\u0E2D\u0E07\u0E2D\u0E2D\u0E19\u0E44\u0E25\u0E19\u0E4C \xB7 \u0E01\u0E25\u0E48\u0E2D\u0E07 subscription \xB7 \u0E0A\u0E38\u0E14\u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E2B\u0E25\u0E32\u0E22\u0E0A\u0E34\u0E49\u0E19",
@@ -59940,10 +60123,10 @@ function systemPrompt(answer, why) {
 
 ## \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07 (template)
 ${TEMPLATES.map((t) => `- ${t.id}: ${t.nameTh} \u2014 ${t.detail}`).join("\n")}
-\u0E41\u0E19\u0E27\u0E01\u0E32\u0E23\u0E40\u0E25\u0E37\u0E2D\u0E01: \u0E02\u0E2D\u0E07\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E14\u0E35\u0E22\u0E27/\u0E41\u0E19\u0E27\u0E15\u0E31\u0E49\u0E07/\u0E23\u0E35\u0E40\u0E17\u0E25 \u2192 tuck-end; \u0E2A\u0E48\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C/\u0E02\u0E2D\u0E07\u0E2B\u0E25\u0E32\u0E22\u0E0A\u0E34\u0E49\u0E19/\u0E02\u0E2D\u0E07\u0E41\u0E1A\u0E19/\u0E40\u0E1B\u0E34\u0E14\u0E07\u0E48\u0E32\u0E22 \u2192 mailer; \u0E07\u0E32\u0E19\u0E2A\u0E48\u0E07\u0E17\u0E35\u0E48\u0E40\u0E19\u0E49\u0E19\u0E41\u0E02\u0E47\u0E07\u0E41\u0E23\u0E07/\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21/\u0E1C\u0E25\u0E34\u0E15\u0E08\u0E33\u0E19\u0E27\u0E19\u0E21\u0E32\u0E01\u0E41\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49\u0E01\u0E32\u0E27 (subscription box, \u0E02\u0E2D\u0E07\u0E41\u0E15\u0E01\u0E07\u0E48\u0E32\u0E22) \u2192 fefco-0427; \u0E0A\u0E38\u0E14\u0E02\u0E27\u0E14/\u0E01\u0E23\u0E30\u0E1B\u0E4B\u0E2D\u0E07\u0E2B\u0E25\u0E32\u0E22\u0E43\u0E1A\u0E41\u0E1A\u0E1A\u0E22\u0E01\u0E2B\u0E34\u0E49\u0E27 (4-pack, 6-pack, \u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E42\u0E0A\u0E27\u0E4C\u0E02\u0E27\u0E14) \u2192 bottle-carrier; \u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E04\u0E38\u0E01\u0E01\u0E35\u0E49/\u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E32\u0E01\u0E44\u0E14\u0E49\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27 (\u0E16\u0E37\u0E2D\u0E2A\u0E27\u0E22) \u2192 gable; \u0E16\u0E32\u0E14\u0E2D\u0E32\u0E2B\u0E32\u0E23/\u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C/\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 \u2192 tray; \u0E41\u0E04\u0E48\u0E1B\u0E25\u0E2D\u0E01\u0E23\u0E31\u0E14\u0E23\u0E2D\u0E1A\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E17\u0E35\u0E48\u0E21\u0E35\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2D\u0E22\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27 \u2192 sleeve. \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A mailer/fefco-0427: H \u0E04\u0E37\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07 (\u0E21\u0E31\u0E01\u0E40\u0E15\u0E35\u0E49\u0E22 \u0E40\u0E0A\u0E48\u0E19 40-80) \u0E2A\u0E48\u0E27\u0E19 W\xD7D \u0E04\u0E37\u0E2D footprint; \u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23/business card \u2192 card
+\u0E41\u0E19\u0E27\u0E01\u0E32\u0E23\u0E40\u0E25\u0E37\u0E2D\u0E01: \u0E02\u0E2D\u0E07\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E14\u0E35\u0E22\u0E27/\u0E41\u0E19\u0E27\u0E15\u0E31\u0E49\u0E07/\u0E23\u0E35\u0E40\u0E17\u0E25 \u2192 tuck-end (\u0E2B\u0E23\u0E37\u0E2D reverse-tuck \u0E40\u0E21\u0E37\u0E48\u0E2D\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E1D\u0E32\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E2A\u0E25\u0E31\u0E1A/\u0E1C\u0E31\u0E07\u0E21\u0E32\u0E15\u0E23\u0E10\u0E32\u0E19\u0E42\u0E23\u0E07\u0E1E\u0E34\u0E21\u0E1E\u0E4C \u0E1D\u0E32\u0E1A\u0E19-\u0E25\u0E48\u0E32\u0E07\u0E04\u0E19\u0E25\u0E30\u0E14\u0E49\u0E32\u0E19); \u0E2A\u0E48\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C/\u0E02\u0E2D\u0E07\u0E2B\u0E25\u0E32\u0E22\u0E0A\u0E34\u0E49\u0E19/\u0E02\u0E2D\u0E07\u0E41\u0E1A\u0E19/\u0E40\u0E1B\u0E34\u0E14\u0E07\u0E48\u0E32\u0E22 \u2192 mailer; \u0E07\u0E32\u0E19\u0E2A\u0E48\u0E07\u0E17\u0E35\u0E48\u0E40\u0E19\u0E49\u0E19\u0E41\u0E02\u0E47\u0E07\u0E41\u0E23\u0E07/\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21/\u0E1C\u0E25\u0E34\u0E15\u0E08\u0E33\u0E19\u0E27\u0E19\u0E21\u0E32\u0E01\u0E41\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49\u0E01\u0E32\u0E27 (subscription box, \u0E02\u0E2D\u0E07\u0E41\u0E15\u0E01\u0E07\u0E48\u0E32\u0E22) \u2192 fefco-0427; \u0E0A\u0E38\u0E14\u0E02\u0E27\u0E14/\u0E01\u0E23\u0E30\u0E1B\u0E4B\u0E2D\u0E07\u0E2B\u0E25\u0E32\u0E22\u0E43\u0E1A\u0E41\u0E1A\u0E1A\u0E22\u0E01\u0E2B\u0E34\u0E49\u0E27 (4-pack, 6-pack, \u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E42\u0E0A\u0E27\u0E4C\u0E02\u0E27\u0E14) \u2192 bottle-carrier; \u0E02\u0E2D\u0E07\u0E02\u0E27\u0E31\u0E0D/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E04\u0E38\u0E01\u0E01\u0E35\u0E49/\u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E32\u0E01\u0E44\u0E14\u0E49\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27 (\u0E16\u0E37\u0E2D\u0E2A\u0E27\u0E22) \u2192 gable; \u0E16\u0E32\u0E14\u0E2D\u0E32\u0E2B\u0E32\u0E23/\u0E14\u0E34\u0E2A\u0E40\u0E1E\u0E25\u0E22\u0E4C/\u0E25\u0E34\u0E49\u0E19\u0E0A\u0E31\u0E01 \u2192 tray; \u0E41\u0E04\u0E48\u0E1B\u0E25\u0E2D\u0E01\u0E23\u0E31\u0E14\u0E23\u0E2D\u0E1A\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32\u0E17\u0E35\u0E48\u0E21\u0E35\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2D\u0E22\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27 \u2192 sleeve. \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A mailer/fefco-0427: H \u0E04\u0E37\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07 (\u0E21\u0E31\u0E01\u0E40\u0E15\u0E35\u0E49\u0E22 \u0E40\u0E0A\u0E48\u0E19 40-80) \u0E2A\u0E48\u0E27\u0E19 W\xD7D \u0E04\u0E37\u0E2D footprint; \u0E19\u0E32\u0E21\u0E1A\u0E31\u0E15\u0E23/business card \u2192 card
 
 ## \u0E04\u0E27\u0E32\u0E21\u0E2B\u0E21\u0E32\u0E22\u0E02\u0E2D\u0E07 W/D/H \u0E15\u0E48\u0E2D template (\u0E2A\u0E33\u0E04\u0E31\u0E0D)
-- tuck-end / fefco-0215 / mailer / fefco-0427 / tray / gable / lid-box: W\xD7D = footprint \u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19
+- tuck-end / reverse-tuck / fefco-0215 / mailer / fefco-0427 / tray / gable / lid-box: W\xD7D = footprint \u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, H = \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19
 - fefco-0215: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1D\u0E32\u0E1A\u0E19\u0E40\u0E2A\u0E35\u0E22\u0E1A + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 (snap/crash-lock bottom) \u2014 \u0E1B\u0E23\u0E30\u0E01\u0E2D\u0E1A\u0E40\u0E23\u0E47\u0E27 \u0E01\u0E49\u0E19\u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E17\u0E32\u0E01\u0E32\u0E27\u0E17\u0E35\u0E25\u0E30\u0E43\u0E1A; \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E17\u0E25\u0E22\u0E2D\u0E14\u0E19\u0E34\u0E22\u0E21 (\u0E02\u0E2D\u0E07\u0E0A\u0E33/\u0E02\u0E19\u0E21/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E2A\u0E33\u0E2D\u0E32\u0E07); handle=false
 - fefco-0202 (OSC): \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E25\u0E39\u0E01\u0E1F\u0E39\u0E01\u0E0A\u0E34\u0E1B\u0E1B\u0E34\u0E49\u0E07\u0E41\u0E1A\u0E1A RSC \u0E41\u0E15\u0E48\u0E25\u0E34\u0E49\u0E19\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E22\u0E32\u0E27\u0E40\u0E15\u0E47\u0E21\u0E40\u0E01\u0E22\u0E17\u0E31\u0E1A\u0E01\u0E31\u0E19\u0E40\u0E15\u0E47\u0E21\u0E41\u0E1C\u0E48\u0E19 (\u0E01\u0E49\u0E19/\u0E1D\u0E32\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19) \u0E41\u0E02\u0E47\u0E07\u0E41\u0E23\u0E07\u0E01\u0E27\u0E48\u0E32 RSC \u2014 \u0E40\u0E2B\u0E21\u0E32\u0E30\u0E02\u0E2D\u0E07\u0E2B\u0E19\u0E31\u0E01/\u0E02\u0E2D\u0E07\u0E41\u0E04\u0E1A\u0E17\u0E35\u0E48\u0E25\u0E34\u0E49\u0E19 RSC \u0E0A\u0E19\u0E44\u0E21\u0E48\u0E16\u0E36\u0E07\u0E01\u0E25\u0E32\u0E07; W\xD7D = footprint, H = \u0E2A\u0E39\u0E07, handle=false
 - fefco-0217: \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E17\u0E23\u0E07\u0E08\u0E31\u0E48\u0E27 \u2014 \u0E1D\u0E32\u0E2B\u0E19\u0E49\u0E32-\u0E2B\u0E25\u0E31\u0E07\u0E1E\u0E31\u0E1A\u0E41\u0E1A\u0E19\u0E17\u0E35\u0E48\u0E1B\u0E32\u0E01 \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19\u0E15\u0E31\u0E49\u0E07\u0E01\u0E25\u0E32\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07 (\u0E2B\u0E39\u0E2B\u0E25\u0E31\u0E07\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E08\u0E31\u0E1A \u0E2B\u0E39\u0E2B\u0E19\u0E49\u0E32\u0E40\u0E1B\u0E47\u0E19\u0E25\u0E34\u0E49\u0E19\u0E14\u0E31\u0E19) \u0E2B\u0E19\u0E49\u0E32\u0E08\u0E31\u0E48\u0E27\u0E2A\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21\u0E17\u0E35\u0E48\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E40\u0E2D\u0E19\u0E40\u0E02\u0E49\u0E32\u0E43\u0E2B\u0E49\u0E2B\u0E39\u0E21\u0E19\u0E1B\u0E25\u0E32\u0E22\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E42\u0E1C\u0E25\u0E48\u0E17\u0E30\u0E25\u0E38\u0E23\u0E48\u0E2D\u0E07\u0E25\u0E47\u0E2D\u0E01\u0E44\u0E27\u0E49 + \u0E01\u0E49\u0E19\u0E25\u0E47\u0E2D\u0E01 (\u0E15\u0E48\u0E32\u0E07\u0E08\u0E32\u0E01 gable \u0E17\u0E35\u0E48\u0E40\u0E1B\u0E47\u0E19\u0E16\u0E32\u0E14\u0E10\u0E32\u0E19\u0E15\u0E31\u0E19: 0217 \u0E40\u0E1B\u0E47\u0E19\u0E17\u0E48\u0E2D\u0E17\u0E32\u0E01\u0E32\u0E27\u0E02\u0E49\u0E32\u0E07 \u0E1E\u0E31\u0E1A\u0E41\u0E1A\u0E19\u0E2A\u0E48\u0E07\u0E44\u0E14\u0E49) \u2014 \u0E40\u0E04\u0E49\u0E01/\u0E40\u0E1A\u0E40\u0E01\u0E2D\u0E23\u0E35\u0E48/\u0E02\u0E2D\u0E07\u0E1D\u0E32\u0E01\u0E16\u0E37\u0E2D\u0E2A\u0E30\u0E14\u0E27\u0E01; W\xD7D = footprint, H = \u0E2A\u0E39\u0E07\u0E1C\u0E19\u0E31\u0E07 (\u0E23\u0E30\u0E1A\u0E1A\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E04\u0E32+\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07), handle=false (\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E21\u0E35\u0E43\u0E19\u0E15\u0E31\u0E27)
@@ -60000,7 +60183,7 @@ ${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? " (\u0E40\u0E1B\u0E23\u0E32
 4. handle=true \u0E01\u0E31\u0E1A\u0E02\u0E2D\u0E07\u0E2B\u0E19\u0E31\u0E01 (\u0E40\u0E0B\u0E23\u0E32\u0E21\u0E34\u0E01/\u0E41\u0E01\u0E49\u0E27/\u0E02\u0E27\u0E14\u0E2B\u0E25\u0E32\u0E22\u0E0A\u0E34\u0E49\u0E19 \u0E23\u0E27\u0E21 >2 \u0E01\u0E01.) \u2192 \u0E40\u0E15\u0E37\u0E2D\u0E19\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E01\u0E23\u0E30\u0E14\u0E32\u0E29\u0E23\u0E31\u0E1A\u0E19\u0E49\u0E33\u0E2B\u0E19\u0E31\u0E01\u0E08\u0E33\u0E01\u0E31\u0E14 \u0E04\u0E27\u0E23\u0E22\u0E01\u0E1B\u0E23\u0E30\u0E04\u0E2D\u0E07\u0E01\u0E49\u0E19\u0E01\u0E25\u0E48\u0E2D\u0E07
 
 ## \u0E04\u0E27\u0E32\u0E21\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E02\u0E2D\u0E07\u0E23\u0E30\u0E1A\u0E1A (\u0E2A\u0E33\u0E04\u0E31\u0E0D\u0E21\u0E32\u0E01 \u2014 \u0E2B\u0E49\u0E32\u0E21\u0E2D\u0E49\u0E32\u0E07\u0E40\u0E01\u0E34\u0E19\u0E19\u0E35\u0E49)
-\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A gen \u0E44\u0E14\u0E49\u0E08\u0E23\u0E34\u0E07\u0E21\u0E35\u0E40\u0E17\u0E48\u0E32\u0E19\u0E35\u0E49: \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19, \u0E27\u0E31\u0E2A\u0E14\u0E38\u0E08\u0E32\u0E01\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23, \u0E02\u0E19\u0E32\u0E14 W/D/H, \u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E40\u0E08\u0E32\u0E30 (handle=true \u2014 tuck-end \u0E40\u0E08\u0E32\u0E30\u0E1A\u0E19\u0E1D\u0E32\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E1A\u0E19, mailer \u0E40\u0E08\u0E32\u0E30\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E2A\u0E2D\u0E07\u0E14\u0E49\u0E32\u0E19; bottle-carrier \u0E21\u0E35\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27+\u0E23\u0E39\u0E21\u0E37\u0E2D+\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E43\u0E19\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27; sleeve/fefco-0427 \u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A), \u0E20\u0E32\u0E0A\u0E19\u0E30\u0E02\u0E36\u0E49\u0E19\u0E23\u0E39\u0E1B (\u0E27\u0E31\u0E2A\u0E14\u0E38 pet-bottle/glass/aluminum \u2192 \u0E17\u0E23\u0E07 revolve + dieline \u0E09\u0E25\u0E32\u0E01\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E15\u0E31\u0E27), \u0E2B\u0E25\u0E2D\u0E14\u0E04\u0E23\u0E35\u0E21 (\u0E27\u0E31\u0E2A\u0E14\u0E38 tube-laminate \u2192 \u0E17\u0E23\u0E07 revolve \u0E2B\u0E25\u0E2D\u0E14\u0E1A\u0E35\u0E1A \u0E1D\u0E32\u0E40\u0E01\u0E25\u0E35\u0E22\u0E27 \u0E01\u0E49\u0E19\u0E0B\u0E35\u0E25\u0E41\u0E1A\u0E19 + dieline \u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E15\u0E31\u0E27), \u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E44\u0E14\u0E04\u0E31\u0E17 (template sticker + \u0E27\u0E31\u0E2A\u0E14\u0E38 sticker-* \u2192 \u0E41\u0E1C\u0E48\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19\u0E21\u0E38\u0E21\u0E21\u0E19; \u0E21\u0E35\u0E42\u0E2B\u0E21\u0E14 '\u0E44\u0E14\u0E04\u0E31\u0E17\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B' \u0E2A\u0E23\u0E49\u0E32\u0E07\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14\u0E15\u0E32\u0E21\u0E02\u0E2D\u0E1A\u0E25\u0E32\u0E22/\u0E23\u0E39\u0E1B PNG \u0E1E\u0E37\u0E49\u0E19\u0E43\u0E2A\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 \u0E41\u0E1A\u0E1A\u0E21\u0E35\u0E02\u0E2D\u0E1A\u0E02\u0E32\u0E27 (\u0E23\u0E30\u0E22\u0E30 1\u20138 \u0E21\u0E21.) \u0E2B\u0E23\u0E37\u0E2D\u0E44\u0E21\u0E48\u0E21\u0E35\u0E02\u0E2D\u0E1A\u0E02\u0E32\u0E27 + \u0E15\u0E23\u0E27\u0E08\u0E44\u0E1F\u0E25\u0E4C\u0E15\u0E32\u0E21\u0E02\u0E49\u0E2D\u0E08\u0E33\u0E01\u0E31\u0E14\u0E1C\u0E25\u0E34\u0E15\u0E44\u0E14\u0E04\u0E31\u0E17 (\u0E2B\u0E48\u0E32\u0E07\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14/\u0E40\u0E1C\u0E37\u0E48\u0E2D\u0E2A\u0E35 \u22651 \u0E21\u0E21., \u0E23\u0E30\u0E22\u0E30\u0E23\u0E30\u0E2B\u0E27\u0E48\u0E32\u0E07\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14 \u22652 \u0E21\u0E21., \u0E0A\u0E48\u0E2D\u0E07\u0E40\u0E08\u0E32\u0E30 \u22652 \u0E21\u0E21., \u0E44\u0E21\u0E48\u0E21\u0E35\u0E21\u0E38\u0E21\u0E2B\u0E31\u0E01\u0E28\u0E2D\u0E01) + \u0E41\u0E1C\u0E48\u0E19\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E2B\u0E25\u0E32\u0E22\u0E14\u0E27\u0E07 (\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E41\u0E1C\u0E48\u0E19 A6/A5/A4 \u2192 \u0E40\u0E23\u0E35\u0E22\u0E07\u0E14\u0E27\u0E07\u0E17\u0E35\u0E48\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E0B\u0E49\u0E33\u0E40\u0E15\u0E47\u0E21\u0E41\u0E1C\u0E48\u0E19\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 \u0E40\u0E27\u0E49\u0E19\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14 2 \u0E21\u0E21. \u0E02\u0E2D\u0E1A\u0E41\u0E1C\u0E48\u0E19 5 \u0E21\u0E21. \u0E2B\u0E21\u0E38\u0E19\u0E44\u0E14\u0E49 \u0E1A\u0E2D\u0E01\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E27\u0E07/\u0E41\u0E1C\u0E48\u0E19 \u0E41\u0E25\u0E30\u0E41\u0E1C\u0E48\u0E19\u0E15\u0E48\u0E2D A3; \u0E2B\u0E23\u0E37\u0E2D\u0E01\u0E33\u0E2B\u0E19\u0E14\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E27\u0E07\u0E15\u0E48\u0E2D\u0E41\u0E1C\u0E48\u0E19\u0E41\u0E25\u0E49\u0E27\u0E23\u0E30\u0E1A\u0E1A\u0E2B\u0E32\u0E02\u0E19\u0E32\u0E14\u0E14\u0E27\u0E07\u0E43\u0E2B\u0E0D\u0E48\u0E2A\u0E38\u0E14\u0E17\u0E35\u0E48\u0E43\u0E2A\u0E48\u0E44\u0E14\u0E49 \u0E22\u0E48\u0E2D/\u0E02\u0E22\u0E32\u0E22\u0E25\u0E32\u0E22\u0E15\u0E32\u0E21\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 (\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E40\u0E25\u0E47\u0E01\u0E2A\u0E38\u0E14 10 \u0E21\u0E21.); \u0E44\u0E1F\u0E25\u0E4C\u0E2A\u0E48\u0E07\u0E2D\u0E2D\u0E01\u0E40\u0E1B\u0E47\u0E19\u0E17\u0E31\u0E49\u0E07\u0E41\u0E1C\u0E48\u0E19) \u2014 \u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI; \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E22\u0E32\u0E01\u0E44\u0E14\u0E49\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E15\u0E31\u0E14\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01 template sticker \u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E1B\u0E34\u0E14 '\u0E44\u0E14\u0E04\u0E31\u0E17: \u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B' \u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A), \u0E41\u0E25\u0E30\u0E16\u0E38\u0E07\u0E1F\u0E34\u0E25\u0E4C\u0E21 (\u0E27\u0E31\u0E2A\u0E14\u0E38 pouch-* \u2192 dieline \u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E41\u0E1A\u0E19; \u0E21\u0E35 6 \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E49\u0E1C\u0E39\u0E49\u0E43\u0E0A\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A: \u0E16\u0E38\u0E07\u0E15\u0E31\u0E49\u0E07\u0E44\u0E14\u0E49 doypack (\u0E01\u0E49\u0E19\u0E15\u0E31\u0E49\u0E07 \u0E43\u0E0A\u0E49 D=\u0E25\u0E36\u0E01\u0E01\u0E49\u0E19), \u0E0B\u0E2D\u0E07\u0E41\u0E1A\u0E19 3 \u0E14\u0E49\u0E32\u0E19 (\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E49\u0E19 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 D \u2014 \u0E02\u0E2D\u0E07\u0E40\u0E25\u0E47\u0E01/\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E48\u0E32\u0E07/\u0E21\u0E32\u0E2A\u0E4C\u0E01/\u0E0B\u0E2D\u0E07\u0E0B\u0E2D\u0E2A), \u0E0B\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E07\u0E08\u0E35\u0E1A brick (\u0E16\u0E38\u0E07\u0E01\u0E32\u0E41\u0E1F\u0E04\u0E25\u0E32\u0E2A\u0E2A\u0E34\u0E01 \u0E17\u0E23\u0E07\u0E41\u0E17\u0E48\u0E07 \u0E43\u0E0A\u0E49 D=\u0E08\u0E35\u0E1A\u0E02\u0E49\u0E32\u0E07), \u0E16\u0E38\u0E07\u0E01\u0E49\u0E19\u0E41\u0E1A\u0E19\u0E15\u0E31\u0E49\u0E07\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21 box/quad-seal (\u0E01\u0E32\u0E41\u0E1F\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E15\u0E31\u0E49\u0E07\u0E17\u0E23\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07 \u0E43\u0E0A\u0E49 D), \u0E0B\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E01\u0E25\u0E32\u0E07 pillow (\u0E16\u0E38\u0E07\u0E02\u0E19\u0E21/\u0E0A\u0E34\u0E1B \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 D), \u0E41\u0E25\u0E30 \u0E16\u0E38\u0E07\u0E21\u0E35\u0E08\u0E38\u0E01 spout (\u0E02\u0E2D\u0E07\u0E40\u0E2B\u0E25\u0E27/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E14\u0E37\u0E48\u0E21 \u0E21\u0E35\u0E08\u0E38\u0E01+\u0E1D\u0E32 \u0E43\u0E0A\u0E49 D=\u0E01\u0E49\u0E19) + \u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E40\u0E2A\u0E23\u0E34\u0E21 (\u0E0B\u0E34\u0E1B\u0E25\u0E47\u0E2D\u0E01/\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01 \u2014 \u0E1B\u0E23\u0E31\u0E1A\u0E23\u0E30\u0E22\u0E30\u0E0B\u0E34\u0E1B\u0E41\u0E25\u0E30\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01\u0E08\u0E32\u0E01\u0E02\u0E2D\u0E1A\u0E1A\u0E19\u0E44\u0E14\u0E49 \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E15\u0E23\u0E27\u0E08\u0E25\u0E33\u0E14\u0E31\u0E1A\u0E0B\u0E35\u0E25\u2192\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01\u2192\u0E0B\u0E34\u0E1B \u0E41\u0E25\u0E30\u0E01\u0E32\u0E23\u0E17\u0E31\u0E1A\u0E27\u0E32\u0E25\u0E4C\u0E27/\u0E08\u0E38\u0E01/\u0E17\u0E35\u0E48\u0E23\u0E31\u0E14\u0E1B\u0E32\u0E01, \u0E23\u0E39\u0E41\u0E02\u0E27\u0E19 euro-hole, \u0E27\u0E32\u0E25\u0E4C\u0E27\u0E01\u0E32\u0E41\u0E1F, \u0E17\u0E35\u0E48\u0E23\u0E31\u0E14\u0E1B\u0E32\u0E01 tin-tie) \u2014 \u0E17\u0E31\u0E49\u0E07\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E16\u0E38\u0E07\u0E41\u0E25\u0E30\u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E40\u0E2A\u0E23\u0E34\u0E21\u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI; \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E0B\u0E2D\u0E07\u0E41\u0E1A\u0E1A\u0E40\u0E08\u0E32\u0E30\u0E08\u0E07/\u0E21\u0E35\u0E0B\u0E34\u0E1B/\u0E21\u0E35\u0E27\u0E32\u0E25\u0E4C\u0E27 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E27\u0E31\u0E2A\u0E14\u0E38\u0E16\u0E38\u0E07\u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A/\u0E40\u0E1B\u0E34\u0E14\u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A), \u0E41\u0E25\u0E30\u0E23\u0E39\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28 (vent holes) \u2014 \u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E01\u0E25\u0E21\u0E40\u0E1B\u0E47\u0E19\u0E01\u0E23\u0E34\u0E14\u0E1A\u0E19\u0E1C\u0E19\u0E31\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E31\u0E1A (tuck-end/mailer/fefco-0427/rsc/tray/gable) \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E2A\u0E48\u0E07\u0E1C\u0E25\u0E44\u0E21\u0E49/\u0E1C\u0E31\u0E01/\u0E02\u0E2D\u0E07\u0E2A\u0E14 \u0E40\u0E02\u0E49\u0E32\u0E17\u0E31\u0E49\u0E07 3D \u0E41\u0E25\u0E30\u0E44\u0E1F\u0E25\u0E4C\u0E15\u0E31\u0E14 (DXF/PDF); \u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A (\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E1C\u0E19\u0E31\u0E07+\u0E02\u0E19\u0E32\u0E14\u0E23\u0E39+\u0E08\u0E33\u0E19\u0E27\u0E19\u0E41\u0E16\u0E27/\u0E04\u0E2D\u0E25\u0E31\u0E21\u0E19\u0E4C) \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI \u2014 \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28/\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1C\u0E25\u0E44\u0E21\u0E49\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E31\u0E1A\u0E17\u0E35\u0E48\u0E40\u0E2B\u0E21\u0E32\u0E30 (\u0E40\u0E0A\u0E48\u0E19 rsc/tray) \u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E23\u0E39\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28\u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A, \u0E41\u0E25\u0E30\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E1E\u0E34\u0E40\u0E28\u0E29\u0E15\u0E48\u0E2D\u0E0A\u0E34\u0E49\u0E19\u0E25\u0E32\u0E22 (\u0E1F\u0E2D\u0E22\u0E25\u0E4C\u0E17\u0E2D\u0E07/\u0E40\u0E07\u0E34\u0E19/\u0E42\u0E23\u0E2A\u0E42\u0E01\u0E25\u0E14\u0E4C, \u0E40\u0E04\u0E25\u0E37\u0E2D\u0E1A Spot UV, \u0E1B\u0E31\u0E4A\u0E21\u0E19\u0E39\u0E19/\u0E1B\u0E31\u0E4A\u0E21\u0E08\u0E21) \u2014 \u0E1C\u0E39\u0E49\u0E43\u0E0A\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E17\u0E35\u0E48\u0E0A\u0E34\u0E49\u0E19\u0E25\u0E32\u0E22\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E44\u0E1F\u0E25\u0E4C\u0E2A\u0E48\u0E07\u0E2D\u0E2D\u0E01\u0E21\u0E35\u0E40\u0E1E\u0E25\u0E15\u0E2A\u0E35 spot \u0E41\u0E22\u0E01\u0E15\u0E48\u0E2D\u0E0A\u0E19\u0E34\u0E14 \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI \u2014 \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D \u0E43\u0E2B\u0E49\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E1E\u0E34\u0E40\u0E28\u0E29\u0E44\u0E14\u0E49\u0E17\u0E35\u0E48\u0E0A\u0E34\u0E49\u0E19\u0E25\u0E32\u0E22\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A
+\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A gen \u0E44\u0E14\u0E49\u0E08\u0E23\u0E34\u0E07\u0E21\u0E35\u0E40\u0E17\u0E48\u0E32\u0E19\u0E35\u0E49: \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19, \u0E27\u0E31\u0E2A\u0E14\u0E38\u0E08\u0E32\u0E01\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23, \u0E02\u0E19\u0E32\u0E14 W/D/H, \u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E40\u0E08\u0E32\u0E30 (handle=true \u2014 tuck-end/reverse-tuck \u0E40\u0E08\u0E32\u0E30\u0E1A\u0E19\u0E1D\u0E32\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E1A\u0E19, mailer \u0E40\u0E08\u0E32\u0E30\u0E1C\u0E19\u0E31\u0E07\u0E02\u0E49\u0E32\u0E07\u0E2A\u0E2D\u0E07\u0E14\u0E49\u0E32\u0E19; bottle-carrier \u0E21\u0E35\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27+\u0E23\u0E39\u0E21\u0E37\u0E2D+\u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E43\u0E19\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27; sleeve/fefco-0427 \u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A), \u0E20\u0E32\u0E0A\u0E19\u0E30\u0E02\u0E36\u0E49\u0E19\u0E23\u0E39\u0E1B (\u0E27\u0E31\u0E2A\u0E14\u0E38 pet-bottle/glass/aluminum \u2192 \u0E17\u0E23\u0E07 revolve + dieline \u0E09\u0E25\u0E32\u0E01\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E15\u0E31\u0E27), \u0E2B\u0E25\u0E2D\u0E14\u0E04\u0E23\u0E35\u0E21 (\u0E27\u0E31\u0E2A\u0E14\u0E38 tube-laminate \u2192 \u0E17\u0E23\u0E07 revolve \u0E2B\u0E25\u0E2D\u0E14\u0E1A\u0E35\u0E1A \u0E1D\u0E32\u0E40\u0E01\u0E25\u0E35\u0E22\u0E27 \u0E01\u0E49\u0E19\u0E0B\u0E35\u0E25\u0E41\u0E1A\u0E19 + dieline \u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E1E\u0E31\u0E19\u0E23\u0E2D\u0E1A\u0E15\u0E31\u0E27), \u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E44\u0E14\u0E04\u0E31\u0E17 (template sticker + \u0E27\u0E31\u0E2A\u0E14\u0E38 sticker-* \u2192 \u0E41\u0E1C\u0E48\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E41\u0E1A\u0E19\u0E21\u0E38\u0E21\u0E21\u0E19; \u0E21\u0E35\u0E42\u0E2B\u0E21\u0E14 '\u0E44\u0E14\u0E04\u0E31\u0E17\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B' \u0E2A\u0E23\u0E49\u0E32\u0E07\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14\u0E15\u0E32\u0E21\u0E02\u0E2D\u0E1A\u0E25\u0E32\u0E22/\u0E23\u0E39\u0E1B PNG \u0E1E\u0E37\u0E49\u0E19\u0E43\u0E2A\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 \u0E41\u0E1A\u0E1A\u0E21\u0E35\u0E02\u0E2D\u0E1A\u0E02\u0E32\u0E27 (\u0E23\u0E30\u0E22\u0E30 1\u20138 \u0E21\u0E21.) \u0E2B\u0E23\u0E37\u0E2D\u0E44\u0E21\u0E48\u0E21\u0E35\u0E02\u0E2D\u0E1A\u0E02\u0E32\u0E27 + \u0E15\u0E23\u0E27\u0E08\u0E44\u0E1F\u0E25\u0E4C\u0E15\u0E32\u0E21\u0E02\u0E49\u0E2D\u0E08\u0E33\u0E01\u0E31\u0E14\u0E1C\u0E25\u0E34\u0E15\u0E44\u0E14\u0E04\u0E31\u0E17 (\u0E2B\u0E48\u0E32\u0E07\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14/\u0E40\u0E1C\u0E37\u0E48\u0E2D\u0E2A\u0E35 \u22651 \u0E21\u0E21., \u0E23\u0E30\u0E22\u0E30\u0E23\u0E30\u0E2B\u0E27\u0E48\u0E32\u0E07\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14 \u22652 \u0E21\u0E21., \u0E0A\u0E48\u0E2D\u0E07\u0E40\u0E08\u0E32\u0E30 \u22652 \u0E21\u0E21., \u0E44\u0E21\u0E48\u0E21\u0E35\u0E21\u0E38\u0E21\u0E2B\u0E31\u0E01\u0E28\u0E2D\u0E01) + \u0E41\u0E1C\u0E48\u0E19\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E2B\u0E25\u0E32\u0E22\u0E14\u0E27\u0E07 (\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E41\u0E1C\u0E48\u0E19 A6/A5/A4 \u2192 \u0E40\u0E23\u0E35\u0E22\u0E07\u0E14\u0E27\u0E07\u0E17\u0E35\u0E48\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E0B\u0E49\u0E33\u0E40\u0E15\u0E47\u0E21\u0E41\u0E1C\u0E48\u0E19\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 \u0E40\u0E27\u0E49\u0E19\u0E40\u0E2A\u0E49\u0E19\u0E15\u0E31\u0E14 2 \u0E21\u0E21. \u0E02\u0E2D\u0E1A\u0E41\u0E1C\u0E48\u0E19 5 \u0E21\u0E21. \u0E2B\u0E21\u0E38\u0E19\u0E44\u0E14\u0E49 \u0E1A\u0E2D\u0E01\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E27\u0E07/\u0E41\u0E1C\u0E48\u0E19 \u0E41\u0E25\u0E30\u0E41\u0E1C\u0E48\u0E19\u0E15\u0E48\u0E2D A3; \u0E2B\u0E23\u0E37\u0E2D\u0E01\u0E33\u0E2B\u0E19\u0E14\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E27\u0E07\u0E15\u0E48\u0E2D\u0E41\u0E1C\u0E48\u0E19\u0E41\u0E25\u0E49\u0E27\u0E23\u0E30\u0E1A\u0E1A\u0E2B\u0E32\u0E02\u0E19\u0E32\u0E14\u0E14\u0E27\u0E07\u0E43\u0E2B\u0E0D\u0E48\u0E2A\u0E38\u0E14\u0E17\u0E35\u0E48\u0E43\u0E2A\u0E48\u0E44\u0E14\u0E49 \u0E22\u0E48\u0E2D/\u0E02\u0E22\u0E32\u0E22\u0E25\u0E32\u0E22\u0E15\u0E32\u0E21\u0E43\u0E2B\u0E49\u0E40\u0E2D\u0E07 (\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E40\u0E25\u0E47\u0E01\u0E2A\u0E38\u0E14 10 \u0E21\u0E21.); \u0E44\u0E1F\u0E25\u0E4C\u0E2A\u0E48\u0E07\u0E2D\u0E2D\u0E01\u0E40\u0E1B\u0E47\u0E19\u0E17\u0E31\u0E49\u0E07\u0E41\u0E1C\u0E48\u0E19) \u2014 \u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI; \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E22\u0E32\u0E01\u0E44\u0E14\u0E49\u0E2A\u0E15\u0E34\u0E01\u0E40\u0E01\u0E2D\u0E23\u0E4C\u0E15\u0E31\u0E14\u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01 template sticker \u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E1B\u0E34\u0E14 '\u0E44\u0E14\u0E04\u0E31\u0E17: \u0E15\u0E32\u0E21\u0E23\u0E39\u0E1B' \u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A), \u0E41\u0E25\u0E30\u0E16\u0E38\u0E07\u0E1F\u0E34\u0E25\u0E4C\u0E21 (\u0E27\u0E31\u0E2A\u0E14\u0E38 pouch-* \u2192 dieline \u0E1F\u0E34\u0E25\u0E4C\u0E21\u0E41\u0E1A\u0E19; \u0E21\u0E35 6 \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E43\u0E2B\u0E49\u0E1C\u0E39\u0E49\u0E43\u0E0A\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A: \u0E16\u0E38\u0E07\u0E15\u0E31\u0E49\u0E07\u0E44\u0E14\u0E49 doypack (\u0E01\u0E49\u0E19\u0E15\u0E31\u0E49\u0E07 \u0E43\u0E0A\u0E49 D=\u0E25\u0E36\u0E01\u0E01\u0E49\u0E19), \u0E0B\u0E2D\u0E07\u0E41\u0E1A\u0E19 3 \u0E14\u0E49\u0E32\u0E19 (\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E49\u0E19 \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 D \u2014 \u0E02\u0E2D\u0E07\u0E40\u0E25\u0E47\u0E01/\u0E15\u0E31\u0E27\u0E2D\u0E22\u0E48\u0E32\u0E07/\u0E21\u0E32\u0E2A\u0E4C\u0E01/\u0E0B\u0E2D\u0E07\u0E0B\u0E2D\u0E2A), \u0E0B\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E07\u0E08\u0E35\u0E1A brick (\u0E16\u0E38\u0E07\u0E01\u0E32\u0E41\u0E1F\u0E04\u0E25\u0E32\u0E2A\u0E2A\u0E34\u0E01 \u0E17\u0E23\u0E07\u0E41\u0E17\u0E48\u0E07 \u0E43\u0E0A\u0E49 D=\u0E08\u0E35\u0E1A\u0E02\u0E49\u0E32\u0E07), \u0E16\u0E38\u0E07\u0E01\u0E49\u0E19\u0E41\u0E1A\u0E19\u0E15\u0E31\u0E49\u0E07\u0E40\u0E2B\u0E25\u0E35\u0E48\u0E22\u0E21 box/quad-seal (\u0E01\u0E32\u0E41\u0E1F\u0E1E\u0E23\u0E35\u0E40\u0E21\u0E35\u0E22\u0E21 \u0E15\u0E31\u0E49\u0E07\u0E17\u0E23\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07 \u0E43\u0E0A\u0E49 D), \u0E0B\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E01\u0E25\u0E32\u0E07 pillow (\u0E16\u0E38\u0E07\u0E02\u0E19\u0E21/\u0E0A\u0E34\u0E1B \u0E44\u0E21\u0E48\u0E43\u0E0A\u0E49 D), \u0E41\u0E25\u0E30 \u0E16\u0E38\u0E07\u0E21\u0E35\u0E08\u0E38\u0E01 spout (\u0E02\u0E2D\u0E07\u0E40\u0E2B\u0E25\u0E27/\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E14\u0E37\u0E48\u0E21 \u0E21\u0E35\u0E08\u0E38\u0E01+\u0E1D\u0E32 \u0E43\u0E0A\u0E49 D=\u0E01\u0E49\u0E19) + \u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E40\u0E2A\u0E23\u0E34\u0E21 (\u0E0B\u0E34\u0E1B\u0E25\u0E47\u0E2D\u0E01/\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01 \u2014 \u0E1B\u0E23\u0E31\u0E1A\u0E23\u0E30\u0E22\u0E30\u0E0B\u0E34\u0E1B\u0E41\u0E25\u0E30\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01\u0E08\u0E32\u0E01\u0E02\u0E2D\u0E1A\u0E1A\u0E19\u0E44\u0E14\u0E49 \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E15\u0E23\u0E27\u0E08\u0E25\u0E33\u0E14\u0E31\u0E1A\u0E0B\u0E35\u0E25\u2192\u0E23\u0E2D\u0E22\u0E09\u0E35\u0E01\u2192\u0E0B\u0E34\u0E1B \u0E41\u0E25\u0E30\u0E01\u0E32\u0E23\u0E17\u0E31\u0E1A\u0E27\u0E32\u0E25\u0E4C\u0E27/\u0E08\u0E38\u0E01/\u0E17\u0E35\u0E48\u0E23\u0E31\u0E14\u0E1B\u0E32\u0E01, \u0E23\u0E39\u0E41\u0E02\u0E27\u0E19 euro-hole, \u0E27\u0E32\u0E25\u0E4C\u0E27\u0E01\u0E32\u0E41\u0E1F, \u0E17\u0E35\u0E48\u0E23\u0E31\u0E14\u0E1B\u0E32\u0E01 tin-tie) \u2014 \u0E17\u0E31\u0E49\u0E07\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E16\u0E38\u0E07\u0E41\u0E25\u0E30\u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E40\u0E2A\u0E23\u0E34\u0E21\u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI; \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E0B\u0E2D\u0E07\u0E41\u0E1A\u0E1A\u0E40\u0E08\u0E32\u0E30\u0E08\u0E07/\u0E21\u0E35\u0E0B\u0E34\u0E1B/\u0E21\u0E35\u0E27\u0E32\u0E25\u0E4C\u0E27 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E27\u0E31\u0E2A\u0E14\u0E38\u0E16\u0E38\u0E07\u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A/\u0E40\u0E1B\u0E34\u0E14\u0E2D\u0E2D\u0E1B\u0E0A\u0E31\u0E19\u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A), \u0E41\u0E25\u0E30\u0E23\u0E39\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28 (vent holes) \u2014 \u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E01\u0E25\u0E21\u0E40\u0E1B\u0E47\u0E19\u0E01\u0E23\u0E34\u0E14\u0E1A\u0E19\u0E1C\u0E19\u0E31\u0E07\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E31\u0E1A (tuck-end/mailer/fefco-0427/rsc/tray/gable) \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E2A\u0E48\u0E07\u0E1C\u0E25\u0E44\u0E21\u0E49/\u0E1C\u0E31\u0E01/\u0E02\u0E2D\u0E07\u0E2A\u0E14 \u0E40\u0E02\u0E49\u0E32\u0E17\u0E31\u0E49\u0E07 3D \u0E41\u0E25\u0E30\u0E44\u0E1F\u0E25\u0E4C\u0E15\u0E31\u0E14 (DXF/PDF); \u0E40\u0E1B\u0E47\u0E19 toggle \u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A (\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E1C\u0E19\u0E31\u0E07+\u0E02\u0E19\u0E32\u0E14\u0E23\u0E39+\u0E08\u0E33\u0E19\u0E27\u0E19\u0E41\u0E16\u0E27/\u0E04\u0E2D\u0E25\u0E31\u0E21\u0E19\u0E4C) \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI \u2014 \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28/\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1C\u0E25\u0E44\u0E21\u0E49\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E31\u0E1A\u0E17\u0E35\u0E48\u0E40\u0E2B\u0E21\u0E32\u0E30 (\u0E40\u0E0A\u0E48\u0E19 rsc/tray) \u0E41\u0E25\u0E49\u0E27\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E23\u0E39\u0E23\u0E30\u0E1A\u0E32\u0E22\u0E2D\u0E32\u0E01\u0E32\u0E28\u0E44\u0E14\u0E49\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A, \u0E41\u0E25\u0E30\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E1E\u0E34\u0E40\u0E28\u0E29\u0E15\u0E48\u0E2D\u0E0A\u0E34\u0E49\u0E19\u0E25\u0E32\u0E22 (\u0E1F\u0E2D\u0E22\u0E25\u0E4C\u0E17\u0E2D\u0E07/\u0E40\u0E07\u0E34\u0E19/\u0E42\u0E23\u0E2A\u0E42\u0E01\u0E25\u0E14\u0E4C, \u0E40\u0E04\u0E25\u0E37\u0E2D\u0E1A Spot UV, \u0E1B\u0E31\u0E4A\u0E21\u0E19\u0E39\u0E19/\u0E1B\u0E31\u0E4A\u0E21\u0E08\u0E21) \u2014 \u0E1C\u0E39\u0E49\u0E43\u0E0A\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E17\u0E35\u0E48\u0E0A\u0E34\u0E49\u0E19\u0E25\u0E32\u0E22\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A \u0E44\u0E1F\u0E25\u0E4C\u0E2A\u0E48\u0E07\u0E2D\u0E2D\u0E01\u0E21\u0E35\u0E40\u0E1E\u0E25\u0E15\u0E2A\u0E35 spot \u0E41\u0E22\u0E01\u0E15\u0E48\u0E2D\u0E0A\u0E19\u0E34\u0E14 \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E1C\u0E48\u0E32\u0E19 AI \u2014 \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D \u0E43\u0E2B\u0E49\u0E1A\u0E2D\u0E01\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E1E\u0E34\u0E40\u0E28\u0E29\u0E44\u0E14\u0E49\u0E17\u0E35\u0E48\u0E0A\u0E34\u0E49\u0E19\u0E25\u0E32\u0E22\u0E43\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A
 \u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E22\u0E31\u0E07\u0E17\u0E33\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49: \u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27\u0E40\u0E0A\u0E37\u0E2D\u0E01/\u0E1E\u0E25\u0E32\u0E2A\u0E15\u0E34\u0E01, \u0E2B\u0E19\u0E49\u0E32\u0E15\u0E48\u0E32\u0E07\u0E43\u0E2A, \u0E15\u0E31\u0E27\u0E25\u0E47\u0E2D\u0E01\u0E1E\u0E34\u0E40\u0E28\u0E29, \u0E41\u0E1C\u0E48\u0E19\u0E01\u0E31\u0E49\u0E19\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19, \u0E17\u0E23\u0E07\u0E20\u0E32\u0E0A\u0E19\u0E30\u0E41\u0E1A\u0E1A\u0E01\u0E33\u0E2B\u0E19\u0E14\u0E40\u0E2D\u0E07 (\u0E42\u0E1B\u0E23\u0E44\u0E1F\u0E25\u0E4C fix \u0E15\u0E32\u0E21\u0E0A\u0E19\u0E34\u0E14\u0E27\u0E31\u0E2A\u0E14\u0E38) \u0E2F\u0E25\u0E2F \u2014 \u0E16\u0E49\u0E32\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E02\u0E2D\u0E2A\u0E34\u0E48\u0E07\u0E40\u0E2B\u0E25\u0E48\u0E32\u0E19\u0E35\u0E49 \u0E43\u0E2B\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2A\u0E34\u0E48\u0E07\u0E43\u0E01\u0E25\u0E49\u0E40\u0E04\u0E35\u0E22\u0E07\u0E17\u0E35\u0E48\u0E21\u0E35 (\u0E40\u0E0A\u0E48\u0E19 \u0E02\u0E2D\u0E2B\u0E39\u0E2B\u0E34\u0E49\u0E27/\u0E17\u0E35\u0E48\u0E08\u0E31\u0E1A \u2192 handle=true) \u0E41\u0E25\u0E30\u0E40\u0E02\u0E35\u0E22\u0E19\u0E43\u0E19 ${why} \u0E15\u0E23\u0E07\u0E46 \u0E27\u0E48\u0E32\u0E23\u0E30\u0E1A\u0E1A\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E02\u0E2D\u0E41\u0E1A\u0E1A\u0E40\u0E1B\u0E4A\u0E30\u0E46 \u0E2B\u0E49\u0E32\u0E21\u0E2D\u0E49\u0E32\u0E07\u0E43\u0E19 assumptions \u0E27\u0E48\u0E32\u0E17\u0E33\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E17\u0E33\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E43\u0E2B\u0E49\u0E41\u0E25\u0E49\u0E27
 
 ## \u0E23\u0E39\u0E1B\u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07\u0E08\u0E32\u0E01\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32 (\u0E16\u0E49\u0E32\u0E21\u0E35)
@@ -60025,7 +60208,7 @@ var BOX_SPEC_SCHEMA = {
     H: { type: "number", description: "\u0E2A\u0E39\u0E07\u0E14\u0E49\u0E32\u0E19\u0E43\u0E19 \u0E21\u0E21. (30-300)" },
     handle: {
       type: "boolean",
-      description: "\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (tuck-end/mailer \u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19; sleeve \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false)"
+      description: "\u0E40\u0E08\u0E32\u0E30\u0E23\u0E39\u0E2B\u0E34\u0E49\u0E27 (tuck-end/reverse-tuck/mailer \u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19; sleeve \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19 false)"
     },
     assumptions: {
       type: "array",
@@ -60100,11 +60283,11 @@ function boxSpecModelOptions(model) {
   };
 }
 var BoxSpecResponseError = class extends Error {
-  constructor(reason, category = null) {
+  constructor(reason2, category = null) {
     super(
-      reason === "refusal" ? `\u0E42\u0E21\u0E40\u0E14\u0E25\u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18\u0E04\u0E33\u0E02\u0E2D (stop_reason=refusal, category=${category ?? "null"})` : reason === "max_tokens" ? "\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E16\u0E39\u0E01\u0E15\u0E31\u0E14\u0E17\u0E35\u0E48 max_tokens \u0E01\u0E48\u0E2D\u0E19 JSON \u0E04\u0E23\u0E1A" : "\u0E44\u0E21\u0E48\u0E1E\u0E1A JSON \u0E2A\u0E40\u0E1B\u0E01\u0E43\u0E19\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E02\u0E2D\u0E07\u0E42\u0E21\u0E40\u0E14\u0E25"
+      reason2 === "refusal" ? `\u0E42\u0E21\u0E40\u0E14\u0E25\u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18\u0E04\u0E33\u0E02\u0E2D (stop_reason=refusal, category=${category ?? "null"})` : reason2 === "max_tokens" ? "\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E16\u0E39\u0E01\u0E15\u0E31\u0E14\u0E17\u0E35\u0E48 max_tokens \u0E01\u0E48\u0E2D\u0E19 JSON \u0E04\u0E23\u0E1A" : "\u0E44\u0E21\u0E48\u0E1E\u0E1A JSON \u0E2A\u0E40\u0E1B\u0E01\u0E43\u0E19\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E02\u0E2D\u0E07\u0E42\u0E21\u0E40\u0E14\u0E25"
     );
-    this.reason = reason;
+    this.reason = reason2;
     this.category = category;
     this.name = "BoxSpecResponseError";
   }
@@ -60375,7 +60558,7 @@ var FX_KINDS = TEXT_FX_KINDS.map((k) => k.id);
 var PRESET_IDS = PRESETS.map((p) => p.id);
 var nullable2 = (schema) => ({ anyOf: [schema, { type: "null" }] });
 var str = (description) => ({ type: "string", ...description ? { description } : {} });
-var num = (description) => ({ type: "number", ...description ? { description } : {} });
+var num2 = (description) => ({ type: "number", ...description ? { description } : {} });
 var bool = (description) => ({ type: "boolean", ...description ? { description } : {} });
 var en = (values, description) => ({ type: "string", enum: [...values], ...description ? { description } : {} });
 var obj = (properties, description) => ({
@@ -60386,81 +60569,81 @@ var obj = (properties, description) => ({
   ...description ? { description } : {}
 });
 var arr = (items, description) => ({ type: "array", items, ...description ? { description } : {} });
-var gradSchema = obj({ from: str("#rrggbb"), to: str("#rrggbb"), angle: num("\u0E2D\u0E07\u0E28\u0E32 0 = \u0E0B\u0E49\u0E32\u0E22\u2192\u0E02\u0E27\u0E32, 90 = \u0E1A\u0E19\u2192\u0E25\u0E48\u0E32\u0E07"), radial: nullable2(bool()) });
+var gradSchema = obj({ from: str("#rrggbb"), to: str("#rrggbb"), angle: num2("\u0E2D\u0E07\u0E28\u0E32 0 = \u0E0B\u0E49\u0E32\u0E22\u2192\u0E02\u0E27\u0E32, 90 = \u0E1A\u0E19\u2192\u0E25\u0E48\u0E32\u0E07"), radial: nullable2(bool()) });
 var fxSchema = obj({
   kind: en(FX_KINDS, "drop \u0E40\u0E07\u0E32 \xB7 background \u0E01\u0E25\u0E48\u0E2D\u0E07\u0E1E\u0E37\u0E49\u0E19\u0E2B\u0E25\u0E31\u0E07 \xB7 hollow \u0E01\u0E25\u0E27\u0E07 \xB7 splice \u0E0B\u0E49\u0E2D\u0E19\u0E40\u0E2B\u0E25\u0E37\u0E48\u0E2D\u0E21 \xB7 double \u0E02\u0E2D\u0E1A\u0E2A\u0E2D\u0E07\u0E0A\u0E31\u0E49\u0E19 \xB7 echo \xB7 glow \xB7 long \u0E40\u0E07\u0E32\u0E22\u0E32\u0E27"),
   color: nullable2(str()),
   color2: nullable2(str()),
-  dist: nullable2(num()),
-  angle: nullable2(num()),
-  blur: nullable2(num()),
-  alpha: nullable2(num("0-100")),
-  width: nullable2(num("% \u0E02\u0E19\u0E32\u0E14\u0E1F\u0E2D\u0E19\u0E15\u0E4C")),
-  width2: nullable2(num()),
-  pad: nullable2(num()),
-  round: nullable2(num())
+  dist: nullable2(num2()),
+  angle: nullable2(num2()),
+  blur: nullable2(num2()),
+  alpha: nullable2(num2("0-100")),
+  width: nullable2(num2("% \u0E02\u0E19\u0E32\u0E14\u0E1F\u0E2D\u0E19\u0E15\u0E4C")),
+  width2: nullable2(num2()),
+  pad: nullable2(num2()),
+  round: nullable2(num2())
 });
 var baseProps = {
   id: nullable2(str("\u0E15\u0E31\u0E27\u0E23\u0E30\u0E1A\u0E38\u0E2A\u0E31\u0E49\u0E19 a-z0-9- (\u0E44\u0E21\u0E48\u0E0B\u0E49\u0E33) \u0E43\u0E0A\u0E49\u0E2D\u0E49\u0E32\u0E07\u0E15\u0E2D\u0E19\u0E41\u0E01\u0E49\u0E44\u0E02")),
   name: nullable2(str("\u0E0A\u0E37\u0E48\u0E2D\u0E0A\u0E31\u0E49\u0E19\u0E43\u0E19\u0E41\u0E1C\u0E07\u0E40\u0E25\u0E40\u0E22\u0E2D\u0E23\u0E4C (\u0E44\u0E17\u0E22)")),
   panel: str("id \u0E02\u0E2D\u0E07\u0E41\u0E1C\u0E07\u0E17\u0E35\u0E48\u0E27\u0E32\u0E07 (\u0E15\u0E49\u0E2D\u0E07\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E41\u0E1C\u0E07\u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E49)"),
-  x: num("\u0E21\u0E21. \u0E08\u0E32\u0E01\u0E02\u0E2D\u0E1A\u0E0B\u0E49\u0E32\u0E22\u0E02\u0E2D\u0E07\u0E41\u0E1C\u0E07"),
-  y: num("\u0E21\u0E21. \u0E08\u0E32\u0E01\u0E02\u0E2D\u0E1A\u0E1A\u0E19\u0E02\u0E2D\u0E07\u0E41\u0E1C\u0E07"),
-  rot: nullable2(num("\u0E2D\u0E07\u0E28\u0E32 \u0E15\u0E32\u0E21\u0E40\u0E02\u0E47\u0E21 (0 = \u0E44\u0E21\u0E48\u0E2B\u0E21\u0E38\u0E19)")),
-  opacity: nullable2(num("0-1")),
+  x: num2("\u0E21\u0E21. \u0E08\u0E32\u0E01\u0E02\u0E2D\u0E1A\u0E0B\u0E49\u0E32\u0E22\u0E02\u0E2D\u0E07\u0E41\u0E1C\u0E07"),
+  y: num2("\u0E21\u0E21. \u0E08\u0E32\u0E01\u0E02\u0E2D\u0E1A\u0E1A\u0E19\u0E02\u0E2D\u0E07\u0E41\u0E1C\u0E07"),
+  rot: nullable2(num2("\u0E2D\u0E07\u0E28\u0E32 \u0E15\u0E32\u0E21\u0E40\u0E02\u0E47\u0E21 (0 = \u0E44\u0E21\u0E48\u0E2B\u0E21\u0E38\u0E19)")),
+  opacity: nullable2(num2("0-1")),
   finish: nullable2(en(FINISH_IDS, "\u0E07\u0E32\u0E19\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E1E\u0E34\u0E40\u0E28\u0E29 (\u0E1F\u0E2D\u0E22\u0E25\u0E4C/spot UV/\u0E1B\u0E31\u0E4A\u0E21\u0E19\u0E39\u0E19-\u0E08\u0E21) \u0E43\u0E0A\u0E49\u0E40\u0E09\u0E1E\u0E32\u0E30\u0E0A\u0E34\u0E49\u0E19\u0E40\u0E14\u0E48\u0E19"))
 };
 var textSchema2 = obj({
   type: en(["text"]),
   ...baseProps,
   text: str("\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21 \u0E2B\u0E25\u0E32\u0E22\u0E1A\u0E23\u0E23\u0E17\u0E31\u0E14\u0E14\u0E49\u0E27\u0E22 \\n"),
-  size: num(`\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 \u0E21\u0E21. (\u0E2D\u0E48\u0E32\u0E19\u0E2D\u0E2D\u0E01\u0E15\u0E31\u0E49\u0E07\u0E41\u0E15\u0E48 ${ART_MIN_TEXT_MM})`),
+  size: num2(`\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 \u0E21\u0E21. (\u0E2D\u0E48\u0E32\u0E19\u0E2D\u0E2D\u0E01\u0E15\u0E31\u0E49\u0E07\u0E41\u0E15\u0E48 ${ART_MIN_TEXT_MM})`),
   color: str("#rrggbb"),
   anchor: nullable2(en(["left", "center", "right"], "x \u0E40\u0E1B\u0E47\u0E19\u0E02\u0E2D\u0E1A\u0E0B\u0E49\u0E32\u0E22/\u0E01\u0E36\u0E48\u0E07\u0E01\u0E25\u0E32\u0E07/\u0E02\u0E2D\u0E1A\u0E02\u0E27\u0E32\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21 (center \u0E2A\u0E30\u0E14\u0E27\u0E01\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E08\u0E31\u0E14\u0E01\u0E25\u0E32\u0E07\u0E41\u0E1C\u0E07)")),
   font: nullable2(en(FONT_IDS)),
   weight: nullable2(en(["400", "700"])),
-  lh: nullable2(num("\u0E15\u0E31\u0E27\u0E04\u0E39\u0E13\u0E23\u0E30\u0E22\u0E30\u0E1A\u0E23\u0E23\u0E17\u0E31\u0E14 (\u0E04\u0E48\u0E32\u0E40\u0E23\u0E34\u0E48\u0E21\u0E15\u0E49\u0E19 1.25)")),
+  lh: nullable2(num2("\u0E15\u0E31\u0E27\u0E04\u0E39\u0E13\u0E23\u0E30\u0E22\u0E30\u0E1A\u0E23\u0E23\u0E17\u0E31\u0E14 (\u0E04\u0E48\u0E32\u0E40\u0E23\u0E34\u0E48\u0E21\u0E15\u0E49\u0E19 1.25)")),
   strokeColor: nullable2(str()),
-  strokeW: nullable2(num("\u0E21\u0E21.")),
-  ls: nullable2(num("\u0E23\u0E30\u0E22\u0E30\u0E2B\u0E48\u0E32\u0E07\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 % \u0E02\u0E19\u0E32\u0E14\u0E1F\u0E2D\u0E19\u0E15\u0E4C (-20..100)")),
+  strokeW: nullable2(num2("\u0E21\u0E21.")),
+  ls: nullable2(num2("\u0E23\u0E30\u0E22\u0E30\u0E2B\u0E48\u0E32\u0E07\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23 % \u0E02\u0E19\u0E32\u0E14\u0E1F\u0E2D\u0E19\u0E15\u0E4C (-20..100)")),
   grad: nullable2(gradSchema),
   fx: nullable2(fxSchema),
-  curve: nullable2(num("\u0E14\u0E31\u0E14\u0E42\u0E04\u0E49\u0E07 \u0E2D\u0E07\u0E28\u0E32 (+ \u0E42\u0E01\u0E48\u0E07\u0E02\u0E36\u0E49\u0E19) \u2014 \u0E2B\u0E49\u0E32\u0E21\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22"))
+  curve: nullable2(num2("\u0E14\u0E31\u0E14\u0E42\u0E04\u0E49\u0E07 \u0E2D\u0E07\u0E28\u0E32 (+ \u0E42\u0E01\u0E48\u0E07\u0E02\u0E36\u0E49\u0E19) \u2014 \u0E2B\u0E49\u0E32\u0E21\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22"))
 });
 var shapeSchema2 = obj({
   type: en(["shape"]),
   ...baseProps,
   shape: en(SHAPE_KINDS),
-  w: num("\u0E21\u0E21."),
-  h: num("\u0E21\u0E21. (line = \u0E04\u0E27\u0E32\u0E21\u0E2B\u0E19\u0E32\u0E40\u0E2A\u0E49\u0E19)"),
+  w: num2("\u0E21\u0E21."),
+  h: num2("\u0E21\u0E21. (line = \u0E04\u0E27\u0E32\u0E21\u0E2B\u0E19\u0E32\u0E40\u0E2A\u0E49\u0E19)"),
   fill: str("#rrggbb \u0E2B\u0E23\u0E37\u0E2D none"),
   stroke: str("#rrggbb \u0E2B\u0E23\u0E37\u0E2D none"),
-  strokeW: num("\u0E21\u0E21."),
+  strokeW: num2("\u0E21\u0E21."),
   grad: nullable2(gradSchema),
-  sides: nullable2(num("polygon/star: \u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E49\u0E32\u0E19/\u0E41\u0E09\u0E01 3-12")),
+  sides: nullable2(num2("polygon/star: \u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E49\u0E32\u0E19/\u0E41\u0E09\u0E01 3-12")),
   dash: nullable2(bool())
 });
 var imageSchema2 = obj({
   type: en(["image"]),
   ...baseProps,
   src: str("motif:<id>:<#\u0E1E\u0E37\u0E49\u0E19>:<#\u0E2A\u0E35\u0E20\u0E32\u0E1E>:<#\u0E2A\u0E35\u0E40\u0E2A\u0E49\u0E19> \u0E20\u0E32\u0E1E\u0E25\u0E30\u0E40\u0E2D\u0E35\u0E22\u0E14\u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E27\u0E32\u0E14\u0E08\u0E32\u0E01\u0E1E\u0E32\u0E40\u0E25\u0E15 \xB7 preset:<id>:<#rrggbb> \u0E25\u0E32\u0E22\u0E08\u0E32\u0E01\u0E44\u0E25\u0E1A\u0E23\u0E32\u0E23\u0E35 \xB7 asset:<id> \u0E23\u0E39\u0E1B\u0E41\u0E19\u0E1A \xB7 svg:<markup> \u0E20\u0E32\u0E1E\u0E40\u0E27\u0E01\u0E40\u0E15\u0E2D\u0E23\u0E4C\u0E2A\u0E31\u0E49\u0E19 (\u0E21\u0E35 viewBox)"),
-  w: num("\u0E04\u0E27\u0E32\u0E21\u0E01\u0E27\u0E49\u0E32\u0E07 \u0E21\u0E21."),
-  h: nullable2(num("\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07 \u0E21\u0E21. (\u0E44\u0E21\u0E48\u0E43\u0E2A\u0E48 = \u0E15\u0E32\u0E21\u0E2A\u0E31\u0E14\u0E2A\u0E48\u0E27\u0E19\u0E23\u0E39\u0E1B)")),
+  w: num2("\u0E04\u0E27\u0E32\u0E21\u0E01\u0E27\u0E49\u0E32\u0E07 \u0E21\u0E21."),
+  h: nullable2(num2("\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07 \u0E21\u0E21. (\u0E44\u0E21\u0E48\u0E43\u0E2A\u0E48 = \u0E15\u0E32\u0E21\u0E2A\u0E31\u0E14\u0E2A\u0E48\u0E27\u0E19\u0E23\u0E39\u0E1B)")),
   fit: nullable2(en(["cover", "contain", "stretch"])),
-  radius: nullable2(num("\u0E21\u0E38\u0E21\u0E42\u0E04\u0E49\u0E07 \u0E21\u0E21.")),
+  radius: nullable2(num2("\u0E21\u0E38\u0E21\u0E42\u0E04\u0E49\u0E07 \u0E21\u0E21.")),
   circle: nullable2(bool())
 });
-var anchorSchema2 = obj({ nx: num("0-1"), ny: num("0-1"), ox: nullable2(num()), oy: nullable2(num()), ix: nullable2(num()), iy: nullable2(num()) });
+var anchorSchema2 = obj({ nx: num2("0-1"), ny: num2("0-1"), ox: nullable2(num2()), oy: nullable2(num2()), ix: nullable2(num2()), iy: nullable2(num2()) });
 var pathSchema2 = obj({
   type: en(["path"]),
   ...baseProps,
   anchors: arr(anchorSchema2, "\u0E08\u0E38\u0E14\u0E22\u0E2D\u0E14 normalized 0..1 \u0E43\u0E19\u0E01\u0E23\u0E2D\u0E1A w\xD7h, ox/oy \u0E41\u0E02\u0E19\u0E40\u0E1A\u0E0B\u0E34\u0E40\u0E22\u0E23\u0E4C\u0E2D\u0E2D\u0E01 ix/iy \u0E41\u0E02\u0E19\u0E40\u0E02\u0E49\u0E32"),
   closed: bool(),
-  w: num(),
-  h: num(),
+  w: num2(),
+  h: num2(),
   fill: str(),
   stroke: str(),
-  strokeW: num(),
+  strokeW: num2(),
   grad: nullable2(gradSchema),
   dash: nullable2(bool())
 });
@@ -60468,7 +60651,7 @@ var rowSchema = obj({ label: str(), value: str(), rdi: nullable2(str("% Thai RDI
 var nutritionSchema2 = obj({
   type: en(["nutrition"]),
   ...baseProps,
-  w: num("\u0E04\u0E27\u0E32\u0E21\u0E01\u0E27\u0E49\u0E32\u0E07\u0E15\u0E32\u0E23\u0E32\u0E07 \u0E21\u0E21. (\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E04\u0E33\u0E19\u0E27\u0E13\u0E40\u0E2D\u0E07 ~1.2\xD7w)"),
+  w: num2("\u0E04\u0E27\u0E32\u0E21\u0E01\u0E27\u0E49\u0E32\u0E07\u0E15\u0E32\u0E23\u0E32\u0E07 \u0E21\u0E21. (\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E39\u0E07\u0E04\u0E33\u0E19\u0E27\u0E13\u0E40\u0E2D\u0E07 ~1.2\xD7w)"),
   serving: str("\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E2B\u0E19\u0E48\u0E27\u0E22\u0E1A\u0E23\u0E34\u0E42\u0E20\u0E04"),
   servings: str("\u0E08\u0E33\u0E19\u0E27\u0E19\u0E2B\u0E19\u0E48\u0E27\u0E22\u0E1A\u0E23\u0E34\u0E42\u0E20\u0E04\u0E15\u0E48\u0E2D\u0E20\u0E32\u0E0A\u0E19\u0E30"),
   energy: str("\u0E01\u0E34\u0E42\u0E25\u0E41\u0E04\u0E25\u0E2D\u0E23\u0E35"),
@@ -60478,7 +60661,7 @@ var nutritionSchema2 = obj({
   footnote: str(),
   ink: nullable2(str()),
   paper: nullable2(bool()),
-  scale: nullable2(num())
+  scale: nullable2(num2())
 });
 var ARTWORK_SCHEMA = obj({
   name: nullable2(str("\u0E0A\u0E37\u0E48\u0E2D\u0E41\u0E19\u0E27\u0E04\u0E34\u0E14\u0E07\u0E32\u0E19\u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A (\u0E44\u0E17\u0E22 \u0E2A\u0E31\u0E49\u0E19)")),
@@ -61123,9 +61306,9 @@ var LOCAL_ARTWORK_LIMITS = { timeoutMs: 13e4, maxRetries: 0, budgetMs: 22e4 };
 var MAX_IMAGES = 4;
 var MAX_PANELS = 80;
 var ArtworkResponseError = class extends Error {
-  constructor(reason, message) {
+  constructor(reason2, message) {
     super(message);
-    this.reason = reason;
+    this.reason = reason2;
     this.name = "ArtworkResponseError";
   }
 };
@@ -61345,23 +61528,23 @@ function parseArtworkRequest(body) {
   const kind = body.kind === "vessel" || body.kind === "pouch" ? body.kind : "box";
   const template = typeof body.template === "string" ? body.template.slice(0, 40) : "tuck-end";
   const materialId = typeof body.materialId === "string" && MATERIALS.some((m) => m.id === body.materialId) ? body.materialId : getMaterial("carton-300").id;
-  const num2 = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi ? v : null;
+  const num3 = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi ? v : null;
   const b = body.box ?? {};
-  const W = num2(b.W, 1, 2e3), D = num2(b.D, 1, 2e3), H = num2(b.H, 1, 2e3);
+  const W = num3(b.W, 1, 2e3), D = num3(b.D, 1, 2e3), H = num3(b.H, 1, 2e3);
   if (W === null || D === null || H === null) throw new Error("box");
   const s = body.sheet ?? {};
-  const sw = num2(s.w, 1, 5e3), sh = num2(s.h, 1, 5e3);
+  const sw = num3(s.w, 1, 5e3), sh = num3(s.h, 1, 5e3);
   if (sw === null || sh === null) throw new Error("sheet");
   if (!Array.isArray(body.panels) || !body.panels.length || body.panels.length > MAX_PANELS) throw new Error("panels");
   const panels = body.panels.map((p) => {
     const o = p ?? {};
     const id = typeof o.id === "string" ? o.id.slice(0, 40) : "";
-    const x0 = num2(o.x0, -5e3, 5e3), y0 = num2(o.y0, -5e3, 5e3), x1 = num2(o.x1, -5e3, 5e3), y1 = num2(o.y1, -5e3, 5e3);
+    const x0 = num3(o.x0, -5e3, 5e3), y0 = num3(o.y0, -5e3, 5e3), x1 = num3(o.x1, -5e3, 5e3), y1 = num3(o.y1, -5e3, 5e3);
     if (!id || x0 === null || y0 === null || x1 === null || y1 === null || x1 <= x0 || y1 <= y0) throw new Error("panel");
     return { id, x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, role: typeof o.role === "string" ? o.role.slice(0, 160) : `\u0E41\u0E1C\u0E07 ${id}`, print: o.print !== false };
   });
   const fillColor = typeof body.fillColor === "string" && HEX2.test(body.fillColor) ? body.fillColor : null;
-  const existing = num2(body.existing, 0, 1e4) ?? 0;
+  const existing = num3(body.existing, 0, 1e4) ?? 0;
   const images = [];
   if (Array.isArray(body.images)) {
     if (body.images.length > MAX_IMAGES) throw new Error("images");
@@ -61379,7 +61562,7 @@ function parseArtworkRequest(body) {
   const f = body.front ?? null;
   if (f && typeof f === "object" && typeof f.panel === "string") {
     const target = panels.find((p) => p.id === f.panel);
-    const x0 = num2(f.x0, 0, 5e3), x1 = num2(f.x1, 0, 5e3);
+    const x0 = num3(f.x0, 0, 5e3), x1 = num3(f.x1, 0, 5e3);
     if (target && x0 !== null && x1 !== null && x1 > x0 && x1 <= target.w + 0.5) front = { panel: target.id, x0, x1 };
   }
   const model = isAiModelChoice(body.model) ? body.model : void 0;
@@ -61712,8 +61895,10 @@ var marketplacePaths = [
   ["quoteDraft", /^\/api\/v1\/marketplace\/requests\/([^/]+)$/, ["GET"]],
   ["quotePublication", /^\/api\/v1\/marketplace\/requests\/([^/]+)\/publication$/, ["GET", "POST"]],
   ["quoteEligibleSuppliers", /^\/api\/v1\/marketplace\/requests\/([^/]+)\/eligible-suppliers$/, ["GET"]],
+  ["quoteRequestNotifications", /^\/api\/v1\/marketplace\/quote-request-notifications$/, ["GET"]],
   ["supplierQuoteRequests", /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests$/, ["GET"]],
-  ["supplierQuoteRequest", /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests\/([^/]+)$/, ["GET"]]
+  ["supplierQuoteRequest", /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests\/([^/]+)$/, ["GET"]],
+  ["markQuoteRequestNotificationRead", /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests\/([^/]+)\/read$/, ["POST"]]
 ];
 function matchMarketplaceRoute(path6) {
   for (const [kind, pattern, methods] of marketplacePaths) {
@@ -61844,6 +62029,10 @@ async function serveMarketplaceRoute(route, request, repository) {
       const after = validated(quoteEligibleSupplierListQuery, uniqueQuery(request.query));
       return { status: 200, data: await repository.listQuoteRequestEligibleSuppliers(actor, id, after) };
     }
+    case "quoteRequestNotifications": {
+      const after = validated(quoteRequestNotificationQuery, uniqueQuery(request.query));
+      return { status: 200, data: await repository.listQuoteRequestNotifications(actor, after) };
+    }
     case "supplierQuoteRequests": {
       const supplierId = validated(supplierIdSchema, parameter);
       const after = validated(supplierQuoteRequestListQuery, uniqueQuery(request.query));
@@ -61854,16 +62043,464 @@ async function serveMarketplaceRoute(route, request, repository) {
       const id = validated(supplierIdSchema, childId);
       return { status: 200, data: await repository.getSupplierQuoteRequest(actor, supplierId, id) };
     }
+    case "markQuoteRequestNotificationRead": {
+      const supplierId = validated(supplierIdSchema, parameter);
+      const id = validated(supplierIdSchema, childId);
+      return { status: 200, data: await repository.markQuoteRequestNotificationRead(actor, supplierId, id) };
+    }
     case "adminList": {
       const { status, after } = validated(supplierAdminQuery, Object.fromEntries(request.query));
       return { status: 200, data: await repository.adminList(actor, status, after) };
     }
     case "review": {
       const supplierId = validated(supplierIdSchema, parameter);
-      const { expectedRevision, action, reason } = validated(reviewSupplierInput, await request.readBody());
-      return { status: 200, data: await repository.review(actor, supplierId, expectedRevision, action, reason) };
+      const { expectedRevision, action, reason: reason2 } = validated(reviewSupplierInput, await request.readBody());
+      return { status: 200, data: await repository.review(actor, supplierId, expectedRevision, action, reason2) };
     }
   }
+}
+
+// server/modules/commerce/validation.ts
+var uuid3 = external_exports.string().uuid();
+var termsSchema = external_exports.object({ requestRevisionId: uuid3, totalMinor: external_exports.number().int().min(1).max(1e11), currency: external_exports.literal("THB"), leadDays: external_exports.number().int().min(1).max(365), validUntil: external_exports.string().datetime({ offset: true }), depositMinor: external_exports.number().int().min(0).max(1e11), requiresProof: external_exports.boolean(), notes: external_exports.string().max(4e3) }).strict();
+var saveQuotationSchema = termsSchema.extend({ operationId: uuid3, expectedRevision: external_exports.number().int().min(0) }).refine((v) => v.depositMinor <= v.totalMinor);
+var quoteActionSchema = external_exports.object({ operationId: uuid3, expectedRevision: external_exports.number().int().min(1) }).strict();
+var quotationRevisionSchema = termsSchema.extend({ id: uuid3, quotationId: uuid3, revision: external_exports.number().int().positive(), sentAt: external_exports.string() });
+var quotationSchema = external_exports.object({ id: uuid3, requestId: uuid3, supplierId: uuid3, supplierName: external_exports.string(), requestTitle: external_exports.string(), revision: external_exports.number().int().positive(), status: external_exports.enum(["draft", "sent", "withdrawn"]), draft: termsSchema.nullable(), current: quotationRevisionSchema.nullable(), createdAt: external_exports.string(), updatedAt: external_exports.string() });
+var quotationPageSchema = external_exports.object({ items: external_exports.array(quotationSchema), nextCursor: uuid3.nullable() });
+var commerceQuery = external_exports.object({ cursor: uuid3.optional() }).strict();
+var orderActionSchema = external_exports.object({ operationId: uuid3, expectedRevision: external_exports.number().int().positive(), reason: external_exports.string().trim().min(1).max(1e3).optional(), fileId: uuid3.nullable().optional(), notes: external_exports.string().max(2e3).optional(), proofId: uuid3.optional(), amountMinor: external_exports.number().int().positive().max(1e11).optional(), reference: external_exports.string().trim().min(1).max(200).optional(), paymentReportId: uuid3.optional() }).strict();
+var selectQuotationSchema = external_exports.object({ operationId: uuid3, quoteRevisionId: uuid3 }).strict();
+var productionOrderSchema = external_exports.object({
+  id: uuid3,
+  requestId: uuid3,
+  supplierId: uuid3,
+  supplierName: external_exports.string(),
+  requestTitle: external_exports.string(),
+  acceptedQuoteRevisionId: uuid3,
+  terms: quotationRevisionSchema,
+  status: external_exports.enum(["pending_supplier_confirmation", "confirmed", "declined", "expired", "cancelled", "in_production", "shipped", "completed"]),
+  revision: external_exports.number().int().positive(),
+  createdAt: external_exports.string(),
+  confirmationDeadline: external_exports.string(),
+  requestSnapshot: external_exports.object({ title: external_exports.string(), quantity: external_exports.number(), notes: external_exports.string(), spec: external_exports.record(external_exports.string(), external_exports.unknown()) }),
+  permissions: external_exports.object({ side: external_exports.enum(["buyer", "supplier"]), canConfirm: external_exports.boolean(), canApproveProof: external_exports.boolean(), canReportPayment: external_exports.boolean(), canConfirmPayment: external_exports.boolean(), canUploadProof: external_exports.boolean(), canUpdateStatus: external_exports.boolean(), canCancel: external_exports.boolean() }),
+  proofs: external_exports.array(external_exports.object({ id: uuid3, version: external_exports.number().int().positive(), fileId: uuid3, notes: external_exports.string(), createdAt: external_exports.string(), approvedAt: external_exports.string().nullable() })),
+  payments: external_exports.array(external_exports.object({ id: uuid3, amountMinor: external_exports.number().int().positive(), reference: external_exports.string(), fileId: uuid3.nullable(), reportedAt: external_exports.string(), confirmedAt: external_exports.string().nullable() }))
+});
+var productionOrderPageSchema = external_exports.object({ items: external_exports.array(productionOrderSchema), nextCursor: uuid3.nullable() });
+var requestSpecSchema = external_exports.object({ template: external_exports.string().min(1).max(120), materialId: external_exports.string().min(1).max(120), W: external_exports.number().min(10).max(250), D: external_exports.number().min(20).max(150), H: external_exports.number().min(10).max(300), handle: external_exports.boolean() }).strict();
+var requestRevisionSchema = external_exports.object({ id: uuid3, revision: external_exports.number().int().positive(), title: external_exports.string(), quantity: external_exports.number().int().positive(), notes: external_exports.string(), spec: requestSpecSchema, createdAt: external_exports.string() });
+var requestTradingSchema = external_exports.object({ status: external_exports.enum(["open", "closed", "selection_pending", "awarded"]), acceptingUntil: external_exports.string(), currentRevision: requestRevisionSchema, revisions: external_exports.array(requestRevisionSchema), revisionsNextCursor: external_exports.number().int().nullable().default(null) });
+var reviseRequestSchema = external_exports.object({ operationId: uuid3, expectedRevisionId: uuid3, title: external_exports.string().trim().min(1).max(100), quantity: external_exports.number().int().min(1).max(1e6), notes: external_exports.string().max(1e3), spec: requestSpecSchema, acceptingUntil: external_exports.string().datetime({ offset: true }) }).strict();
+var requestPreviewSchema = external_exports.object({ preview: external_exports.object({ mimeType: external_exports.enum(["image/webp", "image/jpeg"]), dataBase64: external_exports.string().max(87384), byteSize: external_exports.number().int().min(1).max(65536), sourceProjectRevision: external_exports.null(), sourceRequestRevisionId: uuid3, frozenRequestProjectRevision: external_exports.number().int().positive(), projectRevisionAtCapture: external_exports.number().int().positive(), thumbnailUpdatedAt: external_exports.string(), capturedAt: external_exports.string(), match: external_exports.enum(["unverified_reference", "original_reference"]) }).nullable() });
+
+// server/http/commerce.ts
+var paths = [
+  ["buyerPreview", /^\/api\/v1\/marketplace\/requests\/([^/]+)\/revisions\/([^/]+)\/preview$/, ["GET"]],
+  ["supplierPreview", /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests\/([^/]+)\/revisions\/([^/]+)\/preview$/, ["GET"]],
+  ["orderPreview", /^\/api\/v1\/marketplace\/production-orders\/([^/]+)\/preview$/, ["GET"]],
+  ["commerceNotifications", /^\/api\/v1\/marketplace\/commerce-notifications$/, ["GET"]],
+  ["readCommerceNotification", /^\/api\/v1\/marketplace\/commerce-notifications\/([^/]+)\/read$/, ["POST"]],
+  ["buyerQuoteHistory", /^\/api\/v1\/marketplace\/quotations\/([^/]+)\/history$/, ["GET"]],
+  ["supplierQuoteHistory", /^\/api\/v1\/suppliers\/([^/]+)\/quotations\/([^/]+)\/history$/, ["GET"]],
+  ["buyerTrading", /^\/api\/v1\/marketplace\/requests\/([^/]+)\/trading$/, ["GET"]],
+  ["supplierTrading", /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests\/([^/]+)\/trading$/, ["GET"]],
+  ["reviseRequest", /^\/api\/v1\/marketplace\/requests\/([^/]+)\/revisions$/, ["GET", "POST"]],
+  ["supplierRequestHistory", /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests\/([^/]+)\/revisions$/, ["GET"]],
+  ["orderFile", /^\/api\/v1\/marketplace\/production-orders\/([^/]+)\/files\/([^/]+)$/, ["GET"]],
+  ["buyerOrders", /^\/api\/v1\/marketplace\/production-orders$/, ["GET"]],
+  ["supplierOrders", /^\/api\/v1\/suppliers\/([^/]+)\/production-orders$/, ["GET"]],
+  ["order", /^\/api\/v1\/marketplace\/production-orders\/([^/]+)$/, ["GET"]],
+  ["select", /^\/api\/v1\/marketplace\/requests\/([^/]+)\/select-quotation$/, ["POST"]],
+  ["orderAction", /^\/api\/v1\/marketplace\/production-orders\/([^/]+)\/(confirm|decline|cancel|proof|approve-proof|payment|confirm-payment|start-production|ship|complete)$/, ["POST"]],
+  ["buyerQuotes", /^\/api\/v1\/marketplace\/requests\/([^/]+)\/quotations$/, ["GET"]],
+  ["supplierQuotes", /^\/api\/v1\/suppliers\/([^/]+)\/quotations$/, ["GET"]],
+  ["quotation", /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests\/([^/]+)\/quotation$/, ["GET", "PUT"]],
+  ["quoteAction", /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests\/([^/]+)\/quotation\/(send|withdraw)$/, ["POST"]]
+];
+function matchCommerceRoute(path6) {
+  for (const [kind, pattern, methods] of paths) {
+    const m = pattern.exec(path6);
+    if (m) return { kind, methods, params: m.slice(1) };
+  }
+  return null;
+}
+async function serveCommerceRoute(route, request, repo) {
+  if (Object.keys(Object.fromEntries(request.query)).length !== request.query.size) throw new HttpError(422, "VALIDATION_ERROR", "query \u0E0B\u0E49\u0E33");
+  const actor = await request.authenticate();
+  const [id, child, action] = route.params;
+  if (route.kind === "commerceNotifications") {
+    const { cursor } = commerceQuery.parse(Object.fromEntries(request.query));
+    return { status: 200, data: await repo.listNotifications(actor.userId, cursor ?? null) };
+  }
+  if (route.kind === "buyerQuoteHistory" || route.kind === "supplierQuoteHistory") {
+    const { cursor } = external_exports.object({ cursor: external_exports.coerce.number().int().positive().optional() }).strict().parse(Object.fromEntries(request.query));
+    return { status: 200, data: await repo.quoteHistory(actor.userId, uuid3.parse(route.kind === "buyerQuoteHistory" ? id : child), route.kind === "supplierQuoteHistory" ? uuid3.parse(id) : null, cursor ?? null) };
+  }
+  if (route.kind === "buyerOrders" || route.kind === "supplierOrders") {
+    const { cursor } = commerceQuery.parse(Object.fromEntries(request.query));
+    return { status: 200, data: await repo.listOrders(actor.userId, route.kind === "supplierOrders" ? uuid3.parse(id) : null, cursor ?? null) };
+  }
+  const a = uuid3.parse(id);
+  if (route.kind === "buyerPreview") return { status: 200, data: await repo.requestPreview(actor.userId, a, uuid3.parse(child), null) };
+  if (route.kind === "supplierPreview") return { status: 200, data: await repo.requestPreview(actor.userId, uuid3.parse(child), uuid3.parse(action), a) };
+  if (route.kind === "orderPreview") return { status: 200, data: await repo.orderPreview(actor.userId, a) };
+  if (route.kind === "readCommerceNotification") return { status: 200, data: await repo.readNotification(actor.userId, a) };
+  if (route.kind === "buyerTrading") return { status: 200, data: await repo.getTrading(actor.userId, a, null) };
+  if (route.kind === "supplierTrading") return { status: 200, data: await repo.getTrading(actor.userId, uuid3.parse(child), a) };
+  if (route.kind === "supplierRequestHistory" || route.kind === "reviseRequest" && request.method === "GET") {
+    const { cursor } = external_exports.object({ cursor: external_exports.coerce.number().int().positive().optional() }).strict().parse(Object.fromEntries(request.query));
+    return { status: 200, data: await repo.requestHistory(actor.userId, route.kind === "supplierRequestHistory" ? uuid3.parse(child) : a, route.kind === "supplierRequestHistory" ? a : null, cursor ?? null) };
+  }
+  if (route.kind === "reviseRequest") return { status: 200, data: await repo.reviseRequest(actor.userId, a, reviseRequestSchema.parse(await request.readBody())) };
+  if (route.kind === "orderFile") return { status: 200, data: await repo.downloadOrderFile(actor.userId, a, uuid3.parse(child)) };
+  if (route.kind === "order") return { status: 200, data: await repo.getOrder(actor.userId, a) };
+  if (route.kind === "select") return { status: 200, data: await repo.selectQuotation(actor.userId, a, selectQuotationSchema.parse(await request.readBody())) };
+  if (route.kind === "orderAction") return { status: 200, data: await repo.orderAction(actor.userId, a, child, orderActionSchema.parse(await request.readBody())) };
+  if (route.kind === "buyerQuotes" || route.kind === "supplierQuotes") {
+    if (Object.keys(Object.fromEntries(request.query)).length !== request.query.size) throw new HttpError(422, "VALIDATION_ERROR", "query \u0E0B\u0E49\u0E33");
+    const { cursor } = commerceQuery.parse(Object.fromEntries(request.query));
+    return { status: 200, data: await repo.listQuotations(actor.userId, route.kind === "supplierQuotes" ? a : null, route.kind === "buyerQuotes" ? a : null, cursor ?? null) };
+  }
+  const b = uuid3.parse(child);
+  if (route.kind === "quotation" && request.method === "GET") return { status: 200, data: await repo.getQuotation(actor.userId, a, b) };
+  const input2 = route.kind === "quotation" ? saveQuotationSchema.parse(await request.readBody()) : quoteActionSchema.parse(await request.readBody());
+  return { status: 200, data: await repo.writeQuotation(actor.userId, a, b, route.kind === "quotation" ? "save" : action, input2) };
+}
+
+// shared/contracts/conversations.ts
+var CONVERSATION_FILE_MAX_BYTES = 2 * 1024 * 1024;
+var CONVERSATION_FILE_MIME_TYPES = ["application/pdf", "image/png", "image/jpeg"];
+
+// server/modules/conversations/validation.ts
+var conversationId = external_exports.uuid();
+var conversationListQuery = external_exports.object({ after: external_exports.uuid().optional() }).strict();
+var messageListQuery = external_exports.object({ before: external_exports.string().regex(/^[1-9][0-9]*$/).transform(Number).pipe(external_exports.int().positive().max(Number.MAX_SAFE_INTEGER)).optional() }).strict();
+var ensureConversationInput = external_exports.object({ requestId: external_exports.uuid(), supplierId: external_exports.uuid() }).strict();
+var sendMessageInput = external_exports.object({ operationId: external_exports.uuid(), body: external_exports.string().trim().max(4e3), attachmentIds: external_exports.array(external_exports.uuid()).max(3) }).strict().refine((v) => v.body.length > 0 || v.attachmentIds.length > 0).refine((v) => new Set(v.attachmentIds).size === v.attachmentIds.length);
+var readConversationInput = external_exports.object({ sequence: external_exports.int().min(0).max(Number.MAX_SAFE_INTEGER) }).strict();
+var uploadFileInput = external_exports.object({ operationId: external_exports.uuid(), name: external_exports.string().trim().min(1).max(120).regex(/^[^/\\\x00-\x1f\x7f]+$/), mimeType: external_exports.enum(CONVERSATION_FILE_MIME_TYPES), dataBase64: external_exports.string().min(4).max(2796204).regex(/^[A-Za-z0-9+/]+={0,2}$/) }).strict();
+var date5 = external_exports.iso.datetime({ offset: true });
+var conversationFile = external_exports.object({ id: external_exports.uuid(), name: external_exports.string(), mimeType: external_exports.enum(CONVERSATION_FILE_MIME_TYPES), byteSize: external_exports.int().positive().max(2097152), createdAt: date5 }).strict();
+var conversation = external_exports.object({ id: external_exports.uuid(), requestId: external_exports.uuid(), supplierId: external_exports.uuid(), supplierName: external_exports.string(), requestTitle: external_exports.string(), createdAt: date5, updatedAt: date5, lastSequence: external_exports.int().nonnegative(), lastReadSequence: external_exports.int().nonnegative(), unreadCount: external_exports.int().nonnegative(), canWrite: external_exports.boolean(), side: external_exports.enum(["buyer", "supplier"]).optional(), realtimeTopic: external_exports.string() }).strict();
+var conversationPage = external_exports.object({ items: external_exports.array(conversation).max(24), nextCursor: external_exports.uuid().nullable() }).strict();
+var conversationMessage = external_exports.object({ id: external_exports.uuid(), conversationId: external_exports.uuid(), sequence: external_exports.int().positive(), senderId: external_exports.uuid(), senderName: external_exports.string(), body: external_exports.string(), attachments: external_exports.array(conversationFile).max(3), createdAt: date5 }).strict();
+var conversationMessagePage = external_exports.object({ items: external_exports.array(conversationMessage).max(40), nextCursor: external_exports.int().positive().nullable() }).strict();
+var conversationRead = external_exports.object({ lastReadSequence: external_exports.int().nonnegative() }).strict();
+var conversationFileDownload = external_exports.object({ file: conversationFile, dataBase64: external_exports.string() }).strict();
+
+// server/http/conversations.ts
+var paths2 = [
+  ["list", /^\/api\/v1\/marketplace\/conversations$/, ["GET", "POST"]],
+  ["get", /^\/api\/v1\/marketplace\/conversations\/([^/]+)$/, ["GET"]],
+  ["messages", /^\/api\/v1\/marketplace\/conversations\/([^/]+)\/messages$/, ["GET", "POST"]],
+  ["read", /^\/api\/v1\/marketplace\/conversations\/([^/]+)\/read$/, ["POST"]],
+  ["upload", /^\/api\/v1\/marketplace\/conversations\/([^/]+)\/files$/, ["POST"]],
+  ["download", /^\/api\/v1\/marketplace\/conversations\/([^/]+)\/files\/([^/]+)$/, ["GET"]]
+];
+function matchConversationRoute(path6) {
+  for (const [kind, pattern, methods] of paths2) {
+    const m = pattern.exec(path6);
+    if (m) return { kind, methods, id: m[1], fileId: m[2] };
+  }
+  return null;
+}
+function parse4(schema, value) {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) throw new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E01\u0E32\u0E23\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+  return parsed.data;
+}
+async function serveConversationRoute(route, request, repository) {
+  if (!route.methods.includes(request.method)) throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+  const actor = await request.authenticate({ verifyMfa: false });
+  const query = Object.fromEntries(request.query);
+  if (Object.keys(query).length !== request.query.size) throw new HttpError(422, "VALIDATION_ERROR", "query parameter \u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E0B\u0E49\u0E33");
+  if (route.kind === "list") {
+    if (request.method === "GET") return { status: 200, data: await repository.list(actor, parse4(conversationListQuery, query).after ?? null) };
+    return { status: 200, data: await repository.ensure(actor, parse4(ensureConversationInput, await request.readBody())) };
+  }
+  const id = parse4(conversationId, route.id);
+  switch (route.kind) {
+    case "get":
+      return { status: 200, data: await repository.get(actor, id) };
+    case "messages":
+      if (request.method === "GET") return { status: 200, data: await repository.messages(actor, id, parse4(messageListQuery, query).before ?? null) };
+      return { status: 201, data: await repository.send(actor, id, parse4(sendMessageInput, await request.readBody())) };
+    case "read":
+      return { status: 200, data: await repository.read(actor, id, parse4(readConversationInput, await request.readBody()).sequence) };
+    case "upload":
+      return { status: 201, data: await repository.upload(actor, id, parse4(uploadFileInput, await request.readBody(29e5))) };
+    case "download":
+      return { status: 200, data: await repository.download(actor, id, parse4(conversationId, route.fileId)) };
+  }
+}
+
+// server/modules/admin/validation.ts
+var uuid5 = external_exports.string().uuid();
+var reason = external_exports.string().trim().min(5).max(500);
+var permission = external_exports.enum(["messages", "message_files", "order_details", "order_files"]);
+var adminContextSchema = external_exports.object({ scopes: external_exports.array(external_exports.enum(["operations", "support", "support_supervisor", "auditor", "user_moderator"])), requiresMfa: external_exports.boolean() });
+var adminDashboardSchema = external_exports.object({ suppliers: external_exports.record(external_exports.string(), external_exports.number().int().nonnegative()), requests: external_exports.number().int().nonnegative(), orders: external_exports.record(external_exports.string(), external_exports.number().int().nonnegative()), openCases: external_exports.number().int().nonnegative(), overdueConfirmations: external_exports.number().int().nonnegative() });
+var adminSearchQuery = external_exports.object({ q: external_exports.string().trim().min(1).max(100), kind: external_exports.enum(["supplier", "request", "order"]), cursor: uuid5.optional() }).strict();
+var adminPageQuery = external_exports.object({ cursor: uuid5.optional() }).strict();
+var supportCaseSchema = external_exports.object({ id: uuid5, title: external_exports.string(), reason: external_exports.string(), assignedTo: uuid5, createdBy: uuid5, conversationId: uuid5.nullable(), orderId: uuid5.nullable(), permissions: external_exports.array(permission), status: external_exports.enum(["open", "closed"]), revision: external_exports.number().int().positive(), createdAt: external_exports.string(), expiresAt: external_exports.string() });
+var createSupportCaseSchema = external_exports.object({ operationId: uuid5, title: external_exports.string().trim().min(3).max(100), reason, assignedTo: uuid5, conversationId: uuid5.nullable(), orderId: uuid5.nullable(), permissions: external_exports.array(permission).max(4).refine((v) => new Set(v).size === v.length), expiresAt: external_exports.string().datetime({ offset: true }) }).strict().superRefine((v, ctx) => {
+  if (!v.conversationId && !v.orderId) ctx.addIssue({ code: "custom", message: "A case requires a specific order or conversation" });
+  if (v.permissions.some((p) => p.startsWith("message")) && !v.conversationId) ctx.addIssue({ code: "custom", message: "Message access requires a conversation" });
+  if (v.permissions.some((p) => p.startsWith("order")) && !v.orderId) ctx.addIssue({ code: "custom", message: "Order access requires an order" });
+});
+var closeSupportCaseSchema = external_exports.object({ operationId: uuid5, expectedRevision: external_exports.number().int().positive(), reason }).strict();
+var supportAccessSchema = external_exports.object({ reason, view: external_exports.enum(["messages", "order_details"]), beforeSequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }).strict();
+var supportFileAccessSchema = external_exports.object({ reason }).strict();
+var supportCasePageSchema = external_exports.object({ items: external_exports.array(supportCaseSchema), nextCursor: uuid5.nullable() });
+var adminSearchPageSchema = external_exports.object({ items: external_exports.array(external_exports.object({ id: uuid5, kind: external_exports.enum(["supplier", "request", "order"]), title: external_exports.string(), status: external_exports.string() })), nextCursor: uuid5.nullable() });
+var adminAuditPageSchema = external_exports.object({ items: external_exports.array(external_exports.object({ id: uuid5, actorId: uuid5, action: external_exports.string(), objectType: external_exports.string(), objectId: uuid5.nullable(), caseId: uuid5.nullable(), reason: external_exports.string(), createdAt: external_exports.string() })), nextCursor: uuid5.nullable() });
+var supportAccessResultSchema = external_exports.object({ case: supportCaseSchema, messages: external_exports.array(external_exports.object({ id: uuid5, sequence: external_exports.number().int(), senderName: external_exports.string(), body: external_exports.string(), createdAt: external_exports.string(), files: external_exports.array(external_exports.object({ id: uuid5, name: external_exports.string(), mimeType: external_exports.string(), byteSize: external_exports.number().int() })) })).nullable(), nextBeforeSequence: external_exports.number().int().nullable(), order: external_exports.object({ id: uuid5, requestId: uuid5, supplierId: uuid5, status: external_exports.string(), revision: external_exports.number().int(), supplierName: external_exports.string(), terms: external_exports.record(external_exports.string(), external_exports.unknown()), requestSnapshot: external_exports.record(external_exports.string(), external_exports.unknown()), proofs: external_exports.array(external_exports.object({ id: uuid5, fileId: uuid5, version: external_exports.number().int(), notes: external_exports.string() })), payments: external_exports.array(external_exports.object({ id: uuid5, fileId: uuid5.nullable(), amountMinor: external_exports.number().int(), reference: external_exports.string() })) }).nullable() });
+var supportFileSchema = external_exports.object({ file: external_exports.object({ id: uuid5, name: external_exports.string(), mimeType: external_exports.enum(["application/pdf", "image/png", "image/jpeg"]), byteSize: external_exports.number().int() }), dataBase64: external_exports.string() });
+var adminUserQuery = external_exports.object({ q: external_exports.string().trim().min(1).max(100), cursor: uuid5.optional() }).strict();
+var adminUserSchema = external_exports.object({ id: uuid5, displayName: external_exports.string(), status: external_exports.enum(["active", "suspended", "deleted"]), revision: external_exports.number().int().positive(), createdAt: external_exports.string(), canChangeStatus: external_exports.boolean() });
+var adminUserPageSchema = external_exports.object({ items: external_exports.array(adminUserSchema), nextCursor: uuid5.nullable() });
+var adminUserStatusSchema = external_exports.object({ operationId: uuid5, expectedRevision: external_exports.number().int().positive(), status: external_exports.enum(["active", "suspended"]), reason }).strict();
+var adminMaintenanceSchema = external_exports.object({ operationId: uuid5, reason }).strict();
+var adminMaintenanceResultSchema = external_exports.object({ expiredOrders: external_exports.number().int().nonnegative(), commerceNotifications: external_exports.number().int().nonnegative(), chatNotifications: external_exports.number().int().nonnegative(), chatFailures: external_exports.number().int().nonnegative() });
+
+// server/http/admin.ts
+var routes = [
+  ["users", /^\/api\/v1\/admin\/users$/, ["GET"]],
+  ["userStatus", /^\/api\/v1\/admin\/users\/([^/]+)\/status$/, ["POST"]],
+  ["maintenance", /^\/api\/v1\/admin\/maintenance$/, ["POST"]],
+  ["context", /^\/api\/v1\/admin\/context$/, ["GET"]],
+  ["dashboard", /^\/api\/v1\/admin\/dashboard$/, ["GET"]],
+  ["search", /^\/api\/v1\/admin\/search$/, ["GET"]],
+  ["cases", /^\/api\/v1\/admin\/support-cases$/, ["GET", "POST"]],
+  ["closeCase", /^\/api\/v1\/admin\/support-cases\/([^/]+)\/close$/, ["POST"]],
+  ["access", /^\/api\/v1\/admin\/support-cases\/([^/]+)\/access$/, ["POST"]],
+  ["file", /^\/api\/v1\/admin\/support-cases\/([^/]+)\/files\/([^/]+)\/access$/, ["POST"]],
+  ["audit", /^\/api\/v1\/admin\/audit-log$/, ["GET"]]
+];
+function matchAdminRoute(path6) {
+  for (const [kind, pattern, methods] of routes) {
+    const match = pattern.exec(path6);
+    if (match) return { kind, methods, params: match.slice(1) };
+  }
+  return null;
+}
+async function serveAdminRoute(route, request, repository) {
+  const actor = await request.authenticate({ verifyMfa: true });
+  if (route.kind === "context") {
+    const context = await repository.context(actor.userId);
+    return { status: 200, data: { ...context, requiresMfa: context.scopes.length > 0 && actor.hasVerifiedMfa !== true } };
+  }
+  if (actor.hasVerifiedMfa !== true) throw new HttpError(403, "MARKETPLACE_MFA_REQUIRED", "\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E15\u0E31\u0E27\u0E15\u0E19\u0E2A\u0E2D\u0E07\u0E02\u0E31\u0E49\u0E19\u0E15\u0E2D\u0E19\u0E01\u0E48\u0E2D\u0E19\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E41\u0E2D\u0E14\u0E21\u0E34\u0E19");
+  const query = Object.fromEntries(request.query);
+  if (Object.keys(query).length !== request.query.size) throw new HttpError(422, "VALIDATION_ERROR", "query parameter \u0E15\u0E49\u0E2D\u0E07\u0E44\u0E21\u0E48\u0E0B\u0E49\u0E33");
+  if (route.kind === "users") {
+    const q = adminUserQuery.parse(query);
+    return { status: 200, data: await repository.users(actor.userId, q.q, q.cursor ?? null) };
+  }
+  if (route.kind === "userStatus") return { status: 200, data: await repository.userStatus(actor.userId, external_exports.string().uuid().parse(route.params[0]), adminUserStatusSchema.parse(await request.readBody())) };
+  if (route.kind === "maintenance") return { status: 200, data: await repository.maintenance(actor.userId, adminMaintenanceSchema.parse(await request.readBody())) };
+  if (route.kind === "dashboard") {
+    external_exports.object({}).strict().parse(query);
+    return { status: 200, data: await repository.dashboard(actor.userId) };
+  }
+  if (route.kind === "search") {
+    const q = adminSearchQuery.parse(query);
+    return { status: 200, data: await repository.search(actor.userId, q.q, q.kind, q.cursor ?? null) };
+  }
+  if (route.kind === "audit") {
+    const q = adminPageQuery.parse(query);
+    return { status: 200, data: await repository.audit(actor.userId, q.cursor ?? null) };
+  }
+  if (route.kind === "cases") {
+    if (request.method === "GET") {
+      const q = adminPageQuery.parse(query);
+      return { status: 200, data: await repository.cases(actor.userId, q.cursor ?? null) };
+    }
+    return { status: 201, data: await repository.createCase(actor.userId, createSupportCaseSchema.parse(await request.readBody())) };
+  }
+  const id = external_exports.string().uuid().parse(route.params[0]);
+  if (route.kind === "closeCase") return { status: 200, data: await repository.closeCase(actor.userId, id, closeSupportCaseSchema.parse(await request.readBody())) };
+  if (route.kind === "access") return { status: 200, data: await repository.accessCase(actor.userId, id, supportAccessSchema.parse(await request.readBody())) };
+  const fileId = external_exports.string().uuid().parse(route.params[1]);
+  const { reason: reason2 } = supportFileAccessSchema.parse(await request.readBody());
+  return { status: 200, data: await repository.accessFile(actor.userId, id, fileId, reason2) };
+}
+
+// server/adapters/supabase/commerceRepository.ts
+function commerceDatabaseError(error62) {
+  if (["MARKETPLACE_NOT_FOUND", "QUOTE_REQUEST_NOT_FOUND", "CONVERSATION_NOT_FOUND"].includes(error62.message)) return new HttpError(404, "NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49");
+  if (error62.message === "MARKETPLACE_FORBIDDEN") return new HttpError(403, "MARKETPLACE_FORBIDDEN", "\u0E04\u0E38\u0E13\u0E44\u0E21\u0E48\u0E21\u0E35\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E17\u0E33\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49");
+  if (error62.message === "IDEMPOTENCY_KEY_REUSED") return new HttpError(409, "IDEMPOTENCY_KEY_REUSED", "\u0E23\u0E2B\u0E31\u0E2A\u0E04\u0E33\u0E02\u0E2D\u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2D\u0E37\u0E48\u0E19\u0E41\u0E25\u0E49\u0E27");
+  if (error62.message === "REVISION_CONFLICT") return new HttpError(409, "REVISION_CONFLICT", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E41\u0E25\u0E49\u0E27 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E42\u0E2B\u0E25\u0E14\u0E43\u0E2B\u0E21\u0E48");
+  if (error62.message === "MARKETPLACE_CONFLICT" || error62.code === "23505") return new HttpError(409, "MARKETPLACE_CONFLICT", "\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E44\u0E21\u0E48\u0E2D\u0E19\u0E38\u0E0D\u0E32\u0E15\u0E43\u0E2B\u0E49\u0E17\u0E33\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49");
+  if (error62.message === "VALIDATION_ERROR" || ["22007", "22P02", "22003", "23514"].includes(error62.code)) return new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+  return new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 Marketplace \u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
+}
+var SupabaseCommerceRepository = class {
+  constructor(client) {
+    this.client = client;
+  }
+  async rpc(name, args, schema) {
+    const { data, error: error62 } = await this.client.rpc(name, args);
+    if (error62) throw commerceDatabaseError(error62);
+    const result = schema.safeParse(data);
+    if (!result.success) throw new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 Marketplace \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+    return result.data;
+  }
+  downloadOrderFile(actor, order, file2) {
+    return this.rpc("marketplace_order_download_file", { p_actor: actor, p_order: order, p_file: file2 }, external_exports.object({ file: external_exports.object({ id: external_exports.string().uuid(), name: external_exports.string(), mimeType: external_exports.enum(["application/pdf", "image/png", "image/jpeg"]), byteSize: external_exports.number(), createdAt: external_exports.string() }), dataBase64: external_exports.string() }));
+  }
+  getTrading(actor, request, supplier) {
+    return this.rpc("marketplace_request_trading_get", { p_actor: actor, p_request: request, p_supplier: supplier }, requestTradingSchema);
+  }
+  reviseRequest(actor, request, input2) {
+    return this.rpc("marketplace_request_revise", { p_actor: actor, p_request: request, p_input: input2 }, requestTradingSchema);
+  }
+  listNotifications(actor, after) {
+    return this.rpc("marketplace_commerce_notifications", { p_actor: actor, p_after: after }, external_exports.object({ items: external_exports.array(external_exports.object({ id: external_exports.string().uuid(), requestId: external_exports.string().uuid(), supplierId: external_exports.string().uuid(), kind: external_exports.string(), entityId: external_exports.string().uuid(), createdAt: external_exports.string(), readAt: external_exports.string().nullable(), requestTitle: external_exports.string(), supplierName: external_exports.string() })), nextCursor: external_exports.string().uuid().nullable() }));
+  }
+  readNotification(actor, event) {
+    return this.rpc("marketplace_commerce_notification_read", { p_actor: actor, p_event: event }, external_exports.object({ id: external_exports.string().uuid(), readAt: external_exports.string() }));
+  }
+  quoteHistory(actor, quotation, supplier, after) {
+    return this.rpc("marketplace_quotation_history", { p_actor: actor, p_quotation: quotation, p_supplier: supplier, p_after: after }, external_exports.object({ items: external_exports.array(quotationRevisionSchema), nextCursor: external_exports.number().int().nullable() }));
+  }
+  requestHistory(actor, request, supplier, after) {
+    return this.rpc("marketplace_request_history", { p_actor: actor, p_request: request, p_supplier: supplier, p_after: after }, external_exports.object({ items: external_exports.array(requestRevisionSchema), nextCursor: external_exports.number().int().nullable() }));
+  }
+  requestPreview(actor, request, revision, supplier) {
+    return this.rpc("marketplace_request_preview", { p_actor: actor, p_request: request, p_revision: revision, p_supplier: supplier }, requestPreviewSchema);
+  }
+  orderPreview(actor, order) {
+    return this.rpc("marketplace_order_preview", { p_actor: actor, p_order: order }, requestPreviewSchema);
+  }
+  getOrder(actor, order) {
+    return this.rpc("marketplace_order_get", { p_actor: actor, p_order: order }, productionOrderSchema);
+  }
+  listOrders(actor, supplier, after) {
+    return this.rpc("marketplace_order_list", { p_actor: actor, p_supplier: supplier, p_after: after }, productionOrderPageSchema);
+  }
+  selectQuotation(actor, request, input2) {
+    return this.rpc("marketplace_order_select", { p_actor: actor, p_request: request, p_input: input2 }, productionOrderSchema);
+  }
+  orderAction(actor, order, action, input2) {
+    return this.rpc("marketplace_order_action", { p_actor: actor, p_order: order, p_action: action, p_input: input2 }, productionOrderSchema);
+  }
+  getQuotation(actor, supplier, request) {
+    return this.rpc("marketplace_quotation_get", { p_actor: actor, p_supplier: supplier, p_request: request }, external_exports.object({ quotation: quotationSchema.nullable() }));
+  }
+  listQuotations(actor, supplier, request, after) {
+    return this.rpc("marketplace_quotation_list", { p_actor: actor, p_supplier: supplier, p_request: request, p_after: after }, quotationPageSchema);
+  }
+  writeQuotation(actor, supplier, request, action, input2) {
+    return this.rpc("marketplace_quotation_write", { p_actor: actor, p_supplier: supplier, p_request: request, p_action: action, p_input: input2 }, quotationSchema);
+  }
+};
+function createSupabaseCommerceRepository(config2) {
+  return new SupabaseCommerceRepository(createClient(config2.url, config2.secretKey, { auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false } }));
+}
+
+// server/adapters/supabase/adminRepository.ts
+var SupabaseAdminRepository = class {
+  constructor(client) {
+    this.client = client;
+  }
+  async rpc(name, args, schema) {
+    const { data, error: error62 } = await this.client.rpc(name, args);
+    if (error62) throw commerceDatabaseError(error62);
+    const parsed = schema.safeParse(data);
+    if (!parsed.success) throw new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E1C\u0E39\u0E49\u0E14\u0E39\u0E41\u0E25\u0E23\u0E30\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
+    return parsed.data;
+  }
+  users(actor, q, after) {
+    return this.rpc("marketplace_admin_users", { p_actor: actor, p_query: q, p_after: after }, adminUserPageSchema);
+  }
+  userStatus(actor, user, input2) {
+    return this.rpc("marketplace_admin_user_status", { p_actor: actor, p_user: user, p_input: input2 }, adminUserSchema);
+  }
+  maintenance(actor, input2) {
+    return this.rpc("marketplace_admin_maintenance", { p_actor: actor, p_input: input2 }, adminMaintenanceResultSchema);
+  }
+  context(actor) {
+    return this.rpc("marketplace_admin_context", { p_actor: actor }, adminContextSchema);
+  }
+  dashboard(actor) {
+    return this.rpc("marketplace_admin_dashboard", { p_actor: actor }, adminDashboardSchema);
+  }
+  search(actor, q, kind, after) {
+    return this.rpc("marketplace_admin_search", { p_actor: actor, p_query: q, p_kind: kind, p_after: after }, adminSearchPageSchema);
+  }
+  cases(actor, after) {
+    return this.rpc("marketplace_support_cases", { p_actor: actor, p_after: after }, supportCasePageSchema);
+  }
+  createCase(actor, input2) {
+    return this.rpc("marketplace_support_case_create", { p_actor: actor, p_input: input2 }, supportCaseSchema);
+  }
+  closeCase(actor, id, input2) {
+    return this.rpc("marketplace_support_case_close", { p_actor: actor, p_case: id, p_input: input2 }, supportCaseSchema);
+  }
+  accessCase(actor, id, input2) {
+    return this.rpc("marketplace_support_access", { p_actor: actor, p_case: id, p_input: input2 }, supportAccessResultSchema);
+  }
+  accessFile(actor, id, file2, reason2) {
+    return this.rpc("marketplace_support_file", { p_actor: actor, p_case: id, p_file: file2, p_reason: reason2 }, supportFileSchema);
+  }
+  audit(actor, after) {
+    return this.rpc("marketplace_admin_audit", { p_actor: actor, p_after: after }, adminAuditPageSchema);
+  }
+};
+function createSupabaseAdminRepository(config2) {
+  return new SupabaseAdminRepository(createClient(config2.url, config2.secretKey, { auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false } }));
+}
+
+// server/adapters/supabase/conversationRepository.ts
+var SupabaseConversationRepository = class {
+  constructor(client) {
+    this.client = client;
+  }
+  async rpc(name, actor, args, schema) {
+    const { data, error: error62 } = await this.client.rpc(name, { p_actor_user_id: actor.userId, ...args });
+    if (error62) {
+      if (["MARKETPLACE_NOT_FOUND", "CONVERSATION_NOT_FOUND"].includes(error62.message)) throw new HttpError(404, "NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E01\u0E32\u0E23\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E19\u0E35\u0E49");
+      if (error62.message === "MARKETPLACE_FORBIDDEN") throw new HttpError(403, "MARKETPLACE_FORBIDDEN", "\u0E04\u0E38\u0E13\u0E44\u0E21\u0E48\u0E21\u0E35\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E2A\u0E48\u0E07\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21");
+      if (error62.message === "IDEMPOTENCY_KEY_REUSED") throw new HttpError(409, "IDEMPOTENCY_KEY_REUSED", "\u0E23\u0E2B\u0E31\u0E2A\u0E04\u0E33\u0E02\u0E2D\u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2D\u0E37\u0E48\u0E19\u0E41\u0E25\u0E49\u0E27");
+      if (error62.message === "VALIDATION_ERROR") throw new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E01\u0E32\u0E23\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+      if (error62.message === "CONVERSATION_FILE_LIMIT") throw new HttpError(409, "STORAGE_QUOTA_EXCEEDED", "\u0E44\u0E1F\u0E25\u0E4C\u0E43\u0E19\u0E2B\u0E49\u0E2D\u0E07\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E16\u0E36\u0E07\u0E02\u0E35\u0E14\u0E08\u0E33\u0E01\u0E31\u0E14\u0E41\u0E25\u0E49\u0E27");
+      throw new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E01\u0E32\u0E23\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
+    }
+    const parsed = schema.safeParse(data);
+    if (!parsed.success) throw new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E01\u0E32\u0E23\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+    return parsed.data;
+  }
+  list(actor, after) {
+    return this.rpc("marketplace_list_conversations", actor, { p_after: after }, conversationPage);
+  }
+  ensure(actor, input2) {
+    return this.rpc("marketplace_ensure_conversation", actor, { p_request_id: input2.requestId, p_supplier_id: input2.supplierId }, conversation);
+  }
+  get(actor, id) {
+    return this.rpc("marketplace_get_conversation", actor, { p_conversation_id: id }, conversation);
+  }
+  messages(actor, id, before) {
+    return this.rpc("marketplace_list_conversation_messages", actor, { p_conversation_id: id, p_before: before }, conversationMessagePage);
+  }
+  send(actor, id, input2) {
+    return this.rpc("marketplace_send_conversation_message", actor, { p_conversation_id: id, p_operation_id: input2.operationId, p_body: input2.body, p_attachment_ids: input2.attachmentIds }, conversationMessage);
+  }
+  read(actor, id, sequence) {
+    return this.rpc("marketplace_read_conversation", actor, { p_conversation_id: id, p_sequence: sequence }, conversationRead);
+  }
+  upload(actor, id, input2) {
+    return this.rpc("marketplace_upload_conversation_file", actor, { p_conversation_id: id, p_operation_id: input2.operationId, p_name: input2.name, p_mime_type: input2.mimeType, p_data_base64: input2.dataBase64 }, conversationFile);
+  }
+  download(actor, id, fileId) {
+    return this.rpc("marketplace_download_conversation_file", actor, { p_conversation_id: id, p_file_id: fileId }, conversationFileDownload);
+  }
+};
+function createSupabaseConversationRepository(config2) {
+  return new SupabaseConversationRepository(createClient(config2.url, config2.secretKey, { auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false } }));
 }
 
 // server/http/router.ts
@@ -62045,6 +62682,9 @@ function createApiRouter(config2, dependencies = {}) {
   const billingRepository = dependencies.billingRepository === void 0 ? config2.supabase && createSupabaseBillingRepository(config2.supabase) : dependencies.billingRepository;
   const billingService = dependencies.billingService === void 0 ? billingRepository && new BillingService(billingRepository, billingFlags(config2)) : dependencies.billingService;
   const marketplaceRepository = config2.marketplaceSuppliersEnabled ? dependencies.marketplaceRepository === void 0 ? config2.supabase && createSupabaseMarketplaceRepository(config2.supabase) : dependencies.marketplaceRepository : null;
+  const adminRepository = config2.marketplaceSuppliersEnabled && config2.supabase ? createSupabaseAdminRepository(config2.supabase) : null;
+  const conversationRepository = config2.marketplaceSuppliersEnabled && config2.supabase ? createSupabaseConversationRepository(config2.supabase) : null;
+  const commerceRepository = config2.marketplaceSuppliersEnabled && config2.supabase ? createSupabaseCommerceRepository(config2.supabase) : null;
   return async (req, res) => {
     const requestId = randomUUID3();
     const path6 = requestPath(req);
@@ -62094,6 +62734,78 @@ function createApiRouter(config2, dependencies = {}) {
         sendJson(res, 200, { data, requestId }, requestId);
       } catch (error63) {
         const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E42\u0E2B\u0E25\u0E14\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
+    const adminRoute = config2.marketplaceSuppliersEnabled ? matchAdminRoute(path6) : null;
+    if (adminRoute) {
+      try {
+        if (!req.method || !adminRoute.methods.includes(req.method)) {
+          res.setHeader("allow", adminRoute.methods.join(", "));
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!adminRepository || !sessionService) throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Marketplace");
+        const result = await serveAdminRoute(adminRoute, {
+          method: req.method,
+          query: requestUrl(req).searchParams,
+          authenticate: (options) => sessionService.authenticate(bearerToken(req), requestId, options),
+          readBody: (limit2 = 16 * 1024) => {
+            requireJsonContentType(req);
+            return readJsonBody(req, limit2);
+          }
+        }, adminRepository);
+        sendJson(res, result.status, { data: result.data, requestId }, requestId);
+      } catch (error63) {
+        const httpError = error63 instanceof HttpError ? error63 : error63 instanceof ZodError ? new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 Marketplace \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07") : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E42\u0E2B\u0E25\u0E14\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 Marketplace \u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
+    const conversationRoute = config2.marketplaceSuppliersEnabled ? matchConversationRoute(path6) : null;
+    if (conversationRoute) {
+      try {
+        if (!req.method || !conversationRoute.methods.includes(req.method)) {
+          res.setHeader("allow", conversationRoute.methods.join(", "));
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!conversationRepository || !sessionService) throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Marketplace");
+        const result = await serveConversationRoute(conversationRoute, {
+          method: req.method,
+          query: requestUrl(req).searchParams,
+          authenticate: (options) => sessionService.authenticate(bearerToken(req), requestId, options),
+          readBody: (limit2 = 16 * 1024) => {
+            requireJsonContentType(req);
+            return readJsonBody(req, limit2);
+          }
+        }, conversationRepository);
+        sendJson(res, result.status, { data: result.data, requestId }, requestId);
+      } catch (error63) {
+        const httpError = error63 instanceof HttpError ? error63 : error63 instanceof ZodError ? new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 Marketplace \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07") : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E42\u0E2B\u0E25\u0E14\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 Marketplace \u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
+    const commerceRoute = config2.marketplaceSuppliersEnabled ? matchCommerceRoute(path6) : null;
+    if (commerceRoute) {
+      try {
+        if (!req.method || !commerceRoute.methods.includes(req.method)) {
+          res.setHeader("allow", commerceRoute.methods.join(", "));
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!commerceRepository || !sessionService) throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Marketplace");
+        const result = await serveCommerceRoute(commerceRoute, {
+          method: req.method,
+          query: requestUrl(req).searchParams,
+          authenticate: () => sessionService.authenticate(bearerToken(req), requestId),
+          readBody: () => {
+            requireJsonContentType(req);
+            return readJsonBody(req, 16 * 1024);
+          }
+        }, commerceRepository);
+        sendJson(res, result.status, { data: result.data, requestId }, requestId);
+      } catch (error63) {
+        const httpError = error63 instanceof HttpError ? error63 : error63 instanceof ZodError ? new HttpError(422, "VALIDATION_ERROR", "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 Marketplace \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07") : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E42\u0E2B\u0E25\u0E14\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25 Marketplace \u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
       }
       return;

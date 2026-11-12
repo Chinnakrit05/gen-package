@@ -1,3 +1,4 @@
+import './studio-suppliers.css'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -211,7 +212,7 @@ export function SupplierReviewDocuments({
   }
 
   return (
-    <div className="marketplace-documents" aria-busy={Boolean(busy)}>
+    <div className="marketplace-documents studio-review-documents" aria-busy={Boolean(busy)}>
       {list.isPending && <p role="status">กำลังโหลดรายการเอกสาร…</p>}
       {list.isError && <MarketplaceError
         message={unavailable(list.error) ? 'บัญชีนี้เปิดเอกสารประกอบไม่ได้' : 'โหลดรายการเอกสารไม่สำเร็จ'}
@@ -238,7 +239,7 @@ export function SupplierReviewDocuments({
             </ul>
           )}
           {canWrite && (
-            <form className="marketplace-form" onSubmit={upload}>
+            <form className="marketplace-form studio-upload-panel" onSubmit={upload}>
               <p>แนบได้สูงสุด {SUPPLIER_REVIEW_DOCUMENT_LIMIT} ไฟล์ รองรับ PDF, PNG และ JPEG ขนาดไม่เกิน {sizeLimit} MiB ต่อไฟล์</p>
               <p className="marketplace-muted">แนบแล้ว {documents.length} จาก {SUPPLIER_REVIEW_DOCUMENT_LIMIT} ไฟล์</p>
               <label>

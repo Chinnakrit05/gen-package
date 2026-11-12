@@ -1,3 +1,4 @@
+import '../suppliers/studio-suppliers.css'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { useQuery } from '@tanstack/react-query'
@@ -128,7 +129,9 @@ export function ReviewerMfa({ mfa, onVerified }: { mfa: ReviewerMfaClient; onVer
   }
 
   return (
-    <section className="marketplace-card">
+    <section className="marketplace-card studio-mfa-card">
+      <div className="studio-security-mark" aria-hidden="true">✓</div>
+      <p className="studio-eyebrow">SECURE STAFF ACCESS</p>
       <h2>ยืนยันตัวตนสองขั้นตอน</h2>
       <p>ใช้รหัสจากแอปยืนยันตัวตนที่ผูกกับบัญชีนี้เพื่อเปิดรายการตรวจผู้รับผลิต</p>
       {factors.isPending && <p role="status">กำลังตรวจวิธียืนยันตัวตน…</p>}
@@ -150,7 +153,7 @@ export function ReviewerMfa({ mfa, onVerified }: { mfa: ReviewerMfaClient; onVer
         </>
       )}
       {setup && (
-        <div className="marketplace-notice">
+        <div className="marketplace-notice studio-mfa-setup">
           <p>{setup.qrUrl
             ? 'สแกน QR ด้วยแอปยืนยันตัวตน แล้วกรอกรหัสหกหลักจากแอปด้านล่าง'
             : 'ใช้รหัสตั้งค่าด้วยตนเองในแอปยืนยันตัวตน แล้วกรอกรหัสหกหลักจากแอปด้านล่าง'}</p>

@@ -18,6 +18,15 @@ describe('deployment SPA routing boundaries', () => {
     '/editor/new', '/editor/30000000-0000-4000-8000-000000000001',
     '/editor/30000000-0000-4000-8000-000000000001/',
     '/unknown-ui-page', '/apiary', '/assets-gallery',
+    '/app/requests', '/app/requests/new', '/app/requests/request-id',
+    '/app/requests/request-id/revisions', '/app/requests/request-id/quotations',
+    '/app/orders', '/orders/new', '/orders/order-id', '/chat', '/chat/conversation-id',
+    '/factory/onboarding', '/factory/supplier-id/profile', '/factory/supplier-id/team',
+    '/factory/supplier-id/jobs', '/factory/supplier-id/jobs/request-id',
+    '/factory/supplier-id/jobs/request-id/revisions', '/factory/supplier-id/jobs/request-id/quote',
+    '/factory/supplier-id/quotes', '/factory/supplier-id/orders',
+    '/admin', '/admin/suppliers', '/admin/support', '/admin/audit', '/admin/users',
+    '/suppliers/example-studio',
   ])('serves the shell for a direct UI URL: %s', (url) => {
     expect(servesSpa(url)).toBe(true)
   })
@@ -25,7 +34,9 @@ describe('deployment SPA routing boundaries', () => {
   it.each([
     '/api', '/api/', '/api/v1', '/api/v1/health', '/api/v1/not-a-route',
     '/api/v1/projects?workspaceId=bad', '/api/backend', '/api/box-spec',
-    '/api/unknown-function', '/assets', '/assets/', '/assets/missing',
+    '/api/unknown-function', '/api/v1/admin/context', '/api/v1/admin/maintenance',
+    '/api/v1/production-orders', '/api/v1/conversations',
+    '/assets', '/assets/', '/assets/missing',
     '/assets/app-deadbeef.js', '/assets/font.woff2', '/favicon.ico',
     '/missing.js', '/nested/missing.css', '/images/missing.png',
     '/.well-known/security.txt', '/.well-known/acme-challenge/token',

@@ -77,6 +77,29 @@ export const supplierQuoteRequestPage = z.object({
   items: z.array(supplierQuoteRequestSummary).max(QUOTE_REQUEST_PUBLICATION_PAGE_SIZE),
   nextCursor: draftCursor.nullable(),
 }).strict()
+
+export const quoteRequestNotificationQuery = z.object({
+  afterCreatedAt: timestamp.optional(),
+  afterRequestId: z.uuid().optional(),
+  afterSupplierId: z.uuid().optional(),
+}).strict().refine(({ afterCreatedAt, afterRequestId, afterSupplierId }) =>
+  Boolean(afterCreatedAt) === Boolean(afterRequestId) && Boolean(afterCreatedAt) === Boolean(afterSupplierId),
+).transform(({ afterCreatedAt, afterRequestId, afterSupplierId }) => afterCreatedAt && afterRequestId && afterSupplierId
+  ? { createdAt: afterCreatedAt, requestId: afterRequestId, supplierId: afterSupplierId }
+  : null)
+
+const quoteRequestNotificationCursor = z.object({ createdAt: timestamp, requestId: z.uuid(), supplierId: z.uuid() }).strict()
+const quoteRequestNotification = quoteRequestNotificationCursor.extend({
+  supplierName: publicationSupplier.shape.name,
+  requestTitle: title,
+  readAt: timestamp.nullable(),
+})
+export const quoteRequestNotificationPage = z.object({
+  items: z.array(quoteRequestNotification).max(QUOTE_REQUEST_PUBLICATION_PAGE_SIZE),
+  nextCursor: quoteRequestNotificationCursor.nullable(),
+  hasUnread: z.boolean(),
+}).strict()
+export const quoteRequestNotificationRead = z.object({ requestId: z.uuid(), supplierId: z.uuid(), readAt: timestamp }).strict()
 export const quoteDraftPage = z.object({
   items: z.array(draftSummary).max(QUOTE_REQUEST_DRAFT_PAGE_SIZE),
   nextCursor: draftCursor.nullable(),

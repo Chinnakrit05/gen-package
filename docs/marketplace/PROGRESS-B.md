@@ -1,5 +1,38 @@
 # ความคืบหน้าคน B
 
+## Shared conversation role context - 8 November 2026
+
+Focused migration029 adds authoritative `Conversation.side` from the same existing permission-role function used by conversation access. Buyer ownership wins for a dual-role actor; supplier manager/staff/viewer receive supplier context. The DTO field is optional for older-client/mock compatibility, but the migrated server always returns it. This fixes shared chat-route navigation without guessing from workspace membership or persisting an assumed role.
+
+Verified after targeted029 local apply:8 real rollback-contained lifecycle tests passed, including buyer/manager/staff/viewer/dual-role side;10 conversation HTTP tests passed;TypeScript and diff checks passed. Frontend/browser role navigation acceptance is tracked separately. No other permission or transaction behavior was changed.
+
+
+## Immutable preview completion - 8 November 2026
+
+Closed the remaining publication-preview implementation gap with migration027 and private revision/order preview endpoints. First publication copies actual saved JPEG/WebP bytes up to64 KiB, validates signatures, and omits missing/corrupt images. No backfill for existing publications. Legacy thumbnail provenance is unknown, so sourceProjectRevision remains null and UI receives explicit unverified_reference/original_reference labels plus frozen/capture revisions and timestamps. Revised specs and accepted orders never read a later mutable Editor thumbnail. No Editor capture/upload pipeline or original artwork assets were changed.
+
+Verified current source: TypeScript passes;7 rollback-contained lifecycle PostgreSQL tests pass after027, including immutable preview bytes after thumbnail overwrite/deletion, stale provenance, no retroactive sharing, scoped role checks, exact accepted-spec preview, corrupt image omission and64 KiB constraint. `phase7-preview-http.mjs` passes real HTTP/Auth with actual saved JPEG bytes and new dedicated synthetic fixtures. Browser worker received IDs-only preview fixtures to check display and warning text. No remote migrations or deployment occurred. Final clean-install/build/browser acceptance remains coordinated by the parent/integration worker.
+
+
+## Studio phases 3-7 backend checkpoint - 8 November 2026
+
+Local isolated worktree `marketplace-studio/gen-package`, base `0f10894` plus inherited uncommitted changes. No remote migration, deployment, commit or push in this implementation.
+
+Implemented commerce contracts/API and migrations017,019,021-024,026: immutable sent quotation revisions; staff draft preparation with manager-only send/withdraw; private buyer comparison and paginated history; immutable follow-up public specifications; current-spec/deadline guards; actor/payload-bound operation receipts and current authorization on retries. The original private request draft is retained, not rewritten.
+
+Production selection freezes the accepted quote and request snapshot. A partial unique constraint protects one pending/active/completed order per request. Supplier confirmation revalidates the exact selecting buyer. Proof versions, latest-proof approval, external-payment reports, supplier acknowledgement and guarded production status are separate records. No payment processing is performed. Exact order/file grants protect download bytes. Transactional commerce outbox notices never expose competitor amounts or the winning order ID to losing suppliers.
+
+Dedicated phase4 worker delivered migration018, persisted conversations/messages/private files, pagination, monotonic read cursors, deduplication and content-free private Realtime invalidations. Reported actual local evidence:47 pgTAP assertions,5 PostgreSQL concurrency tests,10 HTTP tests passed. See CHAT-OPERATIONS.md for quotas, retry/retention and cached-subscription revocation limits.
+
+Owner-verified current results: TypeScript passed after confirming024 file and DTO/schema/repository/router edits were complete;29 commerce/marketplace/conversation HTTP tests passed again after026;4 rollback-contained real PostgreSQL lifecycle tests passed on dedicated loopback55432 after026. The lifecycle suite verifies deadline-aware reopening, expired pending selection replacement, explicit latest-proof approval with immutable older approvals, protected file download, Marketplace-only invitee notifications, losing-supplier redaction and membership revocation.
+
+Integration fixes: order-file SQL alias collision; null proof ID must not approve unseen latest proof; Marketplace invitees must not need Editor membership to read notices; preserve legacy supplier-request SQL error contract. Integration reported completed real HTTP proof/payment/order flow and current private file download after fix; final evidence remains owned by the integration worker.
+
+Conservative policy defaults: THB integer satang,30-day initial bidding window,72-hour supplier confirmation, explicit revisions may extend bidding up to90 days. These are implementation defaults, not user-stated requirements. Buyer access remains the existing personal-workspace owner model, not full delegated buyer-team roles.
+
+Operational reference: COMMERCE-OPERATIONS.md. Executed `node scripts/marketplace/phase7-commerce-history.mjs tmp/marketplace-phase7-local`: PASS real HTTP/Auth26 immutable specifications,24+2 history pagination,current supplier snapshot,operation replay/payload binding,immutable quote history,stale quote selection refusal,outsider history denial,24+next notification pagination and private idempotent read receipts. It created a new synthetic RFQ and left browser fixture objects unchanged. Integration worker separately reports754/754 pgTAP assertions and61-table restore fingerprints passed through026. Independent audit, current-source browser/device checks, final restore/build evidence and025 Admin operations remain under integration. Do not mark phase7 or staging/production accepted from these local results. No remote scheduler or retention policy has been configured.
+
+
 ## เฟส 3 วันที่ 8 พฤศจิกายน 2026
 
 บน branch `codex/marketplace-quote-drafts` เพิ่ม migration `20261108001400` และ API สร้าง อ่าน และแบ่งหน้าร่างคำขอราคาส่วนตัว เจ้าของพื้นที่เริ่มจากงาน Cloud ที่บันทึกแล้ว ระบุจำนวนและรายละเอียดการผลิต Server ตรวจสิทธิ์เจ้าของและ revision ของงานต้นทาง แล้วเก็บชื่อ ชนิดแบบ วัสดุ ขนาด และหูหิ้วตามฉบับนั้น การแก้หรือลบงานต้นทางภายหลังไม่เปลี่ยนร่างเดิม การลองบันทึกซ้ำด้วยรหัสเดิมได้ร่างเดิมตามสิทธิ์ปัจจุบัน
@@ -15,6 +48,14 @@
 ทดสอบบน Supabase แยกในเครื่อง API 56221 และ DB 56222 ด้วย `supabase test db --local --workdir tmp/marketplace-publication-local` ผ่าน pgTAP 672 ข้อจาก 15 ไฟล์ และ `node tmp/marketplace-publication-local/http.mjs` ผ่าน Auth/API/ฐานจริง ตรวจส่งพร้อมกัน ลองส่งซ้ำ ปฏิเสธร้านที่เสียสิทธิ์แบบทั้งชุด แยกสิทธิ์ร้านและสมาชิก เปิดสเปกเดิมหลังแก้หรือลบงานต้นทาง แบ่งหน้า และล้างข้อมูลทดสอบ Migration `015` ใช้เฉพาะ Supabase ในเครื่องรอบนี้
 
 วันที่ 8 พฤศจิกายน 2026 ลง `20261108001500_quote_request_publication.sql` บน Supabase staging ก่อน push โค้ดเผยแพร่ Dry-run จากชุด migration ที่ตรงกับประวัติ staging พบไฟล์ `015` เพียงไฟล์เดียว ตรวจหลังลงพบประวัติ 14 รายการ ตารางใหม่ทั้งสองเปิด RLS และ RPC ใหม่ห้าตัวจำกัดไว้ที่ `service_role` ฐานยังไม่มีคำขอที่เผยแพร่เมื่อจบการตรวจนี้
+
+ยืนยัน `main` และโดเมน staging ที่ `0f10894` (`dpl_Ad2QnUkDBWwHXU9m6eMonZB4jybM`) ก่อนและหลังทดสอบ Playwright ตรวจ API ฝั่งร้านที่เลือกตอบ `200` พร้อมข้อมูลคำขอที่อนุญาต ร้านที่อนุมัติแต่ไม่ได้เลือกได้รายการว่างและรายละเอียด `404` บัญชีภายนอกได้ `404` ทั้งสองเส้นทาง ตรวจฐานแบบอ่านอย่างเดียวพบคำขอเผยแพร่และสิทธิ์ร้านที่เลือกอย่างละหนึ่ง งานต้นทางเป็น revision 2 และสเปกที่ส่งมาจาก revision 1 ล้างข้อมูลของบัญชีสังเคราะห์สามบัญชีหลังตรวจแผนแล้ว ตรวจซ้ำยืนยันว่าไม่เหลือกิจการ คำขอ สิทธิ์ร้าน หรืองานทดสอบ และสิทธิ์ผู้ตรวจเดิมยังมีหนึ่งรายการ
+
+บน branch `codex/marketplace-quote-notifications` เพิ่ม migration `20261108001600` และ API แจ้งเตือนในเว็บ ใช้สิทธิ์รับคำขอที่สร้างพร้อมเผยแพร่เป็นรายการแจ้งเตือนของแต่ละร้าน และเก็บสถานะอ่านแยกตามบัญชี จึงไม่เกิดแจ้งเตือนซ้ำเมื่อส่งคำขอเดิมซ้ำ API ตรวจสถานะอนุมัติและสมาชิก Marketplace ปัจจุบันก่อนคืนรายการหรือบันทึกอ่าน ใช้ตัวแบ่งหน้าตามวันเวลา คำขอ และร้าน รวมคำขอที่เผยแพร่ก่อนเพิ่มแจ้งเตือนตามสิทธิ์ปัจจุบัน โดยใช้เวลาเผยแพร่เดิม
+
+`node tmp/marketplace-publication-local/quote-notifications-http.mjs` ผ่านกับ Auth, HTTP และ Supabase ในเครื่อง ตรวจแบ่งหน้าเมื่อคำขอเดียวถูกส่งหลายร้าน เวลาที่อ่านแยกบัญชีและร้าน อ่านซ้ำโดยได้เวลาเดิม ถอนสิทธิ์ร้านหรือสมาชิก และแจ้งเตือนสถานะกิจการกับ MFA เดิม ชุดข้อมูลสังเคราะห์ของรอบนี้ถูกล้างแล้ว
+
+`supabase test db --local --workdir tmp/marketplace-publication-local` ผ่าน 707 ข้อจาก 16 ไฟล์ รวม 35 ข้อใหม่จาก `0016` ตรวจ RLS, API เฉพาะบัญชีบริการ, สิทธิ์ต่อคำขอและร้าน, เวลาของคำขอที่เผยแพร่ก่อนเพิ่มแจ้งเตือน และสถานะอ่านแยกบัญชี ลง migration `016` ใน Supabase ในเครื่องและบันทึกผลตรวจรับไว้ใน worktree นี้
 
 ## เฟส 2 วันที่ 7 พฤศจิกายน 2026
 

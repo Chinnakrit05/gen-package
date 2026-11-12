@@ -48,6 +48,8 @@ const quoteDraft: QuoteRequestDraft = {
 const quotePublicationPath = `/marketplace/requests/${operationId}/publication`
 const quoteSuppliersPath = `/marketplace/requests/${operationId}/eligible-suppliers`
 const supplierRequestsPath = `/suppliers/${supplierId}/quote-requests`
+const quoteNotificationsPath = '/marketplace/quote-request-notifications'
+const quoteNotificationReadPath = `${supplierRequestsPath}/${operationId}/read`
 const receipt = { revisionId: workspaceId, publishedAt: quoteDraft.createdAt, suppliers: [{ id: supplierId, name: profile.name }] }
 const supplierQuote = {
   id: quoteDraft.id, revisionId: receipt.revisionId, title: quoteDraft.title, quantity: quoteDraft.quantity,
@@ -83,6 +85,8 @@ function harness({ reviewer = false, mfa = false, enabled = true, hasVerifiedEma
     publishQuoteRequest: vi.fn(async () => receipt),
     listSupplierQuoteRequests: vi.fn(async () => ({ items: [], nextCursor: null })),
     getSupplierQuoteRequest: vi.fn(async () => supplierQuote),
+    listQuoteRequestNotifications: vi.fn(async () => ({ items: [], nextCursor: null, hasUnread: false })),
+    markQuoteRequestNotificationRead: vi.fn(async () => ({ requestId: operationId, supplierId, readAt: quoteDraft.createdAt })),
     publicProfile: vi.fn(async () => publicProfile),
     adminList: vi.fn(async () => {
       if (!reviewer) throw new HttpError(403, 'MARKETPLACE_FORBIDDEN', 'Forbidden')
@@ -124,7 +128,7 @@ function harness({ reviewer = false, mfa = false, enabled = true, hasVerifiedEma
 describe('Marketplace HTTP boundaries', () => {
   it('keeps routes hidden until the deployment enables the feature', async () => {
     const { authenticate, repository, request } = harness({ enabled: false })
-    for (const path of ['/marketplace/context', '/suppliers/public/test-print-shop', '/admin/suppliers', documentsPath, `/admin${documentPath}`, notificationsPath, adminNotificationsPath, quotePublicationPath, quoteSuppliersPath, supplierRequestsPath, `${supplierRequestsPath}/${operationId}`]) {
+    for (const path of ['/marketplace/context', '/suppliers/public/test-print-shop', '/admin/suppliers', documentsPath, `/admin${documentPath}`, notificationsPath, adminNotificationsPath, quotePublicationPath, quoteSuppliersPath, supplierRequestsPath, `${supplierRequestsPath}/${operationId}`, quoteNotificationsPath, quoteNotificationReadPath]) {
       expect(await request(path)).toMatchObject({ status: 404, payload: { error: { code: 'NOT_FOUND' } } })
     }
     expect(authenticate).not.toHaveBeenCalled()
@@ -207,6 +211,30 @@ describe('Marketplace HTTP boundaries', () => {
     expect(repository.listSupplierQuoteRequests).toHaveBeenCalledWith(expect.objectContaining({ userId }), supplierId, { id: operationId, createdAt: receipt.publishedAt })
     expect((await request(detailPath)).payload.data).toEqual(supplierQuote)
     expect(repository.getSupplierQuoteRequest).toHaveBeenCalledWith(expect.objectContaining({ userId }), supplierId, operationId)
+  })
+
+  it('uses the full quote notification cursor and authenticated read scope', async () => {
+    const { authenticate, request, repository } = harness()
+    expect((await request(quoteNotificationsPath, 'GET', undefined, false)).status).toBe(401)
+    expect((await request(quoteNotificationReadPath, 'POST', undefined, false)).status).toBe(401)
+    const cursor = new URLSearchParams({
+      afterCreatedAt: quoteDraft.createdAt, afterRequestId: operationId, afterSupplierId: supplierId,
+    })
+    expect((await request(`${quoteNotificationsPath}?afterCreatedAt=${quoteDraft.createdAt}&afterRequestId=${operationId}`)).status).toBe(422)
+    expect((await request(`${quoteNotificationsPath}?${cursor}&afterSupplierId=${supplierId}`)).status).toBe(422)
+    expect((await request(`${quoteNotificationsPath}?supplierId=${supplierId}`)).status).toBe(422)
+    expect(repository.listQuoteRequestNotifications).not.toHaveBeenCalled()
+    expect((await request(`${quoteNotificationsPath}?${cursor}`)).payload.data).toEqual({ items: [], nextCursor: null, hasUnread: false })
+    expect(repository.listQuoteRequestNotifications).toHaveBeenCalledWith(expect.objectContaining({ userId }), {
+      createdAt: quoteDraft.createdAt, requestId: operationId, supplierId,
+    })
+    expect((await request(`${supplierRequestsPath}/invalid/read`, 'POST')).status).toBe(422)
+    expect(repository.markQuoteRequestNotificationRead).not.toHaveBeenCalled()
+    const marked = await request(quoteNotificationReadPath, 'POST')
+    expect(marked.status).toBe(200)
+    expect(marked.payload.data).toEqual({ requestId: operationId, supplierId, readAt: quoteDraft.createdAt })
+    expect(repository.markQuoteRequestNotificationRead).toHaveBeenCalledWith(expect.objectContaining({ userId }), supplierId, operationId)
+    expect(authenticate).toHaveBeenLastCalledWith('fixture', expect.any(String), { verifyMfa: false })
   })
 
   it('requires verified MFA as well as the independent platform reviewer grant', async () => {

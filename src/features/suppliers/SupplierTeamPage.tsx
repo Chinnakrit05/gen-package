@@ -1,3 +1,4 @@
+import { SupplierIntro } from './SupplierStudio'
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router'
@@ -28,6 +29,7 @@ export function SupplierTeamPage() {
   const { supplierId } = useParams()
   return (
     <MarketplaceShell title="จัดการทีมผู้รับผลิต">
+      <SupplierIntro eyebrow="TEAM & ACCESS" title="ทีมที่พร้อมทำงานร่วมกัน" description="เชิญเพื่อนร่วมทีมและจัดการบทบาท เพื่อให้ทุกคนเข้าถึงงานที่เหมาะสม" />
       {supplierId && SUPPLIER_ID.test(supplierId)
         ? <SupplierTeamRoute key={supplierId} supplierId={supplierId} />
         : <MarketplaceError message="ลิงก์ทีมผู้รับผลิตไม่ถูกต้อง" />}
@@ -141,6 +143,7 @@ function SupplierTeamPanel({ supplierId, team, reload, blocked }: {
     <>
       {error && <MarketplaceError message={error} />}
       {notice && <p className="marketplace-notice" role="status">{notice}</p>}
+      <div className="studio-summary-grid"><div><span>สมาชิกในทีม</span><strong>{team.members.length}<small>คน</small></strong></div><div><span>คำเชิญที่รอตอบรับ</span><strong>{team.invites.length}<small>รายการ</small></strong></div></div>
       <section className="marketplace-card">
         <h2>เชิญสมาชิก</h2>
         <p>สร้างลิงก์แล้วส่งให้ผู้รับทางช่องทางที่คุณใช้ ผู้รับต้องเข้าสู่ PackIt ด้วยอีเมลที่ระบุ</p>
@@ -171,7 +174,7 @@ function SupplierTeamPanel({ supplierId, team, reload, blocked }: {
         )}
       </section>
       <section className="marketplace-card">
-        <div className="marketplace-meta">
+        <div className="marketplace-meta studio-section-toolbar">
           <h2>สมาชิกในทีม</h2>
           <button type="button" disabled={disabled} onClick={reload}>โหลดข้อมูลทีมล่าสุด</button>
         </div>
@@ -225,8 +228,9 @@ function TeamMemberRow({ member, ownAccount, disabled, save, remove }: {
 }) {
   const [role, setRole] = useState(member.role)
   return (
-    <li className="marketplace-team-row">
+    <li className="marketplace-team-row studio-member-row">
       <div className="marketplace-description">
+        <span className="studio-member-avatar" aria-hidden="true">{(member.displayName || 'P').slice(0, 1)}</span>
         <strong>{member.displayName || 'สมาชิก PackIt'}{ownAccount ? ' (คุณ)' : ''}</strong>
         <p>{supplierRoleNames[member.role]}{member.isWorkspaceOwner ? ' · เจ้าของพื้นที่ทำงาน' : ''}</p>
       </div>

@@ -8,6 +8,7 @@ import {
   publishQuoteRequestInput,
   quoteDraftListQuery,
   quoteEligibleSupplierListQuery,
+  quoteRequestNotificationQuery,
   supplierQuoteRequestListQuery,
 } from '../modules/marketplace/quoteRequestValidation'
 import type { MarketplaceRepository } from '../modules/marketplace/marketplaceRepository'
@@ -53,8 +54,10 @@ const marketplacePaths = [
   ['quoteDraft', /^\/api\/v1\/marketplace\/requests\/([^/]+)$/, ['GET']],
   ['quotePublication', /^\/api\/v1\/marketplace\/requests\/([^/]+)\/publication$/, ['GET', 'POST']],
   ['quoteEligibleSuppliers', /^\/api\/v1\/marketplace\/requests\/([^/]+)\/eligible-suppliers$/, ['GET']],
+  ['quoteRequestNotifications', /^\/api\/v1\/marketplace\/quote-request-notifications$/, ['GET']],
   ['supplierQuoteRequests', /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests$/, ['GET']],
   ['supplierQuoteRequest', /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests\/([^/]+)$/, ['GET']],
+  ['markQuoteRequestNotificationRead', /^\/api\/v1\/suppliers\/([^/]+)\/quote-requests\/([^/]+)\/read$/, ['POST']],
 ] as const
 
 interface MarketplaceRoute {
@@ -208,6 +211,10 @@ export async function serveMarketplaceRoute(
       const after = validated(quoteEligibleSupplierListQuery, uniqueQuery(request.query))
       return { status: 200, data: await repository.listQuoteRequestEligibleSuppliers(actor, id, after) }
     }
+    case 'quoteRequestNotifications': {
+      const after = validated(quoteRequestNotificationQuery, uniqueQuery(request.query))
+      return { status: 200, data: await repository.listQuoteRequestNotifications(actor, after) }
+    }
     case 'supplierQuoteRequests': {
       const supplierId = validated(supplierIdSchema, parameter)
       const after = validated(supplierQuoteRequestListQuery, uniqueQuery(request.query))
@@ -217,6 +224,11 @@ export async function serveMarketplaceRoute(
       const supplierId = validated(supplierIdSchema, parameter)
       const id = validated(supplierIdSchema, childId)
       return { status: 200, data: await repository.getSupplierQuoteRequest(actor, supplierId, id) }
+    }
+    case 'markQuoteRequestNotificationRead': {
+      const supplierId = validated(supplierIdSchema, parameter)
+      const id = validated(supplierIdSchema, childId)
+      return { status: 200, data: await repository.markQuoteRequestNotificationRead(actor, supplierId, id) }
     }
     case 'adminList': {
       const { status, after } = validated(supplierAdminQuery, Object.fromEntries(request.query))

@@ -1,3 +1,4 @@
+import { SupplierIntro } from './SupplierStudio'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
@@ -46,7 +47,8 @@ export function SupplierInviteAccept() {
 
   return (
     <MarketplaceShell title="คำเชิญเข้าทีมผู้รับผลิต">
-      <section className="marketplace-card">
+      <section className="marketplace-card studio-invite-card">
+        <SupplierIntro eyebrow="YOU’RE INVITED" title="ร่วมทีมผู้รับผลิตบน PackIt" description="จัดการงานและข้อมูลกิจการร่วมกับทีมของคุณ" />
         {invitationToken && !unavailable ? (
           <>
             <p>ตอบรับเพื่อเข้าร่วมทีมใน Marketplace ของ PackIt</p>

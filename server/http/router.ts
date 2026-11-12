@@ -55,6 +55,12 @@ import {
 import { readJsonBody } from './body'
 import { HttpError, toApiFailure } from './errors'
 import { matchMarketplaceRoute, serveMarketplaceRoute } from './marketplace'
+import { matchCommerceRoute, serveCommerceRoute } from './commerce'
+import { matchConversationRoute, serveConversationRoute } from './conversations'
+import { matchAdminRoute, serveAdminRoute } from './admin'
+import { createSupabaseAdminRepository } from '../adapters/supabase/adminRepository'
+import { createSupabaseConversationRepository } from '../adapters/supabase/conversationRepository'
+import { createSupabaseCommerceRepository } from '../adapters/supabase/commerceRepository'
 
 export interface HttpRequest {
   method?: string
@@ -339,6 +345,10 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
       : dependencies.marketplaceRepository)
     : null
 
+  const adminRepository = config.marketplaceSuppliersEnabled && config.supabase ? createSupabaseAdminRepository(config.supabase) : null
+  const conversationRepository = config.marketplaceSuppliersEnabled && config.supabase ? createSupabaseConversationRepository(config.supabase) : null
+  const commerceRepository = config.marketplaceSuppliersEnabled && config.supabase ? createSupabaseCommerceRepository(config.supabase) : null
+
   return async (req, res) => {
     const requestId = randomUUID()
     const path = requestPath(req)
@@ -395,6 +405,75 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
         const httpError = error instanceof HttpError
           ? error
           : new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'โหลดข้อมูลบัญชีไม่สำเร็จ')
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
+    const adminRoute = config.marketplaceSuppliersEnabled ? matchAdminRoute(path) : null
+    if (adminRoute) {
+      try {
+        if (!req.method || !adminRoute.methods.includes(req.method)) {
+          res.setHeader('allow', adminRoute.methods.join(', '))
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!adminRepository || !sessionService) throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Marketplace')
+        const result = await serveAdminRoute(adminRoute, {
+          method: req.method, query: requestUrl(req).searchParams,
+          authenticate: (options) => sessionService.authenticate(bearerToken(req), requestId, options),
+          readBody: (limit = 16 * 1024) => { requireJsonContentType(req); return readJsonBody(req, limit) },
+        }, adminRepository)
+        sendJson(res, result.status, { data: result.data, requestId }, requestId)
+      } catch (error) {
+        const httpError = error instanceof HttpError ? error : error instanceof ZodError
+          ? new HttpError(422, 'VALIDATION_ERROR', 'ข้อมูล Marketplace ไม่ถูกต้อง')
+          : new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'โหลดข้อมูล Marketplace ไม่สำเร็จ')
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
+    const conversationRoute = config.marketplaceSuppliersEnabled ? matchConversationRoute(path) : null
+    if (conversationRoute) {
+      try {
+        if (!req.method || !conversationRoute.methods.includes(req.method)) {
+          res.setHeader('allow', conversationRoute.methods.join(', '))
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!conversationRepository || !sessionService) throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Marketplace')
+        const result = await serveConversationRoute(conversationRoute, {
+          method: req.method, query: requestUrl(req).searchParams,
+          authenticate: (options) => sessionService.authenticate(bearerToken(req), requestId, options),
+          readBody: (limit = 16 * 1024) => { requireJsonContentType(req); return readJsonBody(req, limit) },
+        }, conversationRepository)
+        sendJson(res, result.status, { data: result.data, requestId }, requestId)
+      } catch (error) {
+        const httpError = error instanceof HttpError ? error : error instanceof ZodError
+          ? new HttpError(422, 'VALIDATION_ERROR', 'ข้อมูล Marketplace ไม่ถูกต้อง')
+          : new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'โหลดข้อมูล Marketplace ไม่สำเร็จ')
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
+    const commerceRoute = config.marketplaceSuppliersEnabled ? matchCommerceRoute(path) : null
+    if (commerceRoute) {
+      try {
+        if (!req.method || !commerceRoute.methods.includes(req.method)) {
+          res.setHeader('allow', commerceRoute.methods.join(', '))
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!commerceRepository || !sessionService) throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Marketplace')
+        const result = await serveCommerceRoute(commerceRoute, {
+          method: req.method, query: requestUrl(req).searchParams,
+          authenticate: () => sessionService.authenticate(bearerToken(req), requestId),
+          readBody: () => { requireJsonContentType(req); return readJsonBody(req, 16 * 1024) },
+        }, commerceRepository)
+        sendJson(res, result.status, { data: result.data, requestId }, requestId)
+      } catch (error) {
+        const httpError = error instanceof HttpError ? error : error instanceof ZodError
+          ? new HttpError(422, 'VALIDATION_ERROR', 'ข้อมูล Marketplace ไม่ถูกต้อง')
+          : new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'โหลดข้อมูล Marketplace ไม่สำเร็จ')
         sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
       }
       return

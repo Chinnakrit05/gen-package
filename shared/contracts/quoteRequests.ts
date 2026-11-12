@@ -79,3 +79,27 @@ export interface SupplierQuoteRequestPage {
   items: SupplierQuoteRequestSummary[]
   nextCursor: QuoteRequestCursor | null
 }
+
+export interface QuoteRequestNotificationCursor {
+  createdAt: string
+  requestId: string
+  supplierId: string
+}
+
+export interface QuoteRequestNotification extends QuoteRequestNotificationCursor {
+  supplierName: string
+  requestTitle: string
+  readAt: string | null
+}
+
+export interface QuoteRequestNotificationPage {
+  items: QuoteRequestNotification[]
+  nextCursor: QuoteRequestNotificationCursor | null
+  hasUnread: boolean
+}
+
+export interface QuoteRequestNotificationRead {
+  requestId: string
+  supplierId: string
+  readAt: string
+}

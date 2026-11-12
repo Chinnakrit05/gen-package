@@ -1,0 +1,107 @@
+/* Supplier and staff surfaces for the Studio marketplace. */
+.studio-shell .studio-supplier-intro { display: grid; gap: 9px; max-width: 760px; padding: 4px 0 12px; }
+.studio-shell .marketplace-main .studio-eyebrow { color: #6254cf; font-size: 10px; font-weight: 750; letter-spacing: .15em; }
+.studio-shell .marketplace-main .studio-supplier-intro h2 { font-size: clamp(1.35rem, 2.4vw, 1.85rem); letter-spacing: -.025em; color: #1f293a; line-height: 1.45; }
+.studio-shell .studio-supplier-intro > p:last-child { color: #758094; line-height: 1.8; font-size: 14px; }
+.studio-shell .studio-section-heading { display: flex; gap: 13px; align-items: center; }
+.studio-shell .studio-section-heading > div { display: grid; gap: 4px; }
+.studio-shell .studio-step, .studio-shell .studio-company-avatar, .studio-shell .studio-member-avatar, .studio-shell .studio-security-mark { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; color: #6254cf; background: #eeebff; border-radius: 12px; font-weight: 700; }
+.studio-shell .studio-step { width: 38px; height: 38px; font-size: 12px; }
+.studio-shell .studio-company-avatar { width: 58px; height: 58px; font-size: 26px; border: 1px solid #e3ddfc; }
+.studio-shell .studio-profile-overview { gap: 20px; }
+.studio-shell .studio-profile-actions { padding-top: 18px; border-top: 1px solid #e8ebef; }
+.studio-shell .studio-profile-actions a { font-size: 12px; padding: 8px 11px; border-radius: 8px; background: #f6f7fa; text-decoration: none; }
+.studio-shell .studio-profile-actions a:hover { background: #eeebff; }
+.studio-shell .studio-staff-shortcut { grid-template-columns: 1fr auto; align-items: center; border-left: 3px solid #6254cf; }
+.studio-shell .marketplace-list.studio-business-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+.studio-shell .marketplace-list.studio-business-list li { display: grid; grid-template-columns: 1fr auto; align-items: center; padding: 20px; border: 1px solid #e8ebef; border-radius: 12px; background: #fafbfe; }
+.studio-shell .studio-business-list li > a { grid-column: 1 / -1; font-size: 16px; text-decoration: none; margin-bottom: 4px; }
+.studio-shell .studio-business-list li > span { font-size: 12px; }
+.studio-shell .studio-supplier-form { gap: 24px; }
+.studio-shell .studio-supplier-form .marketplace-form-fields { gap: 22px; }
+.studio-shell .studio-form-section-label { display: grid; gap: 5px; }
+.studio-shell .marketplace-main .studio-form-section-label h3, .studio-shell .marketplace-main .studio-review-decision h3 { margin: 0; font-size: 14px; color: #344054; }
+.studio-shell .studio-form-section-label p, .studio-shell .studio-field-help { color: #758094; font-size: 12px; line-height: 1.7; }
+.studio-shell .studio-supplier-form .marketplace-form-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.studio-shell .studio-supplier-form label { font-size: 13px; font-weight: 550; gap: 8px; }
+.studio-shell .studio-supplier-form small { font-weight: 400; font-size: 11px; }
+.studio-shell .studio-supplier-form .marketplace-options { border: 0; padding: 0; }
+.studio-shell .studio-supplier-form .marketplace-options legend { font-size: 14px; font-weight: 650; margin-bottom: 8px; }
+.studio-shell .studio-supplier-form .marketplace-options-grid { margin-top: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.studio-shell .studio-supplier-form .marketplace-options-grid label { padding: 15px; border: 1px solid #e8ebef; border-radius: 10px; background: #fff; cursor: pointer; transition: border-color .15s, background .15s; }
+.studio-shell .studio-supplier-form .marketplace-options-grid label.is-selected { border-color: #c8bff2; background: #f6f3ff; color: #5547b5; }
+.studio-shell .studio-supplier-form input[type='checkbox'] { accent-color: #6254cf; width: 17px; height: 17px; flex-shrink: 0; }
+.studio-shell .studio-form-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding-top: 20px; border-top: 1px solid #e8ebef; }
+.studio-shell .studio-form-footer p { font-size: 12px; }
+.studio-shell .studio-submit-card { border-color: #ded8f8; background: linear-gradient(110deg, #fff, #faf8ff); }
+.studio-shell .studio-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.studio-shell .studio-summary-grid > div { display: grid; gap: 8px; padding: 22px; background: #fff; border: 1px solid #e8ebef; border-radius: 14px; }
+.studio-shell .studio-summary-grid > div > span { font-size: 12px; color: #758094; }
+.studio-shell .studio-summary-grid strong { font-size: 28px; color: #1f293a; }
+.studio-shell .studio-summary-grid strong small { font-size: 12px; font-weight: 400; margin-left: 10px; }
+.studio-shell .marketplace-meta.studio-section-toolbar { justify-content: space-between; gap: 12px; }
+.studio-shell .studio-section-toolbar h2 { margin-right: auto; }
+.studio-shell .studio-member-avatar { width: 35px; height: 35px; border-radius: 50%; float: left; margin-right: 12px; }
+.studio-shell .studio-member-row .marketplace-description { flex: 1 1 210px; }
+.studio-shell .studio-member-row .marketplace-team-actions { gap: 10px; }
+.studio-shell .studio-member-row .marketplace-team-actions label { font-size: 11px; }
+.studio-shell .studio-invite-card, .studio-shell .studio-mfa-card { width: min(100%, 640px); margin-inline: auto; box-sizing: border-box; padding: clamp(22px, 4vw, 40px); }
+.studio-shell .studio-invite-card { margin-block: 16px; }
+.studio-shell .studio-invite-card .studio-supplier-intro { padding-bottom: 20px; border-bottom: 1px solid #e8ebef; }
+.studio-shell .studio-security-mark { width: 48px; height: 48px; font-size: 24px; }
+.studio-shell .studio-mfa-card .marketplace-form { padding-top: 14px; border-top: 1px solid #e8ebef; }
+.studio-shell .studio-mfa-card input[autocomplete='one-time-code'] { max-width: 260px; font-size: 22px; letter-spacing: .25em; }
+.studio-shell .studio-mfa-setup { justify-items: start; }
+.studio-shell .studio-mfa-setup img { border: 8px solid #fff; border-radius: 10px; max-width: 100%; height: auto; }
+.studio-shell .studio-mfa-setup code { word-break: break-all; }
+.studio-shell .studio-public-profile { overflow: hidden; gap: 24px; }
+.studio-shell .studio-public-banner { display: flex; align-items: center; gap: 18px; padding: 28px; border-radius: 12px; background: linear-gradient(115deg, #f0ecff, #f7f8fc 75%); }
+.studio-shell .studio-public-banner > div { display: grid; gap: 8px; }
+.studio-shell .studio-public-banner .studio-company-avatar { background: white; width: 70px; height: 70px; border-radius: 18px; }
+.studio-shell .studio-public-profile .marketplace-description { max-width: 780px; line-height: 1.9; }
+.studio-shell .studio-review-filter { grid-template-columns: minmax(0, 1fr) minmax(180px, 250px); align-items: center; }
+.studio-shell .studio-review-filter > div { display: grid; gap: 6px; }
+.studio-shell .studio-review-filter > label { font-size: 12px; }
+.studio-shell .studio-review-filter > .marketplace-notice { grid-column: 1 / -1; }
+.studio-shell .studio-review-card { gap: 18px; }
+.studio-shell .studio-review-decision { border-top: 1px solid #e8ebef; padding-top: 20px; }
+.studio-shell .studio-review-decision .marketplace-form-fields { grid-template-columns: minmax(150px, .6fr) minmax(0, 1.4fr); align-items: start; gap: 18px; }
+.studio-shell .studio-upload-panel { padding: 22px; border: 1px dashed #cbc5e7; background: #faf9ff; border-radius: 12px; }
+.studio-shell .studio-upload-panel > p { font-size: 12px; }
+.studio-shell .studio-upload-panel input[type='file'] { background: #fff; max-width: 100%; font-size: 12px; }
+.studio-shell .studio-review-documents .marketplace-document-row { padding: 16px 0; }
+.studio-shell .studio-review-documents .marketplace-document-row .marketplace-description { flex: 1 1 180px; min-width: 0; }
+.studio-shell .studio-notification-card { gap: 18px; }
+.studio-shell .studio-notification-card .marketplace-notifications { padding-top: 16px; border-top: 1px solid #e8ebef; }
+.studio-shell .studio-notification-card .marketplace-notification-row { padding: 18px; border: 1px solid #e8ebef; border-radius: 12px; align-items: start; }
+.studio-shell .studio-notification-card .marketplace-notification-row.is-unread { background: #faf8ff; border-color: #e6e0fa; box-shadow: inset 3px 0 #9a8de5; }
+.studio-shell .studio-notification-card .marketplace-notification-row .marketplace-description { flex: 1 1 260px; min-width: 0; }
+.studio-shell .studio-notification-card .marketplace-notification-row .marketplace-meta { flex: 0 1 340px; justify-content: flex-end; font-size: 12px; }
+.studio-shell .studio-notification-card .marketplace-notification-row p { margin-top: 5px; }
+.studio-shell .studio-notification-card time { font-size: 11px; }
+.studio-shell .studio-empty-state { text-align: center; justify-items: center; padding: 44px 22px; }
+@media (max-width: 900px) {
+  .studio-shell .studio-review-decision .marketplace-form-fields { grid-template-columns: 1fr; }
+  .studio-shell .studio-member-row .marketplace-team-actions { flex: 1 1 100%; }
+}
+@media (max-width: 600px) {
+  .studio-shell .studio-supplier-form .marketplace-form-columns, .studio-shell .studio-supplier-form .marketplace-options-grid, .studio-shell .studio-review-filter { grid-template-columns: 1fr; }
+  .studio-shell .studio-staff-shortcut { grid-template-columns: 1fr; }
+  .studio-shell .studio-summary-grid { gap: 10px; }
+  .studio-shell .studio-summary-grid > div { padding: 16px; }
+  .studio-shell .studio-form-footer { align-items: stretch; flex-direction: column; }
+  .studio-shell .studio-form-footer button { width: 100%; }
+  .studio-shell .studio-public-banner { padding: 20px 16px; align-items: flex-start; }
+  .studio-shell .studio-public-banner .studio-company-avatar { width: 46px; height: 46px; font-size: 22px; border-radius: 12px; }
+  .studio-shell .studio-upload-panel { padding: 16px; }
+  .studio-shell .studio-notification-card .marketplace-notification-row .marketplace-meta { justify-content: flex-start; flex-basis: 100%; }
+  .studio-shell .studio-notification-card .marketplace-notification-row { padding: 16px; }
+  .studio-shell .studio-section-toolbar > button { margin-left: 0; }
+}
+
+.studio-shell .studio-notification-stack { display: grid; gap: 18px; scroll-margin-top: 90px; }
+/* The route already supplies h1. Keep its contextual introduction secondary. */
+.studio-shell .studio-supplier-intro { border-left:2px solid #ded6f6; padding:0 0 0 17px; gap:5px; margin-bottom:3px; }
+.studio-shell .studio-supplier-intro > .studio-eyebrow { display:none; }
+.studio-shell .marketplace-main .studio-supplier-intro h2 { font-size:18px; }
+.studio-shell .studio-supplier-intro > p:last-child { font-size:13px; }

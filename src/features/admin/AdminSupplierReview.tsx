@@ -1,3 +1,4 @@
+import { SupplierIntro } from '../suppliers/SupplierStudio'
 import { useRef, useState, type FormEvent } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
@@ -32,6 +33,7 @@ export function AdminSupplierReview({ mfa }: { mfa: ReviewerMfaClient }) {
   const staff = context.isSuccess ? context.data.staff : undefined
   return (
     <MarketplaceShell title="ตรวจผู้รับผลิต">
+      <SupplierIntro eyebrow="PACKIT OPERATIONS" title="ดูแลคุณภาพผู้รับผลิต" description="ตรวจสอบโปรไฟล์ เอกสารประกอบ และบันทึกผลการพิจารณาอย่างเป็นระบบ" />
       {(context.isPending || context.isFetching) && <p role="status">กำลังตรวจสิทธิ์เจ้าหน้าที่…</p>}
       {context.isError && <MarketplaceError message="ตรวจสิทธิ์เจ้าหน้าที่ไม่สำเร็จ" retry={() => void context.refetch()} />}
       {staff && !context.isFetching && (
@@ -76,7 +78,8 @@ function AdminQueue({
   return (
     <>
       {!denied && <SupplierNotifications asReviewer openPendingQueue={openPendingQueue} />}
-      <section className="marketplace-card" id="supplier-review-queue">
+      <section className="marketplace-card studio-review-filter" id="supplier-review-queue">
+        <div><h2>รายการตรวจสอบ</h2><p className="marketplace-muted">เลือกสถานะเพื่อจัดการโปรไฟล์ผู้รับผลิต</p></div>
         <label>
           สถานะโปรไฟล์
           <select ref={statusFilter} value={status} onChange={(event) => { setStatus(event.target.value as SupplierStatus); setNotice(null) }}>
@@ -89,7 +92,7 @@ function AdminQueue({
       {page.isError && (
         <MarketplaceError message={supplierError(page.error, 'โหลดรายการตรวจสอบไม่สำเร็จ')} retry={denied ? checkAccess : refresh} />
       )}
-      {page.isSuccess && items.length === 0 && <p>ไม่มีโปรไฟล์ในสถานะนี้</p>}
+      {page.isSuccess && items.length === 0 && <div className="marketplace-card studio-empty-state"><h2>ไม่มีโปรไฟล์ในสถานะนี้</h2><p className="marketplace-muted">เลือกสถานะอื่นเพื่อตรวจสอบรายการเพิ่มเติม</p></div>}
       {!denied && items.map((profile) => (
         <ReviewCard key={`${profile.id}:${profile.revision}`} profile={profile} reload={refresh} reviewed={(next) => {
           setNotice(`${next.name} · ${supplierStatusNames[next.status]}`)
@@ -131,7 +134,7 @@ function ReviewCard({ profile, reviewed, reload }: {
   }
 
   return (
-    <article className="marketplace-card">
+    <article className="marketplace-card studio-review-card">
       <h2>{profile.name}</h2>
       <div className="marketplace-meta">
         <span className={`marketplace-badge is-${profile.status}`}>{supplierStatusNames[profile.status]}</span>
@@ -152,7 +155,8 @@ function ReviewCard({ profile, reviewed, reload }: {
         </div>
       )}
       {action && (
-        <form className="marketplace-form" onSubmit={submit}>
+        <form className="marketplace-form studio-review-decision" onSubmit={submit}>
+          <h3>บันทึกผลการตรวจสอบ</h3>
           <fieldset className="marketplace-form-fields" disabled={review.isPending || changedRevision}>
             <label>
               การตัดสินใจ

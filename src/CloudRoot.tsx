@@ -3,6 +3,8 @@ import { isAuthApiError, isAuthSessionMissingError, type Session } from '@supaba
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { Navigate, Outlet, RouterProvider, createBrowserRouter, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { Login } from './components/Login'
+import './app/studioShell.css'
+import './app/studioEntry.css'
 import { LoadingStage } from './components/LoadingBoundary'
 import { marketplaceSuppliersEnabled, type ClientConfig } from './config'
 import { LangCtx, loadLang } from './i18n'
@@ -21,6 +23,7 @@ import {
   type CloudSessionValue,
 } from './app/cloudSession'
 import { clearReturnTo, peekReturnTo, sanitizeReturnTo, storeReturnTo } from './app/returnTo'
+import { MarketplaceRealtimeContext } from './app/realtime'
 import { SUPPLIER_INVITE_PATH, isSupplierInvitePath, readSupplierInviteFragment, storeSupplierInvite } from './app/supplierInviteRoute'
 
 // หน้าแพ็กเกจของผู้เยี่ยมชมโหลดเมื่อกดเท่านั้น
@@ -40,6 +43,18 @@ const SupplierTeamPage = lazy(() => import('./features/suppliers/SupplierTeamPag
 const SupplierInviteAccept = lazy(() => import('./features/suppliers/SupplierInviteAccept').then((m) => ({ default: m.SupplierInviteAccept })))
 const PublicSupplierPage = lazy(() => import('./features/suppliers/PublicSupplierPage').then((m) => ({ default: m.PublicSupplierPage })))
 const AdminSupplierReview = lazy(() => import('./features/admin/AdminSupplierReview').then((m) => ({ default: m.AdminSupplierReview })))
+
+const CommerceNotificationsPage = lazy(() => import('./features/commerce/CommerceNotificationsPage').then(m => ({ default: m.CommerceNotificationsPage })))
+const AdminMarketplacePage = lazy(() => import('./features/commerce/AdminMarketplacePages').then(m => ({ default: m.AdminMarketplacePage })))
+const RequestTradingPage = lazy(() => import('./features/commerce/RequestTradingPage').then(m => ({ default: m.RequestTradingPage })))
+const ProductionOrdersPage = lazy(() => import('./features/commerce/ProductionOrderPages').then(m => ({ default: m.ProductionOrdersPage })))
+const ProductionOrderPage = lazy(() => import('./features/commerce/ProductionOrderPages').then(m => ({ default: m.ProductionOrderPage })))
+const SelectQuotationPage = lazy(() => import('./features/commerce/ProductionOrderPages').then(m => ({ default: m.SelectQuotationPage })))
+const ConversationsPage = lazy(() => import('./features/commerce/ConversationPages').then(m => ({ default: m.ConversationsPage })))
+const ConversationPage = lazy(() => import('./features/commerce/ConversationPages').then(m => ({ default: m.ConversationPage })))
+const BuyerQuotationsPage = lazy(() => import('./features/commerce/QuotationPages').then(m => ({ default: m.BuyerQuotationsPage })))
+const SupplierQuotationsPage = lazy(() => import('./features/commerce/QuotationPages').then(m => ({ default: m.SupplierQuotationsPage })))
+const QuotationEditorPage = lazy(() => import('./features/commerce/QuotationPages').then(m => ({ default: m.QuotationEditorPage })))
 
 // สถานะ auth (ก่อน/หลัง bootstrap) ที่ route ทุกตัวอ่าน — อยู่เหนือ RouterProvider
 interface CloudAuthValue {
@@ -106,6 +121,19 @@ const router = createBrowserRouter([
             children: [{ path: 'new', Component: EmptyOutlet }, { path: ':projectId', Component: EmptyOutlet }],
           },
           ...(marketplaceSuppliersEnabled ? [
+            { path: '/app/notifications', element: <Suspense fallback={<QuoteRequestLoading />}><CommerceNotificationsPage /></Suspense> },
+            ...['/admin', '/admin/users', '/admin/search', '/admin/requests', '/admin/orders', '/admin/support', '/admin/audit-log'].map(path => ({ path, element: <AdminMarketplaceRoute /> })),
+            { path: '/app/requests/:requestId/revisions', element: <Suspense fallback={<QuoteRequestLoading />}><RequestTradingPage /></Suspense> },
+            { path: '/factory/:supplierId/jobs/:requestId/revisions', element: <Suspense fallback={<QuoteRequestLoading />}><RequestTradingPage /></Suspense> },
+            { path: '/app/orders', element: <Suspense fallback={<QuoteRequestLoading />}><ProductionOrdersPage /></Suspense> },
+            { path: '/factory/:supplierId/orders', element: <Suspense fallback={<QuoteRequestLoading />}><ProductionOrdersPage /></Suspense> },
+            { path: '/orders/new', element: <Suspense fallback={<QuoteRequestLoading />}><SelectQuotationPage /></Suspense> },
+            { path: '/orders/:orderId', element: <Suspense fallback={<QuoteRequestLoading />}><ProductionOrderPage /></Suspense> },
+            { path: '/chat', element: <Suspense fallback={<QuoteRequestLoading />}><ConversationsPage /></Suspense> },
+            { path: '/chat/:conversationId', element: <Suspense fallback={<QuoteRequestLoading />}><ConversationPage /></Suspense> },
+            { path: '/app/requests/:requestId/quotations', element: <Suspense fallback={<QuoteRequestLoading />}><BuyerQuotationsPage /></Suspense> },
+            { path: '/factory/:supplierId/quotes', element: <Suspense fallback={<QuoteRequestLoading />}><SupplierQuotationsPage /></Suspense> },
+            { path: '/factory/:supplierId/jobs/:requestId/quote', element: <Suspense fallback={<QuoteRequestLoading />}><QuotationEditorPage /></Suspense> },
             {
               path: '/app/requests',
               element: <Suspense fallback={<QuoteRequestLoading />}><QuoteRequestListPage /></Suspense>,
@@ -162,6 +190,11 @@ function MarketplaceLoading() {
 function PublicSupplierRoute() {
   const { config } = useCloudAuth()
   return <Suspense fallback={<MarketplaceLoading />}><PublicSupplierPage apiBaseUrl={config.apiBaseUrl} /></Suspense>
+}
+
+function AdminMarketplaceRoute() {
+  const { reviewerMfa } = useCloudAuth()
+  return <Suspense fallback={<MarketplaceLoading />}><AdminMarketplacePage mfa={reviewerMfa} /></Suspense>
 }
 
 function AdminSupplierRoute() {
@@ -326,7 +359,7 @@ export function CloudRoot({ config, startupVariant }: { config: ClientConfig; st
 
   return (
     <CloudAuthContext.Provider value={value}>
-      <RouterProvider router={router} />
+      <MarketplaceRealtimeContext.Provider value={auth}><RouterProvider router={router} /></MarketplaceRealtimeContext.Provider>
     </CloudAuthContext.Provider>
   )
 }
@@ -393,6 +426,7 @@ function LoginRoute() {
     )
   }
   return (
+    <div className="studio-shell studio-entry">
     <Login
       onLogin={startLogin}
       busy={auth.loginBusy}
@@ -400,6 +434,7 @@ function LoginRoute() {
       finePrint="บัญชี Google ผ่าน Supabase Auth · session ถูกตรวจโดย server"
       onShowPricing={() => setPricingOpen(true)}
     />
+    </div>
   )
 }
 
@@ -583,7 +618,7 @@ function AuthStatus({
   onAction?: () => void
 }) {
   return (
-    <div className="login-screen">
+    <div className="studio-shell studio-entry login-screen">
       <div className="login-card">
         <h1 className="login-title">{title}</h1>
         <p className="login-sub">{message}</p>

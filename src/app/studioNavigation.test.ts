@@ -1,0 +1,12 @@
+import { describe, expect, it } from 'vitest'
+import { studioHasStaffAccess, studioNavigation, studioRoleForPath, studioSupplierForPath } from './studioNavigation'
+import type { SupplierAccess } from '../../shared/contracts/marketplace'
+const supplier: SupplierAccess = { role: 'manager', profile: { id: 'shop-a', workspaceId: 'work-a', name: 'Test', kind: 'factory', slug: 'test', description: '', contactEmail: '', capabilities: [], revision: 1, status: 'approved', reviewNote: null, updatedAt: '' } }
+describe('Studio role-aware navigation', () => {
+  it('derives the role from the current route without granting access', () => { expect(studioRoleForPath('/admin/suppliers')).toBe('staff'); expect(studioRoleForPath('/factory/shop-a/jobs')).toBe('supplier'); expect(studioRoleForPath('/app/requests')).toBe('buyer') })
+  it('never substitutes another shop for an inaccessible deep link', () => { expect(studioSupplierForPath('/factory/shop-b/profile', [supplier])).toBeUndefined(); expect(studioSupplierForPath('/factory/shop-a/profile', [supplier])).toBe(supplier) })
+  it('shows buyer requests only to owners with the feature enabled', () => { expect(studioNavigation('buyer', undefined, false, true).some(item => item.to === '/app/requests')).toBe(false); expect(studioNavigation('buyer', undefined, true, false)).toHaveLength(1); expect(studioNavigation('buyer', undefined, true, true).some(item => item.to === '/app/requests')).toBe(true) })
+  it('restricts management links to actual shop permissions', () => { expect(studioNavigation('supplier', { ...supplier, role: 'viewer' }, false, true).some((item) => item.to.endsWith('/team'))).toBe(false); expect(studioNavigation('supplier', { ...supplier, profile: { ...supplier.profile, status: 'pending' } }, false, true).some((item) => item.to.endsWith('/jobs'))).toBe(false) })
+  it('keeps unresolved shared detail navigation neutral without inventing a supplier', () => { expect(studioNavigation('shared', undefined, false, true).map(item => item.to)).toEqual(['/chat', '/app/projects']); expect(studioNavigation('supplier', supplier, false, true).some(item => item.to === '/factory/shop-a/orders')).toBe(true) })
+  it('requires server-issued reviewer permissions', () => { expect(studioHasStaffAccess(undefined)).toBe(false); expect(studioHasStaffAccess({ suppliers: [], staff: { canReviewSuppliers: false, requiresMfa: false } })).toBe(false) })
+})

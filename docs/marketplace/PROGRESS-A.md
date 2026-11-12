@@ -1,5 +1,29 @@
 # ความคืบหน้าคน A
 
+## Approved staging execution — 9 November 2026 UTC
+
+After a verified migration-scoped recovery backup and independent review, applied 009 and 016–029 to the approved staging database. All 29 versions are present; 35 prior business-table projections remained unchanged. A protected Studio Preview is deployed at https://packit-studio-preview-chinnakrit05.vercel.app using deployment-only configuration and the exact approved Auth redirect. Existing public deployment/main were not redeployed or pushed. A masked-key configuration defect was corrected and real Google sign-in now passes; orders, RFQs and chat load authenticated empty states. Existing staff MFA now passes after reload; the supplier-review queue opens and expanded Admin routes correctly deny missing scopes. Complete remote synthetic transaction/pilot workflows remain pending. No supplier decisions, new test accounts or role grants have been made. See [STAGING-EXECUTION.md](STAGING-EXECUTION.md) for exact deployment/source identities, recovery limitations and verification evidence. Full phase 7 remains incomplete.
+
+
+## Phase 7 staging preparation — 9 November 2026 UTC
+
+Read-only checks confirmed Supabase staging is healthy but lacks 009 (actual objects absent) and 016–029. Fixed staging-readiness to parse current CLI output, target the known project without linking, and distinguish historical gaps/pending migrations without push/repair/reset. Parser 19/19 and expanded route 64/64 tests passed; live preflight correctly blocks. [STAGING-ROLLOUT.md](STAGING-ROLLOUT.md) records upgrade, backup, preview and pilot gates. Feature flag-off blocks existing fulfillment as well as new business and is not a lossless rollback. After reconnect, completed the runbook and populated upgrade rehearsal including key current-deployed 0f10894 API reads/writes/retries. Confirmed Vercel Production follows main; separate Preview configuration is branch-scoped. Current full regression 1,618 passed / 6 existing skips, TypeScript and syntax checks passed. Two local expiry/confirmation lock-order cases also passed; cross-room quota concurrency remains untested. Backup metadata lists no restore point and PITR is disabled, so actual recovery remains unverified. External deployment and access decisions remain open. No remote changes or deployment. Full phase7 remains incomplete.
+
+
+## Marketplace implementation through phase 6 — 8 November 2026 UTC
+
+Implemented the selected Studio UI plus RFQ/spec history and frozen reference previews, quotation editor/comparison/history, persistent private chat/files/read/retry, complete two-party production-order workflow, commerce notifications, and scoped Admin/search/support/audit/account moderation/maintenance. All route groups are wired for desktop/tablet/mobile; the Editor engine was preserved. Latest full unit suite passed 1,589 tests with 6 existing skips, and full API/TypeScript/Vite build passed. Real API/Auth and database checks are separately documented in [PHASE-3-7-RESULTS.md](PHASE-3-7-RESULTS.md).
+
+Phase 7 local acceptance has passed in its recorded scope: real browser workflows and role/navigation checks, clean installation of all 29 migrations, 754 pgTAP assertions, 32 database integration tests, real HTTP/Auth scenarios and a 62-table full restore fingerprint. The result is a local release candidate. Full phase 7 is still unfinished because physical-device/staging/real-user pilot checks have not run; residual unexecuted cases and operating decisions are explicitly listed in PHASE-7-ACCEPTANCE.md. No commit, push, deployment or remote migration occurred. Earlier entries below remain historical checkpoints, not the latest completion status.
+
+
+## Studio UI checkpoint — 8 November 2026
+
+Applied the selected Studio design to every existing buyer, supplier and staff Marketplace screen, plus Cloud login/error presentation, with role-aware sidebar/navbar and responsive drawer/mobile navigation. Original worktrees and the pending quote-notification implementation were preserved. Results and limits are in [STUDIO-UI-RESULTS.md](STUDIO-UI-RESULTS.md). TypeScript, build:local, 1,527 unit tests, 111 responsive/action checks, 33 lifecycle checks and 6 feature-off checks passed; browser evidence is synthetic, not live integration. No commit, push, migration or deployment occurred for this UI work.
+
+The user has now authorized sequential implementation through phase 7. Quotations/comparison, chat, production orders and expanded Admin are not complete at this checkpoint; do not count the Studio fixture as backend acceptance.
+
+
 ## เฟส 3 วันที่ 8 พฤศจิกายน 2026
 
 เพิ่มทางเข้า **สร้างฉบับร่างคำขอราคา** จากการ์ดงาน Cloud ในหน้ารวมงานสำหรับเจ้าของพื้นที่ หน้า `/app/requests/new?projectId=…` โหลดสเปกจากงานที่บันทึกไว้ ให้ระบุชื่อ จำนวน และรายละเอียด แล้วเปิดฉบับร่างที่ `/app/requests/:id` กลับไปดูร่างได้จาก `/app/requests`
@@ -11,6 +35,12 @@ Playwright กับ Supabase ในเครื่องผ่านการ�
 บน branch `codex/marketplace-quote-publication` เพิ่มขั้นเลือกผู้รับผลิตที่อนุมัติแล้ว 1–5 รายใน `/app/requests/:id` ผู้ซื้อเห็นข้อมูลที่จะส่งและตรวจรายชื่อก่อนยืนยัน หลังส่งแสดงรายชื่อผู้รับจริง ร้านเข้าจากโปรไฟล์ไปที่ `/factory/:supplierId/jobs` และเปิดสเปกเบื้องต้นจาก `/factory/:supplierId/jobs/:requestId` หน้าผู้ซื้อและร้านโหลดแยกจาก Editor
 
 `node tmp/marketplace-publication-local/browser.mjs` ผ่านกับ Chromium, HTTP และ Supabase ในเครื่อง ตรวจเลือกข้ามหน้า จำกัดห้าราย ร้านหมดสิทธิ์ก่อนยืนยัน การลองส่งซ้ำเมื่อคำตอบขาดหาย การเปิดใบยืนยันหลังรีเฟรช และการกลับมาที่ลิงก์คำขอหลังเข้าสู่ระบบ ร้านที่ไม่ได้รับเลือก บัญชีภายนอก และร้านที่ถูกพักเปิดรายละเอียดไม่ได้ ผลอยู่ใน `tmp/marketplace-publication-local/browser.log` Cloud build และ `npm test -- --maxWorkers=4` ผ่าน 1,521 รายการ โดยข้าม 6 รายการตามชุดทดสอบ
+
+Playwright บน staging ที่ `0f10894` ผ่านการสร้างร่างจากงาน Cloud เลือกร้านสังเคราะห์หนึ่งจากสองร้านที่อนุมัติแล้ว และตรวจหลักฐานการส่งหลังเปิดใหม่ ร้านที่เลือกเห็นรายการและสเปกฉบับเดิมหลังผู้ซื้อแก้งานต้นทาง ร้านที่ไม่ได้เลือกเห็นรายการว่างและเปิดลิงก์รายละเอียดไม่ได้ บัญชีผู้ซื้อที่ไม่ได้เป็นสมาชิกของร้านเปิดรายการและรายละเอียดฝั่งร้านไม่ได้เช่นกัน สองเส้นทางไม่โหลด Editor ผลอยู่ใน `tmp/marketplace-015-staging/browser.log`
+
+บน branch `codex/marketplace-quote-notifications` เพิ่มกล่องแจ้งเตือนคำขอราคาใน `/factory/onboarding` สำหรับสมาชิกกิจการที่อนุมัติแล้ว มีป้ายรายการที่ยังไม่ได้อ่าน เปิดคำขอ และบันทึกว่าอ่านแล้ว ตรวจรายการทุก 45 วินาทีขณะที่แท็บนี้มองเห็น และโหลดใหม่เมื่อกลับมาเปิดแท็บ โดยดึงข้อมูลครั้งละหนึ่งหน้า
+
+`node tmp/marketplace-publication-local/quote-notifications-browser.mjs` ผ่านกับ Chromium และ Supabase ในเครื่อง ตรวจรับแจ้งเตือนหลังส่งคำขอจริง หยุดตรวจซ้ำเมื่อซ่อนแท็บ แบ่งหน้าและรักษาป้ายเมื่อยังมีรายการเก่าที่ไม่ได้อ่าน ปฏิเสธและซ่อนข้อมูลเมื่อสิทธิ์ถูกปฏิเสธ เปิดลิงก์รายละเอียด และยืนยันว่าไม่มีการตรวจซ้ำในหน้ารวมงานหรือโหลด Editor Cloud build และ Vitest ผ่าน 1,522 รายการ ข้าม 6 ตามชุดทดสอบ ภาพข้อมูลตัวอย่างอยู่ใน `tmp/marketplace-screenshots/index.html`
 
 ## เฟส 2 วันที่ 7 พฤศจิกายน 2026
 

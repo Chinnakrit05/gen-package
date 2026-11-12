@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router'
 import type { SupplierCapability } from '../../../shared/contracts/marketplace'
-import { PackItMark } from '../../components/Login'
+import { StudioShell, type StudioNavigationContext } from '../../app/StudioShell'
 import { supplierCapabilityNames } from './supplierUi'
 import './marketplace.css'
 
@@ -9,25 +8,17 @@ export function MarketplaceShell({
   title,
   children,
   publicPage = false,
+  navigationContext,
 }: {
   title: string
   children: ReactNode
   publicPage?: boolean
+  navigationContext?: StudioNavigationContext
 }) {
   return (
-    <div className="marketplace-page">
-      <header className="marketplace-header">
-        <Link className="marketplace-brand" to={publicPage ? '/' : '/app/projects'}>
-          <span className="login-mark"><PackItMark /></span>
-          <span>{publicPage ? 'PackIt' : 'กลับไปที่งานของฉัน'}</span>
-        </Link>
-        {!publicPage && <Link to="/factory/onboarding">พื้นที่ผู้รับผลิต</Link>}
-      </header>
-      <main className="marketplace-main">
-        <h1>{title}</h1>
-        {children}
-      </main>
-    </div>
+    <StudioShell title={title} navigationContext={navigationContext} publicPage={publicPage} className="marketplace-page">
+      <div className="marketplace-main">{children}</div>
+    </StudioShell>
   )
 }
 

@@ -5,6 +5,9 @@ import type {
   QuoteRequestDraft,
   QuoteRequestDraftPage,
   QuoteRequestEligibleSupplierPage,
+  QuoteRequestNotificationCursor,
+  QuoteRequestNotificationPage,
+  QuoteRequestNotificationRead,
   QuoteRequestPublication,
   SupplierQuoteRequest,
   SupplierQuoteRequestPage,
@@ -58,4 +61,15 @@ export function listSupplierQuoteRequests(base: string, token: string, supplierI
 
 export function getSupplierQuoteRequest(base: string, token: string, supplierId: string, id: string, signal?: AbortSignal): Promise<SupplierQuoteRequest> {
   return requestApi(`${base}/suppliers/${encodeURIComponent(supplierId)}/quote-requests/${encodeURIComponent(id)}`, token, { method: 'GET', signal })
+}
+
+export function listQuoteRequestNotifications(base: string, token: string, after: QuoteRequestNotificationCursor | null, signal?: AbortSignal): Promise<QuoteRequestNotificationPage> {
+  const query = after ? `?${new URLSearchParams({
+    afterCreatedAt: after.createdAt, afterRequestId: after.requestId, afterSupplierId: after.supplierId,
+  })}` : ''
+  return requestApi(`${base}/marketplace/quote-request-notifications${query}`, token, { method: 'GET', signal })
+}
+
+export function markQuoteRequestNotificationRead(base: string, token: string, supplierId: string, requestId: string, signal?: AbortSignal): Promise<QuoteRequestNotificationRead> {
+  return requestApi(`${base}/suppliers/${encodeURIComponent(supplierId)}/quote-requests/${encodeURIComponent(requestId)}/read`, token, { method: 'POST', signal })
 }

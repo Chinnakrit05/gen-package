@@ -1,3 +1,4 @@
+import { ArrowLeft, ArrowUpRight, FileText, Plus, RefreshCw } from 'lucide-react'
 import { useCallback, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
@@ -9,6 +10,7 @@ import { createQuoteRequestDraft, getQuoteRequestDraft, getQuoteRequestPublicati
 import { MarketplaceError, MarketplaceShell } from '../suppliers/MarketplaceShell'
 import { QuoteRequestSpec, formatQuoteDate, quoteAccessUnavailable, quoteQuantity, quoteRequestId } from './QuoteRequestFacts'
 import { QuoteRequestPublicationReceipt, QuoteRequestPublishPanel } from './QuoteRequestPublishPanel'
+import { RequestPreview } from '../commerce/RequestPreview'
 import './quoteRequests.css'
 
 const TITLE_LIMIT = 100
@@ -35,7 +37,7 @@ function RequestPage({ title, children, showListLink = false }: {
   const session = useCloudSession()
   return (
     <MarketplaceShell title={title}>
-      {showListLink && <div><Link to="/app/requests">กลับไปที่คำขอราคา</Link></div>}
+      {showListLink && <div><Link className="quote-request-back" to="/app/requests"><ArrowLeft size={16} aria-hidden="true" />กลับไปที่คำขอราคา</Link></div>}
       {session.meStatus === 'loading' && <p role="status">กำลังตรวจสิทธิ์พื้นที่งาน…</p>}
       {session.meStatus === 'error' && <MarketplaceError message="ตรวจสิทธิ์พื้นที่งานไม่สำเร็จ" retry={session.refreshMembership} />}
       {session.meStatus === 'ready' && children}
@@ -75,26 +77,27 @@ function OwnedDraftList({ workspaceId, workspaceName }: { workspaceId: string; w
   }
   return (
     <>
-      <section className="marketplace-card">
-        <h2>{workspaceName}</h2>
+      <section className="marketplace-card quote-request-intro">
+        <div className="quote-request-section-heading"><span className="quote-request-icon"><FileText size={22} aria-hidden="true" /></span><div><span className="quote-request-eyebrow">พื้นที่งานของคุณ</span><h2>{workspaceName}</h2></div></div>
         <p>เลือกงาน Cloud ที่บันทึกไว้เพื่อเริ่มฉบับร่างคำขอราคา</p>
         <div className="marketplace-meta">
-          <Link to="/app/projects">เลือกงานที่บันทึกไว้</Link>
-          <button type="button" disabled={list.isFetching} onClick={refresh}>โหลดรายการล่าสุด</button>
+          <Link className="quote-request-primary-link" to="/app/projects"><Plus size={17} aria-hidden="true" />เลือกงานที่บันทึกไว้</Link>
+          <button type="button" disabled={list.isFetching} onClick={refresh}><RefreshCw size={15} aria-hidden="true" />โหลดรายการล่าสุด</button>
         </div>
       </section>
-      <section className="marketplace-card">
+      <section className="marketplace-card quote-request-list-card">
+        <div className="quote-request-section-heading"><h2>รายการคำขอราคา</h2><span className="marketplace-muted">เรียงจากรายการล่าสุด</span></div>
         {(list.isPending || list.isFetching) && <p role="status">กำลังโหลดคำขอราคา…</p>}
         {list.isError && <MarketplaceError
           message={quoteAccessUnavailable(list.error) ? 'บัญชีนี้เปิดคำขอราคาของพื้นที่งานนี้ไม่ได้' : 'โหลดคำขอราคาไม่สำเร็จ'}
           retry={quoteAccessUnavailable(list.error) ? undefined : () => void list.refetch()}
         />}
-        {data && (data.items.length === 0 ? <p className="marketplace-muted">ยังไม่มีคำขอราคาในหน้านี้</p> : (
+        {data && (data.items.length === 0 ? <div className="quote-request-empty"><FileText size={30} aria-hidden="true" /><h3>ยังไม่มีคำขอราคาในหน้านี้</h3><p>เริ่มจากงานที่บันทึกไว้ แล้วเลือกผู้รับผลิตเพื่อขอราคา</p></div> : (
           <ul className="marketplace-list">
             {data.items.map((draft) => (
               <li className="quote-request-row" key={draft.id}>
                 <div className="marketplace-description">
-                  <Link to={`/app/requests/${draft.id}`}>{draft.title}</Link>
+                  <Link className="quote-request-title-link" to={`/app/requests/${draft.id}`}>{draft.title}<ArrowUpRight size={17} aria-hidden="true" /></Link>
                   <p>{draft.projectName} · {quoteQuantity.format(draft.quantity)} ชิ้น</p>
                 </div>
                 <time className="marketplace-muted" dateTime={draft.createdAt}>{formatQuoteDate(draft.createdAt)}</time>
@@ -206,9 +209,10 @@ function CreateDraftForm({ source, reloadSource, sourceBusy }: {
   }
   if (quoteAccessUnavailable(create.error)) return <MarketplaceError message="บัญชีนี้บันทึกฉบับร่างจากงานนี้ไม่ได้" />
   return (
-    <>
+    <div className="quote-request-compose">
       <SourceSpec name={source.name} revision={source.revision} spec={source.spec} />
-      <section className="marketplace-card">
+      <section className="marketplace-card quote-request-compose-form">
+        <span className="quote-request-eyebrow">ขั้นตอนที่ 1 · สร้างฉบับร่าง</span>
         <h2>รายละเอียดคำขอราคา</h2>
         <p>ฉบับร่างจะเก็บสเปกจาก revision ที่แสดงไว้และรายละเอียดคำขอในพื้นที่งานนี้</p>
         {conflict && <MarketplaceError message="งานต้นทางมี revision ใหม่ โหลดสเปกล่าสุดแล้วตรวจข้อมูลก่อนบันทึกอีกครั้ง" />}
@@ -235,8 +239,9 @@ function CreateDraftForm({ source, reloadSource, sourceBusy }: {
             </button>
           </fieldset>
         </form>
+        <p className="marketplace-muted quote-request-help">บันทึกฉบับร่างก่อน จากนั้นจึงเลือกผู้รับผลิตและยืนยันการส่ง</p>
       </section>
-    </>
+    </div>
   )
 }
 
@@ -293,25 +298,26 @@ function OwnedQuoteRequest({ draft }: { draft: QuoteRequestDraft }) {
   const receipt = publication.isSuccess ? publication.data.publication : undefined
 
   return (
-    <>
-      <section className="marketplace-card">
+    <div className="quote-request-detail-grid">
+      <section className="marketplace-card quote-request-summary">
+        <span className="quote-request-eyebrow">{receipt ? "ฉบับร่างต้นทาง · ดูสเปกปัจจุบันจากประวัติฉบับ" : "รายละเอียดคำขอ"}</span>
         <div className="marketplace-meta">
           <h2>{draft.title}</h2>
           {receipt !== undefined && <span className="marketplace-badge">{receipt ? 'ส่งแล้ว' : 'ฉบับร่าง'}</span>}
         </div>
-        <p>จำนวนที่ต้องการผลิต {quoteQuantity.format(draft.quantity)} ชิ้น</p>
+        <div className="quote-request-quantity"><span>จำนวนที่ต้องการผลิต</span><strong>{quoteQuantity.format(draft.quantity)} <small>ชิ้น</small></strong></div>
         {draft.notes && <p className="marketplace-description">{draft.notes}</p>}
         <time className="marketplace-muted" dateTime={draft.createdAt}>บันทึกเมื่อ {formatQuoteDate(draft.createdAt)}</time>
       </section>
       <SourceSpec name={draft.projectName} revision={draft.projectRevision} spec={draft.spec} />
       {publication.isPending && <p role="status">กำลังตรวจสถานะการส่งคำขอ…</p>}
       {publication.isError && <MarketplaceError message="โหลดสถานะการส่งคำขอไม่สำเร็จ" retry={() => void reloadPublication()} />}
-      {receipt && <QuoteRequestPublicationReceipt receipt={receipt} />}
+      {receipt && <><RequestPreview target={{ requestId: draft.id, revisionId: receipt.revisionId }} /><Link to={`/app/requests/${draft.id}/revisions`}>ดูสเปกปัจจุบันและเผยแพร่ฉบับใหม่</Link><Link to={`/app/requests/${draft.id}/quotations`}>เปรียบเทียบใบเสนอราคา</Link><QuoteRequestPublicationReceipt receipt={receipt} /></>}
       {publication.data?.publication === null && (
         <QuoteRequestPublishPanel requestId={draft.id} workspaceId={draft.workspaceId}
           blocked={!publication.isSuccess || publication.isFetching} onPublished={published} reloadPublication={reloadPublication} />
       )}
-    </>
+    </div>
   )
 }
 

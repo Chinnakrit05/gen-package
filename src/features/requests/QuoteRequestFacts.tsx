@@ -1,3 +1,4 @@
+import { Layers3 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { QuoteRequestDraft } from '../../../shared/contracts/quoteRequests'
 import { ApiClientError } from '../../services/api/client'
@@ -16,8 +17,8 @@ export function formatQuoteDate(value: string): string {
 
 export function QuoteRequestSpec({ spec, children }: { spec: QuoteRequestDraft['spec']; children?: ReactNode }) {
   return (
-    <section className="marketplace-card">
-      <h2>สเปกเบื้องต้น</h2>
+    <section className="marketplace-card quote-request-spec-card">
+      <div className="quote-request-section-heading"><span className="quote-request-icon"><Layers3 size={21} aria-hidden="true" /></span><h2>สเปกเบื้องต้น</h2></div>
       {children}
       <dl className="quote-request-spec">
         <div><dt>รหัสแบบ</dt><dd>{spec.template}</dd></div>

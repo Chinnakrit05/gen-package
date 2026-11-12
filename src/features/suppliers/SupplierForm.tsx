@@ -1,3 +1,4 @@
+import './studio-suppliers.css'
 import type { FormEvent } from 'react'
 import { SUPPLIER_CAPABILITIES, SUPPLIER_KINDS, type SupplierProfileInput } from '../../../shared/contracts/marketplace'
 import { SUPPLIER_SLUG_PATTERN, supplierCapabilityNames, supplierInput, supplierKindNames } from './supplierUi'
@@ -24,8 +25,9 @@ export function SupplierForm({
     if (input.name && !busy) onSave(input)
   }
   return (
-    <form className="marketplace-form" onSubmit={submit} aria-busy={busy}>
+    <form className="marketplace-form studio-supplier-form" onSubmit={submit} aria-busy={busy}>
       <fieldset className="marketplace-form-fields" disabled={busy}>
+        <div className="studio-form-section-label"><h3>ข้อมูลพื้นฐาน</h3><p>กรอกชื่อและข้อมูลติดต่อที่ใช้งานจริง</p></div>
         <div className="marketplace-form-columns">
           <label>
             ประเภทกิจการ
@@ -64,9 +66,10 @@ export function SupplierForm({
         </label>
         <fieldset className="marketplace-options">
           <legend>ความสามารถในการผลิต</legend>
+          <p className="studio-field-help">เลือกประเภทงานที่กิจการของคุณรองรับ เพื่อให้ได้รับคำขอราคาที่เกี่ยวข้อง</p>
           <div className="marketplace-options-grid">
             {SUPPLIER_CAPABILITIES.map((capability) => (
-              <label key={capability}>
+              <label key={capability} className={value.capabilities.includes(capability) ? 'is-selected' : undefined}>
                 <input
                   type="checkbox"
                   checked={value.capabilities.includes(capability)}
@@ -80,9 +83,12 @@ export function SupplierForm({
           </div>
         </fieldset>
       </fieldset>
+      <div className="studio-form-footer">
+      <p className="marketplace-muted">บันทึกข้อมูลก่อนส่งโปรไฟล์ตรวจสอบ</p>
       <button type="submit" className="primary" disabled={busy || !value.name.trim()}>
         {busy ? 'กำลังบันทึก…' : saveLabel}
       </button>
+      </div>
     </form>
   )
 }

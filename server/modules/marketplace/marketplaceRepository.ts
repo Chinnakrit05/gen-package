@@ -23,6 +23,9 @@ import type {
   QuoteRequestDraft,
   QuoteRequestDraftPage,
   QuoteRequestEligibleSupplierPage,
+  QuoteRequestNotificationCursor,
+  QuoteRequestNotificationPage,
+  QuoteRequestNotificationRead,
   QuoteRequestPublication,
   SupplierQuoteRequest,
   SupplierQuoteRequestPage,
@@ -55,6 +58,8 @@ export interface MarketplaceRepository {
   publishQuoteRequest(actor: Actor, id: string, supplierIds: string[]): Promise<QuoteRequestPublication>
   listSupplierQuoteRequests(actor: Actor, supplierId: string, after: QuoteRequestCursor | null): Promise<SupplierQuoteRequestPage>
   getSupplierQuoteRequest(actor: Actor, supplierId: string, id: string): Promise<SupplierQuoteRequest>
+  listQuoteRequestNotifications(actor: Actor, after: QuoteRequestNotificationCursor | null): Promise<QuoteRequestNotificationPage>
+  markQuoteRequestNotificationRead(actor: Actor, supplierId: string, requestId: string): Promise<QuoteRequestNotificationRead>
   publicProfile(slug: string): Promise<SupplierPublicProfile>
   adminList(actor: Actor, status: SupplierStatus, after?: string): Promise<SupplierAdminPage>
   review(actor: Actor, supplierId: string, expectedRevision: number, action: SupplierReviewAction, reason: string): Promise<SupplierProfile>

@@ -10,7 +10,7 @@ import {
   type SupplierReviewDocumentUpload,
   type SupplierStatus,
 } from '../../../shared/contracts/marketplace'
-import type { CreateQuoteRequestDraftInput, QuoteRequestCursor } from '../../../shared/contracts/quoteRequests'
+import type { CreateQuoteRequestDraftInput, QuoteRequestCursor, QuoteRequestNotificationCursor } from '../../../shared/contracts/quoteRequests'
 import type { ServerConfig } from '../../config'
 import { HttpError } from '../../http/errors'
 import type { Actor } from '../../modules/identity/actor'
@@ -19,6 +19,8 @@ import {
   quoteDraft,
   quoteDraftPage,
   quoteEligibleSupplierPage,
+  quoteRequestNotificationPage,
+  quoteRequestNotificationRead,
   quoteRequestPublication,
   quoteRequestPublicationState,
   supplierQuoteRequest,
@@ -296,6 +298,23 @@ export class SupabaseMarketplaceRepository implements MarketplaceRepository {
       p_supplier_id: supplierId,
       p_request_id: id,
     }, supplierQuoteRequest)
+  }
+
+  listQuoteRequestNotifications(actor: Actor, after: QuoteRequestNotificationCursor | null) {
+    return this.rpc('marketplace_list_quote_request_notifications', {
+      p_actor_user_id: actor.userId,
+      p_after_created_at: after?.createdAt ?? null,
+      p_after_request_id: after?.requestId ?? null,
+      p_after_supplier_id: after?.supplierId ?? null,
+    }, quoteRequestNotificationPage)
+  }
+
+  markQuoteRequestNotificationRead(actor: Actor, supplierId: string, requestId: string) {
+    return this.rpc('marketplace_mark_quote_request_notification_read', {
+      p_actor_user_id: actor.userId,
+      p_supplier_id: supplierId,
+      p_request_id: requestId,
+    }, quoteRequestNotificationRead)
   }
 
   publicProfile(slug: string) {

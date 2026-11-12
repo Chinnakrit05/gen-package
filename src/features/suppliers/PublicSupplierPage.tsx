@@ -1,3 +1,4 @@
+import './studio-suppliers.css'
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import type { SupplierPublicProfile } from '../../../shared/contracts/marketplace'
@@ -37,10 +38,11 @@ function PublicSupplier({ apiBaseUrl, slug }: { apiBaseUrl: string; slug: string
       {state.status === 'missing' && <p>โปรไฟล์นี้อาจยังไม่ได้เผยแพร่หรือใช้ลิงก์ใหม่แล้ว</p>}
       {state.status === 'error' && <MarketplaceError message="โหลดโปรไฟล์ไม่สำเร็จ" retry={() => { setState({ status: 'loading' }); setAttempt((value) => value + 1) }} />}
       {state.status === 'ready' && (
-        <article className="marketplace-card">
-          <p className="marketplace-meta">{supplierKindNames[state.profile.kind]}</p>
+        <article className="marketplace-card studio-public-profile">
+          <div className="studio-public-banner"><span className="studio-company-avatar" aria-hidden="true">{state.profile.name.slice(0, 1)}</span><div><p className="studio-eyebrow">SUPPLIER PROFILE</p><h2>{state.profile.name}</h2></div></div>
+          <p className="marketplace-meta"><span className="marketplace-badge">{supplierKindNames[state.profile.kind]}</span></p>
           {state.profile.description && <p className="marketplace-description">{state.profile.description}</p>}
-          <h2>ความสามารถในการผลิต</h2>
+          <div className="studio-form-section-label"><h2>ความสามารถในการผลิต</h2><p>ประเภทงานที่ผู้รับผลิตรายนี้รองรับ</p></div>
           <CapabilityList capabilities={state.profile.capabilities} />
         </article>
       )}

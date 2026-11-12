@@ -1,3 +1,4 @@
+import { Check, CheckCircle2, Send, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { QUOTE_REQUEST_MAX_SUPPLIERS, type QuoteRequestPublication } from '../../../shared/contracts/quoteRequests'
@@ -10,12 +11,12 @@ import { formatQuoteDate, quoteAccessUnavailable } from './QuoteRequestFacts'
 
 export function QuoteRequestPublicationReceipt({ receipt }: { receipt: QuoteRequestPublication }) {
   return (
-    <section className="marketplace-card">
-      <h2>ส่งคำขอราคาแล้ว</h2>
+    <section className="marketplace-card quote-request-receipt">
+      <div className="quote-request-section-heading"><span className="quote-request-icon is-success"><CheckCircle2 size={23} aria-hidden="true" /></span><div><span className="quote-request-eyebrow">ส่งสำเร็จ</span><h2>ส่งคำขอราคาแล้ว</h2></div></div>
       <time className="marketplace-muted" dateTime={receipt.publishedAt}>{formatQuoteDate(receipt.publishedAt)}</time>
       <p>ผู้รับผลิตที่ได้รับคำขอ {receipt.suppliers.length} ราย</p>
       <ul className="marketplace-list">
-        {receipt.suppliers.map((supplier) => <li key={supplier.id}>{supplier.name}</li>)}
+        {receipt.suppliers.map((supplier) => <li key={supplier.id}><Check size={16} aria-hidden="true" />{supplier.name}</li>)}
       </ul>
     </section>
   )
@@ -77,10 +78,10 @@ export function QuoteRequestPublishPanel({
   if (denied) return <MarketplaceError message="บัญชีนี้เปิดการส่งคำขอราคาไม่ได้" />
 
   return (
-    <section className="marketplace-card">
-      <h2>ส่งคำขอราคาให้ผู้รับผลิต</h2>
+    <section className="marketplace-card quote-request-publish">
+      <div className="quote-request-section-heading"><span className="quote-request-icon"><Users size={22} aria-hidden="true" /></span><div><span className="quote-request-eyebrow">ขั้นตอนที่ 2 · เลือกผู้รับผลิต</span><h2>ส่งคำขอราคาให้ผู้รับผลิต</h2></div></div>
       <p>เลือกผู้รับผลิตที่ผ่านการอนุมัติ 1–{QUOTE_REQUEST_MAX_SUPPLIERS} ราย</p>
-      <p>ผู้รับผลิตที่เลือกจะเห็นชื่อคำขอ จำนวนที่ต้องการผลิต รายละเอียดเพิ่มเติม และสเปกเบื้องต้น</p>
+      <p className="quote-request-help">ผู้รับผลิตที่เลือกจะเห็นชื่อคำขอ จำนวนที่ต้องการผลิต รายละเอียดเพิ่มเติม สเปก และภาพอ้างอิงที่บันทึกไว้เมื่อส่งคำขอ (ถ้ามี)</p>
       {publish.isError && (
         <MarketplaceError message={conflict
           ? 'สถานะคำขอหรือรายชื่อผู้รับผลิตเปลี่ยนไป ตรวจสถานะล่าสุดก่อนส่งอีกครั้ง'
@@ -89,7 +90,7 @@ export function QuoteRequestPublishPanel({
       {publish.isError && <button type="button" disabled={busy} onClick={() => void refreshStatus()}>ตรวจสถานะล่าสุด</button>}
       {selected.length > 0 && (
         <div className="quote-request-selection">
-          <strong>เลือกแล้ว {selected.length} จาก {QUOTE_REQUEST_MAX_SUPPLIERS} ราย</strong>
+          <strong aria-live="polite">เลือกแล้ว {selected.length} จาก {QUOTE_REQUEST_MAX_SUPPLIERS} ราย</strong>
           <ul className="marketplace-list">
             {selected.map((supplier) => (
               <li className="marketplace-meta" key={supplier.id}>
@@ -102,14 +103,14 @@ export function QuoteRequestPublishPanel({
         </div>
       )}
       {confirming ? (
-        <div className="quote-request-selection">
+        <div className="quote-request-selection quote-request-confirmation">
           <h3>ยืนยันรายชื่อผู้รับผลิต</h3>
-          <p>คำขอจะส่งถึงผู้รับผลิต {selected.length} รายที่แสดงด้านบน</p>
+          <p>คำขอจะส่งถึงผู้รับผลิต {selected.length} รายที่แสดงด้านบน พร้อมสเปกและภาพอ้างอิงที่บันทึกไว้ (ถ้ามี)</p><p>ภาพอ้างอิงไม่ได้ยืนยันว่าตรงกับสเปก ระบบไม่แชร์ไฟล์ต้นฉบับหรือประวัติใน Editor และไม่ให้สิทธิ์แก้งานออกแบบ</p>
           <div className="marketplace-meta">
             <button type="button" disabled={busy || conflict} onClick={() => { setConfirming(false); publish.reset() }}>กลับไปแก้รายชื่อ</button>
             <button type="button" className="primary" disabled={busy || conflict || !selected.length}
               onClick={() => publish.mutate(selected.map((supplier) => supplier.id))}>
-              {publish.isPending ? 'กำลังส่งคำขอ…' : 'ยืนยันส่งคำขอ'}
+              <Send size={16} aria-hidden="true" />{publish.isPending ? 'กำลังส่งคำขอ…' : 'ยืนยันส่งคำขอ'}
             </button>
           </div>
         </div>
@@ -118,15 +119,15 @@ export function QuoteRequestPublishPanel({
           {(eligible.isPending || eligible.isFetching) && <p role="status">กำลังโหลดผู้รับผลิต…</p>}
           {eligible.isError && <MarketplaceError message="โหลดรายชื่อผู้รับผลิตไม่สำเร็จ" retry={() => void eligible.refetch()} />}
           {data && (data.items.length === 0 ? <p className="marketplace-muted">ยังไม่มีผู้รับผลิตที่เลือกได้ในหน้านี้</p> : (
-            <ul className="marketplace-list">
+            <ul className="marketplace-list quote-request-supplier-grid">
               {data.items.map((supplier) => {
                 const checked = selected.some((item) => item.id === supplier.id)
                 return (
-                  <li className="quote-request-eligible" key={supplier.id}>
+                  <li className={`quote-request-eligible${checked ? ' is-selected' : ''}`} key={supplier.id}>
                     <label className="quote-request-supplier-option">
                       <input type="checkbox" checked={checked} onChange={() => toggle(supplier)}
                         disabled={busy || conflict || (!checked && selected.length >= QUOTE_REQUEST_MAX_SUPPLIERS)} />
-                      <span><strong>{supplier.name}</strong> · {supplierKindNames[supplier.kind]}</span>
+                      <span><strong>{supplier.name}</strong><small>{supplierKindNames[supplier.kind]}</small></span>
                     </label>
                     <CapabilityList capabilities={supplier.capabilities} />
                   </li>

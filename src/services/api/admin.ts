@@ -1,0 +1,15 @@
+import type { AdminAuditEvent, AdminDashboard, AdminPage, AdminSearchItem, CloseSupportCaseInput, CreateSupportCaseInput, MarketplaceAdminContext, SupportAccessInput, SupportAccessResult, SupportCase, SupportFileDownload } from '../../../shared/contracts/admin'
+import { commerceRead, commerceWrite } from './commerce'
+const cursorQuery = (cursor: string | null) => cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+export const getAdminContext = (base: string, token: string, signal?: AbortSignal) => commerceRead<MarketplaceAdminContext>(base, token, '/admin/context', signal)
+export const getAdminDashboard = (base: string, token: string, signal?: AbortSignal) => commerceRead<AdminDashboard>(base, token, '/admin/dashboard', signal)
+export const searchAdmin = (base: string, token: string, kind: AdminSearchItem['kind'], q: string, cursor: string | null, signal?: AbortSignal) => commerceRead<AdminPage<AdminSearchItem>>(base, token, `/admin/search?${new URLSearchParams({ kind, q, ...(cursor ? { cursor } : {}) })}`, signal)
+export const listSupportCases = (base: string, token: string, cursor: string | null, signal?: AbortSignal) => commerceRead<AdminPage<SupportCase>>(base, token, `/admin/support-cases${cursorQuery(cursor)}`, signal)
+export const createSupportCase = (base: string, token: string, input: CreateSupportCaseInput) => commerceWrite<SupportCase>(base, token, '/admin/support-cases', input)
+export const closeSupportCase = (base: string, token: string, id: string, input: CloseSupportCaseInput) => commerceWrite<SupportCase>(base, token, `/admin/support-cases/${encodeURIComponent(id)}/close`, input)
+export const accessSupportCase = (base: string, token: string, id: string, input: SupportAccessInput) => commerceWrite<SupportAccessResult>(base, token, `/admin/support-cases/${encodeURIComponent(id)}/access`, input)
+export const accessSupportFile = (base: string, token: string, id: string, fileId: string, reason: string) => commerceWrite<SupportFileDownload>(base, token, `/admin/support-cases/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}/access`, { reason })
+export const listAdminAudit = (base: string, token: string, cursor: string | null, signal?: AbortSignal) => commerceRead<AdminPage<AdminAuditEvent>>(base, token, `/admin/audit-log${cursorQuery(cursor)}`, signal)
+export const listAdminUsers = (base: string, token: string, q: string, cursor: string | null, signal?: AbortSignal) => commerceRead<AdminPage<import('../../../shared/contracts/admin').AdminUser>>(base, token, `/admin/users?${new URLSearchParams({ q, ...(cursor ? { cursor } : {}) })}`, signal)
+export const changeAdminUserStatus = (base: string, token: string, id: string, input: import('../../../shared/contracts/admin').AdminUserStatusInput) => commerceWrite<import('../../../shared/contracts/admin').AdminUser>(base, token, `/admin/users/${encodeURIComponent(id)}/status`, input)
+export const runAdminMaintenance = (base: string, token: string, input: import('../../../shared/contracts/admin').AdminMaintenanceInput) => commerceWrite<import('../../../shared/contracts/admin').AdminMaintenanceResult>(base, token, '/admin/maintenance', input)

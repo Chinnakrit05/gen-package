@@ -200,3 +200,47 @@
   background: #fce0e0;
   color: #771b1b;
 }
+
+/* Shared Studio marketplace surfaces, including empty, loading and error states. */
+.studio-shell .marketplace-page { width:100%; margin:0 auto; }
+.studio-shell .marketplace-main { margin-top:0; gap:20px; }
+.studio-shell .marketplace-card { border-radius:14px; box-shadow:var(--shadow-sm); padding:24px; gap:16px; }
+.studio-shell .marketplace-main h2 { font-size:17px; line-height:1.6; }
+.studio-shell .marketplace-main h3 { font-size:15px; }
+.studio-shell .marketplace-form { gap:20px; }
+.studio-shell .marketplace-form label { font-size:12px; color:var(--text-2); gap:7px; }
+.studio-shell .marketplace-page input:not([type=checkbox]),
+.studio-shell .marketplace-page textarea,
+.studio-shell .marketplace-page select { background:#fff; border-color:var(--border-strong); min-height:43px; padding:10px 12px; }
+.studio-shell .marketplace-page input[type=checkbox] { width:16px; height:16px; flex-shrink:0; }
+.studio-shell .marketplace-form-columns,.studio-shell .marketplace-options-grid { gap:18px; }
+.studio-shell .marketplace-options { padding:16px; border-radius:10px; }
+.studio-shell .marketplace-options legend { padding:0 6px; color:var(--text-2); font-size:12px; }
+.studio-shell .marketplace-options label { min-height:30px; }
+.studio-shell .marketplace-badge { display:inline-flex; align-items:center; gap:6px; width:fit-content; font-size:11px; font-weight:600; border-radius:6px; padding:5px 9px; }
+.studio-shell .marketplace-badge:before {content:'';width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+.studio-shell .marketplace-badge.is-approved { background:#eaf5ef; color:#376d53; }
+.studio-shell .marketplace-badge.is-draft { background:#eff1f5; color:#626d80; }
+.studio-shell .marketplace-badge.is-pending { background:#fff3df; color:#8f6026; }
+.studio-shell .marketplace-badge.is-suspended { background:#fff0f0; color:#a44848; }
+.studio-shell .marketplace-capabilities { gap:7px; }
+.studio-shell .marketplace-capabilities li { font-size:11px; padding:5px 9px; background:#f3f2fa; color:#6e648d; border-radius:6px; }
+.studio-shell .marketplace-notice {padding:15px 17px;border:1px solid #e4dff5;border-radius:10px;font-size:13px;line-height:1.8}
+.studio-shell .marketplace-notice.is-error {border-color:#f1d3d6;background:#fff3f4;color:#9a3d47}
+.studio-shell .marketplace-meta {gap:10px}
+.studio-shell .marketplace-list li {overflow-wrap:anywhere;min-width:0}
+.studio-shell .marketplace-list .marketplace-team-row,
+.studio-shell .marketplace-list .marketplace-document-row,
+.studio-shell .marketplace-list .marketplace-notification-row {padding-block:17px}
+@media (max-width:599px) {
+ .studio-shell .marketplace-card {padding:18px;gap:15px}
+ .studio-shell .marketplace-main {gap:16px}
+ .studio-shell .marketplace-form-columns,.studio-shell .marketplace-options-grid {grid-template-columns:minmax(0,1fr)}
+ .studio-shell .marketplace-meta {gap:9px}
+ .studio-shell .marketplace-main h2 {font-size:16px}
+ .studio-shell .marketplace-page input:not([type=checkbox]),.studio-shell .marketplace-page textarea,.studio-shell .marketplace-page select {font-size:16px}
+}
+/* Keep Marketplace pages aligned with the shared Studio content grid. */
+.studio-shell .marketplace-page { padding:32px 36px 20px; }
+@media (max-width:1099px) { .studio-shell .marketplace-page { padding:28px 26px 20px; } }
+@media (max-width:599px) { .studio-shell .marketplace-page { padding:25px 18px 12px; } }

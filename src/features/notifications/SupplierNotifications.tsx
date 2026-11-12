@@ -1,4 +1,5 @@
-import { useId, useState } from 'react'
+import '../suppliers/studio-suppliers.css'
+import { useEffect, useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import type {
@@ -36,10 +37,11 @@ function unavailable(error: unknown): boolean {
 
 export function SupplierNotifications({ defaultOpen = false, ...scope }: NotificationScope & { defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen)
+  useEffect(() => { if (defaultOpen) setOpen(true) }, [defaultOpen])
   const listId = useId()
   return (
-    <section className="marketplace-card">
-      <div className="marketplace-meta">
+    <section className="marketplace-card studio-notification-card">
+      <div className="marketplace-meta studio-section-toolbar">
         <h2>การแจ้งเตือน</h2>
         <button type="button" aria-expanded={open} aria-controls={listId} onClick={() => setOpen((previous) => !previous)}>
           {open ? 'ซ่อนการแจ้งเตือน' : 'ดูการแจ้งเตือน'}
@@ -97,7 +99,7 @@ function NotificationList(scope: NotificationScope) {
       {data && (data.items.length === 0 ? <p className="marketplace-muted">ยังไม่มีการแจ้งเตือนในหน้านี้</p> : (
         <ul className="marketplace-list">
           {data.items.map((item) => (
-            <li className="marketplace-notification-row" key={item.id}>
+            <li className={`marketplace-notification-row ${item.readAt ? 'is-read' : 'is-unread'}`} key={item.id}>
               <div className="marketplace-description">
                 <strong>{actionLabels[item.action]}</strong>
                 <p>{item.supplierName}</p>

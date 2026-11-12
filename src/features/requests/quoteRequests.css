@@ -1,54 +1,82 @@
-.marketplace-list .quote-request-row {
-  align-items: center;
-  justify-content: space-between;
-  padding-block: 10px;
-  border-bottom: 1px solid var(--border);
+/* Quote workflow: quiet Studio surfaces with a clear reading and action order. */
+.quote-request-intro { position: relative; overflow: hidden; border-top: 3px solid #6254cf; }
+.quote-request-section-heading { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.quote-request-section-heading > div { min-width: 0; }
+.quote-request-section-heading > .marketplace-muted { margin-left: auto; font-size: .8rem; }
+.quote-request-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; border-radius: 13px; background: #eeebff; color: #6254cf; }
+.quote-request-icon.is-success { background: #e6f5ee; color: #267955; }
+.quote-request-eyebrow { display: block; color: #746995; font-size: .74rem; font-weight: 600; letter-spacing: .035em; margin-bottom: 5px; }
+.marketplace-page .quote-request-back { display: inline-flex; align-items: center; gap: 7px; font-size: .85rem; text-decoration: none; }
+.marketplace-page .quote-request-primary-link { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 9px 15px; border-radius: 10px; background: #6254cf; color: white; text-decoration: none; }
+.marketplace-page .quote-request-primary-link:hover { background: #5143b6; }
+.quote-request-list-card { gap: 20px; }
+.marketplace-list .quote-request-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 20px 4px; border-bottom: 1px solid #e8ebef; }
+.marketplace-list .quote-request-row:last-child { border-bottom: 0; }
+.quote-request-row .marketplace-description { display: grid; gap: 7px; }
+.quote-request-row .marketplace-description p { color: #727b8d; font-size: .85rem; }
+.quote-request-row time { font-size: .78rem; }
+.marketplace-page .quote-request-title-link { display: inline-flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; color: #1f293a; text-decoration: none; font-size: 1rem; }
+.quote-request-title-link svg { flex-shrink: 0; color: #918aa9; }
+.marketplace-page .quote-request-title-link:hover { color: #6254cf; }
+.quote-request-empty { display: grid; justify-items: center; gap: 12px; text-align: center; padding: 44px 16px; border: 1px dashed #dedce9; border-radius: 14px; color: #727b8d; background: #fafafd; }
+.quote-request-empty svg { color: #8b80ce; }
+.quote-request-empty h3 { color: #1f293a; font-size: 1rem; margin: 0; }
+.quote-request-empty p { font-size: .87rem; max-width: 420px; }
+.quote-request-compose { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr); gap: 22px; align-items: start; }
+.quote-request-compose > .quote-request-spec-card { grid-column: 2; grid-row: 1; }
+.quote-request-compose > .quote-request-compose-form { grid-column: 1; grid-row: 1; }
+.quote-request-compose-form .marketplace-form-fields { gap: 22px; }
+.quote-request-compose-form .marketplace-form { margin-top: 8px; }
+.quote-request-compose-form label { font-weight: 600; font-size: .88rem; gap: 8px; }
+.quote-request-compose-form input, .quote-request-compose-form textarea { font-weight: 400; }
+.quote-request-compose-form textarea { resize: vertical; min-height: 120px; }
+.quote-request-help { color: #737c8e; font-size: .82rem; line-height: 1.7; }
+.quote-request-detail-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.quote-request-detail-grid > :not(.quote-request-summary):not(.quote-request-spec-card) { grid-column: 1 / -1; }
+.quote-request-summary { height: 100%; align-content: start; }
+.quote-request-summary h2 { overflow-wrap: anywhere; }
+.quote-request-quantity { display: grid; gap: 7px; border-block: 1px solid #e8ebef; padding-block: 18px; margin-block: 5px; }
+.quote-request-quantity > span { font-size: .8rem; color: #727b8d; }
+.quote-request-quantity > strong { font-size: 1.9rem; line-height: 1.2; letter-spacing: -.035em; color: #1f293a; }
+.quote-request-quantity small { font-size: .88rem; font-weight: 400; letter-spacing: 0; }
+.quote-request-summary time { font-size: .78rem; }
+.quote-request-spec-card { align-content: start; }
+.quote-request-spec { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 6px 0 0; }
+.quote-request-spec > div { padding: 15px; border: 1px solid #e8ebef; border-radius: 12px; background: #fafbfc; min-width: 0; }
+.quote-request-spec dt { color: #727b8d; font-size: .76rem; }
+.quote-request-spec dd { margin: 8px 0 0; overflow-wrap: anywhere; font-size: .9rem; font-weight: 600; color: #1f293a; }
+.quote-request-publish { gap: 18px; }
+.quote-request-selection { display: grid; gap: 12px; padding: 18px; border: 1px solid #e0daf8; border-radius: 13px; background: #f8f6ff; }
+.quote-request-selection > strong { color: #6254cf; font-size: .88rem; }
+.quote-request-selection h3 { margin: 0; font-size: 1rem; }
+.quote-request-selection .marketplace-list { gap: 10px; }
+.quote-request-selection .marketplace-meta { justify-content: space-between; }
+.quote-request-selection .marketplace-list li { align-items: center; }
+.quote-request-confirmation { background: #fff; border-color: #e8ebef; }
+.marketplace-list.quote-request-supplier-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.marketplace-list .quote-request-eligible { display: grid; align-content: start; gap: 12px; padding: 17px; border: 1px solid #e8ebef; border-radius: 13px; background: white; transition: border-color .15s, background .15s; }
+.marketplace-list .quote-request-eligible.is-selected { border-color: #a397e3; background: #f8f6ff; }
+.marketplace-page .quote-request-supplier-option { display: flex; align-items: start; gap: 10px; overflow-wrap: anywhere; cursor: pointer; }
+.quote-request-supplier-option input { width: 18px; height: 18px; flex-shrink: 0; margin: 3px 0 0; accent-color: #6254cf; }
+.quote-request-supplier-option > span { display: grid; gap: 4px; min-width: 0; }
+.quote-request-supplier-option small { font-size: .76rem; }
+.quote-request-eligible .marketplace-capabilities { padding-left: 28px; }
+.quote-request-eligible:has(input:disabled) label { cursor: default; }
+.quote-request-receipt { border-color: #cee7d9; }
+.quote-request-receipt .marketplace-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px; }
+.quote-request-receipt .marketplace-list li { padding: 12px; align-items: center; border-radius: 10px; background: #f4faf6; color: #267955; }
+@media (max-width: 1050px) {
+  .quote-request-compose, .quote-request-detail-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .quote-request-compose > .quote-request-spec-card, .quote-request-compose > .quote-request-compose-form { grid-column: auto; grid-row: auto; }
 }
-
-.marketplace-list .quote-request-row:last-child {
-  border-bottom: 0;
+@media (max-width: 600px) {
+  .marketplace-list .quote-request-row { grid-template-columns: minmax(0, 1fr); gap: 10px; padding-block: 17px; }
+  .marketplace-list.quote-request-supplier-grid { grid-template-columns: minmax(0, 1fr); }
+  .quote-request-section-heading > .marketplace-muted { margin-left: 0; width: 100%; }
+  .quote-request-spec { gap: 8px; }
+  .quote-request-spec > div { padding: 12px; }
+  .quote-request-selection { padding: 14px; }
+  .quote-request-confirmation .marketplace-meta { display: grid; }
+  .quote-request-confirmation .marketplace-meta button { width: 100%; }
 }
-
-.quote-request-spec {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
-  gap: 12px;
-  margin: 0;
-}
-
-.quote-request-spec dt {
-  color: var(--text-2);
-}
-
-.quote-request-spec dd {
-  margin: 2px 0 0;
-  overflow-wrap: anywhere;
-  font-weight: 600;
-}
-
-.quote-request-selection {
-  display: grid;
-  gap: 8px;
-}
-
-.quote-request-selection h3 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.marketplace-list .quote-request-eligible {
-  display: grid;
-  padding-block: 10px;
-  border-bottom: 1px solid var(--border);
-}
-
-.marketplace-list .quote-request-eligible:last-child {
-  border-bottom: 0;
-}
-
-.marketplace-page .quote-request-supplier-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  overflow-wrap: anywhere;
-}
+@media (prefers-reduced-motion: reduce) { .marketplace-list .quote-request-eligible { transition: none; } }
