@@ -148,7 +148,7 @@ describe('SupabaseBillingRepository', () => {
     vi.restoreAllMocks()
   })
 
-  it('passes the authenticated actor to history and strips private fields from the response', async () => {
+  it('passes the authenticated actor to history and exposes recorded usage details only', async () => {
     const entry = {
       id: aiRequestId,
       kind: null,
@@ -156,9 +156,15 @@ describe('SupabaseBillingRepository', () => {
       createdAt: '2026-11-12T10:01:00Z',
       settledAt: '2026-11-12T10:01:30Z',
       creditUnits: 1,
+      model: 'claude-opus-5-5',
+      inputTokens: 42,
+      outputTokens: 200,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 100,
+      hasImage: false,
     }
     const { client, calls } = fakeClient({ data: {
-      items: [{ ...entry, prompt: 'private', output: { private: true }, inputTokens: 42 }],
+      items: [{ ...entry, prompt: 'private', output: { private: true }, costUsd: 0.001 }],
       nextCursor: null,
       workspaceId,
     } })
@@ -172,6 +178,30 @@ describe('SupabaseBillingRepository', () => {
       p_cursor: aiRequestId,
       p_limit: 20,
     }]])
+  })
+
+  it('keeps history readable with unknown usage when the database still returns the original shape', async () => {
+    const entry = {
+      id: aiRequestId,
+      kind: null,
+      status: 'failed',
+      createdAt: '2026-11-12T10:01:00Z',
+      settledAt: '2026-11-12T10:01:30Z',
+      creditUnits: 0,
+    }
+    const { client } = fakeClient({ data: { items: [entry], nextCursor: null } })
+    await expect(new SupabaseBillingRepository(client).listAiHistory(actor, workspaceId, null, 20)).resolves.toEqual({
+      items: [{
+        ...entry,
+        model: null,
+        inputTokens: null,
+        outputTokens: null,
+        cacheReadTokens: null,
+        cacheCreationTokens: null,
+        hasImage: null,
+      }],
+      nextCursor: null,
+    })
   })
 
   it('returns the same not-found result for an inaccessible or missing workspace', async () => {

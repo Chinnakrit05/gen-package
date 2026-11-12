@@ -7,6 +7,12 @@ export interface AiHistoryEntry {
   createdAt: string
   settledAt: string | null
   creditUnits: number
+  model: string | null
+  inputTokens: number | null
+  outputTokens: number | null
+  cacheReadTokens: number | null
+  cacheCreationTokens: number | null
+  hasImage: boolean | null
 }
 
 export interface AiHistoryPage {

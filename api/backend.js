@@ -54433,6 +54433,7 @@ function logServerEvent(level, event, fields = {}) {
 // server/modules/billing/validation.ts
 var timestampSchema = external_exports.string().refine((value) => !Number.isNaN(Date.parse(value)), "invalid timestamp");
 var creditsSchema = external_exports.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+var aiHistoryTokenCount = external_exports.number().int().min(0).max(2147483647).nullable().default(null);
 var orderKindSchema = external_exports.enum(["design", "pro"]);
 var orderIdSchema = external_exports.uuid();
 var entitlementsQuerySchema = external_exports.object({
@@ -54475,7 +54476,13 @@ var aiHistoryResultSchema = external_exports.object({
     status: external_exports.enum(["reserved", "succeeded", "failed"]),
     createdAt: timestampSchema,
     settledAt: timestampSchema.nullable(),
-    creditUnits: creditsSchema
+    creditUnits: creditsSchema,
+    model: external_exports.string().min(1).max(200).nullable().default(null),
+    inputTokens: aiHistoryTokenCount,
+    outputTokens: aiHistoryTokenCount,
+    cacheReadTokens: aiHistoryTokenCount,
+    cacheCreationTokens: aiHistoryTokenCount,
+    hasImage: external_exports.boolean().nullable().default(null)
   })).max(50),
   nextCursor: external_exports.uuid().nullable()
 });

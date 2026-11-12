@@ -57,10 +57,10 @@ do $$
 begin
   perform public.settle_ai_request(
     (select app_user_id from history_alice), (reservation->>'requestId')::uuid,
-    'succeeded', 'internal-model', 100, 200, 300, 400, true
+    'succeeded', 'claude-sonnet-4-6', 100, 200, 0, 400, true
   ) from history_requests where label = 'legacy';
   perform public.settle_ai_request(
-    (select app_user_id from history_alice), (reservation->>'requestId')::uuid, 'failed'
+    (select app_user_id from history_alice), (reservation->>'requestId')::uuid, 'failed', p_has_image => false
   ) from history_requests where label = 'artwork';
 end;
 $$;
@@ -107,7 +107,8 @@ select is(
   (select result->'items'->0 from history_first_page),
   (select jsonb_build_object(
     'id', request.id, 'kind', 'spec', 'status', 'reserved', 'createdAt', request.created_at,
-    'settledAt', null, 'creditUnits', 1
+    'settledAt', null, 'creditUnits', 1, 'model', null, 'inputTokens', null, 'outputTokens', null,
+    'cacheReadTokens', null, 'cacheCreationTokens', null, 'hasImage', null
   ) from app_private.ai_requests request
   where request.id = (select (reservation->>'requestId')::uuid from history_requests where label = 'spec')),
   'the newest item reports the tagged pending reservation with only public fields'
@@ -132,15 +133,21 @@ select is(
   (select item - 'id' - 'createdAt' - 'settledAt'
     from history_second_page, jsonb_array_elements(result->'items') item
     where item->>'id' = (select reservation->>'requestId' from history_requests where label = 'legacy')),
-  '{"kind":null,"status":"succeeded","creditUnits":1}'::jsonb,
-  'older requests expose a null kind and hide model, tokens and operation ID'
+  jsonb_build_object(
+    'kind', null, 'status', 'succeeded', 'creditUnits', 1, 'model', 'claude-sonnet-4-6',
+    'inputTokens', 100, 'outputTokens', 200, 'cacheReadTokens', 0, 'cacheCreationTokens', 400, 'hasImage', true
+  ),
+  'older requests show recorded details and hide internal fields such as operation ID'
 );
 select is(
   (select item - 'id' - 'createdAt' - 'settledAt'
     from history_second_page, jsonb_array_elements(result->'items') item
     where item->>'id' = (select reservation->>'requestId' from history_requests where label = 'artwork')),
-  '{"kind":"artwork","status":"failed","creditUnits":0}'::jsonb,
-  'failed artwork reports the refunded credit'
+  jsonb_build_object(
+    'kind', 'artwork', 'status', 'failed', 'creditUnits', 0, 'model', null,
+    'inputTokens', null, 'outputTokens', null, 'cacheReadTokens', null, 'cacheCreationTokens', null, 'hasImage', false
+  ),
+  'failed artwork reports the refunded credit and known image flag with unknown model and tokens'
 );
 select is(
   (select public.list_my_ai_history(app_user_id, (select personal_workspace_id from history_alice))->'items'->0->>'id'

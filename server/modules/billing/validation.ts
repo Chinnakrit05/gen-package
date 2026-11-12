@@ -5,6 +5,7 @@ import { z } from 'zod'
 
 const timestampSchema = z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'invalid timestamp')
 const creditsSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
+const aiHistoryTokenCount = z.number().int().min(0).max(2_147_483_647).nullable().default(null)
 const orderKindSchema = z.enum(['design', 'pro'])
 
 export const orderIdSchema = z.uuid()
@@ -59,6 +60,12 @@ export const aiHistoryResultSchema = z.object({
     createdAt: timestampSchema,
     settledAt: timestampSchema.nullable(),
     creditUnits: creditsSchema,
+    model: z.string().min(1).max(200).nullable().default(null),
+    inputTokens: aiHistoryTokenCount,
+    outputTokens: aiHistoryTokenCount,
+    cacheReadTokens: aiHistoryTokenCount,
+    cacheCreationTokens: aiHistoryTokenCount,
+    hasImage: z.boolean().nullable().default(null),
   })).max(50),
   nextCursor: z.uuid().nullable(),
 })
