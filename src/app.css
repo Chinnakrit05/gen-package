@@ -2329,6 +2329,22 @@ button[aria-disabled='true'] {
   border-color: var(--text-2);
   background: var(--surface-2);
 }
+.legacy-artwork-trigger {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-color: var(--accent);
+  background: var(--accent-weak);
+  color: var(--text);
+  text-align: start;
+}
+.legacy-artwork-trigger svg {
+  flex: none;
+  color: var(--accent);
+}
 .art-actions {
   display: flex;
   gap: 8px;

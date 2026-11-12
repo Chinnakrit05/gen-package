@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { panelBoxes } from './aiArtwork'
 import { elCenter, type ImageEl, type ShapeEl } from './artwork'
-import { captureArtworkPanelAnchor, hexLabelAnchorPanels, hexLabelFrontZone, pouchAnchorPanels, refreshArtworkPanelAnchors, resizePanelArtwork } from './artworkResize'
+import {
+  applyLegacyArtworkMatches,
+  captureArtworkPanelAnchor,
+  hexLabelAnchorPanels,
+  hexLabelFrontZone,
+  pouchAnchorPanels,
+  previewLegacyArtworkMatches,
+  refreshArtworkPanelAnchors,
+  resizePanelArtwork,
+} from './artworkResize'
 import { getMaterial } from './materials'
 import { generatePouch } from './pouch'
 import { generateTuckEndBox } from './templates/tuckEnd'
+import type { Panel } from './types'
 import { bottleSectionPoint, generateVessel } from './vessel'
 
 const panels = (W = 80, D = 30, H = 120) => panelBoxes(generateTuckEndBox({ W, D, H }, getMaterial('carton-300')))
@@ -182,5 +192,108 @@ describe('pouch artwork regions', () => {
     expect(elCenter(nextMark).x).toBeCloseTo(nextLeft.x + nextLeft.w / 2)
     expect(elCenter(nextMark).y).toBeCloseTo(nextLeft.y + nextLeft.h / 4)
     expect(nextSpan.panelAnchor?.panelId).toBe('film')
+  })
+})
+
+describe('legacy artwork panel matching', () => {
+  const oldMark = (name: string, x: number, y: number, w = 8, h = 6): ShapeEl => ({
+    id: `aimilskc00-${name}`, name, x, y, w, h, rot: 0,
+    type: 'shape', shape: 'rect', fill: '#12ab34', stroke: 'none', strokeW: 0,
+  })
+
+  it('previews only unanchored Copilot layers and binds the confirmed layer in place', () => {
+    const dieline = generateTuckEndBox({ W: 80, D: 30, H: 120 }, getMaterial('carton-300'))
+    const regions = panelBoxes(dieline)
+    const front = regions.find((panel) => panel.id === 'front')!
+    const back = regions.find((panel) => panel.id === 'back')!
+    const logo: ImageEl = {
+      id: 'aimilskc00-logo', type: 'image', aspect: 2, src: 'data:image/png;base64,AA==',
+      w: 16, h: 8, rot: 0, x: front.x0 + front.w / 2 - 8, y: front.y0 + front.h / 3 - 4,
+    }
+    const manual = { ...logo, id: 'el-milskc00-0' }
+    const other = { ...oldMark('back', back.x0 + 12, back.y0 + 12), locked: true, hidden: true }
+    const spanning = oldMark('spanning', front.x1 - 4, front.y0 + 20)
+    const glue = oldMark('glue', 2, front.y0 + 20)
+    const alreadyAnchored = captureArtworkPanelAnchor({ ...logo, id: 'aimilskc00-bound' }, front)
+    const decos = [logo, manual, other, spanning, glue, alreadyAnchored]
+    const preview = previewLegacyArtworkMatches(decos, regions, dieline)
+
+    expect(preview.map(({ deco, candidates }) => [deco.id, candidates.map((panel) => panel.id)])).toEqual([
+      [logo.id, ['front']], [other.id, ['back']], [spanning.id, []], [glue.id, []],
+    ])
+    expect(logo.panelAnchor).toBeUndefined()
+    const confirmed = applyLegacyArtworkMatches(decos, preview, new Map([
+      [logo.id, 'front'], [manual.id, 'front'], [spanning.id, 'front'],
+    ]))
+    expect(confirmed[0]).toEqual({ ...logo, panelAnchor: {
+      panelId: 'front', panelW: front.w, panelH: front.h, u: expect.closeTo(0.5), v: expect.closeTo(1 / 3), scale: 1,
+    } })
+    expect(confirmed.slice(1)).toEqual(decos.slice(1))
+    expect(confirmed[2]).toBe(other)
+
+    const resized = resizePanelArtwork(confirmed, panels(80, 85), 3)
+    const nextFront = panels(80, 85).find((panel) => panel.id === 'front')!
+    expect(elCenter(resized[0]).x).toBeCloseTo(nextFront.x0 + nextFront.w / 2)
+    expect(elCenter(resized[0]).y).toBeCloseTo(nextFront.y0 + nextFront.h / 3)
+    expect(resized[0]).toMatchObject({ w: 16, h: 8, aspect: 2, panelAnchor: { panelId: 'front' } })
+    expect(resized[2]).toBe(other)
+  })
+
+  it('does not fall back to the whole film for layers spanning physical pouch or bottle faces', () => {
+    const vessel = generateVessel({ W: 76, D: 30, H: 220 }, getMaterial('glass'), 'body', { polygon: true })
+    const label = hexLabelAnchorPanels(panelBoxes(vessel.label), vessel.rect!.a)
+    const face = label.find((region) => region.id === 'label-front-face')!
+    const wrap = [oldMark('front', face.x0 + 10, face.y0 + 10), oldMark('spans', face.x1 - 4, face.y0 + 10)]
+    expect(previewLegacyArtworkMatches(wrap, label, vessel.label).map(({ candidates }) => candidates.map(({ id }) => id)))
+      .toEqual([['label-front-face'], []])
+
+    const pouch = generatePouch({ W: 100, D: 40, H: 150 }, getMaterial('pouch-foil'))
+    const film = pouchAnchorPanels(panelBoxes(pouch.label), pouch)
+    const front = film.find((region) => region.id === 'pouch-front-body')!
+    const back = film.find((region) => region.id === 'pouch-back-body')!
+    const marks = [
+      oldMark('front', front.x0 + 10, front.y0 + 10),
+      oldMark('back', back.x0 + 10, back.y0 + 10),
+      oldMark('spans', front.x0 + 10, front.y1 - 4),
+    ]
+    expect(previewLegacyArtworkMatches(marks, film, pouch.label).map(({ candidates }) => candidates.map(({ id }) => id)))
+      .toEqual([['pouch-front-body'], ['pouch-back-body'], []])
+  })
+
+  it('excludes artwork overlapping holes and concave cutouts within a panel’s bounding box', () => {
+    const outer: Panel = {
+      id: 'front', parentId: null, stage: 0,
+      outline: [
+        { x: 0, y: 0 }, { x: 8, y: 0 }, { x: 8, y: 12 }, { x: 12, y: 12 },
+        { x: 12, y: 0 }, { x: 24, y: 0 }, { x: 24, y: 24 }, { x: 0, y: 24 },
+      ],
+      holes: [[{ x: 18, y: 17 }, { x: 20, y: 17 }, { x: 20, y: 19 }, { x: 18, y: 19 }]],
+    }
+    const dieline = { panels: [outer] }
+    const regions = panelBoxes(dieline)
+    const marks = [
+      oldMark('cutout', 5, 10, 10, 9), // Its center is inside the panel despite the top crossing the notch.
+      oldMark('hole', 14, 14, 8, 8),
+      { ...oldMark('clear', 3, 2, 2, 4), rot: 45 },
+    ]
+    expect(previewLegacyArtworkMatches(marks, regions, dieline).map(({ candidates }) => candidates.map(({ id }) => id)))
+      .toEqual([[], [], ['front']])
+  })
+
+  it('returns all equally valid panels and accepts only a current, explicit choice', () => {
+    const outline = [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }, { x: 0, y: 20 }]
+    const dieline = { panels: [
+      { id: 'front', parentId: null, stage: 0, outline },
+      { id: 'back', parentId: null, stage: 0, outline },
+    ] }
+    const mark = oldMark('overlap', 6, 6)
+    const decos = [mark]
+    const preview = previewLegacyArtworkMatches(decos, panelBoxes(dieline), dieline)
+    expect(preview[0].candidates.map(({ id }) => id)).toEqual(['front', 'back'])
+    expect(applyLegacyArtworkMatches(decos, preview, new Map())).toBe(decos)
+    const choice = new Map([[mark.id, 'back']])
+    expect(applyLegacyArtworkMatches(decos, preview, choice)[0].panelAnchor?.panelId).toBe('back')
+    const moved = [{ ...mark, x: 30 }]
+    expect(applyLegacyArtworkMatches(moved, preview, choice)).toBe(moved)
   })
 })

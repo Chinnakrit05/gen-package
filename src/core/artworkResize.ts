@@ -1,8 +1,21 @@
-import { elCenter, elH, elW, scaleDecos, type Deco } from './artwork'
+import { elCenter, elH, elW, scaleDecos, textLocalBounds, type Deco } from './artwork'
 import type { ArtFrontZone, PanelBox } from './aiArtwork'
 import type { Pouch } from './pouch'
+import { textFxPlan } from './textFx'
+import type { Dieline, Vec2 } from './types'
 
 export type ArtworkAnchorPanel = PanelBox & { sourcePanelId?: string }
+
+export interface LegacyArtworkMatch {
+  deco: Deco
+  candidates: ArtworkAnchorPanel[]
+}
+
+export function isLegacyAiArtwork(deco: Deco): boolean {
+  // The original Copilot compiler saved a base-36 timestamp in each layer ID.
+  // Manual layers and user-created duplicates are issued new el- IDs.
+  return !deco.panelAnchor && /^ai[0-9a-z]{8,}-/.test(deco.id)
+}
 
 function canAnchor(panel: PanelBox): boolean {
   return panel.print && panel.w > 0 && panel.h > 0
@@ -93,6 +106,125 @@ function containsArtwork(panel: PanelBox, deco: Deco): boolean {
   const tolerance = 1e-6
   return x - width / 2 >= panel.x0 - tolerance && x + width / 2 <= panel.x1 + tolerance
     && y - height / 2 >= panel.y0 - tolerance && y + height / 2 <= panel.y1 + tolerance
+}
+
+type Bounds = Pick<PanelBox, 'x0' | 'x1' | 'y0' | 'y1'>
+const MATCH_EPSILON = 1e-6
+
+function artworkFrame(deco: Deco): Bounds {
+  const w = elW(deco)
+  const h = elH(deco)
+  if (deco.type === 'text') {
+    const bounds = textLocalBounds(deco)
+    const paint = textFxPlan(deco)
+    const pad = Math.max(paint.box?.pad ?? 0, (paint.main.strokeW ?? 0) / 2)
+    const frame = { x0: bounds.x - pad, x1: bounds.x + bounds.w + pad, y0: bounds.y - pad, y1: bounds.y + bounds.h + pad }
+    for (const layer of paint.under) {
+      const extra = (layer.strokeW ?? 0) / 2 + (layer.blur ? 3 * layer.blur + 1 : 0)
+      frame.x0 = Math.min(frame.x0, bounds.x + layer.dx - extra)
+      frame.x1 = Math.max(frame.x1, bounds.x + bounds.w + layer.dx + extra)
+      frame.y0 = Math.min(frame.y0, bounds.y + layer.dy - extra)
+      frame.y1 = Math.max(frame.y1, bounds.y + bounds.h + layer.dy + extra)
+    }
+    return frame
+  }
+
+  const stroke = (deco.type === 'shape' || deco.type === 'path') && deco.stroke !== 'none' ? deco.strokeW / 2 : 0
+  // Bézier control points can extend beyond the nominal path frame.
+  const pathXs = deco.type === 'path' ? deco.anchors.flatMap((point) => [point.nx, point.ix ?? point.nx, point.ox ?? point.nx]) : []
+  const pathYs = deco.type === 'path' ? deco.anchors.flatMap((point) => [point.ny, point.iy ?? point.ny, point.oy ?? point.ny]) : []
+  return {
+    x0: w * (Math.min(0, ...pathXs) - 0.5) - stroke,
+    x1: w * (Math.max(1, ...pathXs) - 0.5) + stroke,
+    y0: h * (Math.min(0, ...pathYs) - 0.5) - stroke,
+    y1: h * (Math.max(1, ...pathYs) - 0.5) + stroke,
+  }
+}
+
+function pointInRing(point: Vec2, ring: readonly Vec2[]): boolean {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i], b = ring[j]
+    if ((a.y > point.y) !== (b.y > point.y) && point.x < a.x + (b.x - a.x) * (point.y - a.y) / (b.y - a.y)) inside = !inside
+  }
+  return inside
+}
+
+// Clip a segment to each axis and see whether both intervals overlap.
+function segmentRange(a: number, b: number, min: number, max: number): [number, number] | null {
+  if (a === b) return a >= min && a <= max ? [0, 1] : null
+  const from = (min - a) / (b - a)
+  const to = (max - a) / (b - a)
+  return [Math.min(from, to), Math.max(from, to)]
+}
+
+function ringIntersectsFrame(ring: readonly Vec2[], frame: Bounds, inset: number): boolean {
+  return ring.some((a, index) => {
+    const b = ring[(index + 1) % ring.length]
+    const x = segmentRange(a.x, b.x, frame.x0 + inset, frame.x1 - inset)
+    const y = segmentRange(a.y, b.y, frame.y0 + inset, frame.y1 - inset)
+    return x !== null && y !== null && Math.max(0, x[0], y[0]) <= Math.min(1, x[1], y[1])
+  })
+}
+
+export function previewLegacyArtworkMatches(
+  decos: readonly Deco[],
+  regions: readonly ArtworkAnchorPanel[],
+  dieline: Pick<Dieline, 'panels'>,
+): LegacyArtworkMatch[] {
+  const geometry = new Map(dieline.panels.map((panel) => [panel.id, panel]))
+  const broadPanels = new Set(regions.map((region) => region.sourcePanelId))
+  const printable = regions.filter((region) => canAnchor(region) && !broadPanels.has(region.id) && !region.id.startsWith('fin-'))
+
+  return decos.filter(isLegacyAiArtwork).map((deco) => {
+    const frame = artworkFrame(deco)
+    const center = elCenter(deco)
+    const angle = deco.rot * Math.PI / 180
+    const cos = Math.cos(angle), sin = Math.sin(angle)
+    const flipX = deco.flipX ? -1 : 1
+    const flipY = deco.flipY ? -1 : 1
+    const toLocal = ({ x, y }: Vec2): Vec2 => ({
+      x: flipX * ((x - center.x) * cos + (y - center.y) * sin),
+      y: flipY * (-(x - center.x) * sin + (y - center.y) * cos),
+    })
+    const frameCenter = { x: (frame.x0 + frame.x1) / 2, y: (frame.y0 + frame.y1) / 2 }
+    const coversFrame = (ring: Vec2[]) => pointInRing(frameCenter, ring) && !ringIntersectsFrame(ring, frame, MATCH_EPSILON)
+
+    const candidates = printable.filter((region) => {
+      if (!containsArtwork(region, deco)) return false
+      const source = geometry.get(region.sourcePanelId ?? region.id)
+      if (!source || !coversFrame(source.outline.map(toLocal))) return false
+      if (region.sourcePanelId && !coversFrame([
+        { x: region.x0, y: region.y0 }, { x: region.x1, y: region.y0 },
+        { x: region.x1, y: region.y1 }, { x: region.x0, y: region.y1 },
+      ].map(toLocal))) return false
+      return !source.holes?.some((hole) => {
+        const local = hole.map(toLocal)
+        return pointInRing(frameCenter, local) || ringIntersectsFrame(local, frame, -MATCH_EPSILON)
+      })
+    })
+    return { deco, candidates }
+  })
+}
+
+export function applyLegacyArtworkMatches(
+  decos: Deco[],
+  preview: readonly LegacyArtworkMatch[],
+  choices: ReadonlyMap<string, string>,
+): Deco[] {
+  if (!choices.size) return decos
+  const byId = new Map(preview.map((match) => [match.deco.id, match]))
+  let changed = false
+  const next = decos.map((deco) => {
+    const match = byId.get(deco.id)
+    if (match?.deco !== deco || !isLegacyAiArtwork(deco)) return deco
+    const panelId = choices.get(deco.id)
+    const panel = match.candidates.find((candidate) => candidate.id === panelId)
+    if (!panel) return deco
+    changed = true
+    return captureArtworkPanelAnchor(deco, panel)
+  })
+  return changed ? next : decos
 }
 
 function fitCenter(value: number, min: number, max: number, halfSize: number): number {

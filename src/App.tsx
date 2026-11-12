@@ -3,7 +3,7 @@ import './app.css'
 import './editorFonts'
 import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
-import { LogOut } from 'lucide-react'
+import { Link2, LogOut } from 'lucide-react'
 import { EditorVersionSwitch, EDITOR_VERSION_KEY, loadEditorVersion, type EditorVersion } from './components/editor-v2/EditorVersionSwitch'
 import { EditorRail, ElementLibrary, type EditorTool } from './components/editor-v2/EditorSidebar'
 import { EditorToolbar } from './components/editor-v2/EditorToolbar'
@@ -22,7 +22,16 @@ import { TEMPLATES, getTemplate } from './core/templates'
 import { TAPERED_LID_BOX_ID, taperedLidWidth } from './core/templates/taperedLidBox'
 import type { BoxParams, Dieline, Vec2 } from './core/types'
 import { ART_SAFE_MM, panelBoxes } from './core/aiArtwork'
-import { hexLabelAnchorPanels, pouchAnchorPanels, refreshArtworkPanelAnchors, resizePanelArtwork } from './core/artworkResize'
+import {
+  applyLegacyArtworkMatches,
+  hexLabelAnchorPanels,
+  isLegacyAiArtwork,
+  pouchAnchorPanels,
+  previewLegacyArtworkMatches,
+  refreshArtworkPanelAnchors,
+  resizePanelArtwork,
+  type LegacyArtworkMatch,
+} from './core/artworkResize'
 import type { AiBoxSpec, ArtworkRequestInput, ArtworkResponse, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
 import { dimTextSize } from './core/templates/shared'
@@ -113,6 +122,7 @@ import { isFreshWork, standardSizeFor, VESSEL_STANDARD, type StdSize } from './c
 import { hasDesignWork } from './core/designWork'
 import { freshProjectFor, type NewWorkTarget } from './core/newWork'
 import { SwitchGuardModal } from './components/SwitchGuardModal'
+import { LegacyArtworkMatchDialog } from './components/LegacyArtworkMatchDialog'
 import { BODY_MIN, canRectBottle, defaultRectDepth, RECT_DEPTH_MAX, rectDepthMin, generateVessel, hasNeck, LABEL_STYLES, NECK_MIN, resolveNeckH, resolveShoulderH, SHOULDER_MIN, SHOULDER_STYLES, shoulderMax, LABEL_MIN, LABEL_OVERLAP, CAP_STYLES, defaultCapColor, TUBE_CAP_STYLES, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle, type VesselShape } from './core/vessel'
 import {
   generatePouch,
@@ -1713,6 +1723,7 @@ export default function App({
   const [stageOpen, setStageOpen] = useState(false)
   const [artSnapshots, setArtSnapshots] = useState<ArtworkSnapshot[]>([])
   const [artCurrentId, setArtCurrentId] = useState<string | null>(null)
+  const [legacyArtworkPreview, setLegacyArtworkPreview] = useState<{ dieline: Dieline; matches: LegacyArtworkMatch[] } | null>(null)
   // ถามก่อนสลับประเภทงาน/รูปแบบเมื่อมีงานตกแต่งแล้ว (ยืนยัน = บันทึกงานนี้แล้วเปิดชิ้นงานใหม่ตามเป้าหมายนี้)
   const [switchGuard, setSwitchGuard] = useState<NewWorkTarget | null>(null)
   const [confirmNewProject, setConfirmNewProject] = useState(false)
@@ -2012,6 +2023,8 @@ export default function App({
     return pouch ? pouchAnchorPanels(panels, pouch) : panels
   }, [artworkFollowsPanels, dieline, hexFaceWidth, pouch])
   const hasAnchoredArtwork = artworkFollowsPanels && decos.some((deco) => deco.panelAnchor)
+  const canPreviewLegacyArtwork = !readOnly && artworkAnchorPanels !== undefined && decos.some(isLegacyAiArtwork)
+  const showingLegacyArtworkPreview = !readOnly && legacyArtworkPreview?.dieline === dieline
   const resizeArtworkForBox = (box: BoxParams, material = mat) => {
     if (!hasAnchoredArtwork) return
     const next = template.generate(box, material)
@@ -2337,17 +2350,34 @@ export default function App({
 
   const endSizeEdit = () => { resizingArtwork.current = false }
   const sizeEditBoundary = hasAnchoredArtwork ? endSizeEdit : undefined
+  const recordEditUndo = () => {
+    const before = snapshot()
+    const recorded = lastSnap.current
+    // Keep a preceding edit even if it is still waiting for the regular undo debounce.
+    const pending = recorded && !sameSnap(recorded, before) ? [recorded, before] : [before]
+    setUndoStack((stack) => [...stack, ...pending].slice(-50))
+    setRedoStack([])
+    skipCapture.current = true
+  }
   const recordArtworkSizeEdit = () => {
     if (!resizingArtwork.current) {
-      const before = snapshot()
-      const recorded = lastSnap.current
-      // Preserve a preceding edit that is still waiting for the regular undo debounce.
-      const pending = recorded && !sameSnap(recorded, before) ? [recorded, before] : [before]
-      setUndoStack((stack) => [...stack, ...pending].slice(-50))
-      setRedoStack([])
+      recordEditUndo()
       resizingArtwork.current = true
     }
     skipCapture.current = true
+  }
+  const openLegacyArtworkPreview = () => {
+    if (!artworkAnchorPanels || !canPreviewLegacyArtwork || aiBusy || projectBusy) return
+    setLegacyArtworkPreview({ dieline, matches: previewLegacyArtworkMatches(decos, artworkAnchorPanels, dieline) })
+  }
+  const confirmLegacyArtworkMatches = (choices: ReadonlyMap<string, string>) => {
+    setLegacyArtworkPreview(null)
+    if (!legacyArtworkPreview || !showingLegacyArtworkPreview || aiBusy || projectBusy) return
+    const next = applyLegacyArtworkMatches(decos, legacyArtworkPreview.matches, choices)
+    if (next === decos) return
+    endSizeEdit()
+    recordEditUndo()
+    setDecos(next)
   }
   const resizeArtworkForVessel = (box: BoxParams, shape: VesselShape = {}, style = labelStyle) => {
     if (!hasAnchoredArtwork || hexFaceWidth === undefined) return
@@ -2578,6 +2608,7 @@ export default function App({
   const openProject = (p: Project) => {
     cancelAnimationFrame(raf.current)
     endSizeEdit()
+    setLegacyArtworkPreview(null)
     // สลับงาน = ไม่ใช่การแก้ที่ควร undo — ล้างสแตกและข้ามการบันทึกครั้งนี้
     skipCapture.current = true
     setUndoStack([])
@@ -3417,7 +3448,7 @@ export default function App({
   // คีย์ลัด: Ctrl+Z/Ctrl+Shift+Z undo/redo, Delete ลบ, Esc เลิกเลือก, ลูกศรเลื่อน, Ctrl+D สำเนา
   // ข้ามเมื่อกำลังพิมพ์ในช่อง input/textarea (ไม่แย่งคีย์)
   useEffect(() => {
-    if (readOnly) return
+    if (readOnly || showingLegacyArtworkPreview) return
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
@@ -3456,7 +3487,7 @@ export default function App({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds, selected, undoStack, redoStack, aiBusy, decos, templateId, materialId, W, D, H, handle, qty, fillColor, readOnly])
+  }, [selectedIds, selected, undoStack, redoStack, aiBusy, decos, templateId, materialId, W, D, H, handle, qty, fillColor, readOnly, showingLegacyArtworkPreview])
 
   // ควบคุมการพับ — แถบบนสุดของมุมมอง 3D (โชว์เฉพาะวัสดุที่พับได้)
   const foldBar = mat.foldable && (!v2Model || (!isCard && !isSticker)) ? (
@@ -4591,6 +4622,12 @@ export default function App({
         <aside ref={asideRef} className={isV2 ? 'v2-panel' : undefined} data-tool={readOnly ? sideTab : isV2 ? v2Tool : undefined}>
           {(!isV2 || readOnly) && renderStepTabs('aside-tabbar')}
           {isV2 && !readOnly && <button type="button" className="v2-panel-close" aria-label={t('ซ่อนแผงเครื่องมือ', 'Hide tools panel')} onClick={() => setV2PanelClosed(true)}>×</button>}
+          {canPreviewLegacyArtwork && sideTab !== 'export' && (
+            <button type="button" className="legacy-artwork-trigger" aria-haspopup="dialog" disabled={aiBusy || projectBusy} onClick={openLegacyArtworkPreview}>
+              <Link2 size={16} aria-hidden="true" />
+              {t('พรีวิวจับคู่ลาย AI กับแผง', 'Preview AI artwork matching')}
+            </button>
+          )}
           {v2Model && (
             <ModelPanel tab={modelTab} onTab={setModelTab} options={modelOptions} material={v2MaterialPanel}
               size={v2SizePanel} disabled={modelBusy} onNext={() => {
@@ -7444,6 +7481,10 @@ export default function App({
         )}
       </div>
       {thumbnailStage}
+      {showingLegacyArtworkPreview && legacyArtworkPreview && (
+        <LegacyArtworkMatchDialog dieline={dieline} decos={decos} fillColor={fillColor} fillImage={fillImage} watermark={watermark}
+          matches={legacyArtworkPreview.matches} onConfirm={confirmLegacyArtworkMatches} onCancel={() => setLegacyArtworkPreview(null)} />
+      )}
       {nameModal && (
         <NameModal
           title={nameModal.title}
