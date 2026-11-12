@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { ZodError } from 'zod'
+import type { AiGenerationKind, AiHistoryPage } from '../../../shared/contracts/aiHistory'
 import type { CreateOrderInput, Order, PlanCode } from '../../../shared/contracts/billing'
 import type { ServerConfig } from '../../config'
 import { HttpError } from '../../http/errors'
@@ -19,6 +20,7 @@ import type {
   StorageQuotaResult,
 } from '../../modules/billing/storageQuota'
 import {
+  aiHistoryResultSchema,
   aiReservationResultSchema,
   aiSettlementResultSchema,
   catalogItemResultSchema,
@@ -105,6 +107,9 @@ export function mapBillingDatabaseError(error: BillingDatabaseError, context: Bi
   }
   if (message.includes('APP_USER_NOT_ACTIVE')) {
     return new HttpError(403, 'USER_NOT_ACTIVE', 'บัญชีนี้ไม่พร้อมใช้งาน')
+  }
+  if (error.code === 'P0001' && message === 'INVALID_CURSOR') {
+    return new HttpError(422, 'VALIDATION_ERROR', 'ตัวระบุตำแหน่งในประวัติการใช้งาน AI ไม่ถูกต้อง')
   }
   return new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'ระบบสิทธิ์การใช้งานไม่พร้อมใช้งาน')
 }
@@ -211,15 +216,42 @@ export class SupabaseBillingRepository implements BillingRepository, StorageQuot
     return parsed.data
   }
 
-  async reserveAiCredit(actor: Actor, workspaceId: string, operationId: string): Promise<AiCreditReservation> {
-    const { data, error } = await this.client.rpc('reserve_ai_credit', {
+  async reserveAiCredit(actor: Actor, workspaceId: string, operationId: string, kind?: AiGenerationKind): Promise<AiCreditReservation> {
+    const params = {
       p_actor_user_id: actor.userId,
       p_workspace_id: workspaceId,
       p_operation_id: operationId,
-    })
-    if (error) throw this.databaseError(error, 'reserve_ai_credit', actor)
+    }
+    let rpc = kind === undefined ? 'reserve_ai_credit' : 'reserve_ai_credit_for_kind'
+    let result = await this.client.rpc(rpc, kind === undefined ? params : { ...params, p_generation_kind: kind })
+    if (rpc === 'reserve_ai_credit_for_kind'
+      && result.error?.code === 'PGRST202'
+      && /^Could not find the function public\.reserve_ai_credit_for_kind(?:\([^)]*\))? in the schema cache$/.test(result.error.message)) {
+      // PostgREST rejected the call before execution while the migration is still rolling out.
+      rpc = 'reserve_ai_credit'
+      result = await this.client.rpc(rpc, params)
+    }
+    const { data, error } = result
+    if (error) throw this.databaseError(error, rpc, actor)
     const parsed = aiReservationResultSchema.safeParse(data)
-    if (!parsed.success) throw this.contractError('reserve_ai_credit', actor, parsed.error)
+    if (!parsed.success) throw this.contractError(rpc, actor, parsed.error)
+    return parsed.data
+  }
+
+  async listAiHistory(actor: Actor, workspaceId: string, cursor: string | null, limit: number): Promise<AiHistoryPage> {
+    const rpc = 'list_my_ai_history'
+    const { data, error } = await this.client.rpc(rpc, {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId,
+      p_cursor: cursor,
+      p_limit: limit,
+    })
+    if (error?.code === 'P0001' && error.message === 'PROJECT_NOT_FOUND') {
+      throw new HttpError(404, 'NOT_FOUND', 'ไม่พบพื้นที่งานนี้')
+    }
+    if (error) throw this.databaseError(error, rpc, actor)
+    const parsed = aiHistoryResultSchema.safeParse(data)
+    if (!parsed.success) throw this.contractError(rpc, actor, parsed.error)
     return parsed.data
   }
 

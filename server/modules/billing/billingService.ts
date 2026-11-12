@@ -7,6 +7,7 @@ import {
   type LicenseSource,
   type Order,
 } from '../../../shared/contracts/billing'
+import type { AiGenerationKind, AiHistoryPage } from '../../../shared/contracts/aiHistory'
 import { HttpError } from '../../http/errors'
 import { logServerEvent } from '../../logging'
 import type { Actor } from '../identity/actor'
@@ -54,7 +55,8 @@ export interface BillingRepository {
   ensureOpenAccess(actor: Actor, workspaceId: string): Promise<StoredEntitlements>
   // open access: ตรวจโปรเจกต์/สมาชิก + รอบ Pro ฟรี โดยไม่ออก license ถาวร
   authorizeOpenAccessExport(actor: Actor, projectId: string): Promise<StoredExportAuthorization>
-  reserveAiCredit(actor: Actor, workspaceId: string, operationId: string): Promise<AiCreditReservation>
+  reserveAiCredit(actor: Actor, workspaceId: string, operationId: string, kind?: AiGenerationKind): Promise<AiCreditReservation>
+  listAiHistory(actor: Actor, workspaceId: string, cursor: string | null, limit: number): Promise<AiHistoryPage>
   settleAiRequest(
     actor: Actor,
     requestId: string,
@@ -150,10 +152,14 @@ export class BillingService {
     return order
   }
 
-  async reserveAiCredit(actor: Actor, workspaceId: string, operationId: string): Promise<AiCreditReservation> {
+  async reserveAiCredit(actor: Actor, workspaceId: string, operationId: string, kind?: AiGenerationKind): Promise<AiCreditReservation> {
     // open access: ต่อรอบ Pro ฟรีที่หมดไปก่อนจอง — แท็บที่เปิดค้างข้ามรอบจะได้โควตาใหม่โดยไม่ต้องโหลดสิทธิ์ก่อน
     if (this.options.openAccess) await this.repository.ensureOpenAccess(actor, workspaceId)
-    return this.repository.reserveAiCredit(actor, workspaceId, operationId)
+    return this.repository.reserveAiCredit(actor, workspaceId, operationId, kind)
+  }
+
+  listAiHistory(actor: Actor, workspaceId: string, cursor: string | null, limit: number): Promise<AiHistoryPage> {
+    return this.repository.listAiHistory(actor, workspaceId, cursor, limit)
   }
 
   settleAiRequest(

@@ -3,6 +3,7 @@
 //   artwork = ออกแบบหน้าตาบน template ปัจจุบัน (src/core/aiArtwork + /api/ai-artwork) — local dev ก่อน (cloud ยังไม่มี)
 // ผลลัพธ์ทุกแบบถูก "วางลงงานทันที" (undo ได้) แล้วโชว์เป็นการ์ดในบทสนทนา; ผล artwork เก็บเป็น snapshot ให้เปิดดู/สลับบนเวที 3D
 import { useEffect, useRef, useState } from 'react'
+import { History } from 'lucide-react'
 import { AI_MODEL_CHOICES, aiModelLabel, isAiModelChoice, type AiModelChoice, type AiUsageReport } from '../../shared/contracts/aiModels'
 import { requestArtworkPlan, requestBoxSpec, type AiBoxSpec, type ArtworkImageInput, type ArtworkRequestInput, type CurrentSpec } from '../core/ai'
 import { approxThb, formatUsd, modelPriceLabel, usageRows } from '../core/aiUsage'
@@ -11,6 +12,7 @@ import { loadImageFile, loadTextFont, measureText, type Deco, type FillImage } f
 import type { Dieline } from '../core/types'
 import { useT } from '../i18n'
 import { ApiClientError } from '../services/api/client'
+import { AiHistoryPanel, type AiHistorySource } from './AiHistoryPanel'
 import { toRefImage, type RefImage } from './refImage'
 
 export type CopilotMode = 'spec' | 'artwork'
@@ -93,6 +95,7 @@ export interface CopilotDrawerProps {
   hasDesign: boolean
   onApplySpec: (spec: AiBoxSpec, label: string) => void
   requestSpec?: typeof requestBoxSpec
+  historySource?: AiHistorySource
   artwork: CopilotArtworkContext | null
   // snapshot id ที่ App สร้างหลัง onApply (ใช้ผูกการ์ดกับเวที)
   lastSnapshotId: string | null
@@ -127,6 +130,7 @@ export function CopilotDrawer({
   hasDesign,
   onApplySpec,
   requestSpec = requestBoxSpec,
+  historySource,
   artwork,
   lastSnapshotId,
   onOpenStage,
@@ -139,6 +143,8 @@ export function CopilotDrawer({
   modelChoice = false,
 }: CopilotDrawerProps) {
   const t = useT()
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const showHistory = historyOpen && !!historySource
   const [mode, setMode] = useState<CopilotMode>(SPEC_MODE_COMING_SOON || (artwork && hasDesign) ? 'artwork' : 'spec')
   const [text, setText] = useState('')
   const [refs, setRefs] = useState<RefImage[]>([])
@@ -167,7 +173,7 @@ export function CopilotDrawer({
   useEffect(() => {
     const el = listRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [messages, busy])
+  }, [messages, busy, showHistory])
 
   useEffect(() => {
     if (open) textRef.current?.focus()
@@ -354,10 +360,18 @@ export function CopilotDrawer({
           </span>
         </div>
         <span className="copilot-spacer" />
+        {historySource && (
+          <button type="button" className="cp-tool cp-history-toggle" aria-pressed={showHistory} onClick={() => setHistoryOpen((value) => !value)}>
+            <History size={15} aria-hidden="true" />
+            {t('ประวัติ AI', 'AI history')}
+          </button>
+        )}
         <button type="button" className="copilot-close" aria-label={t('ปิดแผง Copilot', 'Close Copilot')} onClick={onClose}>✕</button>
       </div>
 
-      <div className="copilot-list" ref={listRef}>
+      {showHistory && <AiHistoryPanel source={historySource} />}
+
+      <div className="copilot-list" ref={listRef} hidden={showHistory}>
         <div className="cp-ai">
           <span className="cp-avatar" aria-hidden="true">✦</span>
           <div className="cp-bubble">
@@ -550,7 +564,7 @@ export function CopilotDrawer({
       </div>
 
       {blockedReason && (
-        <div className="cp-blocked" role="status">
+        <div className="cp-blocked" role="status" hidden={showHistory}>
           <span>{blockedReason}</span>
           <button type="button" onClick={onBlocked}>{t('ดูแพ็กเกจ', 'See plans')}</button>
         </div>
@@ -558,6 +572,7 @@ export function CopilotDrawer({
 
       <form
         className="copilot-composer"
+        hidden={showHistory}
         onSubmit={(e) => {
           e.preventDefault()
           void send(text)
@@ -666,26 +681,19 @@ export function CopilotDrawer({
   )
 }
 
-// ปุ่ม "สั่ง AI" บน header (เปิด/ปิดแผง Copilot) — ถูกบล็อก (เครดิต 0): ยังกดได้ แต่พาไปหน้าแพ็กเกจแทน
-export function AiTrigger({ open, onToggle, credits, blockedReason, onBlocked, icon }: { icon?: string; open: boolean; onToggle: () => void; credits?: number | null; blockedReason?: string; onBlocked?: () => void }) {
+// เปิด Copilot เพื่อดูประวัติได้แม้เครดิตหมด ส่วนปุ่มส่งคำขอถูกปิดในแผง
+export function AiTrigger({ open, onToggle, credits, blockedReason, icon }: { icon?: string; open: boolean; onToggle: () => void; credits?: number | null; blockedReason?: string }) {
   const t = useT()
   const creditsLabel = credits === undefined || credits === null ? null : t(`เครดิต AI: ${credits}`, `AI credits: ${credits}`)
-  const fabTitle = t('สั่ง AI สร้าง/แก้กล่องด้วยข้อความ', 'Ask AI to create or edit the box')
+  const fabTitle = t('เปิดแผง Copilot', 'Open Copilot')
   const blocked = Boolean(blockedReason)
   return (
     <button
       type="button"
       className={`pb-fab primary${blocked ? ' blocked' : ''}${open ? ' open' : ''}`}
-      aria-expanded={blocked && !open ? undefined : open}
-      aria-haspopup={blocked && !open ? 'dialog' : undefined}
-      title={blockedReason ?? (creditsLabel ? `${fabTitle} · ${creditsLabel}` : fabTitle)}
-      onClick={() => {
-        if (blocked && !open) {
-          onBlocked?.()
-          return
-        }
-        onToggle()
-      }}
+      aria-expanded={open}
+      title={creditsLabel ? `${fabTitle} · ${creditsLabel}` : fabTitle}
+      onClick={onToggle}
     >
       <span aria-hidden="true">{icon ? <img src={icon} alt="" /> : '✨'}</span> {t('สั่ง AI', 'Ask AI')}
       {creditsLabel && !blocked && <span className="pb-credits">{creditsLabel}</span>}

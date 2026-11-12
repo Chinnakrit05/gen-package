@@ -8,6 +8,7 @@
 // downloads authorized without licenses, purchases off.
 import { StrictMode, useCallback, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { isProOnlyExport, type BillingCatalog, type Entitlements, type Order, type OrderKind } from '../../shared/contracts/billing'
 import type { ProjectSummary, ProjectThumbnailImage, ThumbnailKind } from '../../shared/contracts/projects'
 import App, { type CloudProjectBridge, type EntitlementsStatus, type ProjectStoreSnapshot } from '../../src/App'
@@ -163,6 +164,7 @@ function buildBridge(state: FakeState, flagsRef: { current: Flags }, bump: () =>
     resolveConflict: async (current) => current,
     retrySave: async () => {},
     subscribeRemoteProject: () => () => {},
+    listAiHistory: async () => ({ items: [], nextCursor: null }),
     requestAiArtwork: async () => {
       throw new ApiClientError(503, 'CONFIGURATION_ERROR', 'หน้าทดสอบ paywall ไม่มี AI ออกแบบหน้าตา')
     },
@@ -355,9 +357,12 @@ function Fixture() {
 }
 
 const root = createRoot(document.getElementById('root')!)
+const queryClient = new QueryClient()
 root.render(
   <StrictMode>
-    <Fixture />
+    <QueryClientProvider client={queryClient}>
+      <Fixture />
+    </QueryClientProvider>
   </StrictMode>,
 )
 if (import.meta.hot) {

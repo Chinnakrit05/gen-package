@@ -159,6 +159,7 @@ import {
   type ProjectThumbnailReceipt,
   type PutProjectThumbnailInput,
 } from '../shared/contracts/projects'
+import type { AiHistoryPage } from '../shared/contracts/aiHistory'
 import { isProOnlyExport, type Entitlements, type ExportAuthorization, type ExportFormat, type Order, type OrderKind } from '../shared/contracts/billing'
 import type { ProjectSaveState } from './services/projects/durableSaveQueue'
 import { ApiClientError } from './services/api/client'
@@ -1278,6 +1279,7 @@ export interface CloudProjectBridge {
   // AI ออกแบบหน้าตาบน cloud: payload เดียวกับ legacy /api/ai-artwork (bridge เติม workspace/operation เอง) หัก 1 เครดิต/แบบ;
   // ลายเซ็นเดียวกับ requestArtworkPlan ให้ CopilotDrawer สลับได้ — อาร์กิวเมนต์คีย์ถูกละบน cloud
   requestAiArtwork: (input: ArtworkRequestInput, anthropicApiKey?: string, signal?: AbortSignal) => Promise<ArtworkResponse>
+  listAiHistory(cursor: string | null, signal?: AbortSignal): Promise<AiHistoryPage>
   // --- billing/entitlement (ดู docs/billing-freemium-pro.md §4) — null = โหลดไม่ได้ ปฏิบัติเหมือน Freemium ---
   entitlements: Entitlements | null
   entitlementsStatus: EntitlementsStatus
@@ -4421,7 +4423,6 @@ export default function App({
           onToggle={() => setCopilotOpen((v) => !v)}
           credits={cloud && entitlementsStatus === 'ready' ? gateCredits : undefined}
           blockedReason={aiBlockedReason}
-          onBlocked={() => setPricingOpen(true)}
         />}
         <button
           className="lang-btn"
@@ -7275,6 +7276,7 @@ export default function App({
             hasDesign={history.length > 0}
             onApplySpec={applySpec}
             requestSpec={cloud?.requestAiSpec}
+            historySource={cloud}
             artwork={dieline ? { dieline, kind, template: templateId, materialId, box: { W, D, H }, fillColor, existingCount: decos.length, onApply: applyAiArtwork, request: cloud?.requestAiArtwork, prepareImages: cloud ? rasterizeArtworkImages : undefined } : null}
             lastSnapshotId={artCurrentId}
             onOpenStage={() => setStageOpen(true)}

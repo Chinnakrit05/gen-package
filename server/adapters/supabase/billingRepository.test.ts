@@ -25,11 +25,14 @@ function p0001(message: string, details: string | null = null): BillingDatabaseE
 }
 
 // SupabaseClient ปลอมที่มีแค่ rpc — บันทึกชื่อ function + พารามิเตอร์ แล้วคืนผลที่กำหนด
-function fakeClient(result: { data?: unknown; error?: BillingDatabaseError | null }) {
+type FakeRpcResult = { data?: unknown; error?: BillingDatabaseError | null }
+
+function fakeClient(firstResult: FakeRpcResult, ...nextResults: FakeRpcResult[]) {
   const calls: [string, Record<string, unknown>][] = []
   const client = {
     rpc: async (fn: string, args: Record<string, unknown>) => {
       calls.push([fn, args])
+      const result = nextResults[calls.length - 2] ?? firstResult
       return { data: result.data ?? null, error: result.error ?? null }
     },
   } as unknown as SupabaseClient
@@ -53,6 +56,7 @@ describe('mapBillingDatabaseError', () => {
     ['ORDER_NOT_FOUND', 404, 'ORDER_NOT_FOUND'],
     ['ORDER_NOT_PAYABLE', 409, 'ORDER_NOT_PAYABLE'],
     ['APP_USER_NOT_ACTIVE', 403, 'USER_NOT_ACTIVE'],
+    ['INVALID_CURSOR', 422, 'VALIDATION_ERROR'],
   ] as const)('maps %s to %i %s', (message, status, code) => {
     const mapped = mapBillingDatabaseError(p0001(message))
     expect(mapped).toBeInstanceOf(HttpError)
@@ -142,6 +146,85 @@ describe('settleUsageParams', () => {
 describe('SupabaseBillingRepository', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('passes the authenticated actor to history and strips private fields from the response', async () => {
+    const entry = {
+      id: aiRequestId,
+      kind: null,
+      status: 'succeeded',
+      createdAt: '2026-11-12T10:01:00Z',
+      settledAt: '2026-11-12T10:01:30Z',
+      creditUnits: 1,
+    }
+    const { client, calls } = fakeClient({ data: {
+      items: [{ ...entry, prompt: 'private', output: { private: true }, inputTokens: 42 }],
+      nextCursor: null,
+      workspaceId,
+    } })
+    const repository = new SupabaseBillingRepository(client)
+
+    await expect(repository.listAiHistory(actor, workspaceId, aiRequestId, 20))
+      .resolves.toEqual({ items: [entry], nextCursor: null })
+    expect(calls).toEqual([['list_my_ai_history', {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId,
+      p_cursor: aiRequestId,
+      p_limit: 20,
+    }]])
+  })
+
+  it('returns the same not-found result for an inaccessible or missing workspace', async () => {
+    const { client } = fakeClient({ error: p0001('PROJECT_NOT_FOUND') })
+    await expect(new SupabaseBillingRepository(client).listAiHistory(actor, workspaceId, null, 20))
+      .rejects.toMatchObject({ status: 404, code: 'NOT_FOUND', message: 'ไม่พบพื้นที่งานนี้' })
+  })
+
+  const reservation = { requestId: aiRequestId, credits: 7 }
+  const reservationParams = {
+    p_actor_user_id: actor.userId,
+    p_workspace_id: workspaceId,
+    p_operation_id: aiRequestId,
+  }
+  const missingTypedReservation = {
+    code: 'PGRST202',
+    message: 'Could not find the function public.reserve_ai_credit_for_kind(p_actor_user_id, p_generation_kind, p_operation_id, p_workspace_id) in the schema cache',
+  }
+
+  it('uses the typed reservation RPC when kind is supplied and keeps the original RPC for legacy calls', async () => {
+    const { client, calls } = fakeClient({ data: reservation })
+    const repository = new SupabaseBillingRepository(client)
+
+    await expect(repository.reserveAiCredit(actor, workspaceId, aiRequestId, 'artwork')).resolves.toEqual(reservation)
+    await expect(repository.reserveAiCredit(actor, workspaceId, aiRequestId)).resolves.toEqual(reservation)
+    expect(calls).toEqual([
+      ['reserve_ai_credit_for_kind', { ...reservationParams, p_generation_kind: 'artwork' }],
+      ['reserve_ai_credit', reservationParams],
+    ])
+  })
+
+  it('falls back to the original reservation only when the typed RPC is missing from the schema cache', async () => {
+    const { client, calls } = fakeClient({ error: missingTypedReservation }, { data: reservation })
+    const repository = new SupabaseBillingRepository(client)
+
+    await expect(repository.reserveAiCredit(actor, workspaceId, aiRequestId, 'spec')).resolves.toEqual(reservation)
+    expect(calls).toEqual([
+      ['reserve_ai_credit_for_kind', { ...reservationParams, p_generation_kind: 'spec' }],
+      ['reserve_ai_credit', reservationParams],
+    ])
+  })
+
+  it.each([
+    [p0001('AI_REQUEST_IN_PROGRESS'), 409],
+    [{ ...missingTypedReservation, code: '08006' }, 503],
+    [{ ...missingTypedReservation, message: 'Could not find the function public.reserve_ai_credit in the schema cache' }, 503],
+  ] as const)('does not re-reserve after another error (%#)', async (error, status) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { client, calls } = fakeClient({ error }, { data: reservation })
+    const repository = new SupabaseBillingRepository(client)
+
+    await expect(repository.reserveAiCredit(actor, workspaceId, aiRequestId, 'artwork')).rejects.toMatchObject({ status })
+    expect(calls).toHaveLength(1)
   })
 
   it('settles with the usage columns and trims the model id', async () => {

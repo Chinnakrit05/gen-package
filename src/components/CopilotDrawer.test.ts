@@ -15,14 +15,14 @@ describe('AiTrigger (ปุ่มสั่ง AI บน header)', () => {
     expect(html).not.toContain('เครดิต AI')
   })
 
-  it('keeps the trigger clickable when blocked (0 credits) and shows a visible 0 hint plus the reason', () => {
+  it('keeps Copilot available at 0 credits and shows why generation is blocked', () => {
     const reason = 'ต้องมีเครดิต AI — ดูแพ็กเกจ'
-    const html = renderToStaticMarkup(createElement(AiTrigger, { open: false, onToggle: vi.fn(), blockedReason: reason, onBlocked: vi.fn(), credits: 0 }))
+    const html = renderToStaticMarkup(createElement(AiTrigger, { open: false, onToggle: vi.fn(), blockedReason: reason, credits: 0 }))
     expect(html).not.toContain('disabled=""')
-    expect(html).toContain(`title="${reason}"`)
+    expect(html).toContain('title="เปิดแผง Copilot · เครดิต AI: 0"')
     expect(html).toMatch(/<span class="pb-fab-zero" aria-hidden="true">0<\/span>/)
     expect(html).toContain(`<span class="sr-only"> — ${reason}</span>`)
-    expect(html).toContain('aria-haspopup="dialog"')
+    expect(html).toContain('aria-expanded="false"')
   })
 
   it('translates the trigger in English and shows remaining credits from cloud', () => {

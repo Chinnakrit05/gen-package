@@ -44,6 +44,25 @@ export const aiArtworkRequestSchema = z.object({
   operationId: z.uuid(),
 }).passthrough()
 
+export const aiHistoryQuerySchema = z.object({
+  workspaceId: z.uuid(),
+  cursor: z.uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+}).strict()
+
+// Only fields shown in personal history may leave the server.
+export const aiHistoryResultSchema = z.object({
+  items: z.array(z.object({
+    id: z.uuid(),
+    kind: z.enum(['artwork', 'spec']).nullable(),
+    status: z.enum(['reserved', 'succeeded', 'failed']),
+    createdAt: timestampSchema,
+    settledAt: timestampSchema.nullable(),
+    creditUnits: creditsSchema,
+  })).max(50),
+  nextCursor: z.uuid().nullable(),
+})
+
 export const catalogItemResultSchema = z.object({
   kind: orderKindSchema,
   amountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),

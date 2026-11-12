@@ -145,6 +145,7 @@ function billingRepositoryStub(overrides: Partial<BillingRepository> = {}): Bill
     ensureOpenAccess: async () => { throw new Error('must not be called') },
     authorizeOpenAccessExport: async () => { throw new Error('must not be called') },
     reserveAiCredit: async () => { throw new Error('must not be called') },
+    listAiHistory: async () => { throw new Error('must not be called') },
     settleAiRequest: async () => { throw new Error('must not be called') },
     createOrder: async () => { throw new Error('must not be called') },
     fulfilOrder: async () => { throw new Error('must not be called') },
@@ -191,6 +192,54 @@ function logLines(spy: { mock: { calls: unknown[][] } }): Record<string, unknown
     return JSON.parse(String(call[0])) as Record<string, unknown>
   })
 }
+
+describe('API router — personal AI history', () => {
+  const path = '/api/v1/ai/history'
+  const auth = 'Bearer verified-token'
+
+  it('requires authentication before reading history', async () => {
+    const listAiHistory = vi.fn()
+    const configuredRouter = billingRouter(billingRepositoryStub({ listAiHistory }))
+    const target = response()
+    await configuredRouter(request('GET', `${path}?workspaceId=${workspaceId}`), target.res)
+
+    expect(target.res.statusCode).toBe(401)
+    expect(target.readBody()).toMatchObject({ error: { code: 'AUTH_REQUIRED' } })
+    expect(listAiHistory).not.toHaveBeenCalled()
+  })
+
+  it('returns the authenticated actor’s page without an AI provider or browser caching', async () => {
+    const data = { items: [], nextCursor: null }
+    const listAiHistory = vi.fn().mockResolvedValue(data)
+    const configuredRouter = billingRouter(billingRepositoryStub({ listAiHistory }))
+    const target = response()
+    await configuredRouter(request('GET', `${path}?workspaceId=${workspaceId}`, auth), target.res)
+
+    expect(listAiHistory).toHaveBeenCalledWith(actor, workspaceId, null, 20)
+    expect(target.res.statusCode).toBe(200)
+    expect(target.headers.get('cache-control')).toBe('no-store')
+    expect(target.readBody()).toEqual({ data, requestId: expect.any(String) })
+
+    const nextPage = response()
+    await configuredRouter(request('GET', `${path}?workspaceId=${workspaceId}&cursor=${aiRequestId}&limit=50`, auth), nextPage.res)
+    expect(nextPage.res.statusCode).toBe(200)
+    expect(listAiHistory).toHaveBeenLastCalledWith(actor, workspaceId, aiRequestId, 50)
+  })
+
+  it.each(['limit=51', 'cursor=invalid', 'limit=1&limit=2', `actorUserId=${actor.userId}`])(
+    'rejects invalid pagination or caller scope (%s)',
+    async (query) => {
+      const listAiHistory = vi.fn()
+      const configuredRouter = billingRouter(billingRepositoryStub({ listAiHistory }))
+      const target = response()
+      await configuredRouter(request('GET', `${path}?workspaceId=${workspaceId}&${query}`, auth), target.res)
+
+      expect(target.res.statusCode).toBe(422)
+      expect(target.readBody()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } })
+      expect(listAiHistory).not.toHaveBeenCalled()
+    },
+  )
+})
 
 describe('API router', () => {
   afterEach(() => {
@@ -343,8 +392,8 @@ describe('API router', () => {
   it('reserves a credit, calls the provider with the server key, settles with usage and returns the balance', async () => {
     const calls: unknown[] = []
     const configuredRouter = billingRouter(billingRepositoryStub({
-      reserveAiCredit: async (resolvedActor, resolvedWorkspaceId, resolvedOperationId) => {
-        calls.push(['reserve', resolvedActor.userId, resolvedWorkspaceId, resolvedOperationId])
+      reserveAiCredit: async (resolvedActor, resolvedWorkspaceId, resolvedOperationId, kind) => {
+        calls.push(['reserve', resolvedActor.userId, resolvedWorkspaceId, resolvedOperationId, kind])
         return { requestId: aiRequestId, credits: 4 }
       },
       settleAiRequest: async (_actor, requestId, outcome, usage) => {
@@ -365,7 +414,7 @@ describe('API router', () => {
 
     expect(target.res.statusCode).toBe(200)
     expect(calls).toEqual([
-      ['reserve', actor.userId, workspaceId, operationId],
+      ['reserve', actor.userId, workspaceId, operationId, 'spec'],
       ['generate', serverAiKey, { prompt: 'กล่องของฝาก', image: refImage }],
       ['settle', aiRequestId, 'succeeded', { hasImage: true, model: aiModel, ...aiUsage }],
     ])
@@ -1155,8 +1204,8 @@ describe('API router — AI artwork', () => {
   it('reserves a credit, passes the parsed artwork request to the provider with the server key, settles with usage and returns the plan with the balance', async () => {
     const calls: unknown[] = []
     const configuredRouter = billingRouter(billingRepositoryStub({
-      reserveAiCredit: async (resolvedActor, resolvedWorkspaceId, resolvedOperationId) => {
-        calls.push(['reserve', resolvedActor.userId, resolvedWorkspaceId, resolvedOperationId])
+      reserveAiCredit: async (resolvedActor, resolvedWorkspaceId, resolvedOperationId, kind) => {
+        calls.push(['reserve', resolvedActor.userId, resolvedWorkspaceId, resolvedOperationId, kind])
         return { requestId: aiRequestId, credits: 4 }
       },
       settleAiRequest: async (_actor, requestId, outcome, usage) => {
@@ -1183,7 +1232,7 @@ describe('API router — AI artwork', () => {
     expect(target.res.statusCode).toBe(200)
     expect(target.readBody()).toMatchObject({ data: { ok: true, model: aiModel, mock: false, credits: 4, plan: { name: 'แบบทดสอบ' } } })
     expect(calls).toEqual([
-      ['reserve', actor.userId, workspaceId, operationId],
+      ['reserve', actor.userId, workspaceId, operationId, 'artwork'],
       ['provider', serverAiKey],
       ['settle', aiRequestId, 'succeeded', { hasImage: true, model: aiModel, ...artworkUsage }],
     ])

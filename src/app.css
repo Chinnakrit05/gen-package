@@ -1206,7 +1206,7 @@ main {
   cursor: not-allowed;
   opacity: 0.68;
 }
-/* เครดิต AI 0 (cloud): ปุ่มยังกดได้ (ไปหน้าแพ็กเกจ) — ป้าย "0" ให้เห็นบนจอสัมผัสที่ไม่มี tooltip */
+/* เครดิต AI 0 (cloud): ยังเปิด Copilot ดูประวัติได้ — ป้าย "0" ให้เห็นบนจอสัมผัสที่ไม่มี tooltip */
 .pb-fab.blocked {
   opacity: 0.86;
 }
@@ -4192,6 +4192,20 @@ aside .art-actions .file-pick:only-child {
 .copilot-spacer { flex: 1; }
 .copilot-close { width: 30px; height: 30px; border: none; border-radius: 8px; background: transparent; color: var(--text-3); font-size: 15px; cursor: pointer; }
 .copilot-close:hover { background: var(--border); color: var(--text); }
+.copilot > [hidden] { display: none; }
+.cp-history-toggle { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.cp-history-toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.cp-history { flex: 1; min-height: 0; overflow: auto; padding: 14px; }
+.cp-history-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.cp-history-head h2 { margin: 0; font-size: 15px; }
+.cp-history-refresh { display: grid; place-items: center; min-width: 32px; min-height: 32px; }
+.cp-history p { font-size: 13px; color: var(--text-2); }
+.cp-history-list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.cp-history-list li { display: flex; justify-content: space-between; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2, var(--surface)); }
+.cp-history-list li > div { display: grid; gap: 4px; font-size: 13px; }
+.cp-history-list li > div:last-child { text-align: end; }
+.cp-history-list time, .cp-history-list li span { font-size: 12px; color: var(--text-2); }
+.cp-history-more { width: 100%; margin-top: 10px; }
 .copilot-list { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 .cp-ai { display: flex; gap: 10px; align-items: flex-start; }
 .cp-avatar { flex-shrink: 0; display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 50%; background: var(--text); color: var(--accent); font-size: 12px; margin-top: 2px; }

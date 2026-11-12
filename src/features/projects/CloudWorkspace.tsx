@@ -4,7 +4,7 @@ import type { CloudProject, ProjectSummary } from '../../../shared/contracts/pro
 import App, { type CloudProjectBridge, type EntitlementsStatus, type ProjectStoreSnapshot } from '../../App'
 import { LoadingStage } from '../../components/LoadingBoundary'
 import { freshProject, type Project } from '../../core/project'
-import { requestCloudArtwork, requestCloudBoxSpec } from '../../services/api/ai'
+import { listAiHistory, requestCloudArtwork, requestCloudBoxSpec } from '../../services/api/ai'
 import {
   authorizeExport as authorizeRemoteExport,
   createOrder as createRemoteOrder,
@@ -751,6 +751,7 @@ export function CloudWorkspace(props: CloudWorkspaceProps) {
     },
     retrySave: () => (intentRef.current ? sendIntent() : controller.retry()),
     subscribeRemoteProject,
+    listAiHistory: (cursor, signal) => listAiHistory(props.apiBaseUrl, token(), props.workspaceId, cursor, signal),
     // AI บน cloud: คีย์ของระบบฝั่ง server, หัก 1 เครดิต/คำขอ (operationId ใหม่ทุกครั้ง) — อัปเดตเครดิตจาก response
     requestAiSpec: async (prompt, current, imageBase64) => {
       assertWritable()

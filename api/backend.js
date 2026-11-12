@@ -54463,6 +54463,22 @@ var aiArtworkRequestSchema = external_exports.object({
   workspaceId: external_exports.uuid(),
   operationId: external_exports.uuid()
 }).passthrough();
+var aiHistoryQuerySchema = external_exports.object({
+  workspaceId: external_exports.uuid(),
+  cursor: external_exports.uuid().optional(),
+  limit: external_exports.coerce.number().int().min(1).max(50).default(20)
+}).strict();
+var aiHistoryResultSchema = external_exports.object({
+  items: external_exports.array(external_exports.object({
+    id: external_exports.uuid(),
+    kind: external_exports.enum(["artwork", "spec"]).nullable(),
+    status: external_exports.enum(["reserved", "succeeded", "failed"]),
+    createdAt: timestampSchema,
+    settledAt: timestampSchema.nullable(),
+    creditUnits: creditsSchema
+  })).max(50),
+  nextCursor: external_exports.uuid().nullable()
+});
 var catalogItemResultSchema = external_exports.object({
   kind: orderKindSchema,
   amountMinor: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -54576,6 +54592,9 @@ function mapBillingDatabaseError(error62, context = {}) {
   if (message.includes("APP_USER_NOT_ACTIVE")) {
     return new HttpError(403, "USER_NOT_ACTIVE", "\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
   }
+  if (error62.code === "P0001" && message === "INVALID_CURSOR") {
+    return new HttpError(422, "VALIDATION_ERROR", "\u0E15\u0E31\u0E27\u0E23\u0E30\u0E1A\u0E38\u0E15\u0E33\u0E41\u0E2B\u0E19\u0E48\u0E07\u0E43\u0E19\u0E1B\u0E23\u0E30\u0E27\u0E31\u0E15\u0E34\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19 AI \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+  }
   return new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19");
 }
 var MAX_INT4 = 2147483647;
@@ -54665,15 +54684,38 @@ var SupabaseBillingRepository = class {
     if (!parsed.success) throw this.contractError("authorize_open_access_export", actor, parsed.error);
     return parsed.data;
   }
-  async reserveAiCredit(actor, workspaceId, operationId) {
-    const { data, error: error62 } = await this.client.rpc("reserve_ai_credit", {
+  async reserveAiCredit(actor, workspaceId, operationId, kind) {
+    const params = {
       p_actor_user_id: actor.userId,
       p_workspace_id: workspaceId,
       p_operation_id: operationId
-    });
-    if (error62) throw this.databaseError(error62, "reserve_ai_credit", actor);
+    };
+    let rpc = kind === void 0 ? "reserve_ai_credit" : "reserve_ai_credit_for_kind";
+    let result = await this.client.rpc(rpc, kind === void 0 ? params : { ...params, p_generation_kind: kind });
+    if (rpc === "reserve_ai_credit_for_kind" && result.error?.code === "PGRST202" && /^Could not find the function public\.reserve_ai_credit_for_kind(?:\([^)]*\))? in the schema cache$/.test(result.error.message)) {
+      rpc = "reserve_ai_credit";
+      result = await this.client.rpc(rpc, params);
+    }
+    const { data, error: error62 } = result;
+    if (error62) throw this.databaseError(error62, rpc, actor);
     const parsed = aiReservationResultSchema.safeParse(data);
-    if (!parsed.success) throw this.contractError("reserve_ai_credit", actor, parsed.error);
+    if (!parsed.success) throw this.contractError(rpc, actor, parsed.error);
+    return parsed.data;
+  }
+  async listAiHistory(actor, workspaceId, cursor, limit2) {
+    const rpc = "list_my_ai_history";
+    const { data, error: error62 } = await this.client.rpc(rpc, {
+      p_actor_user_id: actor.userId,
+      p_workspace_id: workspaceId,
+      p_cursor: cursor,
+      p_limit: limit2
+    });
+    if (error62?.code === "P0001" && error62.message === "PROJECT_NOT_FOUND") {
+      throw new HttpError(404, "NOT_FOUND", "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E35\u0E48\u0E07\u0E32\u0E19\u0E19\u0E35\u0E49");
+    }
+    if (error62) throw this.databaseError(error62, rpc, actor);
+    const parsed = aiHistoryResultSchema.safeParse(data);
+    if (!parsed.success) throw this.contractError(rpc, actor, parsed.error);
     return parsed.data;
   }
   async settleAiRequest(actor, requestId, outcome, usage) {
@@ -61722,9 +61764,12 @@ var BillingService = class {
     });
     return order;
   }
-  async reserveAiCredit(actor, workspaceId, operationId) {
+  async reserveAiCredit(actor, workspaceId, operationId, kind) {
     if (this.options.openAccess) await this.repository.ensureOpenAccess(actor, workspaceId);
-    return this.repository.reserveAiCredit(actor, workspaceId, operationId);
+    return this.repository.reserveAiCredit(actor, workspaceId, operationId, kind);
+  }
+  listAiHistory(actor, workspaceId, cursor, limit2) {
+    return this.repository.listAiHistory(actor, workspaceId, cursor, limit2);
   }
   settleAiRequest(actor, requestId, outcome, usage) {
     return this.repository.settleAiRequest(actor, requestId, outcome, usage);
@@ -62627,7 +62672,7 @@ function aiRouteError(error62, requestId, route) {
   return httpError;
 }
 async function chargedAiCall(ctx, call) {
-  const reservation = await ctx.billingService.reserveAiCredit(ctx.actor, ctx.workspaceId, ctx.operationId);
+  const reservation = await ctx.billingService.reserveAiCredit(ctx.actor, ctx.workspaceId, ctx.operationId, ctx.kind);
   let generated;
   try {
     generated = await call();
@@ -62840,6 +62885,31 @@ function createApiRouter(config2, dependencies = {}) {
       }
       return;
     }
+    if (path6 === "/api/v1/ai/history") {
+      try {
+        if (req.method !== "GET") {
+          res.setHeader("allow", "GET");
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method \u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E01\u0E31\u0E1A endpoint \u0E44\u0E21\u0E48\u0E44\u0E14\u0E49");
+        }
+        if (!sessionService || !billingService) {
+          throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 Supabase");
+        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId);
+        const params = requestUrl(req).searchParams;
+        const input2 = Object.fromEntries(params);
+        const query = aiHistoryQuerySchema.safeParse(input2);
+        if (!query.success || params.size !== Object.keys(input2).length) {
+          throw new HttpError(422, "VALIDATION_ERROR", "\u0E15\u0E31\u0E27\u0E01\u0E23\u0E2D\u0E07\u0E1B\u0E23\u0E30\u0E27\u0E31\u0E15\u0E34\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19 AI \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07");
+        }
+        const { workspaceId, cursor, limit: limit2 } = query.data;
+        const data = await billingService.listAiHistory(actor, workspaceId, cursor ?? null, limit2);
+        sendJson(res, 200, { data, requestId }, requestId);
+      } catch (error63) {
+        const httpError = error63 instanceof HttpError ? error63 : new HttpError(503, "DEPENDENCY_UNAVAILABLE", "\u0E42\u0E2B\u0E25\u0E14\u0E1B\u0E23\u0E30\u0E27\u0E31\u0E15\u0E34\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19 AI \u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08");
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId);
+      }
+      return;
+    }
     if (path6 === "/api/v1/ai/artwork") {
       try {
         if (req.method !== "POST") {
@@ -62864,7 +62934,7 @@ function createApiRouter(config2, dependencies = {}) {
         }
         const modelChoice = isAiModelChoiceEnabled(config2);
         const { value, credits } = await chargedAiCall(
-          { billingService, actor, workspaceId: input2.workspaceId, operationId: input2.operationId, requestId, route: AI_ARTWORK_ROUTE, hasImage: request.images.length > 0 },
+          { billingService, actor, workspaceId: input2.workspaceId, operationId: input2.operationId, kind: "artwork", requestId, route: AI_ARTWORK_ROUTE, hasImage: request.images.length > 0 },
           async () => {
             const generated = await aiService.generateArtwork(serverAi.anthropicApiKey, request, modelChoice ? request.model : void 0);
             return { value: generated, model: generated.model, usage: generated.usage };
@@ -62903,7 +62973,7 @@ function createApiRouter(config2, dependencies = {}) {
           throw new HttpError(503, "CONFIGURATION_ERROR", "Server \u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E04\u0E35\u0E22\u0E4C AI");
         }
         const { value: spec, credits } = await chargedAiCall(
-          { billingService, actor, workspaceId: input2.workspaceId, operationId: input2.operationId, requestId, route: AI_ROUTE, hasImage: image !== void 0 },
+          { billingService, actor, workspaceId: input2.workspaceId, operationId: input2.operationId, kind: "spec", requestId, route: AI_ROUTE, hasImage: image !== void 0 },
           async () => {
             const generated = await aiService.generateBoxSpec(serverAi.anthropicApiKey, {
               prompt: input2.prompt.trim(),

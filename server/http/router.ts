@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { IncomingHttpHeaders } from 'node:http'
 import { z, ZodError } from 'zod'
+import type { AiGenerationKind } from '../../shared/contracts/aiHistory'
 import type { ApiSuccess } from '../../shared/contracts/http'
 import type { SessionBootstrapData } from '../../shared/contracts/auth'
 import type { HealthData } from '../../shared/contracts/system'
@@ -34,6 +35,7 @@ import {
 import {
   aiArtworkRequestSchema,
   aiBoxSpecRequestSchema,
+  aiHistoryQuerySchema,
   createOrderInputSchema,
   entitlementsQuerySchema,
   orderIdSchema,
@@ -259,13 +261,14 @@ async function chargedAiCall<T>(
     actor: Parameters<BillingService['reserveAiCredit']>[0]
     workspaceId: string
     operationId: string
+    kind: AiGenerationKind
     requestId: string
     route: string
     hasImage: boolean
   },
   call: () => Promise<{ value: T; model: string; usage: AiUsage | null }>,
 ): Promise<{ value: T; credits: number }> {
-  const reservation = await ctx.billingService.reserveAiCredit(ctx.actor, ctx.workspaceId, ctx.operationId)
+  const reservation = await ctx.billingService.reserveAiCredit(ctx.actor, ctx.workspaceId, ctx.operationId, ctx.kind)
   let generated: { value: T; model: string; usage: AiUsage | null }
   try {
     generated = await call()
@@ -511,6 +514,34 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
       return
     }
 
+    if (path === '/api/v1/ai/history') {
+      try {
+        if (req.method !== 'GET') {
+          res.setHeader('allow', 'GET')
+          throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method นี้ใช้กับ endpoint ไม่ได้')
+        }
+        if (!sessionService || !billingService) {
+          throw new HttpError(503, 'CONFIGURATION_ERROR', 'Server ยังไม่ได้ตั้งค่า Supabase')
+        }
+        const actor = await sessionService.authenticate(bearerToken(req), requestId)
+        const params = requestUrl(req).searchParams
+        const input = Object.fromEntries(params)
+        const query = aiHistoryQuerySchema.safeParse(input)
+        if (!query.success || params.size !== Object.keys(input).length) {
+          throw new HttpError(422, 'VALIDATION_ERROR', 'ตัวกรองประวัติการใช้งาน AI ไม่ถูกต้อง')
+        }
+        const { workspaceId, cursor, limit } = query.data
+        const data = await billingService.listAiHistory(actor, workspaceId, cursor ?? null, limit)
+        sendJson(res, 200, { data, requestId }, requestId)
+      } catch (error) {
+        const httpError = error instanceof HttpError
+          ? error
+          : new HttpError(503, 'DEPENDENCY_UNAVAILABLE', 'โหลดประวัติการใช้งาน AI ไม่สำเร็จ')
+        sendJson(res, httpError.status, toApiFailure(httpError, requestId), requestId)
+      }
+      return
+    }
+
     // AI ออกแบบหน้าตาบน template ที่เลือก (payload เดียวกับ legacy /api/ai-artwork + ซอง workspace/operation):
     // สิทธิ์/เครดิต/รหัสข้อผิดพลาดชุดเดียวกับ box-spec (1 เครดิต/แบบ) — ใช้เวลาได้ถึงงบ CLOUD_ARTWORK_LIMITS ใต้ maxDuration 300
     if (path === '/api/v1/ai/artwork') {
@@ -541,7 +572,7 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
         // รุ่นที่ผู้ทดสอบเลือก + สรุปโทเคน/ค่าใช้จ่าย เฉพาะช่วงพัฒนา — production ใช้รุ่นของ server และไม่ส่งค่าใช้จ่าย
         const modelChoice = isAiModelChoiceEnabled(config)
         const { value, credits } = await chargedAiCall(
-          { billingService, actor, workspaceId: input.workspaceId, operationId: input.operationId, requestId, route: AI_ARTWORK_ROUTE, hasImage: request.images.length > 0 },
+          { billingService, actor, workspaceId: input.workspaceId, operationId: input.operationId, kind: 'artwork', requestId, route: AI_ARTWORK_ROUTE, hasImage: request.images.length > 0 },
           async () => {
             const generated = await aiService.generateArtwork(serverAi.anthropicApiKey, request, modelChoice ? request.model : undefined)
             return { value: generated, model: generated.model, usage: generated.usage }
@@ -585,7 +616,7 @@ export function createApiRouter(config: ServerConfig, dependencies: ApiRouterDep
         }
 
         const { value: spec, credits } = await chargedAiCall(
-          { billingService, actor, workspaceId: input.workspaceId, operationId: input.operationId, requestId, route: AI_ROUTE, hasImage: image !== undefined },
+          { billingService, actor, workspaceId: input.workspaceId, operationId: input.operationId, kind: 'spec', requestId, route: AI_ROUTE, hasImage: image !== undefined },
           async () => {
             const generated = await aiService.generateBoxSpec(serverAi.anthropicApiKey, {
               prompt: input.prompt.trim(),

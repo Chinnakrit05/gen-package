@@ -1,6 +1,19 @@
 import type { AiCreditsReceipt } from '../../../shared/contracts/billing'
+import type { AiHistoryPage } from '../../../shared/contracts/aiHistory'
 import type { AiBoxSpec, ArtworkRequestInput, ArtworkResponse, CurrentSpec } from '../../core/ai'
 import { requestApi } from './client'
+
+export function listAiHistory(
+  apiBaseUrl: string,
+  accessToken: string,
+  workspaceId: string,
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<AiHistoryPage> {
+  const params = new URLSearchParams({ workspaceId })
+  if (cursor) params.set('cursor', cursor)
+  return requestApi<AiHistoryPage>(`${apiBaseUrl}/ai/history?${params}`, accessToken, { method: 'GET', signal })
+}
 
 // AI บน cloud ใช้คีย์ของระบบฝั่ง server — ไม่รับคีย์จากผู้ใช้ (BYOK header ถูกถอดแล้ว)
 // ทุกคำขอหัก 1 เครดิต AI ของ workspace; operationId ใหม่ต่อคำขอ (ซ้ำ → 409) ดู docs/billing-freemium-pro.md §3

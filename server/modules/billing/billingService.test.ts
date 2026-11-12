@@ -49,6 +49,7 @@ function repositoryStub(overrides: Partial<BillingRepository> = {}): BillingRepo
     ensureOpenAccess: async () => { throw new Error('must not be called') },
     authorizeOpenAccessExport: async () => { throw new Error('must not be called') },
     reserveAiCredit: async () => { throw new Error('must not be called') },
+    listAiHistory: async () => { throw new Error('must not be called') },
     settleAiRequest: async () => { throw new Error('must not be called') },
     createOrder: async () => { throw new Error('must not be called') },
     fulfilOrder: async () => { throw new Error('must not be called') },
