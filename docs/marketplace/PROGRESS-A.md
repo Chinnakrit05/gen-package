@@ -1,5 +1,9 @@
 # ความคืบหน้าคน A
 
+## ผลทดสอบเฟส 7 ผ่าน Safari บน Studio Staging Preview (12 พฤศจิกายน 2026 ICT)
+
+**PASS สำหรับเส้นทางที่ตรวจ** ผู้ซื้อสร้างงานใน Editor V2 ส่งคำขอให้สองร้าน เปรียบเทียบสองใบเสนอราคา สนทนาและแนบไฟล์ และเลือกข้อเสนอจนคำสั่งผลิตเสร็จสมบูรณ์ ตรวจสิทธิ์ข้ามร้านและสิทธิ์ Admin ตามบทบาทแล้ว ล้างบัญชีจำลอง 10 บัญชีและข้อมูลของรอบนี้ ตรวจรายละเอียด ขอบเขต และผลล้างข้อมูลใน [บันทึกการทดสอบบน Staging](STAGING-EXECUTION.md).
+
 ## Approved staging execution — 9 November 2026 UTC
 
 After a verified migration-scoped recovery backup and independent review, applied 009 and 016–029 to the approved staging database. All 29 versions are present; 35 prior business-table projections remained unchanged. A protected Studio Preview is deployed at https://packit-studio-preview-chinnakrit05.vercel.app using deployment-only configuration and the exact approved Auth redirect. Existing public deployment/main were not redeployed or pushed. A masked-key configuration defect was corrected and real Google sign-in now passes; orders, RFQs and chat load authenticated empty states. Existing staff MFA now passes after reload; the supplier-review queue opens and expanded Admin routes correctly deny missing scopes. Complete remote synthetic transaction/pilot workflows remain pending. No supplier decisions, new test accounts or role grants have been made. See [STAGING-EXECUTION.md](STAGING-EXECUTION.md) for exact deployment/source identities, recovery limitations and verification evidence. Full phase 7 remains incomplete.
