@@ -1,15 +1,18 @@
 // สไตล์/ฟอนต์ของ Editor โหลดพร้อม chunk นี้ — หน้าเบาใช้ shell.css ใน entry
 import './app.css'
 import './editorFonts'
-import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { LogOut } from 'lucide-react'
 import { EditorVersionSwitch, EDITOR_VERSION_KEY, loadEditorVersion, type EditorVersion } from './components/editor-v2/EditorVersionSwitch'
 import { EditorRail, ElementLibrary, type EditorTool } from './components/editor-v2/EditorSidebar'
 import { EditorToolbar } from './components/editor-v2/EditorToolbar'
+import { ModelPanel, ModelTile, type ModelOption, type ModelTab } from './components/editor-v2/ModelPanel'
+import { modelMaterialAssets, modelSizeAssets, modelTypeAssets, modelViewerAssets } from './components/editor-v2/modelAssets'
 import * as studioAssets from './components/editor-v2/assets'
 import { makeLibraryShape } from './core/editorElements'
 import './components/editor-v2/editor-v2.css'
+import './components/editor-v2/model-workspace.css'
 
 // true เมื่อ DimField อยู่ในแถบปรับแต่งด้านบน (Canva-style) → เปลี่ยนสไลเดอร์เป็นปุ่ม+dropdown อัตโนมัติ
 const TopBarCtx = createContext(false)
@@ -267,6 +270,7 @@ interface DimFieldProps {
   onChange: (v: number) => void
   // pop = แสดงเป็นปุ่มเล็ก คลิกแล้ว dropdown สไลเดอร์ลงมา (แบบ Canva) — ใช้ในแถบบน
   pop?: boolean
+  compact?: boolean
   icon?: React.ReactNode // ถ้ามี → ปุ่ม pop โชว์ไอคอนแทนป้ายข้อความ (label ยังอยู่ใน dropdown + tooltip)
   lengthUnit?: LengthUnit // หน่วยที่แสดง/ป้อน (ค่าจริงเก็บเป็น มม. เสมอ)
 }
@@ -438,7 +442,7 @@ function StickerIssues({ issues, okText }: { issues: IssueItem[]; okText?: [stri
   )
 }
 
-function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange, pop: popProp, icon, lengthUnit = 'mm' }: DimFieldProps) {
+function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange, pop: popProp, icon, lengthUnit = 'mm', compact = false }: DimFieldProps) {
   // ค่า state จริงเป็น มม. เสมอ (เรขาคณิตใช้ มม.) — ซม./นิ้วแค่แปลงตอนแสดง/ป้อน
   const converted = lengthUnit !== 'mm'
   const toDisp = (v: number) => (converted ? dimValue(v, lengthUnit) : v)
@@ -585,6 +589,14 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
           )}
       </div>
     )
+  }
+
+  if (compact) {
+    return <div className="v2-dim-field">
+      <span>{label}</span>
+      {slider}
+      <span className="field-num">{num}</span>
+    </div>
   }
 
   return (
@@ -1139,6 +1151,7 @@ interface EditSnapshot {
   neckH: number | undefined
   shoulderH: number | undefined
   rectDepth: number | undefined
+  vesselPolygon: boolean
   shoulderStyle: ShoulderStyle
   labelBox: LabelBox | undefined
   capStyle: CapStyle
@@ -1149,6 +1162,12 @@ interface EditSnapshot {
   vents: VentConfig
   stickerCut: StickerCut
   decos: Deco[]
+  projectHistory?: {
+    history: DesignVersion[]
+    histIdx: number
+    artSnapshots: ArtworkSnapshot[]
+    artCurrentId: string | null
+  }
 }
 
 const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
@@ -1165,6 +1184,7 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   a.neckH === b.neckH &&
   a.shoulderH === b.shoulderH &&
   a.rectDepth === b.rectDepth &&
+  a.vesselPolygon === b.vesselPolygon &&
   a.shoulderStyle === b.shoulderStyle &&
   sameLabelBox(a.labelBox, b.labelBox) &&
   a.capStyle === b.capStyle &&
@@ -1493,6 +1513,7 @@ export default function App({
   const [shoulderH, setShoulderH] = useState<number | undefined>(initialActive.shoulderH)
   // ขวดเหลี่ยม: ความลึกลำตัว (มม.) — undefined = ขวดกลม; ใช้ได้เฉพาะแก้ว/PET (`canRectBottle`)
   const [rectDepth, setRectDepth] = useState<number | undefined>(initialActive.rectDepth)
+  const [vesselPolygon, setVesselPolygon] = useState(Boolean(initialActive.vesselPolygon))
   const [shoulderStyle, setShoulderStyle] = useState<ShoulderStyle>(initialActive.shoulderStyle ?? 'round')
   // ฉลากกำหนดเอง (ตำแหน่ง/สูง/ยาวรอบตัว) — undefined = ตามรูปแบบฉลาก
   const [labelBox, setLabelBox] = useState<LabelBox | undefined>(initialActive.labelBox)
@@ -1679,6 +1700,7 @@ export default function App({
   const [artCurrentId, setArtCurrentId] = useState<string | null>(null)
   // ถามก่อนสลับประเภทงาน/รูปแบบเมื่อมีงานตกแต่งแล้ว (ยืนยัน = บันทึกงานนี้แล้วเปิดชิ้นงานใหม่ตามเป้าหมายนี้)
   const [switchGuard, setSwitchGuard] = useState<NewWorkTarget | null>(null)
+  const [confirmNewProject, setConfirmNewProject] = useState(false)
   // AI ออกแบบหน้าตา: ชิ้นงานที่แปลงแล้ววางลงงานในจังหวะเดียว (snapshot undo จับเป็นก้าวเดียว) — สีพื้น/รูปพื้นตั้งเมื่อแผนระบุ
   const applyAiArtwork = (r: AiArtworkResult) => {
     const nextDecos = r.mode === 'replace' ? r.decos : [...decos, ...r.decos]
@@ -1834,8 +1856,11 @@ export default function App({
   const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
   const [editorVersion, setEditorVersion] = useState(loadEditorVersion)
   const isV2 = editorVersion === 'v2'
-  const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>(() => editorVersion === 'v2' ? 'artwork' : 'design')
-  const [v2Tool, setV2Tool] = useState<EditorTool>('elements')
+  const [sideTab, setSideTab] = useState<'design' | 'artwork' | 'export'>(() => editorVersion === 'v2' && readOnly ? 'artwork' : 'design')
+  const [v2Tool, setV2Tool] = useState<EditorTool>('model')
+  const [modelTab, setModelTab] = useState<ModelTab>('type')
+  const [modelLightsOpen, setModelLightsOpen] = useState(false)
+  const v2Model = isV2 && !readOnly && sideTab === 'design'
   const [v2Advanced, setV2Advanced] = useState(false)
   const [v2PanelClosed, setV2PanelClosed] = useState(false)
   const changeEditorVersion = (version: EditorVersion) => {
@@ -1843,12 +1868,18 @@ export default function App({
     setEditorVersion(version)
     setV2Advanced(false)
     setV2PanelClosed(false)
-    if (version === 'v2') { setSideTab('artwork'); setV2Tool('elements') }
+    if (version === 'v2' && !readOnly) {
+      setSideTab('design')
+      setV2Tool('model')
+      setModelTab('type')
+    }
+    setModelLightsOpen(false)
     try { localStorage.setItem(EDITOR_VERSION_KEY, version) } catch { /* usable without storage */ }
   }
   const chooseV2Tool = (tool: EditorTool) => {
     setV2Tool(tool)
     setV2PanelClosed(false)
+    setModelLightsOpen(false)
     setSideTab(tool === 'model' ? 'design' : tool === 'export' ? 'export' : 'artwork')
     if (tool === 'layers') setGroups(g => ({ ...g, layers: true }))
     if (tool === 'templates') setGroups(g => ({ ...g, lib: true }))
@@ -1915,8 +1946,8 @@ export default function App({
   // ฉลากจึงอยู่ด้านหน้าเสมอ ไม่ค้างมุมที่ผู้ใช้แก้คืนไม่ได้; engine (`Vessel.labelRot`) ยังรองรับไว้เผื่อเปิดกลับ
   const labelNoRot = useMemo(() => (labelBox?.rot === undefined ? labelBox : { ...labelBox, rot: undefined }), [labelBox])
   const vessel = useMemo(
-    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, { neckH, shoulderH, shoulderStyle, label: labelNoRot, capStyle, rectDepth }) : null),
-    [W, D, H, handle, mat, labelStyle, neckH, shoulderH, shoulderStyle, labelNoRot, capStyle, rectDepth, kind],
+    () => (kind === 'vessel' ? generateVessel({ W, D, H, handle }, mat, labelStyle, { neckH, shoulderH, shoulderStyle, label: labelNoRot, capStyle, rectDepth, polygon: vesselPolygon }) : null),
+    [W, D, H, handle, mat, labelStyle, neckH, shoulderH, shoulderStyle, labelNoRot, capStyle, rectDepth, vesselPolygon, kind],
   )
   const pouch = useMemo(
     () =>
@@ -2142,6 +2173,7 @@ export default function App({
               && p.neckH === neckH
               && p.shoulderH === shoulderH
               && p.rectDepth === rectDepth
+              && Boolean(p.vesselPolygon) === vesselPolygon
               && (p.shoulderStyle ?? 'round') === shoulderStyle
               && sameLabelBox(p.labelBox, labelBox)
               && (p.capStyle ?? 'none') === capStyle
@@ -2165,6 +2197,7 @@ export default function App({
                     neckH,
                     shoulderH,
                     rectDepth,
+                    vesselPolygon: vesselPolygon || undefined,
                     shoulderStyle,
                     labelBox,
                     capStyle,
@@ -2184,7 +2217,7 @@ export default function App({
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, vesselPolygon, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
 
   // local demo เขียน localStorage; cloud ส่ง active project เข้า durable IndexedDB/save queue
   useEffect(() => {
@@ -2269,6 +2302,7 @@ export default function App({
     neckH,
     shoulderH,
     rectDepth,
+    vesselPolygon,
     shoulderStyle,
     labelBox,
     capStyle,
@@ -2299,7 +2333,7 @@ export default function App({
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
+  }, [activeId, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, vesselPolygon, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     skipCapture.current = true
@@ -2316,6 +2350,7 @@ export default function App({
     setNeckH(s.neckH)
     setShoulderH(s.shoulderH)
     setRectDepth(s.rectDepth)
+    setVesselPolygon(s.vesselPolygon)
     setShoulderStyle(s.shoulderStyle ?? 'round')
     setLabelBox(s.labelBox)
     setCapStyle(s.capStyle ?? 'none')
@@ -2326,13 +2361,24 @@ export default function App({
     setVents(s.vents ?? DEFAULT_VENTS)
     setStickerCut(s.stickerCut ?? DEFAULT_STICKER_CUT)
     setDecos(s.decos)
+    if (s.projectHistory) {
+      setHistory(s.projectHistory.history)
+      setHistIdx(s.projectHistory.histIdx)
+      setArtSnapshots(s.projectHistory.artSnapshots)
+      setArtCurrentId(s.projectHistory.artCurrentId)
+    }
     setSelectedIds([])
   }
+
+  const snapshotWithProjectHistory = (): EditSnapshot => ({
+    ...snapshot(),
+    projectHistory: { history, histIdx, artSnapshots, artCurrentId },
+  })
 
   const undo = () => {
     if (aiBusy || undoStack.length === 0) return
     const prev = undoStack[undoStack.length - 1]
-    setRedoStack((r) => [...r, snapshot()])
+    setRedoStack((r) => [...r, prev.projectHistory ? snapshotWithProjectHistory() : snapshot()])
     setUndoStack((u) => u.slice(0, -1))
     applySnapshot(prev)
   }
@@ -2340,7 +2386,7 @@ export default function App({
   const redo = () => {
     if (aiBusy || redoStack.length === 0) return
     const next = redoStack[redoStack.length - 1]
-    setUndoStack((u) => [...u, snapshot()])
+    setUndoStack((u) => [...u, next.projectHistory ? snapshotWithProjectHistory() : snapshot()])
     setRedoStack((r) => r.slice(0, -1))
     applySnapshot(next)
   }
@@ -2415,6 +2461,7 @@ export default function App({
           && p.neckH === neckH
           && p.shoulderH === shoulderH
           && p.rectDepth === rectDepth
+          && Boolean(p.vesselPolygon) === vesselPolygon
           && (p.shoulderStyle ?? 'round') === shoulderStyle
           && sameLabelBox(p.labelBox, labelBox)
           && (p.capStyle ?? 'none') === capStyle
@@ -2428,7 +2475,7 @@ export default function App({
           && p.history === history
           && p.histIdx === histIdx
             ? p
-            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, shoulderStyle, labelBox, capStyle, capColor: capColor ?? undefined, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
+            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, vesselPolygon: vesselPolygon || undefined, shoulderStyle, labelBox, capStyle, capColor: capColor ?? undefined, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -2447,6 +2494,7 @@ export default function App({
     setNeckH(p.neckH)
     setShoulderH(p.shoulderH)
     setRectDepth(p.rectDepth)
+    setVesselPolygon(Boolean(p.vesselPolygon))
     setShoulderStyle(p.shoulderStyle ?? 'round')
     setLabelBox(p.labelBox)
     setCapStyle(p.capStyle ?? 'none')
@@ -2506,7 +2554,7 @@ export default function App({
     openProject(target)
   }
 
-  const newProject = () => {
+  const promptNewProject = () => {
     if (aiBusy || projectBusy || (cloud && !cloud.online)) return
     setNameModal({
       title: 'ตั้งชื่องานใหม่',
@@ -2533,6 +2581,15 @@ export default function App({
         openProject(p)
       },
     })
+  }
+
+  const newProject = () => {
+    if (aiBusy || projectBusy || (cloud && !cloud.online)) return
+    if (isV2 && hasDesignWork(decos, fillImage, fillColor)) {
+      setConfirmNewProject(true)
+      return
+    }
+    promptNewProject()
   }
 
   const deleteProject = (id: string) => {
@@ -2665,7 +2722,10 @@ export default function App({
     }
     setMaterialId(id)
     if (!m.foldable) setFold(1)
-    if (!canRectBottle(id)) setRectDepth(undefined) // ขวดเหลี่ยมมีเฉพาะแก้ว/PET — ไม่เก็บค่าที่ใช้ไม่ได้ค้างไว้
+    if (!canRectBottle(id)) {
+      setRectDepth(undefined)
+      setVesselPolygon(false)
+    }
   }
   const changePouchStyle = (s: PouchStyle) => {
     if (s !== pouchStyle) applyStdSize(standardSizeFor(materialId, s, 'pouch'))
@@ -2708,6 +2768,21 @@ export default function App({
     }
     setProjects((prev) => [...flushInto(prev), seed])
     openProject(seed)
+  }
+
+  const replaceModel = (target: NewWorkTarget) => {
+    if (aiBusy || projectBusy || (cloud && !cloud.online)) return
+    const current = flushInto(projects).find((project) => project.id === activeId)
+    if (!current) return
+    const previousEdit = snapshotWithProjectHistory()
+    const replacement = { ...freshProjectFor(1, target), id: current.id, name: current.name }
+    setSwitchGuard(null)
+    setShowDims3d(false)
+    setVivid3d(false)
+    setArtSnapshots([])
+    setArtCurrentId(null)
+    openProject(replacement)
+    setUndoStack([...undoStack.slice(-49), previousEdit])
   }
 
   const saveFile = (data: BlobPart, mime: string, ext: string) => {
@@ -3275,15 +3350,16 @@ export default function App({
   }, [selectedIds, selected, undoStack, redoStack, aiBusy, decos, templateId, materialId, W, D, H, handle, qty, fillColor, readOnly])
 
   // ควบคุมการพับ — แถบบนสุดของมุมมอง 3D (โชว์เฉพาะวัสดุที่พับได้)
-  const foldBar = mat.foldable ? (
-    <div className="fold-bar">
-      <button className="fold-play" onClick={play}>
-        ▶ พับให้ดู
+  const foldBar = mat.foldable && (!v2Model || (!isCard && !isSticker)) ? (
+    <div className={v2Model ? 'fold-bar v2-model-fold' : 'fold-bar'}>
+      <button type="button" className="fold-play" onClick={play}>
+        {v2Model ? <><img src={modelViewerAssets.play} alt="" />{t('เริ่มการพับ', 'Play folding')}</> : '▶ พับให้ดู'}
       </button>
-      <span className="fold-label">กาง</span>
+      <span className="fold-label">{v2Model ? t('กาง', 'Flat') : 'กาง'}</span>
       <input
         type="range"
         className="fold-range"
+        style={v2Model ? { '--fold-progress': `${fold * 100}%` } as CSSProperties : undefined}
         min={0}
         max={1}
         step={0.01}
@@ -3295,7 +3371,7 @@ export default function App({
           setFold(Number(e.target.value))
         }}
       />
-      <span className="fold-label">พับ</span>
+      <span className="fold-label">{v2Model ? t('พับ', 'Folded') : 'พับ'}</span>
     </div>
   ) : null
 
@@ -3473,16 +3549,46 @@ export default function App({
             dims={dims3dOn}
             lengthUnit={unit}
             dimVariant="lines"
+            transparentBackground={v2Model}
             lightMode={lightMode3d}
             watermark={watermark}
           />
         ) : kind === 'vessel' ? (
-          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} lengthUnit={unit} lightMode={lightMode3d} watermark={watermark} capStyle={capStyle} capColor={capColor} />
+          <VesselViewer3D vessel={vessel!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} lengthUnit={unit} transparentBackground={v2Model} lightMode={lightMode3d} watermark={watermark} capStyle={capStyle} capColor={capColor} />
         ) : (
-          <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} lengthUnit={unit} dimVariant="lines" lightMode={lightMode3d} watermark={watermark} />
+          <PouchViewer3D pouch={pouch!} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims3dOn} lengthUnit={unit} dimVariant="lines" transparentBackground={v2Model} lightMode={lightMode3d} watermark={watermark} />
         )}
       </Suspense>
-      {!pip3dCompact && (
+      {v2Model ? (
+        <div className="v2-model-view-tools" onKeyDown={(event) => {
+          if (event.key === 'Escape') setModelLightsOpen(false)
+        }}>
+          <button type="button" aria-pressed={showDims3d} title={t('แสดงขนาดบนโมเดล', 'Show model dimensions')}
+            aria-label={t('แสดงขนาดบนโมเดล', 'Show model dimensions')} onClick={() => setShowDims3d((value) => !value)}>
+            <img src={modelViewerAssets.dimensions} alt="" />
+          </button>
+          <button type="button" aria-expanded={modelLightsOpen} aria-controls="v2-model-light-options"
+            aria-label={t('รูปแบบแสง', 'Lighting presets')} title={t('รูปแบบแสง', 'Lighting presets')}
+            onClick={() => setModelLightsOpen((value) => !value)}>
+            <img src={modelViewerAssets.lighting} alt="" />
+          </button>
+          {modelLightsOpen && (
+            <div className="v2-model-light-options" id="v2-model-light-options" role="group" aria-label={t('รูปแบบแสง', 'Lighting presets')}>
+              {([
+                ['threePoint', t('แสง 3 จุด', 'Three-point'), modelViewerAssets.threePoint],
+                ['studio', t('สตูดิโอ', 'Studio'), modelViewerAssets.studio],
+              ] as const).map(([id, label, icon]) => (
+                <button key={id} type="button" aria-pressed={vivid3d && lightRig3d === id} onClick={() => {
+                  setVivid3d(!(vivid3d && lightRig3d === id))
+                  setLightRig3d(id)
+                }}>
+                  <img src={icon} alt="" />{label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : !pip3dCompact && (
       <div className="viewer3d-tools">
         <button
           type="button"
@@ -3568,9 +3674,627 @@ export default function App({
     </div>
   )
 
+  const modelBusy = aiBusy || projectBusy
+  const modelMaterials = MATERIALS.filter((material) => {
+    if (packKind(material) !== kind) return false
+    if (isCard) return CARD_STOCK_IDS.includes(material.id)
+    if (isSticker) return material.id.startsWith('sticker-')
+    if (isTube) return material.form === 'tube'
+    return !material.id.startsWith('sticker-') && material.form !== 'tube' && !isCardMat(material)
+  }).sort((a, b) => isCard ? CARD_STOCK_IDS.indexOf(a.id) - CARD_STOCK_IDS.indexOf(b.id) : 0)
+
+  const selectModelOption = (target: NewWorkTarget, selected: boolean) => {
+    if (selected || modelBusy) return
+    guardedSwitch(target, () => {
+      const nextKind = packKind(getMaterial(target.materialId))
+      if (nextKind === 'box') {
+        if (kind !== 'box' || isCard || isSticker || target.template === 'card' || target.template === 'sticker') {
+          changeMaterial(target.materialId)
+        }
+        changeTemplate(target.template)
+      } else {
+        changeMaterial(target.materialId)
+        if (nextKind === 'pouch' && target.pouchStyle) {
+          setPouchStyle(target.pouchStyle)
+          applyStdSize(standardSizeFor(target.materialId, target.pouchStyle, 'pouch'))
+        } else {
+          resetKindSize(nextKind, target.materialId)
+        }
+      }
+    })
+  }
+  const boxOption = (tp: typeof TEMPLATES[number]): ModelOption => {
+    const selected = kind === 'box' && templateId === tp.id
+    const image = tp.id === 'tuck-end' ? modelTypeAssets.foldingBox : tp.id === 'mailer' ? modelTypeAssets.mailer : undefined
+    const icon = tp.id === 'card' ? <img src={modelTypeAssets.card} alt="" />
+      : tp.id === 'sticker' ? <img src={modelTypeAssets.sticker} alt="" /> : <IconBox size={40} />
+    const title = tp.id === 'tuck-end' ? t('กล่องพับ', 'Folding box')
+      : tp.id === 'mailer' ? t('กล่องไปรษณีย์', 'Mailer box') : tp.nameTh
+    const detail = tp.id === 'tuck-end' ? t('เครื่องสำอางและขนม', 'Cosmetics and snacks')
+      : tp.id === 'mailer' ? t('ส่งของและชุดของฝาก', 'Shipping and gift sets') : tp.detail
+    return {
+      id: tp.id, title, detail, searchText: `${tp.nameTh} ${tp.detail}`, selected, image, icon,
+      category: tp.id === 'card' || tp.id === 'sticker' ? 'other' : 'box',
+      onSelect: () => selectModelOption({
+        template: tp.id,
+        materialId: tp.id === 'card' ? DEFAULT_CARD_MAT : tp.id === 'sticker' ? 'sticker-vinyl' : 'carton-300',
+      }, selected),
+    }
+  }
+  const boxOptions = v2Model ? TEMPLATES.map(boxOption) : []
+  const bottleSelected = kind === 'vessel' && !isTube
+  const modelOptions: ModelOption[] = v2Model ? [
+    boxOptions.find((option) => option.id === 'tuck-end')!,
+    {
+      id: 'bottle', title: t('ขวดและภาชนะ', 'Bottles & vessels'),
+      detail: t('ขวด PET · แก้ว · กระป๋อง', 'PET · Glass · Cans'),
+      category: 'vessel', selected: bottleSelected, image: modelTypeAssets.bottle,
+      onSelect: () => selectModelOption({ template: 'tuck-end', materialId: 'pet-bottle' }, bottleSelected),
+    },
+    boxOptions.find((option) => option.id === 'mailer')!,
+    {
+      id: 'tube', title: t('หลอดครีม', 'Cosmetic tube'), category: 'flexible', selected: isTube, icon: <IconTube size={40} />,
+      onSelect: () => selectModelOption({ template: 'tuck-end', materialId: 'tube-laminate' }, isTube),
+    },
+    ...POUCH_STYLES.filter((option) => option.id !== 'box' || pouchStyle === 'box').map((option): ModelOption => {
+      const selected = kind === 'pouch' && pouchStyle === option.id
+      return {
+        id: `pouch-${option.id}`, title: option.nameTh, detail: option.detail, category: 'flexible', selected,
+        icon: <IconPouch size={40} />,
+        onSelect: () => selectModelOption({
+          template: 'tuck-end', materialId: kind === 'pouch' ? materialId : 'pouch-foil', pouchStyle: option.id,
+        }, selected),
+      }
+    }),
+    ...boxOptions.filter((option) => option.id !== 'tuck-end' && option.id !== 'mailer'),
+  ] : []
+
+  const v2CapPresets = [
+    { id: 'screw', title: t('ฝาเกลียว', 'Screw cap'), image: modelMaterialAssets.screw },
+    { id: 'flip', title: t('ฝาฟลิปท็อป', 'Flip-top cap'), image: modelMaterialAssets.flipTop },
+    { id: 'pump', title: t('หัวปั๊ม', 'Pump'), image: modelMaterialAssets.pump },
+  ] as const
+  const v2MaterialPanel = v2Model && (
+    <div className="v2-model-fields">
+      <section className="v2-model-section">
+        <h2>{t('วัสดุของบรรจุภัณฑ์', 'Packaging material')}</h2>
+        <div className="v2-model-material-list">
+          {modelMaterials.map((material) => {
+            const image = material.id === 'pouch-foil' || material.id === 'aluminum' ? modelMaterialAssets.foil
+              : material.id === 'carton-300' || material.id === 'carton-400' ? modelMaterialAssets.paper : undefined
+            const grammage = /^carton-(300|400)$/.exec(material.id)?.[1]
+            return (
+              <button key={material.id} type="button" disabled={modelBusy} aria-pressed={materialId === material.id}
+                onClick={() => changeMaterial(material.id)}>
+                {image ? <img src={image} alt="" /> : <span className="v2-model-material-swatch" style={{ backgroundColor: material.color }} />}
+                <span>
+                  <strong>{grammage ? t('กระดาษกล่องแป้ง', 'Paperboard') : material.nameTh}</strong>
+                  <small>{grammage ? t(`หนา ${grammage} แกรม`, `${grammage} gsm`)
+                    : material.foldable ? t(`หนา ${material.thickness} มม.`, `${material.thickness} mm thick`) : material.process}</small>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </section>
+      {(showNeck || isTube) && (
+        <section className="v2-model-section">
+          <h2>{isTube ? t('ฝาหลอด', 'Tube cap') : t('รูปแบบฝาขวด', 'Bottle cap style')}</h2>
+          <label className="v2-model-cap-color">
+            {t('สีฝา', 'Cap colour')}
+            <span>
+              <img src={modelMaterialAssets.color} alt="" />
+              <input type="color" value={capColor ?? defaultCapColor(capStyle)} aria-label={t('สีฝา', 'Cap colour')}
+                disabled={modelBusy} onChange={(event) => setCapColor(event.target.value)} />
+            </span>
+          </label>
+          {showNeck ? (
+            <>
+              <div className="v2-model-tiles">
+                {v2CapPresets.map((cap) => (
+                  <ModelTile key={cap.id} title={cap.title} image={cap.image} selected={capStyle === cap.id}
+                    disabled={modelBusy} onClick={() => setCapStyle(cap.id)} />
+                ))}
+              </div>
+              <details className="v2-model-more">
+                <summary>{t('ฝาแบบอื่น', 'More cap styles')}</summary>
+                <div className="unit-toggle">
+                  {CAP_STYLES.filter((cap) => !v2CapPresets.some((preset) => preset.id === cap.id)).map((cap) => (
+                    <button key={cap.id} type="button" disabled={modelBusy} aria-pressed={capStyle === cap.id}
+                      className={capStyle === cap.id ? 'active' : ''} onClick={() => setCapStyle(cap.id)}>{t(cap.nameTh, cap.nameEn)}</button>
+                  ))}
+                </div>
+              </details>
+            </>
+          ) : (
+            <div className="unit-toggle">
+              {TUBE_CAP_STYLES.map((cap) => {
+                const selected = cap.id === 'oval' ? capStyle === 'oval' : capStyle !== 'oval'
+                return <button key={cap.id} type="button" disabled={modelBusy} aria-pressed={selected}
+                  className={selected ? 'active' : ''} onClick={() => setCapStyle(cap.id)}>{t(cap.nameTh, cap.nameEn)}</button>
+              })}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  )
+
+  const stickerSettings = !readOnly && isSticker && (
+    <>
+      {isSticker && (
+        <Group title={t('ไดคัท', 'Die cut')} open={groups.label} onToggle={() => toggleGroup('label')}>
+          {/* รูปทรงไดคัท: รูปทรงพื้นฐาน (พอดีกรอบ W×H — ปรับกว้าง/สูงได้จากช่องขนาด) หรือ ตามรูปลาย */}
+          <div className="sticker-shapes" role="group" aria-label={t('รูปทรงไดคัท', 'Cut shape')}>
+            {STICKER_BASIC_SHAPES.map((sh) => {
+              const pts = stickerOutline(sh.id, 30, 30)
+              return (
+                <button
+                  key={sh.id}
+                  type="button"
+                  className={`sticker-shape${stickerCut.shape === sh.id ? ' active' : ''}`}
+                  aria-pressed={stickerCut.shape === sh.id}
+                  disabled={aiBusy}
+                  title={t(sh.nameTh, sh.nameEn)}
+                  onClick={() => setStickerCut({ ...stickerCut, shape: sh.id })}
+                >
+                  <svg viewBox="-3 -3 36 36" aria-hidden="true">
+                    <path d={`M ${pts.map((p) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' L ')} Z`} />
+                  </svg>
+                  <span>{t(sh.nameTh, sh.nameEn)}</span>
+                </button>
+              )
+            })}
+            <button
+              type="button"
+              className={`sticker-shape${stickerCut.shape === 'contour' ? ' active' : ''}`}
+              aria-pressed={stickerCut.shape === 'contour'}
+              disabled={aiBusy}
+              title={t('ตามรูป', 'Follow artwork')}
+              onClick={() => setStickerCut({ ...stickerCut, shape: 'contour' })}
+            >
+              <svg viewBox="-3 -3 36 36" aria-hidden="true">
+                <path d="M6 22 C2 14 8 4 15 7 C20 1 31 6 26 15 C31 22 22 31 15 26 C10 31 3 28 6 22 Z" strokeDasharray="3 2" />
+              </svg>
+              <span>{t('ตามรูป', 'Follow artwork')}</span>
+            </button>
+          </div>
+          {stickerCut.shape !== 'contour' && (
+            <p className="hint">
+              {t('ปรับกว้าง (W) × สูง (H) ได้ที่ช่องขนาด — วงกลมตั้ง W = H', 'Set width (W) × height (H) in the size panel — W = H for a circle')}
+            </p>
+          )}
+          {stickerCut.shape === 'contour' && (
+            <>
+              <div className="unit-toggle sticker-seg" role="group" aria-label={t('ขอบ', 'Border')}>
+                <button
+                  type="button"
+                  className={stickerCut.border === 'white' ? 'active' : ''}
+                  aria-pressed={stickerCut.border === 'white'}
+                  disabled={aiBusy}
+                  onClick={() => setStickerCut({ ...stickerCut, border: 'white' })}
+                >
+                  {t('มีขอบขาว', 'White border')}
+                </button>
+                <button
+                  type="button"
+                  className={stickerCut.border === 'none' ? 'active' : ''}
+                  aria-pressed={stickerCut.border === 'none'}
+                  disabled={aiBusy}
+                  onClick={() => setStickerCut({ ...stickerCut, border: 'none' })}
+                >
+                  {t('ไม่มีขอบขาว', 'No border')}
+                </button>
+              </div>
+              {stickerCut.border === 'white' && (
+                <DimField
+                  lengthUnit={unit}
+                  label={t('ความกว้างขอบขาว', 'Border width')}
+                  value={stickerCut.offset}
+                  min={STICKER_OFFSET_MIN}
+                  max={STICKER_OFFSET_MAX}
+                  disabled={aiBusy}
+                  onChange={(v) => setStickerCut({ ...stickerCut, offset: v })}
+                />
+              )}
+              <p className="hint">
+                {contourStatus === 'no-art'
+                  ? t(
+                      'ยังไม่มีลายบนแผ่น — วางรูป (แนะนำ PNG พื้นใส) หรือข้อความในแท็บตกแต่ง ระบบจะสร้างเส้นตัดตามรูปให้เอง ระหว่างนี้ใช้สี่เหลี่ยมไปก่อน',
+                      'No artwork yet — add an image (transparent PNG works best) or text in Decorate and the cut line will follow it; a rectangle is used meanwhile',
+                    )
+                  : contourStatus === 'pending'
+                    ? t('กำลังสร้างเส้นตัดตามรูป…', 'Tracing the cut line…')
+                    : contourStatus === 'empty'
+                      ? stickerCut.border === 'none'
+                        ? t(
+                            `ลายบางเกินไปสำหรับแบบไม่มีขอบขาว — ตัดเข้าเนื้อ ${NO_BORDER_INSET} มม. แล้วไม่เหลือชิ้นที่ตัดได้ (เส้นที่บางกว่า ~2 มม. หายหมด) ลองใช้แบบมีขอบขาว หรือขยาย/หนาลาย`,
+                            `Artwork too thin for no-border — after cutting ${NO_BORDER_INSET} mm inside nothing is left (strokes under ~2 mm vanish); use a white border or enlarge/thicken the art`,
+                          )
+                        : t('ลายเล็กเกินไป ไม่พบชิ้นที่ตัดได้ — ขยายลาย', 'Artwork too small to cut — enlarge it')
+                      : stickerCut.border === 'white'
+                    ? t(
+                        `เส้นตัดห่างขอบลาย ${stickerCut.offset} มม. รอบตัว (ขั้นต่ำ ${STICKER_RULES.minBorder} มม.) มุมโค้งมนให้ตัดสวย`,
+                        `Cut runs ${stickerCut.offset} mm outside the artwork (min ${STICKER_RULES.minBorder} mm), corners rounded`,
+                      )
+                    : t(
+                        `ตัดเข้าในเนื้อลาย ${NO_BORDER_INSET} มม. — สีจึงเลยเส้นตัดออกไปพอดีเงื่อนไขเผื่อสี ≥${STICKER_RULES.minBleed} มม. (ส่วนที่บางกว่า 2 มม. อาจหาย)`,
+                        `Cut sits ${NO_BORDER_INSET} mm inside the artwork so colour runs past it (bleed ≥${STICKER_RULES.minBleed} mm); parts thinner than 2 mm may drop out`,
+                      )}
+              </p>
+            </>
+          )}
+          <StickerIssues issues={stickerIssues} />
+        </Group>
+      )}
+
+      {isSticker && (
+        <Group title={t('แผ่นสติกเกอร์', 'Sticker sheet')} open={groups.label} onToggle={() => toggleGroup('label')}>
+          <div className="unit-toggle sticker-seg" role="group" aria-label={t('ขนาดแผ่น', 'Sheet size')}>
+            <button
+              type="button"
+              className={!stickerCut.sheet ? 'active' : ''}
+              aria-pressed={!stickerCut.sheet}
+              disabled={aiBusy}
+              onClick={() => updateSheet({ sheet: undefined, perSheet: undefined })}
+            >
+              {t('ดวงเดียว', 'Single')}
+            </button>
+            {STICKER_SHEETS.map((sh) => (
+              <button
+                key={sh.id}
+                type="button"
+                className={stickerCut.sheet === sh.id ? 'active' : ''}
+                aria-pressed={stickerCut.sheet === sh.id}
+                disabled={aiBusy}
+                onClick={() => updateSheet({ sheet: sh.id })}
+              >
+                {sh.nameTh}
+              </button>
+            ))}
+            <button
+              type="button"
+              className={stickerCut.sheet === 'custom' ? 'active' : ''}
+              aria-pressed={stickerCut.sheet === 'custom'}
+              disabled={aiBusy}
+              onClick={() => updateSheet({ sheet: 'custom' })}
+            >
+              {t('กำหนดเอง', 'Custom')}
+            </button>
+          </div>
+          {stickerCut.sheet === 'custom' && (
+            <>
+              <DimField
+                lengthUnit={unit}
+                label={t('กว้างแผ่น', 'Sheet width')}
+                value={stickerCut.sheetW ?? DEFAULT_CUSTOM_SHEET.w}
+                min={CUSTOM_SHEET_MIN}
+                max={CUSTOM_SHEET_MAX}
+                disabled={aiBusy}
+                onChange={(v) => updateSheet({ sheetW: v })}
+              />
+              <DimField
+                lengthUnit={unit}
+                label={t('ยาวแผ่น', 'Sheet height')}
+                value={stickerCut.sheetH ?? DEFAULT_CUSTOM_SHEET.h}
+                min={CUSTOM_SHEET_MIN}
+                max={CUSTOM_SHEET_MAX}
+                disabled={aiBusy}
+                onChange={(v) => updateSheet({ sheetH: v })}
+              />
+              <div className="sheet-presets">
+                {[
+                  { label: 'SRA3', w: 320, h: 450 },
+                  { label: 'SRA4', w: 225, h: 320 },
+                  { label: '13×19″', w: 330, h: 483 },
+                ].map((pz) => (
+                  <button
+                    key={pz.label}
+                    type="button"
+                    disabled={aiBusy}
+                    onClick={() => updateSheet({ sheetW: pz.w, sheetH: pz.h })}
+                  >
+                    {pz.label} <span>{pz.w}×{pz.h}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {stickerCut.sheet && (
+            <DimField
+              lengthUnit={unit}
+              label={t('ขอบแผ่น (ตามโรงพิมพ์)', 'Sheet margin (per printer)')}
+              value={sheetMargin}
+              min={0}
+              max={SHEET_MARGIN_MAX}
+              disabled={aiBusy}
+              onChange={(v) => updateSheet({ sheetMargin: v === SHEET_MARGIN ? undefined : v })}
+            />
+          )}
+          {stickerCut.sheet && (
+            <DimField
+              lengthUnit={unit}
+              label={t('ระยะห่างระหว่างดวง', 'Gap between stickers')}
+              value={sheetGap}
+              min={SHEET_GAP}
+              max={SHEET_GAP_MAX}
+              disabled={aiBusy}
+              onChange={(v) => updateSheet({ sheetGap: v === SHEET_GAP ? undefined : v })}
+            />
+          )}
+          {sheetLayout && (
+            <>
+              <div className="unit-toggle sticker-seg" role="group" aria-label={t('วิธีกำหนด', 'Sizing')}>
+                <button
+                  type="button"
+                  className={!stickerCut.perSheet ? 'active' : ''}
+                  aria-pressed={!stickerCut.perSheet}
+                  disabled={aiBusy}
+                  onClick={() => updateSheet({ perSheet: undefined })}
+                >
+                  {t('กำหนดขนาด', 'Set size')}
+                </button>
+                <button
+                  type="button"
+                  className={stickerCut.perSheet ? 'active' : ''}
+                  aria-pressed={!!stickerCut.perSheet}
+                  disabled={aiBusy}
+                  onClick={() => updateSheet({ perSheet: Math.max(1, sheetLayout.count || 1) })}
+                >
+                  {t('กำหนดจำนวน', 'Set count')}
+                </button>
+              </div>
+              {!!stickerCut.perSheet && (
+                <PerSheetField
+                  value={stickerCut.perSheet}
+                  disabled={aiBusy}
+                  onCommit={(n) => updateSheet({ perSheet: n })}
+                  label={t('จำนวนต่อแผ่น', 'Stickers per sheet')}
+                  unit={t('ดวง', 'pcs')}
+                />
+              )}
+              {perSheetErr && (
+                <div className="sticker-issues has-err" role="alert">
+                  {t(
+                    `ใส่ ${stickerCut.perSheet} ดวงไม่ได้ — ดวงจะเล็กกว่า ${STICKER_MIN_SIZE} มม. (หรือขอบขาวกว้างเกินช่อง) ลดจำนวน หรือเลือกแผ่นใหญ่ขึ้น`,
+                    `Can't fit ${stickerCut.perSheet} — stickers would be under ${STICKER_MIN_SIZE} mm (or the border is too wide); lower the count or pick a bigger sheet`,
+                  )}
+                </div>
+              )}
+              {!perSheetErr && !!stickerCut.perSheet && sheetLayout.count < stickerCut.perSheet && (
+                <div className="sticker-issues" role="alert">
+                  {t(
+                    `ตอนนี้ได้ ${sheetLayout.count} จาก ${stickerCut.perSheet} ดวง (ลายถูกแก้หลังจัดขนาด) — `,
+                    `Currently ${sheetLayout.count} of ${stickerCut.perSheet} fit (artwork changed after sizing) — `,
+                  )}
+                  <button type="button" className="link-btn" onClick={() => updateSheet({})}>
+                    {t('จัดขนาดใหม่', 'Resize again')}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+          {!sheetLayout ? (
+            <p className="hint">
+              {t(
+                'เลือกขนาดแผ่นเพื่อเรียงสติกเกอร์ดวงนี้ซ้ำเต็มแผ่นอัตโนมัติ (แบบแผ่นสติกเกอร์ไดคัท) — ไฟล์ส่งออกจะเป็นทั้งแผ่น',
+                'Pick a sheet size to repeat this sticker across a kiss-cut sheet automatically — exports become the whole sheet',
+              )}
+            </p>
+          ) : sheetLayout.count === 0 ? (
+            <div className="sticker-issues has-err" role="alert">
+              {t(
+                `ดวงใหญ่เกินแผ่น ${sheetLayout.sheet.nameTh} (${sheetLayout.sheet.w}×${sheetLayout.sheet.h} มม. เว้นขอบ ${sheetMargin} มม.) — ลดขนาดสติกเกอร์ ลดขอบแผ่น หรือเลือกแผ่นใหญ่ขึ้น`,
+                `Sticker is larger than ${sheetLayout.sheet.nameTh} (${sheetLayout.sheet.w}×${sheetLayout.sheet.h} mm, ${sheetMargin} mm margin) — shrink it, reduce the margin or pick a bigger sheet`,
+              )}
+            </div>
+          ) : (
+            <>
+              <StickerSheetPreview
+                layout={sheetLayout}
+                sheetDieline={exportDieline}
+                piece={dieline}
+                thumb={stickerThumb}
+                fillColor={fillImage ? null : fillColor}
+                watermark={watermark}
+              />
+              <div className="sheet-stats">
+                <b>
+                  {t(
+                    `${sheetLayout.count} ดวง/แผ่น ${sheetLayout.sheet.nameTh}`,
+                    `${sheetLayout.count} per ${sheetLayout.sheet.nameTh} sheet`,
+                  )}
+                </b>
+                <span>
+                  {t('ดวงละ', 'each')} {fmtMm(cutBox(dieline).x1 - cutBox(dieline).x0)}×
+                  {fmtMm(cutBox(dieline).y1 - cutBox(dieline).y0)} {t('มม.', 'mm')} · {sheetLayout.cols}×{sheetLayout.rows}
+                  {sheetLayout.rotated ? t(' · หมุน 90°', ' · rotated 90°') : ''}
+                  {sheetLayout.sheet.perA3 > 1 &&
+                    ' · ' +
+                      t(
+                        `A3 1 แผ่น = ${sheetLayout.sheet.perA3} แผ่น = ${sheetLayout.count * sheetLayout.sheet.perA3} ดวง`,
+                        `1 A3 = ${sheetLayout.sheet.perA3} sheets = ${sheetLayout.count * sheetLayout.sheet.perA3} stickers`,
+                      )}
+                </span>
+                <span>
+                  {t(
+                    `สั่ง ${qty.toLocaleString('th-TH')} ดวง → ${stickerSheetsNeeded(qty, sheetLayout.count).toLocaleString('th-TH')} แผ่น ${sheetLayout.sheet.nameTh}` +
+                      (sheetLayout.sheet.perA3 > 1
+                        ? ` (≈ ${Math.ceil(stickerSheetsNeeded(qty, sheetLayout.count) / sheetLayout.sheet.perA3).toLocaleString('th-TH')} แผ่น A3)`
+                        : ''),
+                    `${qty.toLocaleString('en-US')} stickers → ${stickerSheetsNeeded(qty, sheetLayout.count).toLocaleString('en-US')} ${sheetLayout.sheet.nameTh} sheets` +
+                      (sheetLayout.sheet.perA3 > 1
+                        ? ` (≈ ${Math.ceil(stickerSheetsNeeded(qty, sheetLayout.count) / sheetLayout.sheet.perA3).toLocaleString('en-US')} A3)`
+                        : ''),
+                  )}
+                </span>
+              </div>
+              <p className="hint">
+                {t(
+                  `เส้นตัดแต่ละดวงห่างกัน ${sheetGap} มม. (ขั้นต่ำ ${SHEET_GAP} มม. ตามโรงพิมพ์) · ห่างขอบแผ่น ${sheetMargin} มม. · ไฟล์ PDF/SVG/DXF ที่ดาวน์โหลดเป็นทั้งแผ่น`,
+                  `Cut lines ${sheetGap} mm apart (printer minimum ${SHEET_GAP} mm) · ${sheetMargin} mm from the sheet edge · PDF/SVG/DXF downloads contain the whole sheet`,
+                )}
+              </p>
+            </>
+          )}
+        </Group>
+      )}
+    </>
+  )
+
+  const pickBottleShape = (shape: 'round' | 'rect' | 'polygon') => {
+    setVesselPolygon(shape === 'polygon')
+    setRectDepth(shape === 'rect' ? rectDepth ?? defaultRectDepth(W, D) : undefined)
+  }
+  const v2LabelSettings = v2Model && vessel && !isTube && (() => {
+    const short = labelStyle === 'band' || labelStyle === 'neck'
+    const height = Math.round((vessel.labelY1 - vessel.labelY0) * 2) / 2
+    const lower = Math.ceil(vessel.labelRange[0] * 2) / 2
+    const upper = Math.max(lower, Math.floor((vessel.labelRange[1] - height) * 2) / 2)
+    const y = Math.round(vessel.labelY0 * 2) / 2
+    const placeLabel = (position: number) => setLabelBox((box) => ({ ...box, y: position, h: height }))
+    const selectLabel = (style: LabelStyle) => {
+      if (labelStyle === style) return
+      setLabelStyle(style)
+      setLabelBox((box) => box?.w === undefined ? undefined : { w: box.w })
+    }
+    const positions = [
+      { id: 'top', value: upper, label: t('ขอบบน', 'Top'), image: modelSizeAssets.labelTop },
+      { id: 'middle', value: Math.round(lower + upper) / 2, label: t('กึ่งกลาง', 'Center'), image: modelSizeAssets.labelMiddle },
+      { id: 'bottom', value: lower, label: t('ขอบล่าง', 'Bottom'), image: modelSizeAssets.labelBottom },
+    ]
+    const labelHeightControl = <DimField compact lengthUnit={unit} label={t('ความกว้างฉลาก', 'Label height')} value={height}
+      min={LABEL_MIN} max={Math.max(LABEL_MIN, Math.floor((vessel.labelRange[1] - vessel.labelRange[0]) * 2) / 2)}
+      disabled={modelBusy} onChange={(value) => setLabelBox((box) => ({ ...box, y, h: value }))} />
+    const rect = vessel.rect
+    return (
+      <section className="v2-model-section">
+        <h2>{t('รูปแบบฉลาก', 'Label style')}</h2>
+        <div className="v2-model-tiles v2-model-tiles--wide">
+          <ModelTile title={t('คลุมลำตัว', 'Full body')} image={modelSizeAssets.fullLabel} selected={!short}
+            disabled={modelBusy} onClick={() => { if (short) selectLabel('body') }} />
+          <ModelTile title={t('ครึ่งลำตัว', 'Half body')} image={modelSizeAssets.halfLabel} selected={short}
+            disabled={modelBusy} onClick={() => { if (!short) selectLabel('band') }} />
+        </div>
+        {short && labelHeightControl}
+        <DimField compact lengthUnit={unit} label={t('ความยาวฉลาก', 'Label length')}
+          value={vessel.labelArc >= 2 * Math.PI - 1e-9 ? Math.round(vessel.circ * 2) / 2 : vessel.label.width}
+          min={LABEL_MIN} max={Math.max(LABEL_MIN, Math.round(vessel.circ * 2) / 2)}
+          disabled={modelBusy} onChange={(value) => setLabelBox((box) => ({ ...box, w: value }))} />
+        {short && (
+          <>
+            <div className="v2-label-position">
+              <span>{t('ตำแหน่งฉลาก', 'Label position')}</span>
+              <div role="group" aria-label={t('จัดตำแหน่งฉลาก', 'Align label')}>
+                {positions.map(({ id, value, label, image }) => (
+                  <button key={id} type="button" aria-label={label} title={label} aria-pressed={y === value}
+                    disabled={modelBusy} onClick={() => placeLabel(value)}><img src={image} alt="" /></button>
+                ))}
+              </div>
+            </div>
+            <input type="range" className="v2-label-range" aria-label={t('ตำแหน่งฉลาก', 'Label position')}
+              min={lower} max={upper} step={0.5} value={y} disabled={modelBusy || upper === lower}
+              onChange={(event) => placeLabel(Number(event.target.value))} />
+          </>
+        )}
+        <details className="v2-model-more">
+          <summary>{t('รูปแบบฉลากเพิ่มเติม', 'More label styles')}</summary>
+          <div className="unit-toggle">
+            {LABEL_STYLES.filter(({ id }) => id === 'full' || id === 'neck').map(({ id, nameTh }) => (
+              <button key={id} type="button" aria-pressed={labelStyle === id} className={labelStyle === id ? 'active' : ''}
+                disabled={modelBusy} onClick={() => selectLabel(id)}>{nameTh}</button>
+            ))}
+          </div>
+          {!short && showNeck && <>
+            {labelHeightControl}
+            <DimField compact lengthUnit={unit} label={t('ตำแหน่งฉลาก', 'Label position')} value={y}
+              min={lower} max={upper} disabled={modelBusy || upper === lower} onChange={placeLabel} />
+          </>}
+          {rect && <div className="unit-toggle" role="group" aria-label={t('แบบฉลาก', 'Label coverage')}>
+            <button type="button" aria-pressed={vessel.labelArc >= 2 * Math.PI - 1e-9}
+              disabled={modelBusy} onClick={() => setLabelBox((box) => ({ ...box, w: undefined }))}>
+              {t('พันรอบ', 'Wrap-around')}
+            </button>
+            <button type="button" aria-pressed={vessel.labelArc < 2 * Math.PI - 1e-9}
+              disabled={modelBusy} onClick={() => setLabelBox((box) => ({
+                ...box, w: Math.floor((rect.polygon ? rect.a : 2 * (rect.a - rect.rc)) * 0.9 * 2) / 2,
+              }))}>
+              {t('หน้าเดียว', 'Front only')}
+            </button>
+          </div>}
+          {labelBox && <button type="button" className="link-btn" disabled={modelBusy} onClick={() => setLabelBox(undefined)}>
+            {t('กลับเป็นขนาดตามรูปแบบฉลาก', 'Reset to label style')}
+          </button>}
+        </details>
+      </section>
+    )
+  })()
+
+  const v2SizePanel = v2Model && (
+    <div className="v2-model-fields">
+      {showNeck && vessel ? (
+        <>
+          {capacityMl != null && <div className="v2-model-capacity">
+            {t('ความจุโดยประมาณ', 'Est. capacity')} <strong>{formatCapacity(capacityMl, imperial)}</strong>
+          </div>}
+          {canRectBottle(mat.id) && <section className="v2-model-section">
+            <h2>{t('ทรงขวด', 'Bottle shape')}</h2>
+            <div className="v2-model-tiles">
+              {([
+                ['round', t('ทรงกระบอก', 'Cylinder'), modelSizeAssets.cylinder, !vesselPolygon && rectDepth === undefined],
+                ['rect', t('ทรงเหลี่ยม', 'Rectangular'), modelSizeAssets.rectangle, !vesselPolygon && rectDepth !== undefined],
+                ['polygon', t('ทรงหลายเหลี่ยม', 'Hexagonal'), modelSizeAssets.polygon, vesselPolygon],
+              ] as const).map(([id, title, image, selected]) => (
+                <ModelTile key={id} title={title} image={image} selected={selected} disabled={modelBusy} onClick={() => pickBottleShape(id)} />
+              ))}
+            </div>
+          </section>}
+          <section className="v2-model-section">
+            <div className="v2-size-heading">
+              <h2>{t('ปรับแต่งบรรจุภัณฑ์', 'Adjust package')}</h2>
+              <select aria-label={t('หน่วยวัด', 'Unit')} value={unit} onChange={(event) => setUnit(event.target.value as typeof unit)}>
+                {LENGTH_UNITS.map((option) => <option key={option} value={option}>{t(unitLabelOf(option), option === 'in' ? 'inch' : option)}</option>)}
+              </select>
+            </div>
+            <h3>{t('ตัวขวด', 'Bottle body')}</h3>
+            <DimField compact lengthUnit={unit} label={t('ความกว้าง', 'Body width')} value={W} min={30} max={250} disabled={modelBusy} onChange={setW} />
+            <DimField compact lengthUnit={unit} label={t('ความยาว', 'Body height')} value={bodyH} min={Math.max(BODY_MIN, 30 - neckEff)}
+              max={300 - neckEff} disabled={modelBusy} onChange={setBodyH} />
+            {vessel.rect && !vesselPolygon && <DimField compact lengthUnit={unit} label={t('ความลึก', 'Body depth')}
+              value={Math.round(vessel.rect.b * 4) / 2} min={rectDepthMin(D)} max={RECT_DEPTH_MAX} disabled={modelBusy} onChange={setRectDepth} />}
+            <h3>{t('คอขวด', 'Bottle neck')}</h3>
+            <DimField compact lengthUnit={unit} label={t('ความกว้างคอขวด', 'Neck width')} value={D} min={20} max={150} disabled={modelBusy} onChange={setD} />
+            <DimField compact lengthUnit={unit} label={t('ความสูงคอขวด', 'Neck height')} value={neckEff} min={NECK_MIN}
+              max={Math.max(NECK_MIN, Math.min(150, 300 - bodyH))} disabled={modelBusy} onChange={setNeckLen} />
+          </section>
+          <section className="v2-model-section">
+            <h2>{t('ทรงไหล่', 'Shoulder shape')}</h2>
+            <div className="v2-model-tiles">
+              {([
+                ['flat', t('ตั้งฉาก', 'Square'), modelSizeAssets.squareShoulder],
+                ['slope', t('ลาดตรง', 'Sloped'), modelSizeAssets.straightShoulder],
+                ['round', t('โค้งมน', 'Rounded'), modelSizeAssets.roundShoulder],
+              ] as const).map(([id, title, image]) => (
+                <ModelTile key={id} title={title} image={image} selected={shoulderStyle === id} disabled={modelBusy} onClick={() => setShoulderStyle(id)} />
+              ))}
+            </div>
+            <DimField compact lengthUnit={unit} label={t('ความสูงไหล่', 'Shoulder height')} value={shoulderEff} min={SHOULDER_MIN}
+              max={shoulderMax(mat.id, bodyH)} disabled={modelBusy} onChange={setShoulderH} />
+          </section>
+        </>
+      ) : (
+        <>
+          {stickerSettings}
+          <div className="v2-size-host" ref={setSizeFloatEl} />
+        </>
+      )}
+      {v2LabelSettings}
+    </div>
+  )
+
   return (
     <LangCtx.Provider value={lang}>
-    <div className={`app${isV2 ? ' editor-v2' : ''}${isV2 && v2PanelClosed && !readOnly ? ' v2-panel-closed' : ''}${readOnly ? ' editor-readonly' : ''}`} data-editor-version={editorVersion}>
+    <div className={`app${isV2 ? ' editor-v2' : ''}${v2Model ? ' v2-model-workspace' : ''}${isV2 && v2PanelClosed && !readOnly ? ' v2-panel-closed' : ''}${readOnly ? ' editor-readonly' : ''}`} data-editor-version={editorVersion}>
       <header ref={headerRef} className={cloud ? 'with-plan' : undefined}>
         <h1>{isV2 && <img src={studioAssets.imgGroup} alt="" />}PackIt</h1>
         {onBackToProjects && <button type="button" className="editor-projects-link" disabled={projectBusy} onClick={onBackToProjects}>{t('งานของฉัน', 'My projects')}</button>}
@@ -3753,7 +4477,14 @@ export default function App({
         <aside ref={asideRef} className={isV2 ? 'v2-panel' : undefined} data-tool={readOnly ? sideTab : isV2 ? v2Tool : undefined}>
           {(!isV2 || readOnly) && renderStepTabs('aside-tabbar')}
           {isV2 && !readOnly && <button type="button" className="v2-panel-close" aria-label={t('ซ่อนแผงเครื่องมือ', 'Hide tools panel')} onClick={() => setV2PanelClosed(true)}>×</button>}
-          {isV2 && !readOnly && sideTab === 'design' && <div className="v2-size-host" ref={setSizeFloatEl} />}
+          {v2Model && (
+            <ModelPanel tab={modelTab} onTab={setModelTab} options={modelOptions} material={v2MaterialPanel}
+              size={v2SizePanel} disabled={modelBusy} onNext={() => {
+                if (modelTab === 'type') setModelTab('material')
+                else if (modelTab === 'material') setModelTab('size')
+                else chooseV2Tool('elements')
+              }} />
+          )}
           {isV2 && !readOnly && sideTab === 'artwork' && <>
             {v2Tool === 'elements' && <ElementLibrary disabled={aiBusy || projectBusy} onShape={addShape} onNutrition={addNutrition} onNext={() => chooseV2Tool('export')}
               onFreeShape={kind => { const deco = makeLibraryShape(dieline, kind); if (deco) { setDecos(ds => [...ds, deco]); setSelectedIds([deco.id]) } }} />}
@@ -3773,6 +4504,7 @@ export default function App({
 
           {!readOnly && sideTab === 'design' && (
           <>
+          {!v2Model && <>
           <Group title={t('ประเภทงาน', 'Job type')} open={groups.mode} onToggle={() => toggleGroup('mode')}>
             <div className="pick-list">
               <button
@@ -3981,20 +4713,7 @@ export default function App({
             onToggle={() => toggleGroup('mat')}
           >
             <div className="pick-list">
-              {MATERIALS.filter((m) => {
-                if (packKind(m) !== kind) return false
-                const sticker = m.id.startsWith('sticker-')
-                const tube = m.form === 'tube'
-                // นามบัตรใช้กระดาษการ์ดเท่านั้น (card-* + กระดาษกล่องเดิม — ไม่ใช่ลูกฟูก/พลาสติกใส/สติกเกอร์)
-                if (isCard) return CARD_STOCK_IDS.includes(m.id)
-                if (isSticker) return sticker // สติกเกอร์โชว์เฉพาะวัสดุสติกเกอร์
-                if (isTube) return tube // หลอดครีมโชว์เฉพาะวัสดุหลอด
-                // กล่อง/ภาชนะทั่วไปไม่ปนวัสดุสติกเกอร์/หลอด/กระดาษนามบัตร
-                return !sticker && !tube && !isCardMat(m)
-              })
-                // นามบัตร: เรียงตาม CARD_STOCK_IDS (กระดาษการ์ดโดยเฉพาะก่อน กระดาษกล่องท้ายรายการ)
-                .sort((a, b) => (isCard ? CARD_STOCK_IDS.indexOf(a.id) - CARD_STOCK_IDS.indexOf(b.id) : 0))
-                .map((m) => (
+              {modelMaterials.map((m) => (
                 <button
                   key={m.id}
                   className={`pick-item mat${materialId === m.id ? ' active' : ''}`}
@@ -4085,7 +4804,7 @@ export default function App({
                         disabled={aiBusy}
                         onClick={() => {
                           const rs = vessel.rect!
-                          setLabelBox((b) => ({ ...b, w: Math.floor(2 * (rs.a - rs.rc) * 0.9 * 2) / 2 }))
+                          setLabelBox((b) => ({ ...b, w: Math.floor((rs.polygon ? rs.a : 2 * (rs.a - rs.rc)) * 0.9 * 2) / 2 }))
                         }}
                       >
                         {t('หน้าเดียว', 'Front only')}
@@ -4184,325 +4903,10 @@ export default function App({
             </Group>
           )}
 
-          {isSticker && (
-            <Group title={t('ไดคัท', 'Die cut')} open={groups.label} onToggle={() => toggleGroup('label')}>
-              {/* รูปทรงไดคัท: รูปทรงพื้นฐาน (พอดีกรอบ W×H — ปรับกว้าง/สูงได้จากช่องขนาด) หรือ ตามรูปลาย */}
-              <div className="sticker-shapes" role="group" aria-label={t('รูปทรงไดคัท', 'Cut shape')}>
-                {STICKER_BASIC_SHAPES.map((sh) => {
-                  const pts = stickerOutline(sh.id, 30, 30)
-                  return (
-                    <button
-                      key={sh.id}
-                      type="button"
-                      className={`sticker-shape${stickerCut.shape === sh.id ? ' active' : ''}`}
-                      aria-pressed={stickerCut.shape === sh.id}
-                      disabled={aiBusy}
-                      title={t(sh.nameTh, sh.nameEn)}
-                      onClick={() => setStickerCut({ ...stickerCut, shape: sh.id })}
-                    >
-                      <svg viewBox="-3 -3 36 36" aria-hidden="true">
-                        <path d={`M ${pts.map((p) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' L ')} Z`} />
-                      </svg>
-                      <span>{t(sh.nameTh, sh.nameEn)}</span>
-                    </button>
-                  )
-                })}
-                <button
-                  type="button"
-                  className={`sticker-shape${stickerCut.shape === 'contour' ? ' active' : ''}`}
-                  aria-pressed={stickerCut.shape === 'contour'}
-                  disabled={aiBusy}
-                  title={t('ตามรูป', 'Follow artwork')}
-                  onClick={() => setStickerCut({ ...stickerCut, shape: 'contour' })}
-                >
-                  <svg viewBox="-3 -3 36 36" aria-hidden="true">
-                    <path d="M6 22 C2 14 8 4 15 7 C20 1 31 6 26 15 C31 22 22 31 15 26 C10 31 3 28 6 22 Z" strokeDasharray="3 2" />
-                  </svg>
-                  <span>{t('ตามรูป', 'Follow artwork')}</span>
-                </button>
-              </div>
-              {stickerCut.shape !== 'contour' && (
-                <p className="hint">
-                  {t('ปรับกว้าง (W) × สูง (H) ได้ที่ช่องขนาด — วงกลมตั้ง W = H', 'Set width (W) × height (H) in the size panel — W = H for a circle')}
-                </p>
-              )}
-              {stickerCut.shape === 'contour' && (
-                <>
-                  <div className="unit-toggle sticker-seg" role="group" aria-label={t('ขอบ', 'Border')}>
-                    <button
-                      type="button"
-                      className={stickerCut.border === 'white' ? 'active' : ''}
-                      aria-pressed={stickerCut.border === 'white'}
-                      disabled={aiBusy}
-                      onClick={() => setStickerCut({ ...stickerCut, border: 'white' })}
-                    >
-                      {t('มีขอบขาว', 'White border')}
-                    </button>
-                    <button
-                      type="button"
-                      className={stickerCut.border === 'none' ? 'active' : ''}
-                      aria-pressed={stickerCut.border === 'none'}
-                      disabled={aiBusy}
-                      onClick={() => setStickerCut({ ...stickerCut, border: 'none' })}
-                    >
-                      {t('ไม่มีขอบขาว', 'No border')}
-                    </button>
-                  </div>
-                  {stickerCut.border === 'white' && (
-                    <DimField
-                      lengthUnit={unit}
-                      label={t('ความกว้างขอบขาว', 'Border width')}
-                      value={stickerCut.offset}
-                      min={STICKER_OFFSET_MIN}
-                      max={STICKER_OFFSET_MAX}
-                      disabled={aiBusy}
-                      onChange={(v) => setStickerCut({ ...stickerCut, offset: v })}
-                    />
-                  )}
-                  <p className="hint">
-                    {contourStatus === 'no-art'
-                      ? t(
-                          'ยังไม่มีลายบนแผ่น — วางรูป (แนะนำ PNG พื้นใส) หรือข้อความในแท็บตกแต่ง ระบบจะสร้างเส้นตัดตามรูปให้เอง ระหว่างนี้ใช้สี่เหลี่ยมไปก่อน',
-                          'No artwork yet — add an image (transparent PNG works best) or text in Decorate and the cut line will follow it; a rectangle is used meanwhile',
-                        )
-                      : contourStatus === 'pending'
-                        ? t('กำลังสร้างเส้นตัดตามรูป…', 'Tracing the cut line…')
-                        : contourStatus === 'empty'
-                          ? stickerCut.border === 'none'
-                            ? t(
-                                `ลายบางเกินไปสำหรับแบบไม่มีขอบขาว — ตัดเข้าเนื้อ ${NO_BORDER_INSET} มม. แล้วไม่เหลือชิ้นที่ตัดได้ (เส้นที่บางกว่า ~2 มม. หายหมด) ลองใช้แบบมีขอบขาว หรือขยาย/หนาลาย`,
-                                `Artwork too thin for no-border — after cutting ${NO_BORDER_INSET} mm inside nothing is left (strokes under ~2 mm vanish); use a white border or enlarge/thicken the art`,
-                              )
-                            : t('ลายเล็กเกินไป ไม่พบชิ้นที่ตัดได้ — ขยายลาย', 'Artwork too small to cut — enlarge it')
-                          : stickerCut.border === 'white'
-                        ? t(
-                            `เส้นตัดห่างขอบลาย ${stickerCut.offset} มม. รอบตัว (ขั้นต่ำ ${STICKER_RULES.minBorder} มม.) มุมโค้งมนให้ตัดสวย`,
-                            `Cut runs ${stickerCut.offset} mm outside the artwork (min ${STICKER_RULES.minBorder} mm), corners rounded`,
-                          )
-                        : t(
-                            `ตัดเข้าในเนื้อลาย ${NO_BORDER_INSET} มม. — สีจึงเลยเส้นตัดออกไปพอดีเงื่อนไขเผื่อสี ≥${STICKER_RULES.minBleed} มม. (ส่วนที่บางกว่า 2 มม. อาจหาย)`,
-                            `Cut sits ${NO_BORDER_INSET} mm inside the artwork so colour runs past it (bleed ≥${STICKER_RULES.minBleed} mm); parts thinner than 2 mm may drop out`,
-                          )}
-                  </p>
-                </>
-              )}
-              <StickerIssues issues={stickerIssues} />
-            </Group>
-          )}
+          {stickerSettings}
+          </>}
 
-          {isSticker && (
-            <Group title={t('แผ่นสติกเกอร์', 'Sticker sheet')} open={groups.label} onToggle={() => toggleGroup('label')}>
-              <div className="unit-toggle sticker-seg" role="group" aria-label={t('ขนาดแผ่น', 'Sheet size')}>
-                <button
-                  type="button"
-                  className={!stickerCut.sheet ? 'active' : ''}
-                  aria-pressed={!stickerCut.sheet}
-                  disabled={aiBusy}
-                  onClick={() => updateSheet({ sheet: undefined, perSheet: undefined })}
-                >
-                  {t('ดวงเดียว', 'Single')}
-                </button>
-                {STICKER_SHEETS.map((sh) => (
-                  <button
-                    key={sh.id}
-                    type="button"
-                    className={stickerCut.sheet === sh.id ? 'active' : ''}
-                    aria-pressed={stickerCut.sheet === sh.id}
-                    disabled={aiBusy}
-                    onClick={() => updateSheet({ sheet: sh.id })}
-                  >
-                    {sh.nameTh}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className={stickerCut.sheet === 'custom' ? 'active' : ''}
-                  aria-pressed={stickerCut.sheet === 'custom'}
-                  disabled={aiBusy}
-                  onClick={() => updateSheet({ sheet: 'custom' })}
-                >
-                  {t('กำหนดเอง', 'Custom')}
-                </button>
-              </div>
-              {stickerCut.sheet === 'custom' && (
-                <>
-                  <DimField
-                    lengthUnit={unit}
-                    label={t('กว้างแผ่น', 'Sheet width')}
-                    value={stickerCut.sheetW ?? DEFAULT_CUSTOM_SHEET.w}
-                    min={CUSTOM_SHEET_MIN}
-                    max={CUSTOM_SHEET_MAX}
-                    disabled={aiBusy}
-                    onChange={(v) => updateSheet({ sheetW: v })}
-                  />
-                  <DimField
-                    lengthUnit={unit}
-                    label={t('ยาวแผ่น', 'Sheet height')}
-                    value={stickerCut.sheetH ?? DEFAULT_CUSTOM_SHEET.h}
-                    min={CUSTOM_SHEET_MIN}
-                    max={CUSTOM_SHEET_MAX}
-                    disabled={aiBusy}
-                    onChange={(v) => updateSheet({ sheetH: v })}
-                  />
-                  <div className="sheet-presets">
-                    {[
-                      { label: 'SRA3', w: 320, h: 450 },
-                      { label: 'SRA4', w: 225, h: 320 },
-                      { label: '13×19″', w: 330, h: 483 },
-                    ].map((pz) => (
-                      <button
-                        key={pz.label}
-                        type="button"
-                        disabled={aiBusy}
-                        onClick={() => updateSheet({ sheetW: pz.w, sheetH: pz.h })}
-                      >
-                        {pz.label} <span>{pz.w}×{pz.h}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-              {stickerCut.sheet && (
-                <DimField
-                  lengthUnit={unit}
-                  label={t('ขอบแผ่น (ตามโรงพิมพ์)', 'Sheet margin (per printer)')}
-                  value={sheetMargin}
-                  min={0}
-                  max={SHEET_MARGIN_MAX}
-                  disabled={aiBusy}
-                  onChange={(v) => updateSheet({ sheetMargin: v === SHEET_MARGIN ? undefined : v })}
-                />
-              )}
-              {stickerCut.sheet && (
-                <DimField
-                  lengthUnit={unit}
-                  label={t('ระยะห่างระหว่างดวง', 'Gap between stickers')}
-                  value={sheetGap}
-                  min={SHEET_GAP}
-                  max={SHEET_GAP_MAX}
-                  disabled={aiBusy}
-                  onChange={(v) => updateSheet({ sheetGap: v === SHEET_GAP ? undefined : v })}
-                />
-              )}
-              {sheetLayout && (
-                <>
-                  <div className="unit-toggle sticker-seg" role="group" aria-label={t('วิธีกำหนด', 'Sizing')}>
-                    <button
-                      type="button"
-                      className={!stickerCut.perSheet ? 'active' : ''}
-                      aria-pressed={!stickerCut.perSheet}
-                      disabled={aiBusy}
-                      onClick={() => updateSheet({ perSheet: undefined })}
-                    >
-                      {t('กำหนดขนาด', 'Set size')}
-                    </button>
-                    <button
-                      type="button"
-                      className={stickerCut.perSheet ? 'active' : ''}
-                      aria-pressed={!!stickerCut.perSheet}
-                      disabled={aiBusy}
-                      onClick={() => updateSheet({ perSheet: Math.max(1, sheetLayout.count || 1) })}
-                    >
-                      {t('กำหนดจำนวน', 'Set count')}
-                    </button>
-                  </div>
-                  {!!stickerCut.perSheet && (
-                    <PerSheetField
-                      value={stickerCut.perSheet}
-                      disabled={aiBusy}
-                      onCommit={(n) => updateSheet({ perSheet: n })}
-                      label={t('จำนวนต่อแผ่น', 'Stickers per sheet')}
-                      unit={t('ดวง', 'pcs')}
-                    />
-                  )}
-                  {perSheetErr && (
-                    <div className="sticker-issues has-err" role="alert">
-                      {t(
-                        `ใส่ ${stickerCut.perSheet} ดวงไม่ได้ — ดวงจะเล็กกว่า ${STICKER_MIN_SIZE} มม. (หรือขอบขาวกว้างเกินช่อง) ลดจำนวน หรือเลือกแผ่นใหญ่ขึ้น`,
-                        `Can't fit ${stickerCut.perSheet} — stickers would be under ${STICKER_MIN_SIZE} mm (or the border is too wide); lower the count or pick a bigger sheet`,
-                      )}
-                    </div>
-                  )}
-                  {!perSheetErr && !!stickerCut.perSheet && sheetLayout.count < stickerCut.perSheet && (
-                    <div className="sticker-issues" role="alert">
-                      {t(
-                        `ตอนนี้ได้ ${sheetLayout.count} จาก ${stickerCut.perSheet} ดวง (ลายถูกแก้หลังจัดขนาด) — `,
-                        `Currently ${sheetLayout.count} of ${stickerCut.perSheet} fit (artwork changed after sizing) — `,
-                      )}
-                      <button type="button" className="link-btn" onClick={() => updateSheet({})}>
-                        {t('จัดขนาดใหม่', 'Resize again')}
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-              {!sheetLayout ? (
-                <p className="hint">
-                  {t(
-                    'เลือกขนาดแผ่นเพื่อเรียงสติกเกอร์ดวงนี้ซ้ำเต็มแผ่นอัตโนมัติ (แบบแผ่นสติกเกอร์ไดคัท) — ไฟล์ส่งออกจะเป็นทั้งแผ่น',
-                    'Pick a sheet size to repeat this sticker across a kiss-cut sheet automatically — exports become the whole sheet',
-                  )}
-                </p>
-              ) : sheetLayout.count === 0 ? (
-                <div className="sticker-issues has-err" role="alert">
-                  {t(
-                    `ดวงใหญ่เกินแผ่น ${sheetLayout.sheet.nameTh} (${sheetLayout.sheet.w}×${sheetLayout.sheet.h} มม. เว้นขอบ ${sheetMargin} มม.) — ลดขนาดสติกเกอร์ ลดขอบแผ่น หรือเลือกแผ่นใหญ่ขึ้น`,
-                    `Sticker is larger than ${sheetLayout.sheet.nameTh} (${sheetLayout.sheet.w}×${sheetLayout.sheet.h} mm, ${sheetMargin} mm margin) — shrink it, reduce the margin or pick a bigger sheet`,
-                  )}
-                </div>
-              ) : (
-                <>
-                  <StickerSheetPreview
-                    layout={sheetLayout}
-                    sheetDieline={exportDieline}
-                    piece={dieline}
-                    thumb={stickerThumb}
-                    fillColor={fillImage ? null : fillColor}
-                    watermark={watermark}
-                  />
-                  <div className="sheet-stats">
-                    <b>
-                      {t(
-                        `${sheetLayout.count} ดวง/แผ่น ${sheetLayout.sheet.nameTh}`,
-                        `${sheetLayout.count} per ${sheetLayout.sheet.nameTh} sheet`,
-                      )}
-                    </b>
-                    <span>
-                      {t('ดวงละ', 'each')} {fmtMm(cutBox(dieline).x1 - cutBox(dieline).x0)}×
-                      {fmtMm(cutBox(dieline).y1 - cutBox(dieline).y0)} {t('มม.', 'mm')} · {sheetLayout.cols}×{sheetLayout.rows}
-                      {sheetLayout.rotated ? t(' · หมุน 90°', ' · rotated 90°') : ''}
-                      {sheetLayout.sheet.perA3 > 1 &&
-                        ' · ' +
-                          t(
-                            `A3 1 แผ่น = ${sheetLayout.sheet.perA3} แผ่น = ${sheetLayout.count * sheetLayout.sheet.perA3} ดวง`,
-                            `1 A3 = ${sheetLayout.sheet.perA3} sheets = ${sheetLayout.count * sheetLayout.sheet.perA3} stickers`,
-                          )}
-                    </span>
-                    <span>
-                      {t(
-                        `สั่ง ${qty.toLocaleString('th-TH')} ดวง → ${stickerSheetsNeeded(qty, sheetLayout.count).toLocaleString('th-TH')} แผ่น ${sheetLayout.sheet.nameTh}` +
-                          (sheetLayout.sheet.perA3 > 1
-                            ? ` (≈ ${Math.ceil(stickerSheetsNeeded(qty, sheetLayout.count) / sheetLayout.sheet.perA3).toLocaleString('th-TH')} แผ่น A3)`
-                            : ''),
-                        `${qty.toLocaleString('en-US')} stickers → ${stickerSheetsNeeded(qty, sheetLayout.count).toLocaleString('en-US')} ${sheetLayout.sheet.nameTh} sheets` +
-                          (sheetLayout.sheet.perA3 > 1
-                            ? ` (≈ ${Math.ceil(stickerSheetsNeeded(qty, sheetLayout.count) / sheetLayout.sheet.perA3).toLocaleString('en-US')} A3)`
-                            : ''),
-                      )}
-                    </span>
-                  </div>
-                  <p className="hint">
-                    {t(
-                      `เส้นตัดแต่ละดวงห่างกัน ${sheetGap} มม. (ขั้นต่ำ ${SHEET_GAP} มม. ตามโรงพิมพ์) · ห่างขอบแผ่น ${sheetMargin} มม. · ไฟล์ PDF/SVG/DXF ที่ดาวน์โหลดเป็นทั้งแผ่น`,
-                      `Cut lines ${sheetGap} mm apart (printer minimum ${SHEET_GAP} mm) · ${sheetMargin} mm from the sheet edge · PDF/SVG/DXF downloads contain the whole sheet`,
-                    )}
-                  </p>
-                </>
-              )}
-            </Group>
-          )}
-
-          {sizeFloatEl && createPortal(
+          {sizeFloatEl && (!v2Model || (modelTab === 'size' && !showNeck)) && createPortal(
           <Group
             title={
               kind === 'box'
@@ -4563,26 +4967,26 @@ export default function App({
                 <div className="unit-toggle" role="group" aria-label={t('ทรงขวด', 'Bottle shape')}>
                   <button
                     type="button"
-                    className={rectDepth === undefined ? 'active' : ''}
-                    aria-pressed={rectDepth === undefined}
+                    className={rectDepth === undefined && !vesselPolygon ? 'active' : ''}
+                    aria-pressed={rectDepth === undefined && !vesselPolygon}
                     disabled={aiBusy}
-                    onClick={() => setRectDepth(undefined)}
+                    onClick={() => { setRectDepth(undefined); setVesselPolygon(false) }}
                   >
                     {t('กลม', 'Round')}
                   </button>
                   <button
                     type="button"
-                    className={rectDepth !== undefined ? 'active' : ''}
-                    aria-pressed={rectDepth !== undefined}
+                    className={rectDepth !== undefined && !vesselPolygon ? 'active' : ''}
+                    aria-pressed={rectDepth !== undefined && !vesselPolygon}
                     disabled={aiBusy}
-                    onClick={() => setRectDepth((d) => d ?? defaultRectDepth(W, D))}
+                    onClick={() => { setVesselPolygon(false); setRectDepth((d) => d ?? defaultRectDepth(W, D)) }}
                   >
                     {t('เหลี่ยม', 'Rectangular')}
                   </button>
                 </div>
               </div>
             )}
-            {kind === 'vessel' && vessel?.rect && (
+            {kind === 'vessel' && vessel?.rect && !vesselPolygon && (
               <DimField
                 lengthUnit={unit}
                 label={t('ลึกขวด', 'Bottle depth')}
@@ -4976,14 +5380,14 @@ export default function App({
             sizeFloatEl,
           )}
 
-          <div className="step-nav">
+          {!v2Model && <div className="step-nav">
             <span className="step-saved">{t('✓ บันทึกงานอัตโนมัติ', '✓ Auto-saved')}</span>
             <div className="step-btns">
               <button className="step-next" onClick={() => goStep('artwork')}>
                 {t('ไปต่อ: ตกแต่ง →', 'Next: Decorate →')}
               </button>
             </div>
-          </div>
+          </div>}
           </>
           )}
 
@@ -6890,7 +7294,18 @@ export default function App({
             }}
           />
         )}
-        {switchGuard && <SwitchGuardModal onConfirm={() => startNewWork(switchGuard)} onCancel={() => setSwitchGuard(null)} />}
+        {switchGuard && (
+          <SwitchGuardModal variant={isV2 ? 'v2-switch' : 'v1'}
+            onConfirm={() => startNewWork(switchGuard)}
+            onReplace={isV2 ? () => replaceModel(switchGuard) : undefined}
+            onCancel={() => setSwitchGuard(null)} />
+        )}
+        {confirmNewProject && (
+          <SwitchGuardModal variant="v2-start" onCancel={() => setConfirmNewProject(false)} onConfirm={() => {
+            setConfirmNewProject(false)
+            promptNewProject()
+          }} />
+        )}
         {stageOpen && (
           <CopilotStage onClose={() => setStageOpen(false)} viewer={viewer3D} snapshots={artSnapshots} currentId={artCurrentId} onPick={pickArtSnapshot} />
         )}

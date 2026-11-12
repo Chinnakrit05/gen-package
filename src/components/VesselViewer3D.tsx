@@ -9,12 +9,13 @@ import { cameraPosition, vesselCameraFit } from './viewerCamera'
 import { safeCanvasEvents } from './safeCanvasEvents'
 import type { Material } from '../core/types'
 import {
+  bottleSectionPerimeter,
+  bottleSectionPoint,
   capShape,
   CORK_COLOR,
   defaultCapColor,
+  HEX_APOTHEM_RATIO,
   rectSectionAt,
-  roundedRectPerimeter,
-  roundedRectPoint,
   tubeSection,
   type CapStyle,
   type RectSection,
@@ -82,22 +83,24 @@ function labelTextureConfigure(vessel: Vessel, t: THREE.CanvasTexture) {
   t.wrapS = THREE.ClampToEdgeWrapping
 }
 
-// ขวดเหลี่ยม: ลำตัว loft ตามโปรไฟล์ขวดกลม — แต่ละแถวเป็นวงหน้าตัดสี่เหลี่ยมมุมมน (`rectSectionAt`) ไล่เป็นวงกลมที่คอ
+// ขวดเหลี่ยม: ลำตัว loft ตามโปรไฟล์ขวดกลม — หน้าตัดเหลี่ยมไล่เป็นวงกลมที่คอ
 // จุดในวงเรียงตามความยาวเส้นรอบรูปเริ่มกึ่งกลางด้านหลัง (รอยต่อ mesh อยู่บนหน้าแบนด้านหลัง ไม่เห็นเส้นเงา)
 export function rectBodyGeometry(profile: { x: number; y: number }[], rs: RectSection, N = 128): THREE.BufferGeometry {
+  // หกเหลี่ยมเริ่มที่กลางด้าน ใช้จำนวนช่วงหาร 12 ลงตัวเพื่อให้จุดตัวอย่างตรงมุมทุกมุม
+  const segments = rs.polygon ? Math.ceil(N / 12) * 12 : N
   const pos: number[] = []
   const idx: number[] = []
   for (const p of profile) {
     const s = rectSectionAt(rs, p.x, p.y)
-    const per = roundedRectPerimeter(s.a, s.b, s.rc)
-    for (let k = 0; k <= N; k++) {
-      const [x, z] = roundedRectPoint(s.a, s.b, s.rc, per / 2 + (per * k) / N)
+    const per = bottleSectionPerimeter(s)
+    for (let k = 0; k <= segments; k++) {
+      const [x, z] = bottleSectionPoint(s, per / 2 + (per * k) / segments)
       pos.push(x, p.y, z)
     }
   }
-  const stride = N + 1
+  const stride = segments + 1
   for (let i = 0; i < profile.length - 1; i++) {
-    for (let k = 0; k < N; k++) {
+    for (let k = 0; k < segments; k++) {
       const q = i * stride + k
       // หน้าสามเหลี่ยมหันออกนอก (s เดินไป +x ที่หน้าขวด: tangent × ขึ้น = +z)
       idx.push(q, q + 1, q + stride, q + 1, q + stride + 1, q + stride)
@@ -113,23 +116,36 @@ export function rectBodyGeometry(profile: { x: number; y: number }[], rs: RectSe
 // ฉลากบนขวดเหลี่ยม: แถบตามเส้นรอบรูปลำตัว (ลอยเหนือผิว 0.3 มม.) ยาว L = ความยาวที่หุ้มจริง จัดกึ่งกลางด้านหน้า —
 // พันรอบ (L = เส้นรอบรูป) รอยต่ออยู่กลางหลัง; u ไล่ซ้าย→ขวาเมื่อมองจากหน้า, v ล่าง→บน (ตรงกับ texture ฉลาก)
 export function rectLabelGeometry(rs: RectSection, y0: number, y1: number, L: number, lift = 0.3): THREE.BufferGeometry {
-  const a = rs.a + lift
-  const b = rs.b + lift
-  const rc = rs.rc + lift
-  // ผิวที่ลอยยาวกว่าผิวขวด 2π·lift — เดินตามสัดส่วน ไม่งั้นฉลากพันรอบเหลือช่องว่างที่รอยต่อหลัง ~2 มม.
-  const grow = roundedRectPerimeter(a, b, rc) / roundedRectPerimeter(rs.a, rs.b, rs.rc)
-  const NU = 2 * Math.max(12, Math.ceil(L / 3)) // จำนวนคู่ → กึ่งกลางหน้าเป็นจุดยอดพอดี (สมมาตรซ้าย-ขวา)
+  const surface = rs.polygon
+    ? { a: rs.a + lift / HEX_APOTHEM_RATIO, b: rs.b + lift, rc: 0, polygon: true }
+    : { a: rs.a + lift, b: rs.b + lift, rc: rs.rc + lift }
+  // เดินตามสัดส่วนเส้นรอบรูปใหม่ เพื่อให้ฉลากพันรอบปิดรอยต่อสนิท
+  const grow = bottleSectionPerimeter(surface) / bottleSectionPerimeter(rs)
+  const subdivisions = 2 * Math.max(12, Math.ceil(L / 3))
+  let columns: number[]
+  if (rs.polygon) {
+    // ให้ฉลากหักตรงมุมของแต่ละด้าน ไม่ตัดผ่านตัวขวดเมื่อวาดจากจุดบนคนละหน้า
+    columns = [0, 0.5, 1]
+    for (let corner = 0; corner < 6; corner++) {
+      const u = 0.5 + ((corner - 2.5) * rs.a) / L
+      if (u > 0 && u < 1) columns.push(u)
+    }
+    columns.sort((a, b) => a - b)
+  } else {
+    columns = Array.from({ length: subdivisions + 1 }, (_, k) => k / subdivisions)
+  }
   const pos: number[] = []
   const uv: number[] = []
   const idx: number[] = []
   for (const [y, v] of [[y0, 0], [y1, 1]] as const) {
-    for (let k = 0; k <= NU; k++) {
-      const [x, z] = roundedRectPoint(a, b, rc, (-L / 2 + (L * k) / NU) * grow)
+    for (const u of columns) {
+      const [x, z] = bottleSectionPoint(surface, (u - 0.5) * L * grow)
       pos.push(x, y, z)
-      uv.push(k / NU, v)
+      uv.push(u, v)
     }
   }
-  for (let k = 0; k < NU; k++) idx.push(k, k + 1, k + NU + 1, k + 1, k + NU + 2, k + NU + 1)
+  const stride = columns.length
+  for (let k = 0; k < stride - 1; k++) idx.push(k, k + 1, k + stride, k + 1, k + stride + 1, k + stride)
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
@@ -404,7 +420,7 @@ function VesselModel({
       {tube || vessel.rect ? (
         <mesh geometry={labelGeo}>
           {/* ขวดเหลี่ยม: หน้าเดียว (ด้านในฉลากไม่โผล่ผ่านแก้วใสเหมือนฉลากทรงกระบอก) */}
-          <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} {...finishMaterialProps(maps, 0.8, 0)} side={tube ? THREE.DoubleSide : THREE.FrontSide} />
+          <meshStandardMaterial ref={labelMatRef} map={tex} color={tex ? '#ffffff' : '#f5f2ea'} {...finishMaterialProps(maps, 0.8, 0)} side={tube ? THREE.DoubleSide : THREE.FrontSide} flatShading={vessel.rect?.polygon ?? false} />
         </mesh>
       ) : (
         <mesh geometry={labelGeo} position={[0, (vessel.labelY0 + vessel.labelY1) / 2, 0]} rotation={[0, Math.PI + vessel.labelRot, 0]}>
@@ -447,6 +463,7 @@ export function VesselViewer3D({
   watermark,
   capStyle,
   capColor,
+  transparentBackground = false,
   extra,
 }: {
   vessel: Vessel
@@ -460,6 +477,7 @@ export function VesselViewer3D({
   watermark?: string | null
   capStyle?: CapStyle
   capColor?: string | null
+  transparentBackground?: boolean
   extra?: ReactNode // ของเสริมใน <Canvas> (เช่นตัวถ่ายภาพย่อแกลเลอรี)
 }) {
   // ตำแหน่งแรกจาก Canvas; สลับขวด↔หลอด/ขนาดต่างมากโดยไม่ถอดหน้า 3D → FitViewerCamera จัดกล้องใหม่
@@ -472,7 +490,7 @@ export function VesselViewer3D({
       role="img"
       aria-label="มุมมอง 3 มิติของภาชนะพร้อมฉลาก"
     >
-      <color attach="background" args={['#ffffff']} />
+      {!transparentBackground && <color attach="background" args={['#ffffff']} />}
       <SceneLighting mode={lightMode ?? 'soft'} />
       <VesselModel vessel={vessel} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} lengthUnit={lengthUnit} watermark={watermark} capStyle={capStyle} capColor={capColor} />
       <OrbitControls makeDefault enableDamping />

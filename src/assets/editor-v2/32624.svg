@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icon.Button">
+<circle id="Ellipse 10" cx="12" cy="12" r="3" stroke-width="2" stroke="#154049"/>
+<path id="Vector 8" d="M5.5 18.5L6.375 17.625M9 15L8.125 15.875" stroke-width="2" stroke-linecap="round" stroke="#154049"/>
+<path id="Vector 10" d="M5.5 5.5L6.375 6.375M9 9L8.125 8.125" stroke-width="2" stroke-linecap="round" stroke="#154049"/>
+<path id="Vector 11" d="M15 15L15.875 15.875M18.5 18.5L17.625 17.625" stroke-width="2" stroke-linecap="round" stroke="#154049"/>
+<circle id="Ellipse 11" cx="3" cy="21" r="1" stroke-width="2" stroke="#154049"/>
+<circle id="Ellipse 12" cx="3" cy="3" r="1" stroke-width="2" stroke="#154049"/>
+<circle id="Ellipse 13" cx="21" cy="21" r="1" stroke-width="2" stroke="#154049"/>
+</g>
+</svg>

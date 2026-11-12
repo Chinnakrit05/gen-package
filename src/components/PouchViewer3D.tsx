@@ -1102,6 +1102,7 @@ export function PouchViewer3D({
   dimVariant,
   lightMode,
   watermark,
+  transparentBackground = false,
   extra,
 }: {
   pouch: Pouch
@@ -1114,6 +1115,7 @@ export function PouchViewer3D({
   dimVariant?: 'lines' | 'badge'
   lightMode?: LightMode
   watermark?: string | null
+  transparentBackground?: boolean
   extra?: ReactNode // ของเสริมใน <Canvas> (เช่นตัวถ่ายภาพย่อแกลเลอรี)
 }) {
   // ตำแหน่งแรกจาก Canvas (ถุงตั้ง/ก้น K หน้าตรง, แบบอื่นมุมเฉียง — ดู pouchCameraFit);
@@ -1126,7 +1128,7 @@ export function PouchViewer3D({
       role="img"
       aria-label="มุมมอง 3 มิติของถุงพร้อมลาย"
     >
-      <color attach="background" args={['#ffffff']} />
+      {!transparentBackground && <color attach="background" args={['#ffffff']} />}
       <SceneLighting mode={lightMode ?? 'soft'} />
       <PouchModel pouch={pouch} mat={mat} decos={decos} fillColor={fillColor} fillImage={fillImage} dims={dims} lengthUnit={lengthUnit} dimVariant={dimVariant} watermark={watermark} />
       <OrbitControls makeDefault enableDamping />

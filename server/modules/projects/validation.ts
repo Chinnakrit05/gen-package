@@ -224,6 +224,7 @@ export const cloudProjectDocumentSchema = z.object({
   labelStyle: z.enum(['body', 'full', 'band', 'neck']).optional(),
   neckH: finite.min(1).max(300).optional(),
   rectDepth: finite.min(1).max(300).optional(),
+  vesselPolygon: z.boolean().optional(),
   shoulderH: finite.min(1).max(300).optional(),
   shoulderStyle: z.enum(['round', 'slope', 'flat']).optional(),
   labelBox: z.object({

@@ -1,0 +1,131 @@
+.v2-work-dialog-overlay {
+  background: rgb(20 35 37 / 18%);
+  padding: 16px;
+}
+
+.modal.v2-work-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(313px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 24px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--v2-paper, white);
+  box-shadow: 0 4px 8px rgb(21 64 73 / 25%);
+  color: #000;
+}
+
+.v2-work-dialog h3 {
+  margin: 0;
+  color: inherit;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.v2-work-dialog p {
+  margin: 0;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.v2-work-dialog .modal-actions {
+  gap: 12px;
+  margin: 0;
+}
+
+.v2-work-dialog .modal-actions button {
+  flex: 1;
+  min-width: 0;
+  min-height: 35px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--v2-ink, #154049);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.v2-work-dialog .modal-actions .v2-work-dialog-secondary {
+  border-color: #5d848c;
+  background: var(--v2-paper, white);
+}
+
+.v2-work-dialog .modal-actions .v2-work-dialog-secondary:hover {
+  background: var(--accent-weak, #e7f4f7);
+}
+
+.v2-work-dialog .modal-actions .v2-work-dialog-primary {
+  background: #02c39a;
+  color: #fff;
+  font-weight: 700;
+}
+
+.v2-work-dialog .modal-actions .v2-work-dialog-primary:hover {
+  background: #00a896;
+}
+
+.modal.v2-work-dialog-switch {
+  width: min(545px, 100%);
+  gap: 36px;
+}
+
+.v2-work-dialog-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.v2-work-dialog-title-narrow {
+  display: none;
+}
+
+.v2-work-dialog-switch #switch-guard-question {
+  text-align: center;
+}
+
+.v2-work-dialog-switch .modal-actions button {
+  border-radius: 50px;
+}
+
+.v2-work-dialog-switch .modal-actions .v2-work-dialog-secondary {
+  order: -1;
+  border-color: var(--v2-ink, #154049);
+}
+
+.v2-work-dialog-switch .modal-actions .v2-work-dialog-primary {
+  color: #154049;
+}
+
+:root[data-theme='dark'] .v2-work-dialog {
+  color: var(--v2-ink, var(--text));
+}
+
+@media (max-width: 576px) {
+  .modal.v2-work-dialog-switch {
+    width: min(349px, 100%);
+    gap: 24px;
+    text-align: center;
+  }
+
+  .v2-work-dialog-title-wide {
+    display: none;
+  }
+
+  .v2-work-dialog-title-narrow {
+    display: inline;
+  }
+
+  .v2-work-dialog-switch .modal-actions {
+    flex-direction: column;
+  }
+
+  .v2-work-dialog-switch .modal-actions .v2-work-dialog-secondary {
+    order: 0;
+  }
+}

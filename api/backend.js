@@ -59593,6 +59593,7 @@ var cloudProjectDocumentSchema = external_exports.object({
   labelStyle: external_exports.enum(["body", "full", "band", "neck"]).optional(),
   neckH: finite.min(1).max(300).optional(),
   rectDepth: finite.min(1).max(300).optional(),
+  vesselPolygon: external_exports.boolean().optional(),
   shoulderH: finite.min(1).max(300).optional(),
   shoulderStyle: external_exports.enum(["round", "slope", "flat"]).optional(),
   labelBox: external_exports.object({

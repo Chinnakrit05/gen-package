@@ -295,6 +295,7 @@ interface ModelProps {
   lightMode?: LightMode
   // ลายน้ำพรีวิว (Freemium) ประทับบน texture ทั้งแผ่น — null/ไม่ส่ง = ไม่มี
   watermark?: string | null
+  transparentBackground?: boolean
   extra?: ReactNode // ของเสริมใน <Canvas> (เช่นตัวถ่ายภาพย่อแกลเลอรี)
 }
 
@@ -510,7 +511,7 @@ export function Viewer3D(props: ModelProps) {
       role="img"
       aria-label={card ? 'มุมมอง 3 มิติของนามบัตร (หมุนดูหน้า-หลังได้)' : 'มุมมอง 3 มิติของกล่องที่กำลังพับ'}
     >
-      <color attach="background" args={['#ffffff']} />
+      {!props.transparentBackground && <color attach="background" args={['#ffffff']} />}
       <SceneLighting mode={props.lightMode ?? 'soft'} />
       {card ? <CardModel {...props} /> : <FoldedModel {...props} />}
       <OrbitControls makeDefault enableDamping />

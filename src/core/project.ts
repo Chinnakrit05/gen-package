@@ -54,6 +54,7 @@ export interface Project {
   neckH?: number // ความสูงคอขวด มม. (เฉพาะโหมดภาชนะ; H = สูงรวม) — ไม่ใส่ = สัดส่วนมาตรฐานตามวัสดุ
   shoulderH?: number // ความสูงไหล่ มม. (อยู่ในความสูงตัว) — ไม่ใส่ = สัดส่วนมาตรฐานตามวัสดุ
   rectDepth?: number // ขวดเหลี่ยม: ความลึกลำตัว มม. (แก้ว/PET) — ไม่ใส่ = ขวดกลม
+  vesselPolygon?: boolean // ลำตัวขวดหกเหลี่ยม (แก้ว/PET)
   shoulderStyle?: ShoulderStyle // รูปทรงไหล่ — ไม่ใส่ = 'round'
   labelBox?: LabelBox // ฉลากกำหนดเอง (ขอบล่าง/สูง/ยาวรอบตัว มม., หมุนองศา) — เก็บเฉพาะคีย์ที่ตั้ง
   capStyle?: CapStyle // ฝาขวด (3D) — ไม่ใส่ = 'none'
@@ -176,6 +177,7 @@ export function parseProject(v: unknown, idx: number): Project | null {
     neckH: typeof o.neckH === 'number' && Number.isFinite(o.neckH) ? clamp(Math.round(o.neckH * 2) / 2, 1, 300) : undefined,
     shoulderH: typeof o.shoulderH === 'number' && Number.isFinite(o.shoulderH) ? clamp(Math.round(o.shoulderH * 2) / 2, 1, 300) : undefined,
     rectDepth: typeof o.rectDepth === 'number' && Number.isFinite(o.rectDepth) ? clamp(Math.round(o.rectDepth * 2) / 2, 10, 250) : undefined,
+    vesselPolygon: o.vesselPolygon === true ? true : undefined,
     labelBox: parseLabelBox(o.labelBox),
     capStyle:
       o.capStyle === 'oval' || CAP_STYLES.some((s) => s.id === o.capStyle && s.id !== 'none') ? (o.capStyle as CapStyle) : undefined,

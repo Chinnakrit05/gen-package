@@ -145,7 +145,7 @@ export interface Vessel {
   H: number
   tube?: TubeShape // มีเฉพาะหลอดครีม — บอก viewer ให้สร้างลำตัว loft บีบแบน
   tubeSheet?: TubeSheetMap // หลอดครีม: dieline = แผ่นพิมพ์เต็มรอบวง (รอยต่อขอบซ้าย/ขวา) → แม็พความสูงลงแผ่น
-  rect?: RectSection // ขวดเหลี่ยม (แก้ว/PET) — viewer สร้างลำตัว loft หน้าตัดสี่เหลี่ยมมุมมนแทนทรงหมุน
+  rect?: RectSection // ขวดเหลี่ยม (แก้ว/PET) — viewer สร้างลำตัว loft แทนทรงหมุน
 }
 
 // --- ขวดเหลี่ยม (สี่เหลี่ยมผืนผ้ามุมมน) ---
@@ -159,18 +159,23 @@ export interface RectSection {
   R: number // รัศมีโปรไฟล์ที่ลำตัว (= W/2) — อ้างอิงไล่หน้าตัดตามโปรไฟล์
   rn: number // รัศมีคอ — ไล่หน้าตัดจากลำตัว (R) ถึงคอ (rn)
   yn?: number // ความสูงโคนคอ — ตั้งแต่ระดับนี้ขึ้นไป (คอ/ขอบปาก/ปาก) กลมเสมอ แม้รัศมีขอบปากจะกว้างกว่าคอ
+  polygon?: boolean // หกเหลี่ยมด้านเท่า ครึ่งกว้าง a วัดถึงมุม และครึ่งลึก b วัดถึงด้านแบน
 }
+type BottleSection = Pick<RectSection, 'a' | 'b' | 'rc' | 'polygon'>
 export const RECT_BOTTLE_MATS = ['glass', 'pet-bottle']
 export const canRectBottle = (matId: string) => RECT_BOTTLE_MATS.includes(matId)
 export const RECT_CORNER = 0.22 // รัศมีมุมมน = สัดส่วนของด้านสั้นครึ่งหนึ่ง (ขวดเหลี่ยมทั่วไปมุมมนพอประมาณ)
 export const RECT_DEPTH_MAX = 250
+export const HEX_APOTHEM_RATIO = Math.sqrt(3) / 2
 export const rectDepthMin = (D: number) => Math.max(20, Math.min(Math.max(D / 2, 5) * 2 + 4, 250)) // ลึกพอให้คอผ่าน
 export const defaultRectDepth = (W: number, D: number) => Math.max(rectDepthMin(D), Math.round(W * 0.6))
 // หน้าตัดที่ระดับซึ่งโปรไฟล์ขวดกลมมีรัศมี r: ลำตัว (r = R) = สี่เหลี่ยมมุมมนเต็ม, คอ (r ≤ rn) = วงกลมรัศมี r
 // y = ความสูงของจุดบนโปรไฟล์ (ไม่ส่ง = ตัดสินจากรัศมีอย่างเดียว)
-export function rectSectionAt(s: RectSection, r: number, y?: number): { a: number; b: number; rc: number } {
+export function rectSectionAt(s: RectSection, r: number, y?: number): BottleSection {
   if (r <= s.rn + 1e-9 || (y !== undefined && s.yn !== undefined && y >= s.yn - 1e-9)) return { a: r, b: r, rc: r }
   const t = Math.min(1, (r - s.rn) / Math.max(1e-9, s.R - s.rn))
+  // หดแกนหกเหลี่ยมลงและเพิ่มรัศมีมุมระหว่างไหล่กับคอ จนหน้าตัดกลายเป็นวงกลม
+  if (s.polygon) return { a: s.a * t, b: s.b * t, rc: s.rn * (1 - t), polygon: true }
   const a = s.rn + (s.a - s.rn) * t
   const b = s.rn + (s.b - s.rn) * t
   return { a, b, rc: Math.min(a, b, s.rn + (s.rc - s.rn) * t) }
@@ -206,6 +211,42 @@ export function roundedRectPoint(a: number, b: number, rc: number, s: number): [
   if (d <= q) return arc(-sx, sz, -Math.PI, d)
   d -= q
   return [-sx + d, b]
+}
+
+export function bottleSectionPerimeter({ a, b, rc, polygon }: BottleSection): number {
+  return polygon ? 6 * a + 2 * Math.PI * rc : roundedRectPerimeter(a, b, rc)
+}
+
+export function bottleSectionArea({ a, b, rc, polygon }: BottleSection): number {
+  return polygon ? 3 * a * b + 6 * a * rc + Math.PI * rc ** 2 : roundedRectArea(a, b, rc)
+}
+
+// เดินจากกึ่งกลางด้านหน้าไปทางขวา โดยแต่ละด้านมีช่วงเส้นตรงและช่วงโค้งที่มุมถัดไป
+export function bottleSectionPoint(section: BottleSection, s: number): [number, number] {
+  const { a, b, rc, polygon } = section
+  if (!polygon) return roundedRectPoint(a, b, rc, s)
+  const perimeter = bottleSectionPerimeter(section)
+  if (perimeter <= 0) return [0, 0]
+
+  const turn = Math.PI / 3
+  const span = a + turn * rc
+  const d = ((s + a / 2) % perimeter + perimeter) % perimeter
+  const edge = Math.min(5, Math.floor(d / span))
+  const along = d - edge * span
+  const normal = Math.PI / 2 - edge * turn
+  if (along <= a || rc === 0) {
+    const start = normal + turn / 2
+    return [
+      a * Math.cos(start) + rc * Math.cos(normal) + along * Math.sin(normal),
+      a * Math.sin(start) + rc * Math.sin(normal) - along * Math.cos(normal),
+    ]
+  }
+  const end = normal - turn / 2
+  const angle = normal - (along - a) / rc
+  return [
+    a * Math.cos(end) + rc * Math.cos(angle),
+    a * Math.sin(end) + rc * Math.sin(angle),
+  ]
 }
 
 // ภาชนะ = พับไม่ได้ และไม่ใช่ถุงฟิล์ม (doypack) — ถุงเป็น path แยก
@@ -318,6 +359,7 @@ export interface VesselShape {
   label?: LabelBox
   capStyle?: CapStyle // ฝาที่เลือก — ฝาจีบเปลี่ยนขอบปากเป็น crown finish (วงแหวนเตี้ย)
   rectDepth?: number // ขวดเหลี่ยม: ความลึกลำตัว (มม.) — ไม่ใส่ = ขวดกลม; ใช้ได้เฉพาะแก้ว/PET (`canRectBottle`)
+  polygon?: boolean // ขวดหกเหลี่ยม — ใช้ได้เฉพาะแก้ว/PET
 }
 
 // เส้นไหล่จาก (R, s0) ถึงโคนคอ (rn, Hb) — ไม่รวมจุดเริ่ม
@@ -562,8 +604,9 @@ const mouthLip = (neck: number, H: number, rn: number, crown = false) =>
 export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelStyle = 'body', shape: VesselShape = {}): Vessel {
   const { W, D, H } = box
   const R = W / 2
+  const polygon = shape.polygon === true && canRectBottle(mat.id)
   // ปาก/คอต้องเล็กกว่าตัวเสมอ (กันผู้ใช้/AI ใส่ D เกิน W)
-  const rn = Math.min(Math.max(D / 2, 5), R * 0.9)
+  const rn = Math.min(Math.max(D / 2, 5), R * (polygon ? HEX_APOTHEM_RATIO : 0.9))
 
   const { pts, band, straight, mouth } = profileFor(mat.id, R, rn, H, shape)
   // ช่วงลำตัวตรง = ขอบเขตที่ฉลากติดได้จริง ใช้คำนวณรูปแบบฉลากแต่ละแบบ
@@ -605,18 +648,18 @@ export function generateVessel(box: BoxParams, mat: Material, labelStyle: LabelS
     labelY1 = labelY0 + hh
   }
 
-  // ขวดเหลี่ยม: หน้าตัดลำตัวสี่เหลี่ยมมุมมน (ลึกอย่างน้อยพอให้คอผ่าน)
-  const rsec: RectSection | undefined =
-    shape.rectDepth !== undefined && canRectBottle(mat.id)
-      ? (() => {
-          const b = Math.min(RECT_DEPTH_MAX, Math.max(rectDepthMin(D), shape.rectDepth)) / 2
-          // ขอบปากวงแหวนกว้างกว่าคอ — ถ้าไล่ตามรัศมีอย่างเดียวจะได้ปากเหลี่ยมนิด ๆ จึงล็อกกลมตั้งแต่โคนคอ
-          return { a: R, b, rc: RECT_CORNER * Math.min(R, b), R, rn, ...(mouth ? { yn: mouth.neckY } : {}) }
-        })()
-      : undefined
+  // ขอบปากวงแหวนอาจกว้างกว่าคอ จึงล็อกหน้าตัดให้กลมตั้งแต่โคนคอ
+  const sectionBase = { a: R, R, rn, ...(mouth ? { yn: mouth.neckY } : {}) }
+  let rsec: RectSection | undefined
+  if (polygon) {
+    rsec = { ...sectionBase, b: R * HEX_APOTHEM_RATIO, rc: 0, polygon: true }
+  } else if (shape.rectDepth !== undefined && canRectBottle(mat.id)) {
+    const b = Math.min(RECT_DEPTH_MAX, Math.max(rectDepthMin(D), shape.rectDepth)) / 2
+    rsec = { ...sectionBase, b, rc: RECT_CORNER * Math.min(R, b) }
+  }
 
   // --- dieline ฉลาก: พันรอบตัว = เส้นรอบวง (ขวดเหลี่ยม = เส้นรอบรูปจริงรวมมุมมน) + ระยะทับซ้อน / สั้นกว่า = ฉลากแผ่นหน้า ---
-  const circ = rsec ? roundedRectPerimeter(rsec.a, rsec.b, rsec.rc) : 2 * Math.PI * R
+  const circ = rsec ? bottleSectionPerimeter(rsec) : 2 * Math.PI * R
   // รัศมีเทียบเท่า (เส้นรอบวง ÷ 2π) — ให้ labelArc·labelR = ความยาวฉลากที่หุ้มจริง ใช้สูตรเดียวกันทั้งกลม/เหลี่ยม
   const labelR = circ / (2 * Math.PI)
   const h = labelY1 - labelY0

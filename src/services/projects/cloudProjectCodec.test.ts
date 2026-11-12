@@ -3,6 +3,7 @@ import type { ReadyAssetMetadata } from '../../../shared/contracts/assets'
 import type { CloudProject } from '../../../shared/contracts/projects'
 import type { Project } from '../../core/project'
 import { parseProjectFile } from '../../core/projectFile'
+import { cloudProjectDocumentSchema } from '../../../server/modules/projects/validation'
 import {
   CloudProjectCodecError,
   ProjectAssetSidecar,
@@ -130,6 +131,26 @@ function cloudProject(
 }
 
 describe('cloud/editor project codec', () => {
+  it('retains a hexagonal bottle through cloud validation, hydration, and portable export', async () => {
+    const workspaceId = crypto.randomUUID()
+    const sidecar = new ProjectAssetSidecar({ appUserId: crypto.randomUUID(), workspaceId })
+    const transfer = new FakeTransfer()
+    const base = fullProject()
+    const project: Project = {
+      ...base,
+      live: { ...base.live, materialId: 'glass', D: 28, handle: false },
+      vesselPolygon: true,
+      fillImage: null,
+      decos: [],
+    }
+    const encoded = await dehydrateProject({ project, workspaceId, sidecar, transfer })
+    const document = cloudProjectDocumentSchema.parse(encoded.document)
+    const cloud = cloudProject(project, { ...encoded, document }, workspaceId)
+    const exported = await serializeCloudProjectPortable({ cloudProject: cloud, sidecar, transfer })
+    const parsed = parseProjectFile(exported)
+    expect(parsed.ok && parsed.project.vesselPolygon).toBe(true)
+  })
+
   it('round-trips every editor field and replaces runtime sources with asset IDs', async () => {
     const workspaceId = crypto.randomUUID()
     const scope = { appUserId: crypto.randomUUID(), workspaceId }
