@@ -4250,6 +4250,9 @@ aside .art-actions .file-pick:only-child {
 .cp-history-tokens h3 { margin: 0 0 7px; font-size: 12px; }
 .cp-history-tokens p { margin: 0; font-size: inherit; }
 .cp-history-tokens .cp-history-token-total { color: var(--text); font-weight: 700; }
+.cp-history-cost { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.cp-history-cost dd { font-weight: 600; }
+.cp-history-cost p { margin: 5px 0 0; font-size: 11px; }
 .cp-history-more { width: 100%; margin-top: 10px; }
 .copilot-list { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 .cp-ai { display: flex; gap: 10px; align-items: flex-start; }

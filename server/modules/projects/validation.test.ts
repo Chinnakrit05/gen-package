@@ -94,6 +94,22 @@ describe('cloud project validation', () => {
     }).success).toBe(false)
   })
 
+  it('rejects panel anchors with nonpositive geometry, out-of-panel positions, or unknown fields', () => {
+    const panelAnchor = { panelId: 'front', panelW: 80, panelH: 120, u: 0.5, v: 0.2, scale: 1 }
+    const doc = (over: Record<string, unknown>) => ({
+      ...validDocument(),
+      decos: [{
+        id: 't1', type: 'text', text: 'Label', color: '#222222', size: 10, w: 30, x: 0, y: 0, rot: 0,
+        panelAnchor: { ...panelAnchor, ...over },
+      }],
+    })
+    expect(cloudProjectDocumentSchema.parse(doc({})).decos[0].panelAnchor).toEqual(panelAnchor)
+    expect(cloudProjectDocumentSchema.safeParse(doc({ panelW: 0 })).success).toBe(false)
+    expect(cloudProjectDocumentSchema.safeParse(doc({ scale: 0 })).success).toBe(false)
+    expect(cloudProjectDocumentSchema.safeParse(doc({ u: 1.1 })).success).toBe(false)
+    expect(cloudProjectDocumentSchema.safeParse(doc({ extra: true })).success).toBe(false)
+  })
+
   it('rejects history indexes and operation envelopes that are not exact', () => {
     expect(cloudProjectDocumentSchema.safeParse({ ...validDocument(), histIdx: 0 }).success).toBe(false)
     expect(createProjectInputSchema.safeParse({

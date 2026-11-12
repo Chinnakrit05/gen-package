@@ -26,7 +26,7 @@ export const CACHE_WRITE_MULTIPLIER = 1.25
 
 export const AI_MODEL_PRICES: Record<string, AiModelPrice> = {
   'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2 },
-  'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.2 },
+  'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.1 },
   'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheRead: 0.01, longPrompt: { above: 100_000, input: 0.5, output: 2.5 } },
   // รุ่นที่ server-side fallback ส่งต่อไปตอบแทนได้ — คิดตามรุ่นที่ตอบจริง
   'claude-opus-4-8': { input: 5, output: 25, cacheRead: 0.5 },

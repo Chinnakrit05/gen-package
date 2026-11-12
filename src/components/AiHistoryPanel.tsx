@@ -2,8 +2,8 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, RefreshCw } from 'lucide-react'
 import { Fragment } from 'react'
 import type { AiHistoryEntry, AiHistoryPage } from '../../shared/contracts/aiHistory'
-import { aiModelLabel } from '../../shared/contracts/aiModels'
-import { formatTokens } from '../core/aiUsage'
+import { aiModelLabel, aiRequestCostUsd, APPROX_THB_PER_USD } from '../../shared/contracts/aiModels'
+import { approxThb, formatTokens, formatUsd } from '../core/aiUsage'
 import { useT } from '../i18n'
 
 export interface AiHistorySource {
@@ -49,6 +49,15 @@ function AiHistoryItem({ item, clockFormat, timeFormat }: {
   const totalTokens = tokenRows.every(({ count }) => count != null)
     ? tokenRows.reduce((total, { count }) => total + (count ?? 0), 0)
     : null
+  const { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens } = item
+  const costUsd = item.status === 'succeeded' && item.model
+    && inputTokens != null && outputTokens != null && cacheReadTokens != null && cacheCreationTokens != null
+    ? aiRequestCostUsd(item.model, { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens })
+    : null
+  const cost = costUsd !== null && Number.isFinite(costUsd) ? {
+    usd: costUsd > 0 && costUsd < 0.0001 ? '< $0.0001' : formatUsd(costUsd),
+    thb: costUsd > 0 && costUsd * APPROX_THB_PER_USD < 0.01 ? '< ฿0.01' : `฿${approxThb(costUsd)}`,
+  } : null
 
   return (
     <li>
@@ -101,6 +110,18 @@ function AiHistoryItem({ item, clockFormat, timeFormat }: {
                 )}
               </dl>
             ) : <p>{unknown}</p>}
+          </div>
+          <div className="cp-history-cost">
+            <dl>
+              <dt>{t('ค่าใช้จ่าย API โดยประมาณ', 'Estimated API cost')}</dt>
+              <dd>{cost ? `${cost.usd} USD · ${cost.thb} THB` : t('ประมาณไม่ได้', 'Unavailable')}</dd>
+            </dl>
+            {cost && (
+              <p>{t(
+                `อิงโทเคนและรุ่นที่บันทึก · 1 USD ≈ ${APPROX_THB_PER_USD} บาท`,
+                `From recorded tokens and model · 1 USD ≈ ${APPROX_THB_PER_USD} THB`,
+              )}</p>
+            )}
           </div>
         </div>
       </details>

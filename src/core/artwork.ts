@@ -3,6 +3,15 @@ import { LETTER_SPACING_RANGE, TEXT_STRETCH_RANGE, TEXT_GRAD_PAINT, parseTextFx,
 export { TEXT_STROKE_MUL } from './textFx'
 import { finishDef, isFinishKind, printsCmyk, type FinishKind } from './finish'
 
+export interface ArtworkPanelAnchor {
+  panelId: string
+  panelW: number // ขนาดแผงตอนตั้งจุดอ้างอิง
+  panelH: number
+  u: number // จุดกึ่งกลางชิ้นงานเทียบกับแผง (0..1)
+  v: number
+  scale: number // ตัวคูณขนาดเทียบกับตอนตั้งจุดอ้างอิง
+}
+
 // องค์ประกอบที่แปะบนแผ่นคลี่ (เฟส A: พรีวิวบนจอเท่านั้น ยังไม่เข้าไฟล์ผลิต)
 //
 // พิกัดเก็บเป็น มม. บนแผ่นคลี่ชุดเดียวกับ dieline เพราะแผ่นคลี่ทำหน้าที่เป็น UV map
@@ -23,6 +32,7 @@ export interface BaseEl {
   flipY?: boolean // พลิกแนวตั้ง
   opacity?: number // ความทึบ 0..1 (ไม่ใส่ = 1 ทึบเต็ม)
   finish?: FinishKind // งานพิมพ์พิเศษ (ฟอยล์/Spot UV/ปั๊มนูน-จม) — ดู finish.ts
+  panelAnchor?: ArtworkPanelAnchor
 }
 
 export interface ImageEl extends BaseEl {
@@ -2067,10 +2077,23 @@ export async function renderArtworkAlpha(
 }
 
 // --- persistence ---
-function parseBase(
-  o: Record<string, unknown>,
-): { x: number; y: number; rot: number; hidden?: boolean; locked?: boolean; finish?: FinishKind } | null {
+function parsePanelAnchor(value: unknown): ArtworkPanelAnchor | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const { panelId, panelW, panelH, u, v, scale } = value as Record<string, unknown>
+  if (
+    typeof panelId !== 'string' || panelId.length === 0 || panelId.length > 100 ||
+    typeof panelW !== 'number' || !Number.isFinite(panelW) || panelW < 1e-6 || panelW > 1_000_000 ||
+    typeof panelH !== 'number' || !Number.isFinite(panelH) || panelH < 1e-6 || panelH > 1_000_000 ||
+    typeof u !== 'number' || !Number.isFinite(u) || u < 0 || u > 1 ||
+    typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1 ||
+    typeof scale !== 'number' || !Number.isFinite(scale) || scale < 1e-6 || scale > 1_000_000
+  ) return undefined
+  return { panelId, panelW, panelH, u, v, scale }
+}
+
+function parseBase(o: Record<string, unknown>): Omit<BaseEl, 'id'> {
   // กันเหนียว: พิกัด/มุมที่เพี้ยน (NaN/Infinity/หาย) → 0 แทนที่จะทิ้งทั้งชิ้นหรือปล่อยให้เรนเดอร์พัง
+  const panelAnchor = parsePanelAnchor(o.panelAnchor)
   return {
     x: finiteOr(o.x, 0),
     y: finiteOr(o.y, 0),
@@ -2085,6 +2108,7 @@ function parseBase(
       ? { opacity: Math.min(1, Math.max(0, Number(o.opacity))) }
       : {}),
     ...(isFinishKind(o.finish) ? { finish: o.finish } : {}),
+    ...(panelAnchor ? { panelAnchor } : {}),
   }
 }
 
@@ -2104,7 +2128,6 @@ export function parseDeco(v: unknown): Deco | null {
   if (typeof v !== 'object' || v === null) return null
   const o = v as Record<string, unknown>
   const base = parseBase(o)
-  if (!base) return null
   const id = typeof o.id === 'string' && o.id ? o.id : newId()
 
   // ข้อมูลรุ่นเก่า (โลโก้ชิ้นเดียว ไม่มี type) → ตีความเป็น image

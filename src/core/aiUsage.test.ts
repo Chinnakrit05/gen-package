@@ -14,6 +14,7 @@ describe('aiRequestCostUsd (ค่าใช้จ่ายต่อคำขอ�
 
   it('งานเดียวกันบน Sonnet 5.5 ครึ่งราคา และ Haiku 5.5 ถูกกว่า ~40 เท่า (ถ้าใช้โทเคนเท่ากัน)', () => {
     expect(aiRequestCostUsd('claude-sonnet-5-5', coldRun)).toBeCloseTo(0.144741, 6)
+    expect(aiRequestCostUsd('claude-sonnet-5-5', warmRun)).toBeCloseTo(0.112769, 6)
     expect(aiRequestCostUsd('claude-haiku-5-5', coldRun)).toBeCloseTo(0.00723705, 8)
   })
 

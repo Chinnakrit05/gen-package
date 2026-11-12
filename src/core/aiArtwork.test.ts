@@ -223,6 +223,26 @@ describe('compileArtworkPlan', () => {
     expect(parseDecos(out.decos)).toHaveLength(3)
   })
 
+  it('anchors the fitted logo to its panel and keeps the uploaded aspect when the plan requests stretching', () => {
+    const parsed = parseArtworkPlan(plan([
+      { type: 'image', panel: 'front', x: 10, y: 20, w: 20, h: 20, fit: 'stretch', src: 'asset:logo' },
+    ]))
+    if (!parsed.ok) throw new Error('parse')
+    const { decos } = compileArtworkPlan(parsed.plan, boxes, {
+      anchorPanels: true,
+      assets: { logo: { src: 'data:image/png;base64,AAAA', aspect: 2 } },
+    })
+    expect(decos).toEqual([
+      expect.objectContaining({
+        type: 'image', w: 20, h: 10, fit: 'contain',
+        panelAnchor: {
+          panelId: 'front', panelW: front.w, panelH: front.h,
+          u: 20 / front.w, v: 25 / front.h, scale: 1,
+        },
+      }),
+    ])
+  })
+
   it('checkArtworkPlan รายงานแผงที่ไม่มี และ estimateTextWidth ไม่นับสระบน/วรรณยุกต์', () => {
     const p = parseArtworkPlan(plan([{ type: 'text', panel: 'nope', x: 0, y: 0, text: 'x', size: 5, color: '#000000' }]))
     if (!p.ok) throw new Error('parse')

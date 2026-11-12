@@ -59445,6 +59445,7 @@ var color = external_exports.string().regex(/^#[0-9a-fA-F]{6}$/);
 var paint = external_exports.union([color, external_exports.literal("none")]);
 var shortId = external_exports.string().min(1).max(100);
 var optionalTrue = external_exports.literal(true).optional();
+var panelMeasure = finite.min(1e-6).max(1e6);
 var baseFields = {
   id: shortId,
   x: coordinate,
@@ -59457,7 +59458,15 @@ var baseFields = {
   flipX: external_exports.boolean().optional(),
   flipY: external_exports.boolean().optional(),
   opacity: finite.min(0).max(1).optional(),
-  finish: external_exports.enum(FINISHES.map((x) => x.id)).optional()
+  finish: external_exports.enum(FINISHES.map((x) => x.id)).optional(),
+  panelAnchor: external_exports.object({
+    panelId: shortId,
+    panelW: panelMeasure,
+    panelH: panelMeasure,
+    u: finite.min(0).max(1),
+    v: finite.min(0).max(1),
+    scale: panelMeasure
+  }).strict().optional()
 };
 var gradientSchema = external_exports.object({
   from: color,
@@ -61225,7 +61234,7 @@ var isAiModelChoice = (value) => AI_MODEL_CHOICES.some((choice) => choice.id ===
 var CACHE_WRITE_MULTIPLIER = 1.25;
 var AI_MODEL_PRICES = {
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2 },
-  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.2 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1 },
   "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01, longPrompt: { above: 1e5, input: 0.5, output: 2.5 } },
   // รุ่นที่ server-side fallback ส่งต่อไปตอบแทนได้ — คิดตามรุ่นที่ตอบจริง
   "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5 },

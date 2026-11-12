@@ -37,6 +37,14 @@ it('round-trips V2 text styling without losing artwork in older project files', 
 })
 
 describe('projectFile: round-trip', () => {
+  it('discards malformed panel anchoring without losing the artwork or its visible placement', () => {
+    const project = sampleProject()
+    const file = JSON.parse(serializeProject(project))
+    file.project.decos[0].panelAnchor = { panelId: 'front', panelW: 80, panelH: 120, u: 0.5, v: 0.2, scale: 0 }
+    const parsed = parseProjectFile(JSON.stringify(file))
+    expect(parsed.ok && parsed.project.decos).toEqual(project.decos)
+  })
+
   it('serialize → parse คืนค่าครบทุกฟิลด์ที่ผู้ใช้แก้', () => {
     const p = sampleProject()
     const res = parseProjectFile(serializeProject(p))

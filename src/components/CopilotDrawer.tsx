@@ -261,6 +261,7 @@ export function CopilotDrawer({
       measure: (txt, size, font, weight) => measureText(txt, size, font, weight),
       assets: logo ? { logo: logo.asset } : undefined,
       front,
+      anchorPanels: artwork.kind === 'box' && artwork.template === 'tuck-end',
     })
     if (!compiled.decos.length) throw new Error(t('AI ไม่ได้วางชิ้นงานบนแผงที่พิมพ์ได้เลย ลองใหม่', 'The AI placed nothing on a printable panel, please retry'))
     let { decos, fillImage } = compiled

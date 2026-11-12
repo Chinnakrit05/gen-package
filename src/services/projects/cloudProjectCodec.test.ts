@@ -157,17 +157,21 @@ describe('cloud/editor project codec', () => {
     const sidecar = new ProjectAssetSidecar(scope)
     const transfer = new FakeTransfer()
     const project = fullProject()
+    const panelAnchor = { panelId: 'front', panelW: 80, panelH: 120, u: 0.5, v: 0.2, scale: 0.75 }
+    project.decos[0] = { ...project.decos[0], panelAnchor }
 
     const dehydrated = await dehydrateProject({ project, workspaceId, sidecar, transfer })
+    const document = cloudProjectDocumentSchema.parse(dehydrated.document)
+    const cloud = cloudProject(project, { ...dehydrated, document }, workspaceId)
     expect(transfer.upload).toHaveBeenCalledTimes(2)
     expect(dehydrated.document.fillImage).toMatchObject({ assetId: expect.any(String), aspect: 1 })
     expect(dehydrated.document.fillImage).not.toHaveProperty('src')
-    expect(dehydrated.document.decos[0]).toMatchObject({ type: 'image', assetId: expect.any(String) })
+    expect(document.decos[0]).toMatchObject({ type: 'image', assetId: expect.any(String), panelAnchor })
     expect(dehydrated.document.decos[0]).not.toHaveProperty('src')
     expect(dehydrated.document.decos.slice(1)).toEqual(project.decos.slice(1))
 
     const hydrated = await hydrateProject({
-      cloudProject: cloudProject(project, dehydrated, workspaceId),
+      cloudProject: cloud,
       sidecar: new ProjectAssetSidecar(scope),
       transfer,
     })
@@ -186,6 +190,9 @@ describe('cloud/editor project codec', () => {
       history: project.history,
       histIdx: project.histIdx,
     })
+    const exported = await serializeCloudProjectPortable({ cloudProject: cloud, sidecar, transfer })
+    const parsed = parseProjectFile(exported)
+    expect(parsed.ok && parsed.project.decos[0].panelAnchor).toEqual(panelAnchor)
   })
 
   it('dedupes repeated sources and reuses a scoped sidecar snapshot', async () => {

@@ -10,6 +10,7 @@
 import type { Dieline } from './types'
 import type { Deco, FillImage, GradientDef, NutriRow, PathAnchor, ShapeKind, TextEl } from './artwork'
 import { FONTS } from './artwork'
+import { captureArtworkPanelAnchor } from './artworkResize'
 import { FINISHES, type FinishKind } from './finish'
 import { presetById, presetDataUrl, PRESETS } from './presets'
 import { TEXT_FX_KINDS, type TextFx, type TextFxKind } from './textFx'
@@ -673,6 +674,7 @@ export interface CompileArtworkOptions {
   assets?: Record<string, ArtAsset> // asset id → รูปที่ผู้ใช้อัปโหลด
   idPrefix?: string
   safe?: number
+  anchorPanels?: boolean
   // ภาชนะทรงกระบอก: ข้อความ/รูปที่กึ่งกลางอยู่ในช่วงนี้ถูกจำกัดความกว้างไม่เกินช่วง (ข้อความ: fitFrontText, รูป: ย่อเท่าช่วง)
   // รูปทรง/เส้นไม่ถูกจำกัด (แถบสี/ลายพื้นพันรอบได้)
   front?: ArtFrontZone | null
@@ -704,6 +706,7 @@ export function compileArtworkPlan(plan: ArtworkPlan, panels: PanelBox[], opts: 
       warnings.push({ severity: 'warning', code: 'glue-panel', index: i, message: `ชิ้นที่ ${i + 1}: วางบนปีกทากาว "${panel.id}" — ตัดทิ้ง` })
       return
     }
+    const addDeco = (deco: Deco) => decos.push(opts.anchorPanels ? captureArtworkPanelAnchor(deco, panel) : deco)
     // ระยะเว้นขอบ: แผงเล็ก (ลิ้น) เว้นน้อยลง; แถบสี/เส้น (shape, path) ชนขอบแผงได้ (ลายพื้นถึงรอยพับเป็นเรื่องปกติ)
     const safe = e.type === 'shape' || e.type === 'path' ? 0 : Math.min(opts.safe ?? ART_SAFE_MM, Math.max(0.5, Math.min(panel.w, panel.h) / 6))
     const box = { x0: panel.x0 + safe, y0: panel.y0 + safe, x1: panel.x1 - safe, y1: panel.y1 - safe }
@@ -781,23 +784,23 @@ export function compileArtworkPlan(plan: ArtworkPlan, panels: PanelBox[], opts: 
         ...(e.fx ? { fx: e.fx } : {}),
         ...(e.curve ? { curve: e.curve } : {}),
       }
-      decos.push(text)
+      addDeco(text)
       return
     }
     if (e.type === 'shape') {
       const pos = fit(e.w, e.h, panel.x0 + e.x, panel.y0 + e.y, () => {})
-      decos.push({ ...base, type: 'shape', shape: e.shape, x: pos.x, y: pos.y, w: pos.w, h: pos.h, fill: e.fill, stroke: e.stroke, strokeW: e.strokeW, ...(e.grad ? { grad: e.grad } : {}), ...(e.sides ? { sides: e.sides } : {}), ...(e.dash ? { dash: true } : {}) })
+      addDeco({ ...base, type: 'shape', shape: e.shape, x: pos.x, y: pos.y, w: pos.w, h: pos.h, fill: e.fill, stroke: e.stroke, strokeW: e.strokeW, ...(e.grad ? { grad: e.grad } : {}), ...(e.sides ? { sides: e.sides } : {}), ...(e.dash ? { dash: true } : {}) })
       return
     }
     if (e.type === 'path') {
       const pos = fit(e.w, e.h, panel.x0 + e.x, panel.y0 + e.y, () => {})
-      decos.push({ ...base, type: 'path', anchors: e.anchors, closed: e.closed, x: pos.x, y: pos.y, w: pos.w, h: pos.h, fill: e.fill, stroke: e.stroke, strokeW: e.strokeW, ...(e.grad ? { grad: e.grad } : {}), ...(e.dash ? { dash: true } : {}) })
+      addDeco({ ...base, type: 'path', anchors: e.anchors, closed: e.closed, x: pos.x, y: pos.y, w: pos.w, h: pos.h, fill: e.fill, stroke: e.stroke, strokeW: e.strokeW, ...(e.grad ? { grad: e.grad } : {}), ...(e.dash ? { dash: true } : {}) })
       return
     }
     if (e.type === 'nutrition') {
       const h = e.w * 1.2 * (e.scale ?? 1)
       const pos = fit(e.w, h, panel.x0 + e.x, panel.y0 + e.y, () => {})
-      decos.push({ ...base, type: 'nutrition', x: pos.x, y: pos.y, w: pos.w, serving: e.serving, servings: e.servings, energy: e.energy, ...(e.energyFat ? { energyFat: e.energyFat } : {}), rows: e.rows, vitamins: e.vitamins, footnote: e.footnote, ...(e.ink ? { ink: e.ink } : {}), ...(e.paper === false ? { paper: false } : {}), ...(e.scale ? { scale: e.scale } : {}) })
+      addDeco({ ...base, type: 'nutrition', x: pos.x, y: pos.y, w: pos.w, serving: e.serving, servings: e.servings, energy: e.energy, ...(e.energyFat ? { energyFat: e.energyFat } : {}), rows: e.rows, vitamins: e.vitamins, footnote: e.footnote, ...(e.ink ? { ink: e.ink } : {}), ...(e.paper === false ? { paper: false } : {}), ...(e.scale ? { scale: e.scale } : {}) })
       return
     }
     // image
@@ -806,8 +809,9 @@ export function compileArtworkPlan(plan: ArtworkPlan, panels: PanelBox[], opts: 
       warnings.push({ severity: 'warning', code: 'image-unresolved', index: i, message: `ชิ้นที่ ${i + 1}: หารูป "${e.src.slice(0, 40)}" ไม่พบ — ตัดทิ้ง` })
       return
     }
+    const keepLogoAspect = opts.anchorPanels && e.src === 'asset:logo'
     let w = e.w
-    let h = e.h ?? e.w / resolved.aspect
+    let h = keepLogoAspect ? e.w / resolved.aspect : e.h ?? e.w / resolved.aspect
     let left = panel.x0 + e.x
     const zone = frontZoneOf(panel.id)
     if (zone && e.x + w / 2 >= zone.x0 && e.x + w / 2 <= zone.x1 && w > zone.x1 - zone.x0) {
@@ -818,9 +822,9 @@ export function compileArtworkPlan(plan: ArtworkPlan, panels: PanelBox[], opts: 
       warnings.push({ severity: 'warning', code: 'front-fit', index: i, message: `ชิ้นที่ ${i + 1}: รูปกว้างเกินด้านหน้าที่อ่านได้ของภาชนะ — ย่อเหลือ ${Math.floor(k * 100)}%` })
     }
     const pos = fit(w, h, left, panel.y0 + e.y, () => {})
-    decos.push({
+    addDeco({
       ...base, type: 'image', src: resolved.src, aspect: resolved.aspect, x: pos.x, y: pos.y, w: pos.w, h: pos.h,
-      ...(e.fit ? { fit: e.fit } : {}),
+      ...(keepLogoAspect ? { fit: 'contain' as const } : e.fit ? { fit: e.fit } : {}),
       ...(e.radius ? { radius: e.radius } : {}),
       ...(e.circle ? { circle: true } : {}),
       ...(resolved.preset ? { preset: resolved.preset, presetColor: resolved.presetColor } : {}),
@@ -830,7 +834,7 @@ export function compileArtworkPlan(plan: ArtworkPlan, panels: PanelBox[], opts: 
   let fillImage: FillImage | null = null
   if (plan.background) {
     const clean = sanitizeSvg(plan.background)
-    if (clean) fillImage = { src: presetDataUrl(clean.svg), aspect: clean.aspect, fit: 'stretch' }
+    if (clean) fillImage = { src: presetDataUrl(clean.svg), aspect: clean.aspect, fit: opts.anchorPanels ? 'cover' : 'stretch' }
   }
   return { decos, fillColor: plan.fillColor, fillImage, warnings }
 }

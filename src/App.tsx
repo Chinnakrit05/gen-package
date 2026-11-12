@@ -20,7 +20,9 @@ import { LangCtx, loadLang, LANG_KEY, useT, type Lang } from './i18n'
 import { CARD_STOCK_IDS, DEFAULT_CARD_MAT, MATERIALS, getMaterial, isCardMat, packKind } from './core/materials'
 import { TEMPLATES, getTemplate } from './core/templates'
 import { TAPERED_LID_BOX_ID, taperedLidWidth } from './core/templates/taperedLidBox'
-import type { Dieline, Vec2 } from './core/types'
+import type { BoxParams, Dieline, Vec2 } from './core/types'
+import { ART_SAFE_MM, panelBoxes } from './core/aiArtwork'
+import { refreshArtworkPanelAnchors, resizePanelArtwork } from './core/artworkResize'
 import type { AiBoxSpec, ArtworkRequestInput, ArtworkResponse, CurrentSpec } from './core/ai'
 import { dielineDXFString } from './core/dxf'
 import { dimTextSize } from './core/templates/shared'
@@ -269,6 +271,7 @@ interface DimFieldProps {
   unit?: string
   step?: number
   onChange: (v: number) => void
+  onEditBoundary?: () => void
   // pop = แสดงเป็นปุ่มเล็ก คลิกแล้ว dropdown สไลเดอร์ลงมา (แบบ Canva) — ใช้ในแถบบน
   pop?: boolean
   compact?: boolean
@@ -443,7 +446,7 @@ function StickerIssues({ issues, okText }: { issues: IssueItem[]; okText?: [stri
   )
 }
 
-function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange, pop: popProp, icon, lengthUnit = 'mm', compact = false }: DimFieldProps) {
+function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0.5, onChange, onEditBoundary, pop: popProp, icon, lengthUnit = 'mm', compact = false }: DimFieldProps) {
   // ค่า state จริงเป็น มม. เสมอ (เรขาคณิตใช้ มม.) — ซม./นิ้วแค่แปลงตอนแสดง/ป้อน
   const converted = lengthUnit !== 'mm'
   const toDisp = (v: number) => (converted ? dimValue(v, lengthUnit) : v)
@@ -518,7 +521,10 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
       value={text}
       disabled={disabled}
       aria-label={label}
-      onFocus={() => setEditing(true)}
+      onFocus={() => {
+        onEditBoundary?.()
+        setEditing(true)
+      }}
       onChange={(e) => {
         setText(e.target.value)
         const n = Number(e.target.value)
@@ -528,6 +534,7 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
       onBlur={() => {
         setEditing(false)
         commit(toMm(Number(text))) // clamp ตอนออกจากช่อง (เป็น มม.)
+        onEditBoundary?.()
       }}
     />
   )
@@ -541,6 +548,12 @@ function DimField({ label, value, min, max, disabled, unit = 'มม.', step = 0
       disabled={disabled}
       aria-label={label}
       onChange={(e) => commit(Number(e.target.value))}
+      onPointerDown={onEditBoundary}
+      onPointerUp={onEditBoundary}
+      onPointerCancel={onEditBoundary}
+      onLostPointerCapture={onEditBoundary}
+      onKeyUp={onEditBoundary}
+      onBlur={onEditBoundary}
     />
   )
 
@@ -1721,7 +1734,7 @@ export default function App({
   const pickArtSnapshot = (id: string) => {
     const s = artSnapshots.find((x) => x.id === id)
     if (!s) return
-    setDecos(s.decos)
+    setDecos(artworkFollowsPanels ? resizePanelArtwork(s.decos, panelBoxes(dieline), ART_SAFE_MM) : s.decos)
     setFillColor(s.fillColor)
     setFillImage(s.fillImage)
     setArtCurrentId(id)
@@ -1914,6 +1927,7 @@ export default function App({
   // ข้ามการบันทึกลง undo หนึ่งครั้ง — ใช้ตอน apply undo/redo หรือสลับงาน (ไม่ใช่การแก้ของผู้ใช้)
   const skipCapture = useRef(false)
   const lastSnap = useRef<EditSnapshot | null>(null)
+  const resizingArtwork = useRef(false)
   const raf = useRef(0)
 
   const template = getTemplate(templateId)
@@ -1999,6 +2013,13 @@ export default function App({
           : pouch!.label,
     [W, D, H, handle, mat, template, vessel, pouch, kind, vents, isSticker, stickerLoops, stickerCut.shape],
   )
+  const artworkFollowsPanels = kind === 'box' && templateId === 'tuck-end'
+  const hasAnchoredArtwork = artworkFollowsPanels && decos.some((deco) => deco.panelAnchor)
+  const resizeArtworkForBox = (box: BoxParams, material = mat) => {
+    if (!hasAnchoredArtwork) return
+    const next = template.generate(box, material)
+    setDecos(resizePanelArtwork(decos, panelBoxes(next), ART_SAFE_MM))
+  }
   // ไดคัทตามรูปไม่ใช้เส้นเผื่อตัด 3 มม. แบบกล่อง — สติกเกอร์ใช้กติกาเผื่อสี/ระยะห่างของตัวเอง (ตรวจด้านล่าง)
   const guides = useMemo(
     () => (showGuides && dieline && !(isSticker && stickerLoops) ? computeGuides(dieline) : null),
@@ -2317,6 +2338,28 @@ export default function App({
     decos,
   })
 
+  const endSizeEdit = () => { resizingArtwork.current = false }
+  const changeDimension = (axis: 'W' | 'D' | 'H', value: number) => {
+    const box = { W, D, H, handle }
+    if (box[axis] === value) return
+    if (hasAnchoredArtwork) {
+      if (!resizingArtwork.current) {
+        const before = snapshot()
+        const recorded = lastSnap.current
+        // Preserve a preceding edit that is still waiting for the regular undo debounce.
+        const pending = recorded && !sameSnap(recorded, before) ? [recorded, before] : [before]
+        setUndoStack((stack) => [...stack, ...pending].slice(-50))
+        setRedoStack([])
+        resizingArtwork.current = true
+      }
+      skipCapture.current = true
+      resizeArtworkForBox({ ...box, [axis]: value })
+    }
+    if (axis === 'W') setW(value)
+    else if (axis === 'D') setD(value)
+    else setH(value)
+  }
+
   // เก็บสถานะตั้งต้นทันทีเพื่อให้ย้อนการแก้ครั้งแรกได้ ส่วนการลาก slider/ลากลายรอให้ค่านิ่งก่อนลง undo
   useEffect(() => {
     const cur = snapshot()
@@ -2338,6 +2381,7 @@ export default function App({
   }, [activeId, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, vesselPolygon, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
+    endSizeEdit()
     skipCapture.current = true
     setTemplateId(s.templateId)
     setMaterialId(s.materialId)
@@ -2483,6 +2527,7 @@ export default function App({
 
   const openProject = (p: Project) => {
     cancelAnimationFrame(raf.current)
+    endSizeEdit()
     // สลับงาน = ไม่ใช่การแก้ที่ควร undo — ล้างสแตกและข้ามการบันทึกครั้งนี้
     skipCapture.current = true
     setUndoStack([])
@@ -2719,6 +2764,9 @@ export default function App({
     cancelAnimationFrame(raf.current)
     // สลับวัสดุภาชนะ (PET ↔ แก้ว ↔ กระป๋อง) ตอนยังไม่เริ่มงาน → ขนาดมาตรฐานของวัสดุนั้น (ขวด 500 มล. ≠ กระป๋อง 330 มล.)
     const m = getMaterial(id)
+    if (hasAnchoredArtwork && id !== materialId && packKind(m) === 'box') {
+      resizeArtworkForBox({ W, D, H, handle }, m)
+    }
     if (id !== materialId && kind === 'vessel' && !isTube && packKind(m) === 'vessel' && m.form !== 'tube') {
       applyStdSize(standardSizeFor(id, pouchStyle, 'vessel'))
     }
@@ -3107,10 +3155,20 @@ export default function App({
     setSelectedIds([el.id])
   }
 
+  // อัปเดตจุดอ้างอิงแผงเมื่อผู้ใช้ย้ายหรือปรับขนาดเลเยอร์ด้วยมือ
+  const editDecos = (edit: (current: Deco[]) => Deco[]) => {
+    if (!hasAnchoredArtwork) {
+      setDecos(edit)
+      return
+    }
+    const panels = panelBoxes(dieline)
+    setDecos((current) => refreshArtworkPanelAnchors(current, edit(current), panels))
+  }
+
   // แก้เฉพาะชิ้นที่เลือก (ชิ้นเดียว) ผ่านฟังก์ชันแปลง (คงชนิด image/text ไว้)
   const patchSelected = (fn: (d: Deco) => Deco) => {
     if (!selectedId) return
-    setDecos((ds) => ds.map((d) => (d.id === selectedId ? fn(d) : d)))
+    editDecos((ds) => ds.map((d) => (d.id === selectedId ? fn(d) : d)))
   }
 
   // แก้แถวตารางโภชนาการทีละแถว (rows = สารอาหาร, vitamins = วิตามิน/แร่ธาตุ)
@@ -3136,7 +3194,7 @@ export default function App({
 
   // ลากชิ้น: ถ้าอยู่ในชุดเลือกหลายชิ้น ให้ย้ายทั้งชุดตามระยะเดียวกัน (ชิ้นที่ลากตรง snap)
   const moveDeco = (id: string, x: number, y: number) =>
-    setDecos((ds) => {
+    editDecos((ds) => {
       const g = ds.find((d) => d.id === id)
       if (!g) return ds
       const move = multi && selectedIds.includes(id) ? new Set(selectedIds) : new Set([id])
@@ -3146,7 +3204,7 @@ export default function App({
     })
 
   const rotateDeco = (id: string, deg: number) =>
-    setDecos((ds) => ds.map((d) => (d.id === id ? { ...d, rot: deg } : d)))
+    editDecos((ds) => ds.map((d) => (d.id === id ? { ...d, rot: deg } : d)))
 
   const removeDeco = (id: string) =>
     setDecos((ds) => {
@@ -3157,7 +3215,7 @@ export default function App({
   // ย่อ-ขยายจากมือจับมุม — DielineSVG ส่งกรอบใหม่ (x,y,w,h) มาให้ แล้วปรับตามชนิดชิ้น
   const r1 = (v: number) => Math.round(v * 10) / 10
   const resizeDeco = (id: string, x: number, y: number, w: number, h: number, anchor: ResizeAnchor) =>
-    setDecos((ds) =>
+    editDecos((ds) =>
       ds.map((d) => {
         if (d.id !== id) return d
         let next: Deco
@@ -3214,13 +3272,13 @@ export default function App({
   // จัดแนว: เลือกชิ้นเดียว = เทียบแผงหน้า; หลายชิ้น = เทียบกรอบรวมของสิ่งที่เลือก
   const alignSelected = (mode: AlignMode) => {
     if (!dieline || !selectedIds.length) return
-    if (multi) setDecos((ds) => alignInSelection(ds, selectedIds, mode))
+    if (multi) editDecos((ds) => alignInSelection(ds, selectedIds, mode))
     else patchSelected((d) => alignToFace(dieline, d, mode))
   }
 
   const distributeSelected = (axis: 'h' | 'v') => {
     if (selectedIds.length < 3) return
-    setDecos((ds) => distribute(ds, selectedIds, axis))
+    editDecos((ds) => distribute(ds, selectedIds, axis))
   }
 
   // จัดกลุ่ม/แยกกลุ่ม (groupId ร่วมกัน = เลือก/ย้ายพร้อมกัน)
@@ -3260,7 +3318,7 @@ export default function App({
       }
       return c
     })
-    setDecos((ds) => [...ds, ...copies])
+    editDecos((ds) => [...ds, ...copies])
     setSelectedIds(copies.map((c) => c.id))
   }
 
@@ -3271,14 +3329,14 @@ export default function App({
     if (!copies.length) return
     const gid = copies[0].groupId!
     const sel = new Set(selectedIds)
-    setDecos((ds) => [...ds.map((d) => (sel.has(d.id) ? { ...d, groupId: gid } : d)), ...copies])
+    editDecos((ds) => [...ds.map((d) => (sel.has(d.id) ? { ...d, groupId: gid } : d)), ...copies])
     setSelectedIds([...selectedIds, ...copies.map((c) => c.id)])
   }
 
   const nudgeSelected = (dx: number, dy: number) => {
     if (!selectedIds.length) return
     const move = new Set(decos.filter((d) => selectedIds.includes(d.id) && !d.locked).map((d) => d.id))
-    setDecos((ds) => ds.map((d) => (move.has(d.id) ? { ...d, x: d.x + dx, y: d.y + dy } : d)))
+    editDecos((ds) => ds.map((d) => (move.has(d.id) ? { ...d, x: d.x + dx, y: d.y + dy } : d)))
   }
 
   // จัดเลเยอร์: ลำดับใน decos = ลำดับวาด (ท้าย = หน้าสุด) — เลื่อนชิ้นที่เลือกขึ้นหน้า/ลงหลัง
@@ -4959,7 +5017,8 @@ export default function App({
               min={isSticker ? STICKER_MIN_SIZE : 30}
               max={250}
               disabled={aiBusy || perSheetLocked}
-              onChange={setW}
+              onChange={(value) => changeDimension('W', value)}
+              onEditBoundary={artworkFollowsPanels ? endSizeEdit : undefined}
             />
             {/* ขวดเหลี่ยม (แก้ว/PET): สลับทรงกลม/เหลี่ยม + ความลึกลำตัว (สี่เหลี่ยมผืนผ้า กว้าง W × ลึก) */}
             {kind === 'vessel' && canRectBottle(mat.id) && (
@@ -5029,7 +5088,8 @@ export default function App({
                 min={20}
                 max={150}
                 disabled={aiBusy}
-                onChange={setD}
+                onChange={(value) => changeDimension('D', value)}
+                onEditBoundary={artworkFollowsPanels ? endSizeEdit : undefined}
               />
             )}
             {showNeck ? (
@@ -5082,7 +5142,8 @@ export default function App({
                 min={isSticker ? STICKER_MIN_SIZE : 30}
                 max={300}
                 disabled={aiBusy || perSheetLocked}
-                onChange={setH}
+                onChange={(value) => changeDimension('H', value)}
+                onEditBoundary={artworkFollowsPanels ? endSizeEdit : undefined}
               />
             )}
             {perSheetLocked && (

@@ -18,6 +18,7 @@ const color = z.string().regex(/^#[0-9a-fA-F]{6}$/)
 const paint = z.union([color, z.literal('none')])
 const shortId = z.string().min(1).max(100)
 const optionalTrue = z.literal(true).optional()
+const panelMeasure = finite.min(1e-6).max(1_000_000)
 
 const baseFields = {
   id: shortId,
@@ -32,6 +33,14 @@ const baseFields = {
   flipY: z.boolean().optional(),
   opacity: finite.min(0).max(1).optional(),
   finish: z.enum(FINISHES.map((x) => x.id) as [FinishKind, ...FinishKind[]]).optional(),
+  panelAnchor: z.object({
+    panelId: shortId,
+    panelW: panelMeasure,
+    panelH: panelMeasure,
+    u: finite.min(0).max(1),
+    v: finite.min(0).max(1),
+    scale: panelMeasure,
+  }).strict().optional(),
 }
 
 const gradientSchema = z.object({
