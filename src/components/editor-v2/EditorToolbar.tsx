@@ -72,31 +72,82 @@ export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced,
   )
 }
 
+// ขนาดตัวอักษรสำเร็จรูปในรายการเลือก (มม.)
+const FONT_SIZE_PRESETS = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48, 60, 72]
+
 // ช่องขนาดตัวอักษร: เก็บข้อความที่กำลังพิมพ์แยกจากขนาดจริง — ลบจนว่าง/พิมพ์ "1" ก่อนจะเป็น "14" ได้
 // โดยข้อความบนแผ่นไม่หดตามตัวเลขครึ่งทาง; ใช้ค่าเมื่อกด Enter หรือออกจากช่อง, Esc = คืนค่าเดิม
+// คลิกช่อง 1 ครั้ง = เปิดรายการขนาด (เคอร์เซอร์อยู่ในช่อง พิมพ์ต่อได้), ดับเบิลคลิก = คลุมตัวเลขทั้งหมด + เปิดรายการ;
+// ปุ่ม − / + อยู่นอกคอมโพเนนต์นี้ จึงไม่เปิดรายการ
 function FontSizeInput({ label, value, disabled, onCommit }: { label: string; value: number; disabled: boolean; onCommit: (size: number) => void }) {
+  const t = useT()
   const [draft, setDraft] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  const list = useRef<HTMLUListElement>(null)
   const commit = () => {
     if (draft === null) return
     const n = Number(draft)
     if (draft.trim() !== '' && Number.isFinite(n)) onCommit(n)
     setDraft(null)
   }
+  useEffect(() => {
+    if (!open) return
+    const close = (event: PointerEvent) => { if (!box.current?.contains(event.target as Node)) setOpen(false) }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [open])
+  useEffect(() => { if (disabled) setOpen(false) }, [disabled])
+  // เปิดรายการแล้วเลื่อนให้ขนาดปัจจุบัน (หรือที่ใกล้สุด) อยู่ในมุมมอง
+  useEffect(() => {
+    if (!open || !list.current) return
+    const near = FONT_SIZE_PRESETS.reduce((b, s) => (Math.abs(s - value) < Math.abs(b - value) ? s : b), FONT_SIZE_PRESETS[0])
+    const item = list.current.querySelector<HTMLElement>(`[data-size="${near}"]`)
+    if (item) list.current.scrollTop = item.offsetTop - (list.current.clientHeight - item.offsetHeight) / 2
+  }, [open, value])
+  const pick = (size: number) => {
+    setDraft(null)
+    onCommit(size)
+    setOpen(false)
+  }
   return (
-    <input
-      type="number"
-      min="1"
-      max="400"
-      step="0.5"
-      aria-label={label}
-      disabled={disabled}
-      value={draft ?? value}
-      onChange={e => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={e => {
-        if (e.key === 'Enter') commit()
-        else if (e.key === 'Escape') setDraft(null)
-      }}
-    />
+    <div ref={box} className="v2-font-size-field">
+      <input
+        type="number"
+        min="1"
+        max="400"
+        step="0.5"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled}
+        value={draft ?? value}
+        onChange={e => setDraft(e.target.value)}
+        onClick={() => setOpen(true)}
+        onDoubleClick={e => { e.currentTarget.select(); setOpen(true) }}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { commit(); setOpen(false) }
+          else if (e.key === 'Escape') { setDraft(null); setOpen(false) }
+        }}
+      />
+      {open && (
+        <ul ref={list} className="v2-font-size-menu" role="listbox" aria-label={t('ขนาดตัวอักษร', 'Font sizes')}>
+          {FONT_SIZE_PRESETS.map(size => (
+            <li
+              key={size}
+              data-size={size}
+              role="option"
+              aria-selected={size === value}
+              // กันช่องเสียโฟกัส (ไม่งั้น blur จะ commit ตัวเลขที่พิมพ์ค้างก่อนค่าที่เลือก)
+              onPointerDown={e => e.preventDefault()}
+              onClick={() => pick(size)}
+            >
+              {size}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }

@@ -148,6 +148,11 @@
 .v2-font-size { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 9px; height: 28px; }
 .editor-v2 .v2-font-size input { width: 34px; height: 26px; border: 0; padding: 0; background: none; text-align: center; font-size: 13px; appearance: textfield; }
 .v2-font-size input::-webkit-inner-spin-button { appearance: none; }
+.v2-font-size-field { position: relative; display: flex; }
+.v2-font-size-menu { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 30; width: 64px; max-height: 236px; margin: 0; padding: 6px; list-style: none; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--v2-paper); box-shadow: 0 6px 24px #15404920; }
+.v2-font-size-menu li { padding: 7px 0; border-radius: 8px; text-align: center; font-size: 14px; color: var(--v2-ink); cursor: pointer; user-select: none; }
+.v2-font-size-menu li:hover { background: #f1f3f3; }
+.v2-font-size-menu li[aria-selected='true'] { background: var(--accent-weak); font-weight: 600; }
 .v2-toolbar-divider { flex: 0 0 1px; height: 24px; background: var(--border); }
 .v2-color { display: block; width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%; overflow: hidden; cursor: pointer; }
 .editor-v2 .v2-color input { padding: 0; border: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
