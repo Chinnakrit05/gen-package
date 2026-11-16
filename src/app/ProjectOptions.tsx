@@ -41,6 +41,10 @@ export function ProjectOptions({ name, disabled, disabledReason, onDelete }: Pro
       onBlur={(event) => {
         if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setOpen(false)
       }}
+      onMouseDown={(event) => {
+        // Safari can blur the focused action before delivering a mouse click on it.
+        if (open) event.preventDefault()
+      }}
       onKeyDown={(event) => {
         if (!open || event.key !== 'Escape') return
         event.stopPropagation()
