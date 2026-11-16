@@ -4,6 +4,7 @@ import type {
   DeleteProjectInput,
   DeleteReceipt,
 } from '../../../shared/contracts/projects'
+import { ApiClientError } from '../api/client'
 import {
   projectMutationKey,
   projectMutationScopeKey,
@@ -18,6 +19,9 @@ export interface DurableProjectMutationOptions {
   create(input: CreateProjectInput): Promise<CloudProject>
   remove(input: DeleteProjectInput): Promise<DeleteReceipt>
 }
+
+type MutationJournal = Pick<DurableProjectMutationOptions, 'scope' | 'store'>
+type DurableDeleteOptions = Pick<DurableProjectMutationOptions, 'scope' | 'store' | 'remove'>
 
 const activeMutations = new Map<string, Promise<unknown>>()
 
@@ -48,25 +52,14 @@ export async function executeDurableCreate(
 }
 
 export async function executeDurableDelete(
-  options: DurableProjectMutationOptions,
+  options: DurableDeleteOptions,
   input: DeleteProjectInput,
 ): Promise<DeleteReceipt> {
   const pending = (await options.store.list(options.scope)).find((record) => (
     record.kind === 'delete' && record.input.projectId === input.projectId
   )) as Extract<PersistedProjectMutation, { kind: 'delete' }> | undefined
-  if (pending) {
-    return coalesce(pending.key, async () => {
-      const result = await sendDelete(options, pending)
-      await options.store.delete(pending.key)
-      return result
-    })
-  }
-  const record = await persistMutation(options, 'delete', input)
-  return coalesce(record.key, async () => {
-    const result = await sendDelete(options, record)
-    await options.store.delete(record.key)
-    return result
-  })
+  const record = pending ?? await persistMutation(options, 'delete', input)
+  return coalesce(record.key, () => completeDelete(options, record))
 }
 
 export async function replayDurableProjectMutations(
@@ -85,8 +78,11 @@ export async function replayDurableProjectMutations(
       continue
     }
     await coalesce(record.key, async () => {
-      if (record.kind === 'create') created.push(await sendCreate(options, record))
-      else deleted.push(await sendDelete(options, record))
+      if (record.kind === 'delete') {
+        deleted.push(await completeDelete(options, record))
+        return
+      }
+      created.push(await sendCreate(options, record))
       await options.store.delete(record.key)
     })
     replayed += 1
@@ -95,17 +91,17 @@ export async function replayDurableProjectMutations(
 }
 
 async function persistMutation(
-  options: DurableProjectMutationOptions,
+  options: MutationJournal,
   kind: 'create',
   input: CreateProjectInput,
 ): Promise<Extract<PersistedProjectMutation, { kind: 'create' }>>
 async function persistMutation(
-  options: DurableProjectMutationOptions,
+  options: MutationJournal,
   kind: 'delete',
   input: DeleteProjectInput,
 ): Promise<Extract<PersistedProjectMutation, { kind: 'delete' }>>
 async function persistMutation(
-  options: DurableProjectMutationOptions,
+  options: MutationJournal,
   kind: PersistedProjectMutation['kind'],
   input: CreateProjectInput | DeleteProjectInput,
 ): Promise<PersistedProjectMutation> {
@@ -151,15 +147,25 @@ async function sendCreate(
   return result
 }
 
-async function sendDelete(
-  options: DurableProjectMutationOptions,
+async function completeDelete(
+  options: DurableDeleteOptions,
   record: Extract<PersistedProjectMutation, { kind: 'delete' }>,
 ): Promise<DeleteReceipt> {
   await incrementAttempts(options.store, record)
-  const result = await options.remove(structuredClone(record.input))
+  let result: DeleteReceipt
+  try {
+    result = await options.remove(structuredClone(record.input))
+  } catch (error) {
+    // The server rejected this exact revision. A new confirmation can use the latest revision.
+    if (error instanceof ApiClientError && error.code === 'REVISION_CONFLICT') {
+      await options.store.delete(record.key)
+    }
+    throw error
+  }
   if (result.operationId !== record.operationId || result.projectId !== record.input.projectId) {
     throw new Error('delete receipt ไม่ตรงกับ mutation ที่ส่ง')
   }
+  await options.store.delete(record.key)
   return result
 }
 

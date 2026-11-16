@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CloudProject, CreateProjectInput, DeleteProjectInput } from '../../../shared/contracts/projects'
+import { ApiClientError } from '../api/client'
 import {
   MemoryProjectMutationStore,
   projectMutationKey,
@@ -184,6 +185,34 @@ describe('durable project create/delete mutations', () => {
     await replayDurableProjectMutations(configured)
     expect(sent).toEqual([input, input])
     expect(await store.list(scope)).toEqual([])
+  })
+
+  it.each(['directly', 'on replay'])('allows a newly confirmed revision after a delete conflict %s', async (mode) => {
+    const store = new MemoryProjectMutationStore()
+    const stale: DeleteProjectInput = {
+      projectId: '40000000-0000-4000-8000-000000000001',
+      operationId: '50000000-0000-4000-8000-000000000001',
+      expectedRevision: 7,
+    }
+    const fresh = { ...stale, expectedRevision: 8, operationId: '50000000-0000-4000-8000-000000000002' }
+    const conflict = new ApiClientError(409, 'REVISION_CONFLICT', 'งานนี้ถูกแก้ไขจากอีกหน้าต่าง')
+    const remove = vi.fn(options(store).remove)
+    const deleteOptions = { scope, store, remove }
+
+    if (mode === 'on replay') {
+      remove.mockRejectedValueOnce(new TypeError('response lost'))
+      await expect(executeDurableDelete(deleteOptions, stale)).rejects.toThrow('response lost')
+      expect(await store.list(scope)).toHaveLength(1)
+      remove.mockRejectedValueOnce(conflict)
+      await expect(replayDurableProjectMutations(options(store, { remove }))).rejects.toBe(conflict)
+    } else {
+      remove.mockRejectedValueOnce(conflict)
+      await expect(executeDurableDelete(deleteOptions, stale)).rejects.toBe(conflict)
+    }
+
+    expect(await store.list(scope)).toEqual([])
+    await expect(executeDurableDelete(deleteOptions, fresh)).resolves.toMatchObject({ operationId: fresh.operationId, revision: 9 })
+    expect(remove.mock.calls).toEqual(mode === 'on replay' ? [[stale], [stale], [fresh]] : [[stale], [fresh]])
   })
 
   it('coalesces concurrent callers for the same durable operation', async () => {

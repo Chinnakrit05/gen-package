@@ -1,0 +1,107 @@
+.project-options {
+  position: absolute;
+  inset: 8px 8px auto;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.project-options[data-open] {
+  z-index: 3;
+}
+
+.project-options-trigger,
+.project-options-popover {
+  pointer-events: auto;
+}
+
+.project-options .project-options-trigger {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  min-height: 38px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-solid);
+  color: var(--text);
+}
+
+.project-options .project-options-trigger:hover,
+.project-options .project-options-trigger[aria-expanded='true'] {
+  border-color: var(--border-strong);
+  background: var(--bg-solid);
+}
+
+.project-options button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.project-options-popover {
+  position: absolute;
+  inset-block-start: calc(100% + 5px);
+  inset-inline-end: 0;
+  width: min(148px, 100%);
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-sm);
+}
+
+.project-options-popover button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 37px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #a62f3a;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: start;
+}
+
+[data-theme='dark'] .project-options-popover button {
+  color: var(--danger);
+}
+
+.project-options-popover button:not([aria-disabled='true']):hover {
+  background: var(--danger-bg);
+}
+
+.project-options-popover button[aria-disabled='true'] {
+  color: var(--text-3);
+  cursor: default;
+}
+
+.project-options-popover p {
+  margin: 0;
+  padding: 0 9px 6px;
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+@media (pointer: coarse) {
+  .project-options .project-options-trigger {
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .project-options-popover button {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 599px) {
+  .project-options-popover {
+    scroll-margin-block: 76px calc(76px + env(safe-area-inset-bottom));
+  }
+}

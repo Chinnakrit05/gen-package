@@ -1,17 +1,24 @@
 // /app/projects — รายการงานแบบแบ่งหน้า (1-A3) ห้าม import Editor/core engine/three/exporter
 // ใช้ summary + ภาพย่อตาม contract b-phase0-r1: หน้าละ 24, cursor opaque, batch ภาพย่อ ≤ 24 จับคู่ด้วย projectId
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router'
 import { ArrowRight, ArrowUpRight, Box, Check, FileText, Layers3, Plus, RefreshCw, ShieldCheck } from 'lucide-react'
 import { StudioShell } from './StudioShell'
-import type { ProjectSummary, ThumbnailKind } from '../../shared/contracts/projects'
+import { ProjectOptions } from './ProjectOptions'
+import type { ProjectPage, ProjectSummary, ThumbnailKind } from '../../shared/contracts/projects'
 import { marketplaceSuppliersEnabled } from '../config'
+import { deleteProjectConfirmText, designLicenseKnowledge } from '../core/designLicense'
 import { thumbNeedsFetch } from '../core/thumbnail'
 import { hasLegacyMigrationSource } from '../features/projects/legacyStorage'
-import { getProjectThumbnails, listProjects } from '../services/api/projects'
+import { getEntitlements } from '../services/api/billing'
+import { ApiClientError } from '../services/api/client'
+import { deleteProject, getProjectThumbnails, listProjects } from '../services/api/projects'
 import { IndexedDbCreateIntentStore, type CreateIntentRecord } from '../services/drafts/createIntentStore'
 import { getCloudDraftClientId, IndexedDbProjectDraftStore } from '../services/drafts/projectDraftStore'
+import { IndexedDbProjectMutationStore } from '../services/drafts/projectMutationStore'
+import { executeDurableDelete } from '../services/projects/durableProjectMutations'
+import { ProjectSyncChannel } from '../services/projects/projectSyncChannel'
 import { IndexedDbThumbStore, ThumbnailCache, base64ToBlob, cloudThumbnailScope } from '../services/thumbnails/thumbnailCache'
 import { useCloudSession } from './cloudSession'
 import { takeFlash } from './flash'
@@ -21,6 +28,7 @@ import './projects.css'
 const THUMB_BATCH = 24
 const LegacyMigrationFlow = lazy(() => import('../features/projects/LegacyMigrationFlow')
   .then((module) => ({ default: module.LegacyMigrationFlow })))
+const projectsKey = (appUserId: string, workspaceId: string) => ['cloud', appUserId, workspaceId, 'projects', { limit: PROJECT_PAGE_SIZE }] as const
 
 export function ProjectsPage() {
   const session = useCloudSession()
@@ -42,7 +50,7 @@ export function ProjectsPage() {
     }
   }, [])
 
-  const queryKey = useMemo(() => ['cloud', appUserId, workspaceId, 'projects', { limit: PROJECT_PAGE_SIZE }] as const, [appUserId, workspaceId])
+  const queryKey = useMemo(() => projectsKey(appUserId, workspaceId), [appUserId, workspaceId])
   // gcTime 0: กลับมาหน้านี้ (เช่นออกจาก Editor) เริ่มหน้าแรกใหม่ ไม่ refetch ทุกหน้าที่เคยโหลด (R1)
   const projects = useInfiniteQuery({
     queryKey,
@@ -68,6 +76,59 @@ export function ProjectsPage() {
   const thumbs = useThumbnails(appUserId, workspaceId, items, session)
   const pending = useLocalPending(appUserId, workspaceId, canCreate)
   const offlineDrafts = online ? [] : pending.localDrafts.filter((draft) => !items.some((item) => item.id === draft.id))
+  const mutationStore = useMemo(() => new IndexedDbProjectMutationStore(), [])
+  const deleteContext = useRef({ appUserId, workspaceId, canCreate, pending, mounted: false })
+  Object.assign(deleteContext.current, { appUserId, workspaceId, canCreate, pending })
+  useEffect(() => {
+    const context = deleteContext.current
+    context.mounted = true
+    return () => { context.mounted = false }
+  }, [])
+
+  const deletion = useMutation({
+    mutationFn: async ({ item, actorId }: { item: ProjectSummary; actorId: string }) => {
+      const allowed = () => {
+        const current = deleteContext.current
+        return current.mounted && current.appUserId === actorId && current.workspaceId === item.workspaceId
+          && current.canCreate && !current.pending.projectIds.has(item.id) && navigator.onLine
+      }
+      if (!allowed()) return false
+      const { apiBaseUrl, getAccessToken } = session
+      const entitlements = await getEntitlements(apiBaseUrl, getAccessToken(), item.workspaceId).catch(() => null)
+      if (!allowed()) return false
+      const license = designLicenseKnowledge(item.id, new Set(entitlements?.licensedProjectIds), true, entitlements !== null)
+      if (!window.confirm(deleteProjectConfirmText(item.name, license, (thai) => thai))) return false
+
+      const scope = { appUserId: actorId, workspaceId: item.workspaceId }
+      const receipt = await executeDurableDelete({
+        scope,
+        store: mutationStore,
+        remove: (input) => deleteProject(apiBaseUrl, getAccessToken(), input),
+      }, { projectId: item.id, operationId: crypto.randomUUID(), expectedRevision: item.revision })
+
+      const sync = new ProjectSyncChannel(scope, crypto.randomUUID())
+      sync.publish({ kind: 'deleted', projectId: receipt.projectId, revision: receipt.revision })
+      sync.close()
+      return true
+    },
+    onSuccess: async (deleted, { item, actorId }) => {
+      if (!deleted) return
+      const key = projectsKey(actorId, item.workspaceId)
+      await queryClient.cancelQueries({ queryKey: key })
+      queryClient.setQueryData<InfiniteData<ProjectPage>>(key, (data) => data && ({
+        ...data,
+        pages: data.pages.map((page) => ({ ...page, items: page.items.filter(({ id }) => id !== item.id) })),
+      }))
+      void queryClient.invalidateQueries({ queryKey: key })
+    },
+    onError: async (error, { item, actorId }) => {
+      if (error instanceof ApiClientError && (error.code === 'REVISION_CONFLICT' || error.status === 404)) {
+        await queryClient.invalidateQueries({ queryKey: projectsKey(actorId, item.workspaceId) })
+      }
+    },
+  })
+  const deletionItem = deletion.variables?.actorId === appUserId && deletion.variables.item.workspaceId === workspaceId
+    ? deletion.variables.item : undefined
 
   const changeWorkspace = (next: string) => {
     if (next === workspaceId) return
@@ -146,6 +207,11 @@ export function ProjectsPage() {
 
       <section className="projects-section">
         <div className="projects-section-heading"><div><h2>งานออกแบบทั้งหมด</h2><p>เปิดงานเพื่อออกแบบต่อ หรือเตรียมฉบับร่างขอราคา</p></div><div className="projects-list-actions"><button className="projects-refresh" onClick={refresh} disabled={!online || projects.isFetching}><RefreshCw size={14} aria-hidden="true" />รีเฟรช</button>{canMigrate && <button disabled={!online} onClick={() => setMigrationOpen(true)}>ย้ายงานเดิมขึ้น Cloud</button>}</div></div>
+        {deletionItem && deletion.isPending && <div className="projects-banner" role="status">กำลังจัดการงาน «{deletionItem.name}»…</div>}
+        {deletionItem && deletion.isSuccess && deletion.data && <div className="projects-banner" role="status">ลบงาน «{deletionItem.name}» แล้ว</div>}
+        {deletionItem && deletion.isError && <div className="projects-banner is-error" role="alert">
+          ลบงาน «{deletionItem.name}» ไม่สำเร็จ {deletion.error instanceof ApiClientError ? deletion.error.message : 'กรุณาลองอีกครั้ง'}
+        </div>}
         {!online && !projects.data ? (
           <div className="projects-empty" role="status">
             <p>ออฟไลน์ — ยังโหลดรายการงานไม่ได้</p>
@@ -170,32 +236,35 @@ export function ProjectsPage() {
             <div className="projects-grid">
               {items.map((item) => {
                 const awaitingSave = pending.projectIds.has(item.id)
-                const card = (
-                  <button key={item.id} className="project-card" onClick={() => navigate(`/editor/${item.id}`)}>
-                    <div className="project-thumb"><span className="project-card-arrow"><ArrowUpRight size={15} /></span>
-                      {thumbs.url(item.id) ? <img src={thumbs.url(item.id)} alt="" /> : <KindIcon kind={item.thumbnail?.kind} />}
-                    </div>
-                    <div className="project-meta">
-                      <span className="project-name">{item.name}</span>
-                      <span className="project-sub">
-                        {item.thumbnail?.label ? `${item.thumbnail.label} · ` : ''}{formatUpdated(item.updatedAt)}
-                      </span>
-                    </div>
-                    {awaitingSave && <span className="project-badge">รอส่ง</span>}
-                  </button>
-                )
-                if (!showQuoteRequests) return card
+                const deleteDisabledReason = !online ? 'เชื่อมต่ออินเทอร์เน็ตเพื่อลบงาน'
+                  : awaitingSave ? 'เปิดงานและบันทึกการแก้ไขที่ค้างไว้ก่อนลบ'
+                  : deletion.isPending ? 'กำลังจัดการงานอื่นอยู่' : undefined
                 return (
                   <div key={item.id} className="project-card-with-action" role="group" aria-label={item.name}>
-                    {card}
-                    <button
+                    <button type="button" className="project-card" disabled={deletion.isPending && deletionItem?.id === item.id} onClick={() => navigate(`/editor/${item.id}`)}>
+                      <div className="project-thumb">
+                        {!canCreate && <span className="project-card-arrow"><ArrowUpRight size={15} /></span>}
+                        {thumbs.url(item.id) ? <img src={thumbs.url(item.id)} alt="" /> : <KindIcon kind={item.thumbnail?.kind} />}
+                      </div>
+                      <div className="project-meta">
+                        <span className="project-name">{item.name}</span>
+                        <span className="project-sub">
+                          {item.thumbnail?.label ? `${item.thumbnail.label} · ` : ''}{formatUpdated(item.updatedAt)}
+                        </span>
+                      </div>
+                      {awaitingSave && <span className="project-badge">รอส่ง</span>}
+                    </button>
+                    {canCreate && <ProjectOptions name={item.name} disabled={Boolean(deleteDisabledReason)} disabledReason={deleteDisabledReason}
+                      onDelete={() => deletion.mutate({ item, actorId: appUserId })} />}
+                    {showQuoteRequests && <button
+                      className="project-quote-action"
                       type="button"
-                      disabled={!online || awaitingSave}
+                      disabled={!online || awaitingSave || (deletion.isPending && deletionItem?.id === item.id)}
                       title={awaitingSave ? 'รอให้งานบันทึกขึ้น Cloud ก่อน' : undefined}
                       onClick={() => void navigate(`/app/requests/new?projectId=${encodeURIComponent(item.id)}`)}
                     >
                       <FileText size={14} aria-hidden="true" />สร้างฉบับร่างขอราคา <ArrowRight size={14} aria-hidden="true" />
-                    </button>
+                    </button>}
                   </div>
                 )
               })}
