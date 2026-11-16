@@ -3,8 +3,9 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router'
-import { ArrowRight, ArrowUpRight, Box, Check, FileText, Layers3, Plus, RefreshCw, ShieldCheck } from 'lucide-react'
+import { ArrowUpRight, Box, ChevronRight, Factory, FilePlus2, Files, History, Plus, RefreshCw, Truck, UploadCloud } from 'lucide-react'
 import { StudioShell } from './StudioShell'
+import type { StudioNavItem } from './studioNavigation'
 import { ProjectOptions } from './ProjectOptions'
 import { ProjectDeleteDialog } from './ProjectDeleteDialog'
 import type { ProjectPage, ProjectSummary, ThumbnailKind } from '../../shared/contracts/projects'
@@ -143,154 +144,190 @@ export function ProjectsPage() {
   }
 
   const latestProject = items[0]
-  const roleLabel = session.role === 'owner' ? 'เจ้าของพื้นที่' : session.role === 'editor' ? 'แก้ไขงานได้' : 'ดูอย่างเดียว'
+  const quickLinks = [
+    ...(showQuoteRequests ? [{ to: '/app/requests', label: 'คำขอราคา', icon: 'requests' as const, Icon: Files }] : []),
+    ...(marketplaceSuppliersEnabled ? [
+      { to: '/app/orders', label: 'คำสั่งผลิต', icon: 'orders' as const, Icon: Truck },
+      { to: '/factory/onboarding', label: 'ผู้รับผลิต', icon: 'factory' as const, Icon: Factory },
+    ] : []),
+  ]
+  const compactNavigation: StudioNavItem[] = [
+    { to: '/app/projects', label: 'งานออกแบบของฉัน', icon: 'projects', exact: true },
+    ...quickLinks,
+  ]
+  const create = () => navigate('/editor/new')
+
+  function renderProject(item: ProjectSummary, featured = false) {
+    const awaitingSave = pending.projectIds.has(item.id)
+    const deleting = deletion.isPending && deletionItem?.id === item.id
+    const deleteDisabledReason = !online ? 'เชื่อมต่ออินเทอร์เน็ตเพื่อลบงาน'
+      : awaitingSave ? 'เปิดงานและบันทึกการแก้ไขที่ค้างไว้ก่อนลบ'
+      : deletion.isPending ? 'กำลังจัดการงานอื่นอยู่' : undefined
+    const metadata = [item.thumbnail?.label, formatUpdated(item.updatedAt)].filter(Boolean).join(' · ')
+    const imageUrl = thumbs.url(item.id)
+    const open = () => navigate(`/editor/${item.id}`)
+    const options = canCreate && <ProjectOptions name={item.name} disabled={Boolean(deleteDisabledReason)} disabledReason={deleteDisabledReason}
+      onDelete={() => setDeleteTarget({ item, actorId: appUserId })} />
+    const quoteLabel = `สร้างฉบับร่างขอราคางาน ${item.name}`
+    const quote = showQuoteRequests && (
+      <button className="projects-icon-action project-quote-action" type="button"
+        aria-label={quoteLabel}
+        title={awaitingSave ? 'รอให้งานบันทึกขึ้น Cloud ก่อน' : quoteLabel}
+        disabled={!online || awaitingSave || deleting}
+        onClick={() => void navigate(`/app/requests/new?projectId=${encodeURIComponent(item.id)}`)}>
+        <FilePlus2 size={17} aria-hidden="true" />
+      </button>
+    )
+    const preview = imageUrl ? <img src={imageUrl} alt="" decoding="async" loading={featured ? 'eager' : 'lazy'} />
+      : <KindIcon kind={item.thumbnail?.kind} />
+
+    if (featured) return (
+      <section key={item.id} className="projects-hero" role="group" aria-label={item.name}>
+        <div className="projects-hero-copy">
+          <span className="projects-hero-label"><History size={15} aria-hidden="true" /> แก้ไขล่าสุด</span>
+          <h2>{item.name}</h2>
+          {metadata && <p className="project-sub">{metadata}</p>}
+          {awaitingSave && <span className="project-badge">รอส่ง</span>}
+          <div className="projects-hero-actions">
+            <button type="button" className="projects-icon-action projects-accent-action" aria-label={`เปิดงาน ${item.name}`}
+              title="เปิดงาน" onClick={open} disabled={deleting}>
+              <ArrowUpRight size={18} aria-hidden="true" />
+            </button>
+            {quote}
+            {options}
+          </div>
+        </div>
+        <button type="button" className="projects-hero-art" aria-label={`เปิดงาน ${item.name} จากภาพย่อ`} onClick={open} disabled={deleting}>
+          {preview}
+        </button>
+      </section>
+    )
+
+    return (
+      <div key={item.id} className="project-card-with-action" role="group" aria-label={item.name}>
+        <button type="button" className="project-card" aria-label={`เปิดงาน ${item.name}`}
+          title={[item.name, metadata].filter(Boolean).join(' · ')} disabled={deleting} onClick={open}>
+          <span className="project-thumb">{preview}</span>
+          <span className="project-meta">
+            <KindIcon kind={item.thumbnail?.kind} />
+            <span className="project-name">{item.name}</span>
+          </span>
+          {awaitingSave && <span className="project-badge">รอส่ง</span>}
+        </button>
+        {options}
+        {quote}
+      </div>
+    )
+  }
 
   return (
-    <StudioShell
-      title="งานออกแบบของฉัน"
-      description="ทุกไอเดียเริ่มต้นได้ที่นี่ จัดการงานออกแบบและเตรียมพร้อมสำหรับการผลิต"
-      className="projects-page"
-      onWorkspaceChange={changeWorkspace}
-      actions={<button className="primary projects-new" disabled={!canCreate} title={canCreate ? undefined : 'บทบาทดูอย่างเดียวสร้างงานไม่ได้'} onClick={() => navigate('/editor/new')}><Plus size={16} aria-hidden="true" />สร้างงานใหม่</button>}
+    <StudioShell title="งานออกแบบของฉัน" className="projects-page"
+      compactNavigation={compactNavigation} onWorkspaceChange={changeWorkspace}
+      actions={<>
+        {canMigrate && (
+          <button type="button" className="projects-icon-action" aria-label="ย้ายงานเดิมขึ้น Cloud"
+            title="ย้ายงานเดิมขึ้น Cloud" disabled={!online} onClick={() => setMigrationOpen(true)}>
+            <UploadCloud size={18} aria-hidden="true" />
+          </button>
+        )}
+        <button type="button" className="projects-icon-action projects-refresh" aria-label="รีเฟรช" title="รีเฟรช"
+          onClick={refresh} disabled={!online || projects.isFetching}>
+          <RefreshCw size={17} aria-hidden="true" />
+        </button>
+        {canCreate && (
+          <button type="button" className="projects-icon-action projects-accent-action" aria-label="สร้างงานใหม่"
+            title="สร้างงานใหม่" onClick={create}>
+            <Plus size={20} aria-hidden="true" />
+          </button>
+        )}
+      </>}
     >
-      <div className="projects-stats" aria-label="ภาพรวมพื้นที่งาน">
-        <div className="projects-stat"><span>งานที่โหลดในพื้นที่นี้</span><strong>{projects.isPending ? '—' : items.length}<i><Layers3 size={20} /></i></strong><small>{projects.hasNextPage ? 'ยังมีงานเพิ่มเติมในหน้าถัดไป' : 'รายการงานออกแบบของพื้นที่นี้'}</small></div>
-        <div className="projects-stat"><span>รอส่งจากเครื่องนี้</span><strong>{pending.intents.length + pending.projectIds.size}<i><RefreshCw size={20} /></i></strong><small>งานใหม่และการแก้ไขที่ยังไม่ส่งขึ้น Cloud</small></div>
-        <div className="projects-stat"><span>สิทธิ์ของคุณในพื้นที่</span><strong className="projects-stat-role">{roleLabel}<i><ShieldCheck size={20} /></i></strong><small>{online ? 'เชื่อมต่ออินเทอร์เน็ตอยู่' : 'กำลังใช้งานแบบออฟไลน์'}</small></div>
+      {!online && <div className="projects-banner is-offline">ออฟไลน์ · แสดงงานที่โหลดไว้และงานที่รอส่งในเครื่องนี้</div>}
+      {notice && <div className="projects-banner" role="status">{notice}</div>}
+      {session.role === 'viewer' && <div className="projects-banner">พื้นที่งานนี้คุณดูได้อย่างเดียว</div>}
+      {deletionItem && deletion.isPending && <div className="projects-banner" role="status">กำลังจัดการงาน «{deletionItem.name}»…</div>}
+      {deletionItem && deletion.isSuccess && deletion.data && <div className="projects-banner" role="status">ลบงาน «{deletionItem.name}» แล้ว</div>}
+      {deletionItem && deletion.isError && <div className="projects-banner is-error" role="alert">
+        ลบงาน «{deletionItem.name}» ไม่สำเร็จ {deletion.error instanceof ApiClientError ? deletion.error.message : 'กรุณาลองอีกครั้ง'}
+      </div>}
+
+      <div className={quickLinks.length > 0 ? 'projects-overview has-quick-links' : 'projects-overview'}>
+        {!online && !projects.data ? (
+          <div className="projects-empty" role="status">เชื่อมต่ออินเทอร์เน็ตเพื่อโหลดรายการงาน</div>
+        ) : projects.isPending ? (
+          <div className="projects-hero is-skeleton" role="status" aria-busy="true"><span className="sr-only">กำลังโหลดรายการงาน</span></div>
+        ) : latestProject ? renderProject(latestProject, true) : projects.isError ? (
+          <div className="projects-empty" role="alert">
+            <p>โหลดรายการงานไม่สำเร็จ</p>
+            <button type="button" onClick={refresh} disabled={!online}>ลองใหม่</button>
+          </div>
+        ) : (
+          <div className="projects-empty">
+            <span className="projects-empty-icon"><Box size={28} aria-hidden="true" /></span>
+            <h2>ยังไม่มีงานในพื้นที่นี้</h2>
+            {canCreate && <button type="button" className="projects-accent-action" onClick={create}>สร้างงานแรก</button>}
+          </div>
+        )}
+        {quickLinks.length > 0 && (
+          <nav className="projects-quick-links" aria-label="การผลิต">
+            {quickLinks.map(({ to, label, Icon }) => (
+              <Link key={to} to={to}>
+                <span className="projects-quick-icon"><Icon size={17} aria-hidden="true" /></span>
+                <strong>{label}</strong>
+                <ChevronRight size={15} aria-hidden="true" />
+              </Link>
+            ))}
+          </nav>
+        )}
       </div>
 
-      {!online && <div className="projects-banner is-offline">ออฟไลน์ — แสดงเฉพาะงานที่โหลดไว้และงานที่รอส่งในเครื่องนี้</div>}
-      {notice && <div className="projects-banner">{notice}</div>}
-      {session.role === 'viewer' && <div className="projects-banner">พื้นที่งานนี้คุณดูได้อย่างเดียว</div>}
+      {items.length > 1 && (
+        <section className="projects-section" aria-label="งานออกแบบอื่น">
+          <div className="projects-grid">{items.slice(1).map((item) => renderProject(item))}</div>
+        </section>
+      )}
+      {items.length > 0 && projects.isError && <div className="projects-banner is-error" role="alert">โหลดรายการเพิ่มเติมไม่สำเร็จ</div>}
+      {projects.hasNextPage && (
+        <div className="projects-more">
+          <button type="button" onClick={() => void projects.fetchNextPage()} disabled={projects.isFetchingNextPage || !online}>
+            {projects.isFetchingNextPage ? 'กำลังโหลด…' : 'โหลดเพิ่ม'}
+          </button>
+        </div>
+      )}
 
-      <div className="projects-dashboard">
-      <div className="projects-primary-column">
-      <section className="projects-hero" aria-label="เริ่มต้นงานออกแบบ">
-        <div className="projects-hero-copy"><span className="studio-eyebrow"><span className="projects-live-dot" />YOUR NEXT GREAT PACKAGE</span><h2>{latestProject ? 'ไอเดียของคุณ' : 'เริ่มจากไอเดีย'}<br />พร้อมเป็นจริงแล้ว</h2><p>{latestProject ? 'กลับไปแต่งรายละเอียดให้ลงตัว แล้วเตรียมสเปกสำหรับผู้รับผลิตที่ใช่' : 'กำหนดรูปทรงและขนาด ออกแบบลวดลาย แล้วพรีวิวบรรจุภัณฑ์ในมุมมอง 3D'}</p>{latestProject ? <button onClick={() => navigate(`/editor/${latestProject.id}`)}>กลับไปออกแบบต่อ <ArrowRight size={16} /></button> : canCreate && <button onClick={() => navigate('/editor/new')}>เริ่มออกแบบบรรจุภัณฑ์ <ArrowRight size={16} /></button>}<span className="projects-hero-caption"><Box size={16} />{latestProject?.name || 'สร้างงานในแบบของคุณ'}</span></div>
-        <div className="projects-hero-art" aria-hidden="true">{latestProject && thumbs.url(latestProject.id) ? <img src={thumbs.url(latestProject.id)} alt="" /> : <div className="studio-package-composition"><div className="studio-package-box"><span>PACKIT</span><Box size={42} strokeWidth={1} /><strong>Made<br />to inspire.</strong><small>YOUR IDEAS, IN FORM.</small></div><div className="studio-package-small"><span>studio.</span><Box size={27} strokeWidth={1} /></div></div>}<small>PACKAGING / DESIGN STUDIO</small></div>
-      </section>
       {pending.intents.length > 0 && (
-        <section className="projects-section">
+        <section className="projects-section projects-local">
           <h2>งานใหม่ที่ยังไม่ได้ส่งขึ้น Cloud</h2>
           <div className="projects-grid">
             {pending.intents.map((intent) => (
-              <button
-                key={intent.key}
-                className="project-card is-pending"
-                onClick={() => navigate('/editor/new', { state: { packitNewIntent: intent.intentId } })}
-              >
-                <div className="project-thumb"><KindIcon /></div>
-                <div className="project-meta">
+              <button key={intent.key} type="button" className="project-card is-pending"
+                onClick={() => navigate('/editor/new', { state: { packitNewIntent: intent.intentId } })}>
+                <span className="project-thumb"><KindIcon /></span>
+                <span className="project-meta">
                   <span className="project-name">{intent.latest.project.name}</span>
-                  <span className="project-sub">
-                    {intent.status === 'failed' ? 'สร้างไม่สำเร็จ — เปิดเพื่อจัดการ' : 'สร้างไว้ในเครื่อง รอส่ง'}
-                  </span>
-                </div>
+                  <span className="project-sub">{intent.status === 'failed' ? 'สร้างไม่สำเร็จ · เปิดเพื่อจัดการ' : 'สร้างไว้ในเครื่อง รอส่ง'}</span>
+                </span>
               </button>
             ))}
           </div>
         </section>
       )}
-
       {offlineDrafts.length > 0 && (
-        <section className="projects-section">
+        <section className="projects-section projects-local">
           <h2>งานที่เก็บร่างไว้ในแท็บนี้</h2>
           <div className="projects-grid">
             {offlineDrafts.map((draft) => (
-              <button key={draft.id} className="project-card is-pending" onClick={() => navigate(`/editor/${draft.id}`)}>
-                <div className="project-thumb"><KindIcon /></div>
-                <div className="project-meta">
+              <button key={draft.id} type="button" className="project-card is-pending" onClick={() => navigate(`/editor/${draft.id}`)}>
+                <span className="project-thumb"><KindIcon /></span>
+                <span className="project-meta">
                   <span className="project-name">{draft.name}</span>
                   <span className="project-sub">บันทึกไว้ในเครื่อง รอส่งขึ้น Cloud</span>
-                </div>
+                </span>
               </button>
             ))}
           </div>
         </section>
       )}
-
-      <section className="projects-section">
-        <div className="projects-section-heading"><div><h2>งานออกแบบทั้งหมด</h2><p>เปิดงานเพื่อออกแบบต่อ หรือเตรียมฉบับร่างขอราคา</p></div><div className="projects-list-actions"><button className="projects-refresh" onClick={refresh} disabled={!online || projects.isFetching}><RefreshCw size={14} aria-hidden="true" />รีเฟรช</button>{canMigrate && <button disabled={!online} onClick={() => setMigrationOpen(true)}>ย้ายงานเดิมขึ้น Cloud</button>}</div></div>
-        {deletionItem && deletion.isPending && <div className="projects-banner" role="status">กำลังจัดการงาน «{deletionItem.name}»…</div>}
-        {deletionItem && deletion.isSuccess && deletion.data && <div className="projects-banner" role="status">ลบงาน «{deletionItem.name}» แล้ว</div>}
-        {deletionItem && deletion.isError && <div className="projects-banner is-error" role="alert">
-          ลบงาน «{deletionItem.name}» ไม่สำเร็จ {deletion.error instanceof ApiClientError ? deletion.error.message : 'กรุณาลองอีกครั้ง'}
-        </div>}
-        {!online && !projects.data ? (
-          <div className="projects-empty" role="status">
-            <p>ออฟไลน์ — ยังโหลดรายการงานไม่ได้</p>
-            <p>เชื่อมต่ออินเทอร์เน็ตเพื่อโหลดรายการของพื้นที่นี้</p>
-          </div>
-        ) : projects.isPending ? (
-          <div className="projects-grid" aria-busy="true">
-            {Array.from({ length: 8 }, (_, index) => <div className="project-card is-skeleton" key={index} />)}
-          </div>
-        ) : projects.isError && items.length === 0 ? (
-          <div className="projects-empty">
-            <p>{online ? 'โหลดรายการงานไม่สำเร็จ' : 'ออฟไลน์ — ยังโหลดรายการงานไม่ได้'}</p>
-            <button onClick={refresh} disabled={!online}>ลองใหม่</button>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="projects-empty"><span className="projects-empty-icon"><Box size={28} /></span>
-            <h3>เริ่มต้นงานชิ้นแรกของคุณ</h3><p>ยังไม่มีงานในพื้นที่นี้</p>
-            {canCreate && <button className="primary" onClick={() => navigate('/editor/new')}>สร้างงานแรก</button>}
-          </div>
-        ) : (
-          <>
-            <div className="projects-grid">
-              {items.map((item) => {
-                const awaitingSave = pending.projectIds.has(item.id)
-                const deleteDisabledReason = !online ? 'เชื่อมต่ออินเทอร์เน็ตเพื่อลบงาน'
-                  : awaitingSave ? 'เปิดงานและบันทึกการแก้ไขที่ค้างไว้ก่อนลบ'
-                  : deletion.isPending ? 'กำลังจัดการงานอื่นอยู่' : undefined
-                return (
-                  <div key={item.id} className="project-card-with-action" role="group" aria-label={item.name}>
-                    <button type="button" className="project-card" disabled={deletion.isPending && deletionItem?.id === item.id} onClick={() => navigate(`/editor/${item.id}`)}>
-                      <div className="project-thumb">
-                        {!canCreate && <span className="project-card-arrow"><ArrowUpRight size={15} /></span>}
-                        {thumbs.url(item.id) ? <img src={thumbs.url(item.id)} alt="" /> : <KindIcon kind={item.thumbnail?.kind} />}
-                      </div>
-                      <div className="project-meta">
-                        <span className="project-name">{item.name}</span>
-                        <span className="project-sub">
-                          {item.thumbnail?.label ? `${item.thumbnail.label} · ` : ''}{formatUpdated(item.updatedAt)}
-                        </span>
-                      </div>
-                      {awaitingSave && <span className="project-badge">รอส่ง</span>}
-                    </button>
-                    {canCreate && <ProjectOptions name={item.name} disabled={Boolean(deleteDisabledReason)} disabledReason={deleteDisabledReason}
-                      onDelete={() => setDeleteTarget({ item, actorId: appUserId })} />}
-                    {showQuoteRequests && <button
-                      className="project-quote-action"
-                      type="button"
-                      disabled={!online || awaitingSave || (deletion.isPending && deletionItem?.id === item.id)}
-                      title={awaitingSave ? 'รอให้งานบันทึกขึ้น Cloud ก่อน' : undefined}
-                      onClick={() => void navigate(`/app/requests/new?projectId=${encodeURIComponent(item.id)}`)}
-                    >
-                      <FileText size={14} aria-hidden="true" />สร้างฉบับร่างขอราคา <ArrowRight size={14} aria-hidden="true" />
-                    </button>}
-                  </div>
-                )
-              })}
-            </div>
-            {projects.isError && <div className="projects-banner is-error">โหลดเพิ่มไม่สำเร็จ ลองอีกครั้ง</div>}
-            {projects.hasNextPage && (
-              <div className="projects-more">
-                <button onClick={() => void projects.fetchNextPage()} disabled={projects.isFetchingNextPage || !online}>
-                  {projects.isFetchingNextPage ? 'กำลังโหลด…' : 'โหลดเพิ่ม'}
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </section>
-      </div>
-      <aside className="projects-side">
-        <div className="projects-side-heading"><h2>ขั้นตอนถัดไป</h2><span>WORKFLOW</span></div>
-        <div className="projects-quick-links">{showQuoteRequests && <Link to="/app/requests"><span className="projects-quick-icon"><FileText size={18} /></span><span><strong>คำขอราคาของฉัน</strong><small>ติดตามร่างและคำขอที่เผยแพร่</small></span><ArrowRight size={15} /></Link>}{marketplaceSuppliersEnabled && <Link to="/factory/onboarding"><span className="projects-quick-icon"><Box size={18} /></span><span><strong>พื้นที่ผู้รับผลิต</strong><small>จัดการกิจการและคำขอที่ได้รับ</small></span><ArrowRight size={15} /></Link>}<div className="projects-workspace-note"><ShieldCheck size={18} /><span><strong>ข้อมูลแยกตามพื้นที่งาน</strong><small>แสดงเฉพาะงานที่คุณมีสิทธิ์เข้าถึง</small></span></div></div>
-        <section className="projects-process"><span className="studio-eyebrow">FROM IDEA TO PRODUCTION</span><h3>ทุกขั้นตอน เชื่อมถึงกัน</h3><ol><li><span><Check size={12} /></span><div><strong>ออกแบบบรรจุภัณฑ์</strong><small>กำหนดรูปทรง ขนาด และลวดลาย</small></div></li><li><span>2</span><div><strong>เตรียมคำขอราคา</strong><small>สร้างฉบับสเปกจากงานที่บันทึกแล้ว</small></div></li><li><span>3</span><div><strong>เลือกผู้รับผลิต</strong><small>ส่งสเปกให้กิจการที่ผ่านการอนุมัติ</small></div></li></ol><p>ฉบับสเปกที่ส่งแล้วเก็บข้อมูล ณ เวลานั้น เพื่อให้ทุกฝ่ายอ้างอิงตรงกัน</p></section>
-      </aside>
-      </div>
       {confirmation && (
         <ProjectDeleteDialog
           name={confirmation.item.name}
