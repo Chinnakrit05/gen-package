@@ -75,9 +75,9 @@ describe('ย่อขยาย/หมุนทั้งชุดที่เล
   })
 })
 
-describe('Ctrl+G สลับจัดกลุ่ม/แยกกลุ่ม', () => {
+describe('ตรวจว่าชุดที่เลือกเป็นกลุ่มเดียวครบ', () => {
   const ds = [shape('a', 0, 0, 1, 1, { groupId: 'g1' }), shape('b', 0, 0, 1, 1, { groupId: 'g1' }), shape('c', 0, 0, 1, 1)]
-  it('เลือกครบทั้งกลุ่มเดียว = แยกกลุ่ม; ปนชิ้นนอกกลุ่ม/ไม่ครบกลุ่ม = จัดกลุ่มใหม่', () => {
+  it('เลือกครบทั้งกลุ่มเดียว = ใช่; ปนชิ้นนอกกลุ่ม/ไม่ครบกลุ่ม/ชิ้นเดียว = ไม่ใช่', () => {
     expect(isWholeGroup(ds, ['a', 'b'])).toBe(true)
     expect(isWholeGroup(ds, ['a', 'b', 'c'])).toBe(false)
     expect(isWholeGroup(ds, ['a'])).toBe(false)

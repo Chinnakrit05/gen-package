@@ -3382,7 +3382,7 @@ export default function App({
 
   // จัดกลุ่ม/แยกกลุ่ม (groupId ร่วมกัน = เลือก/ย้ายพร้อมกัน)
   const groupSelected = () => {
-    if (selectedIds.length < 2) return
+    if (selectedIds.length < 2 || isWholeGroup(decos, selectedIds)) return // เป็นกลุ่มเดียวอยู่แล้ว ไม่สร้างกลุ่มซ้ำ
     const gid = newGroupId()
     const sel = new Set(selectedIds)
     setDecos((ds) => ds.map((d) => (sel.has(d.id) ? { ...d, groupId: gid } : d)))
@@ -3391,9 +3391,6 @@ export default function App({
     const sel = new Set(selectedIds)
     setDecos((ds) => ds.map((d) => (sel.has(d.id) ? { ...d, groupId: undefined } : d)))
   }
-  // Ctrl+G: ชุดที่เลือกเป็นกลุ่มเดียวครบอยู่แล้ว = แยกกลุ่ม; ไม่งั้นจัดกลุ่ม
-  const toggleGroupSelected = () => (isWholeGroup(decos, selectedIds) ? ungroupSelected() : groupSelected())
-
   // โหมดเลือกหลายรายการ (สำหรับทัช/iPad แต่เปิดทุกอุปกรณ์): แตะชิ้น = เพิ่ม/เอาออก, แตะที่ว่างไม่ล้างชุด;
   // ยืนยัน = จัดกลุ่มชิ้นที่เลือก (≥ 2 และยังไม่เป็นกลุ่มเดียว) แล้วออก, ยกเลิก = ออกโดยคงการเลือกไว้
   const [multiMode, setMultiMode] = useState(false)
@@ -3501,7 +3498,7 @@ export default function App({
         duplicateSelected()
       } else if (mod && (e.key === 'g' || e.key === 'G')) {
         e.preventDefault()
-        e.shiftKey ? ungroupSelected() : toggleGroupSelected()
+        e.shiftKey ? ungroupSelected() : groupSelected() // Ctrl+G = จัดกลุ่ม, Ctrl+Shift+G = แยกกลุ่ม
       } else if (e.key === 'Escape') {
         if (multiMode) setMultiMode(false) // Esc ในโหมดเลือกหลายรายการ = ยกเลิกโหมด (คงชุดที่เลือก)
         else setSelectedIds([])

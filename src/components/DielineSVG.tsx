@@ -1076,6 +1076,11 @@ export const DielineSVG = memo(function DielineSVG({
           const el = svgRef.current?.querySelector<SVGGElement>(`g.deco[data-id="${CSS.escape(id)}"]`)
           if (el) els.push({ el, orig: el.getAttribute('transform') ?? '' })
         }
+        // กรอบรวมของชุดที่เลือกเลื่อนตามไปพร้อมกัน (ไม่งั้นค้างที่เดิมจนปล่อยเมาส์ เพราะคำนวณจาก decos ที่ยังไม่ commit)
+        if (ids.length > 1) {
+          const gb = svgRef.current?.querySelector<SVGGElement>('g.group-box')
+          if (gb) els.push({ el: gb, orig: gb.getAttribute('transform') ?? '' })
+        }
         pv = dragPreview.current = { id: d.id, x, y, els }
       }
       pv.x = x

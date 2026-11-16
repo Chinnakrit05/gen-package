@@ -1286,7 +1286,7 @@ export function layerRows(decos: Deco[]): LayerRow[] {
   return rows
 }
 
-// Ctrl+G: ชุดที่เลือกเป็น "กลุ่มเดียวครบทั้งกลุ่ม" อยู่แล้ว = แยกกลุ่ม; ไม่งั้นรวมเป็นกลุ่มใหม่ (≥ 2 ชิ้น)
+// ชุดที่เลือกเป็น "กลุ่มเดียวครบทั้งกลุ่ม" อยู่แล้วหรือไม่ — จัดกลุ่มซ้ำ/ยืนยันโหมดเลือกหลายรายการข้ามได้
 export function isWholeGroup(decos: Deco[], ids: string[]): boolean {
   if (ids.length < 2) return false
   const sel = decos.filter((d) => ids.includes(d.id))
