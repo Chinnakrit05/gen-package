@@ -154,6 +154,15 @@
 .v2-font-size-menu li { padding: 7px 0; border-radius: 8px; text-align: center; font-size: 14px; color: var(--v2-ink); cursor: pointer; user-select: none; }
 .v2-font-size-menu li:hover { background: #f1f3f3; }
 .v2-font-size-menu li[aria-selected='true'] { background: var(--accent-weak); font-weight: 600; }
+/* แถบเลื่อนบางไม่มีปุ่มลูกศร: Chrome บน Windows วาดลูกศรบน-ล่างให้แถบ scrollbar-width (ค่าทั่วแอปใน shell.css)
+   — เบราว์เซอร์ที่มี ::-webkit-scrollbar คืนค่ามาตรฐานเป็น auto ให้ใช้แถบที่กำหนดเองแทน; Firefox ไม่มีลูกศรอยู่แล้ว */
+@supports selector(::-webkit-scrollbar) {
+  .v2-font-size-menu { scrollbar-width: auto; scrollbar-color: auto; }
+  .v2-font-size-menu::-webkit-scrollbar { width: 4px; }
+  .v2-font-size-menu::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+  .v2-font-size-menu::-webkit-scrollbar-track { background: transparent; margin: 8px 0; }
+  .v2-font-size-menu::-webkit-scrollbar-thumb { border: 0; border-radius: 4px; background: var(--border-strong); }
+}
 .v2-toolbar-divider { flex: 0 0 1px; height: 24px; background: var(--border); }
 .v2-color { display: block; width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%; overflow: hidden; cursor: pointer; }
 .editor-v2 .v2-color input { padding: 0; border: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
