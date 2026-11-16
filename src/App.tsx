@@ -38,7 +38,7 @@ import { dimTextSize } from './core/templates/shared'
 import { dielinePDFBytes, type PdfSpotPlate } from './core/pdf'
 import { renderDimTextMasks } from './core/pdfDimText'
 import { specSheetPDFBytes } from './core/specSheet'
-import {
+import { layerRows, isWholeGroup, transformSelection, type SelectionTransform,
   loadImageFile,
   makeImageEl,
   makeTextEl,
@@ -3028,6 +3028,12 @@ export default function App({
       return all ? cur.filter((x) => !grp.includes(x)) : [...new Set([...cur, ...grp])]
     })
   }
+  // ลากคลุมเลือก: ขยายเป็นทั้งกลุ่มของแต่ละชิ้น; additive (Shift/โหมดเลือกหลายรายการ) = เพิ่มเข้าชุดเดิม
+  const selectMany = (ids: string[], additive: boolean) => {
+    const grp = expandGroups(decos, ids)
+    if (grp.length) setGroups((g) => (g.props ? g : { ...g, props: true }))
+    setSelectedIds((cur) => (additive ? [...new Set([...cur, ...grp])] : grp))
+  }
   const isSelected = (id: string) => selectedIds.includes(id)
   const currentAi = histIdx >= 0 ? history[histIdx]?.ai : undefined
 
@@ -3361,6 +3367,19 @@ export default function App({
     editDecos((ds) => distribute(ds, selectedIds, axis))
   }
 
+  // ย่อขยาย/หมุนทั้งชุดที่เลือกจากกรอบรวมบน blueprint: ทุกค่าเทียบกับลายตอนเริ่มลาก (ไม่สะสมเพี้ยนทีละเฟรม)
+  const groupBase = useRef<Deco[] | null>(null)
+  const transformGroupSel = (op: SelectionTransform | null) => {
+    if (!op) {
+      groupBase.current = null
+      return
+    }
+    const base = (groupBase.current ??= decos)
+    const sel = new Set(selectedIds.filter((id) => !base.find((d) => d.id === id)?.locked))
+    const next = new Map(transformSelection(base.filter((d) => sel.has(d.id)), sel, op).map((d) => [d.id, d]))
+    editDecos((ds) => ds.map((d) => next.get(d.id) ?? d))
+  }
+
   // จัดกลุ่ม/แยกกลุ่ม (groupId ร่วมกัน = เลือก/ย้ายพร้อมกัน)
   const groupSelected = () => {
     if (selectedIds.length < 2) return
@@ -3371,6 +3390,19 @@ export default function App({
   const ungroupSelected = () => {
     const sel = new Set(selectedIds)
     setDecos((ds) => ds.map((d) => (sel.has(d.id) ? { ...d, groupId: undefined } : d)))
+  }
+  // Ctrl+G: ชุดที่เลือกเป็นกลุ่มเดียวครบอยู่แล้ว = แยกกลุ่ม; ไม่งั้นจัดกลุ่ม
+  const toggleGroupSelected = () => (isWholeGroup(decos, selectedIds) ? ungroupSelected() : groupSelected())
+
+  // โหมดเลือกหลายรายการ (สำหรับทัช/iPad แต่เปิดทุกอุปกรณ์): แตะชิ้น = เพิ่ม/เอาออก, แตะที่ว่างไม่ล้างชุด;
+  // ยืนยัน = จัดกลุ่มชิ้นที่เลือก (≥ 2 และยังไม่เป็นกลุ่มเดียว) แล้วออก, ยกเลิก = ออกโดยคงการเลือกไว้
+  const [multiMode, setMultiMode] = useState(false)
+  useEffect(() => {
+    if (multiMode && (!isV2 || sideTab !== 'artwork' || readOnly)) setMultiMode(false)
+  }, [multiMode, isV2, sideTab, readOnly])
+  const confirmMultiMode = () => {
+    if (selectedIds.length > 1 && !isWholeGroup(decos, selectedIds)) groupSelected()
+    setMultiMode(false)
   }
 
   // สลับ ซ่อน/ล็อก ให้ทุกชิ้นที่เลือก (อิงค่าของชิ้นแรกเป็นตัวตั้ง)
@@ -3469,9 +3501,10 @@ export default function App({
         duplicateSelected()
       } else if (mod && (e.key === 'g' || e.key === 'G')) {
         e.preventDefault()
-        e.shiftKey ? ungroupSelected() : groupSelected()
+        e.shiftKey ? ungroupSelected() : toggleGroupSelected()
       } else if (e.key === 'Escape') {
-        setSelectedIds([])
+        if (multiMode) setMultiMode(false) // Esc ในโหมดเลือกหลายรายการ = ยกเลิกโหมด (คงชุดที่เลือก)
+        else setSelectedIds([])
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length) {
         e.preventDefault()
         removeSelected()
@@ -3487,7 +3520,7 @@ export default function App({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds, selected, undoStack, redoStack, aiBusy, decos, templateId, materialId, W, D, H, handle, qty, fillColor, readOnly, showingLegacyArtworkPreview])
+  }, [selectedIds, selected, undoStack, redoStack, aiBusy, decos, templateId, materialId, W, D, H, handle, qty, fillColor, readOnly, showingLegacyArtworkPreview, multiMode])
 
   // ควบคุมการพับ — แถบบนสุดของมุมมอง 3D (โชว์เฉพาะวัสดุที่พับได้)
   const foldBar = mat.foldable && (!v2Model || (!isCard && !isSticker)) ? (
@@ -5804,7 +5837,31 @@ export default function App({
                 {decos.length > 0 && (
                   <ul className="deco-list">
                     {/* บนสุด = หน้าสุด (กลับลำดับ array ที่ท้าย = วาดทับ) */}
-                    {[...decos].reverse().map((d) => {
+                    {layerRows(decos).map((row) => {
+                      if (row.kind === 'head') {
+                        const allSel = row.members.every((m) => isSelected(m.id))
+                        return (
+                          <li key={`grp-${row.groupId}`} className="deco-row group-head">
+                            <button
+                              className={`deco-item${allSel ? ' active' : ''}`}
+                              onClick={(e) => selectDeco(row.members[0].id, e.shiftKey || e.ctrlKey || e.metaKey)}
+                              title={t('กลุ่ม — คลิกเพื่อเลือกทั้งกลุ่ม', 'Group — click to select the whole group')}
+                            >
+                              <span className="deco-tico group-ico" aria-hidden="true">▣</span>
+                              <span className="deco-name">{t(`กลุ่ม (${row.members.length} ชิ้น)`, `Group (${row.members.length} items)`)}</span>
+                            </button>
+                            <button
+                              className="deco-toggle"
+                              title={t('แยกกลุ่ม', 'Ungroup')}
+                              aria-label={t('แยกกลุ่มนี้', 'Ungroup this group')}
+                              onClick={() => setDecos((ds) => ds.map((x) => (x.groupId === row.groupId ? { ...x, groupId: undefined } : x)))}
+                            >
+                              ⊟
+                            </button>
+                          </li>
+                        )
+                      }
+                      const d = row.d
                       const thumb =
                         d.type === 'image' ? (
                           <img className="deco-thumb" src={d.src} alt="" />
@@ -5834,7 +5891,7 @@ export default function App({
                           </span>
                         )
                       return (
-                      <li key={d.id} className={`deco-row${d.hidden ? ' is-hidden' : ''}`}>
+                      <li key={d.id} className={`deco-row${d.hidden ? ' is-hidden' : ''}${row.inGroup ? ' in-group' : ''}`}>
                         {renamingId === d.id ? (
                           <div className="deco-item renaming">
                             {thumb}
@@ -7340,7 +7397,7 @@ export default function App({
             ) : (
             <>
             {/* host แถบเครื่องมือ (Canva) — ลอยทับบน dieline (portal มาลงที่นี่เมื่อเลือกชิ้น) */}
-            {!readOnly && isV2 && sideTab === 'artwork' && <EditorToolbar selected={selected ?? undefined} count={selectedIds.length} disabled={aiBusy || projectBusy} advanced={v2Advanced} onAdvanced={() => { setV2Advanced(v => !v); if (!selectedIds.length) chooseV2Tool('layers') }} onPatch={patchSelected} onDuplicate={duplicateSelected} onLock={toggleLockedSelected} onDelete={removeSelected} onLayers={() => chooseV2Tool('layers')} />}
+            {!readOnly && isV2 && sideTab === 'artwork' && <EditorToolbar selected={selected ?? undefined} count={selectedIds.length} disabled={aiBusy || projectBusy} advanced={v2Advanced} onAdvanced={() => { setV2Advanced(v => !v); if (!selectedIds.length) chooseV2Tool('layers') }} onPatch={patchSelected} onDuplicate={duplicateSelected} onLock={toggleLockedSelected} onDelete={removeSelected} onLayers={() => chooseV2Tool('layers')} multiMode={multiMode} onMultiMode={() => setMultiMode(true)} onMultiConfirm={confirmMultiMode} onMultiCancel={() => setMultiMode(false)} onAlign={alignSelected} />}
             <div className="deco-topbar-host" ref={setDecoBar} />
             <div className="blueprint card">
               <DielineSVG
@@ -7355,6 +7412,9 @@ export default function App({
                 {...(!readOnly && {
                   selectedIds,
                   onSelect: selectDeco,
+                  onSelectMany: selectMany,
+                  onGroupTransform: transformGroupSel,
+                  multiSelect: multiMode,
                   onMove: moveDeco,
                   onRotate: rotateDeco,
                   onResize: resizeDeco,

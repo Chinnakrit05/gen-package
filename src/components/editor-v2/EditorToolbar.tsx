@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { FONTS, withTextW, type Deco, type TextEl } from '../../core/artwork'
+import { FONTS, withTextW, type AlignMode, type Deco, type TextEl } from '../../core/artwork'
 import { useT } from '../../i18n'
 import * as assets from './assets'
 
@@ -14,11 +14,26 @@ interface Props {
   onLock: () => void
   onDelete: () => void
   onLayers: () => void
+  // โหมดเลือกหลายรายการ: แตะชิ้นเพื่อเพิ่ม/เอาออก แล้วสั่งกับทั้งชุด; ยืนยัน = จัดกลุ่มแล้วออก, ยกเลิก = ออกเฉย ๆ
+  multiMode: boolean
+  onMultiMode: () => void
+  onMultiConfirm: () => void
+  onMultiCancel: () => void
+  onAlign: (mode: AlignMode) => void
 }
 
-export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced, onPatch, onDuplicate, onLock, onDelete, onLayers }: Props) {
+const ALIGN_MODES: { mode: AlignMode; th: string; en: string }[] = [
+  { mode: 'left', th: 'ชิดซ้าย', en: 'Left' },
+  { mode: 'hcenter', th: 'กึ่งกลางแนวนอน', en: 'Center' },
+  { mode: 'right', th: 'ชิดขวา', en: 'Right' },
+  { mode: 'top', th: 'ชิดบน', en: 'Top' },
+  { mode: 'vcenter', th: 'กึ่งกลางแนวตั้ง', en: 'Middle' },
+  { mode: 'bottom', th: 'ชิดล่าง', en: 'Bottom' },
+]
+
+export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced, onPatch, onDuplicate, onLock, onDelete, onLayers, multiMode, onMultiMode, onMultiConfirm, onMultiCancel, onAlign }: Props) {
   const t = useT()
-  const [popover, setPopover] = useState<'opacity' | 'align' | null>(null)
+  const [popover, setPopover] = useState<'opacity' | 'align' | 'multiAlign' | null>(null)
   const root = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!popover) return
@@ -28,7 +43,29 @@ export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced,
     document.addEventListener('keydown', escape)
     return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape) }
   }, [popover])
-  useEffect(() => { setPopover(null) }, [selected?.id, selected?.locked, disabled])
+  useEffect(() => { setPopover(null) }, [selected?.id, selected?.locked, disabled, multiMode])
+  if (multiMode) {
+    const few = disabled || count < 2 // เมนูคำสั่งใช้ได้เมื่อเลือกตั้งแต่ 2 ชิ้น
+    return (
+      <div ref={root} className="v2-toolbar v2-multi-bar" role="toolbar" aria-label={t('เลือกหลายรายการ', 'Multi-select')}>
+        <span className="v2-multi-title">{t('เลือกหลายรายการ', 'Multi-select')} · <b>{t(`${count} ชิ้น`, `${count} items`)}</b></span>
+        <span className="v2-multi-hint">{t('แตะชิ้นเพื่อเพิ่ม/เอาออก', 'Tap items to add or remove')}</span>
+        <span className="v2-toolbar-divider" />
+        <button type="button" className="v2-multi-act" aria-label={t('ลบที่เลือก', 'Delete selection')} title={t('ลบ', 'Delete')} disabled={few} onClick={onDelete}><img src={assets.imgSectionToolbarIconTrashStateNormal} alt="" /><span>{t('ลบ', 'Delete')}</span></button>
+        <button type="button" className="v2-multi-act" aria-label={t('ทำสำเนา', 'Duplicate')} title={t('ทำสำเนา', 'Duplicate')} disabled={few} onClick={onDuplicate}><img src={assets.imgSectionToolbarIconCopyStateNormal} alt="" /><span>{t('ทำสำเนา', 'Duplicate')}</span></button>
+        <button type="button" className="v2-multi-act" aria-label={t('จัดแนว', 'Align')} title={t('จัดแนว', 'Align')} aria-expanded={popover === 'multiAlign'} disabled={few} onClick={() => setPopover(popover === 'multiAlign' ? null : 'multiAlign')}><img src={assets.imgSectionToolbarIconLeftAlignStateNormal} alt="" /><span>{t('จัดแนว', 'Align')}</span></button>
+        <button type="button" className="v2-multi-act" aria-label={t('ล็อก/ปลดล็อก', 'Lock / unlock')} title={t('ล็อก/ปลดล็อก', 'Lock / unlock')} aria-pressed={!!selected?.locked} disabled={few} onClick={onLock}><img src={assets.imgSectionToolbarIconUnlockStateNormal} alt="" /><span>{t('ล็อก', 'Lock')}</span></button>
+        <span className="v2-multi-spacer" />
+        <button type="button" className="v2-multi-cancel" onClick={onMultiCancel}>{t('ยกเลิก', 'Cancel')}</button>
+        <button type="button" className="v2-multi-confirm" title={t('จัดกลุ่มชิ้นที่เลือกแล้วออกจากโหมด', 'Group the selection and finish')} onClick={onMultiConfirm}>{t('ยืนยัน', 'Confirm')}</button>
+        {popover === 'multiAlign' && (
+          <div className="v2-toolbar-popover v2-multi-align">
+            {ALIGN_MODES.map((a) => <button key={a.mode} type="button" onClick={() => { onAlign(a.mode); setPopover(null) }}>{t(a.th, a.en)}</button>)}
+          </div>
+        )}
+      </div>
+    )
+  }
   const text = selected?.type === 'text' ? selected : null
   const blocked = disabled || !selected || !!selected.locked
   const color = selected?.type === 'text' ? selected.color : selected?.type === 'shape' && selected.shape === 'line' ? selected.stroke : selected?.type === 'shape' || selected?.type === 'path' ? selected.fill : undefined
@@ -59,6 +96,7 @@ export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced,
         <button type="button" className="v2-toolbar-secondary" title={t('ขีดเส้นใต้', 'Underline')} aria-label={t('ขีดเส้นใต้', 'Underline')} aria-pressed={!!text?.underline} disabled={blocked} onClick={() => patchText({ underline: !text?.underline || undefined })}><img src={assets.imgSectionToolbarIconUnderlineStateNormal} alt="" /></button>
         <button type="button" className="v2-toolbar-secondary" title={t('ระยะและเอฟเฟกต์ตัวอักษร', 'Text spacing & effects')} aria-label={t('ระยะและเอฟเฟกต์ตัวอักษร', 'Text spacing & effects')} disabled={blocked} onClick={onAdvanced}><img src={assets.imgSectionToolbarIconALargeSmallStateNormal} alt="" /></button>
       </>}
+      <button type="button" className="v2-toolbar-label v2-multi-enter" title={t('เลือกหลายรายการ — แตะชิ้นเพื่อเพิ่ม/เอาออก', 'Multi-select — tap items to add or remove')} disabled={disabled} onClick={onMultiMode}>{t('เลือกหลายรายการ', 'Multi-select')}</button>
       <button type="button" className="v2-toolbar-secondary v2-toolbar-label" onClick={onLayers}>{t('เลเยอร์', 'Layers')}</button>
       <button type="button" className="v2-toolbar-secondary v2-toolbar-label" disabled={!count} onClick={onAdvanced}>{t('สไตล์', 'Style')}</button>
       <span className="v2-toolbar-divider v2-toolbar-secondary" />

@@ -170,6 +170,19 @@
 .editor-v2 .v2-toolbar .v2-opacity { height: 24px; background: linear-gradient(90deg, #15404988, #ffffff22), url('../../assets/editor-v2/4a32d.png') center / cover; }
 .editor-v2 .v2-toolbar .v2-toolbar-label { flex-basis: auto; width: auto; padding: 0 2px; white-space: nowrap; font-weight: 600; }
 .v2-selection-count { white-space: nowrap; font-size: 12px; }
+/* โหมดเลือกหลายรายการ: แถบคำสั่งแทนแถบปรับแต่ง — ปุ่มใหญ่พอให้แตะด้วยนิ้วบน iPad */
+.editor-v2 .v2-toolbar.v2-multi-bar { justify-content: flex-start; flex-wrap: nowrap; }
+.v2-multi-title { white-space: nowrap; font-size: 13px; color: var(--v2-ink); }
+.v2-multi-hint { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-3); }
+.v2-multi-spacer { flex: 1 1 0; min-width: 0; }
+.editor-v2 .v2-toolbar .v2-multi-act { flex: 0 0 auto; width: auto; height: 34px; gap: 6px; padding: 0 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
+.editor-v2 .v2-toolbar .v2-multi-act img { width: 18px; height: 18px; }
+.editor-v2 .v2-toolbar .v2-multi-cancel, .editor-v2 .v2-toolbar .v2-multi-confirm { flex: 0 0 auto; width: auto; height: 34px; padding: 0 16px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+.editor-v2 .v2-toolbar .v2-multi-cancel { border: 1px solid var(--border); background: var(--v2-paper); }
+.editor-v2 .v2-toolbar .v2-multi-confirm { background: var(--accent); color: #fff; }
+.editor-v2 .v2-toolbar .v2-multi-confirm:hover { background: var(--accent); filter: brightness(1.08); }
+.editor-v2 .v2-toolbar .v2-multi-enter { border: 1px solid var(--border); padding: 0 8px; }
+.v2-multi-align { left: auto; display: grid; grid-template-columns: repeat(3, auto); gap: 6px; }
 .v2-toolbar-popover { position: absolute; top: calc(100% + 10px); right: 0; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--v2-paper); box-shadow: 0 6px 24px #15404920; font-size: 12px; }
 .v2-toolbar-popover label { display: flex; align-items: center; gap: 8px; }
 .editor-v2 .v2-toolbar-popover button { width: auto; min-width: 52px; padding: 4px 8px; }
@@ -190,6 +203,11 @@
   .editor-v2 .v2-toolbar.expanded { flex-wrap: wrap; justify-content: flex-start; }
   .editor-v2 .v2-toolbar.expanded .v2-toolbar-secondary { display: inline-flex; }
   .editor-v2 .v2-toolbar.expanded ~ .deco-topbar-host .deco-topbar { top: 144px; }
+}
+/* จอแคบ (iPad แนวตั้ง/หน้าต่างเล็ก): แถบโหมดเลือกหลายรายการเหลือไอคอน ไม่มีคำแนะนำ ให้ปุ่มยกเลิก/ยืนยันอยู่บรรทัดเดียว */
+@container editor-canvas (max-width: 1150px) {
+  .editor-v2 .v2-toolbar .v2-multi-act span, .v2-multi-hint { display: none; }
+  .editor-v2 .v2-toolbar .v2-multi-act { width: 38px; padding: 0; justify-content: center; }
 }
 @container editor-canvas (max-width: 650px) {
   .editor-v2 .v2-toolbar { left: 0; top: 60px; right: 0; }

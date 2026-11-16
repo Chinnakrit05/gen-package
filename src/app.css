@@ -4420,3 +4420,9 @@ aside .art-actions .file-pick:only-child {
     display: none;
   }
 }
+
+/* แผงเลเยอร์: หัวกลุ่ม + ชิ้นในกลุ่มย่อหน้า */
+.deco-row.group-head .deco-item { font-weight: 600; }
+.deco-row.group-head .group-ico { color: var(--accent); }
+.deco-row.in-group { padding-left: 18px; position: relative; }
+.deco-row.in-group::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; border-left: 2px solid var(--accent-weak); }

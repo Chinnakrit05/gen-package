@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Dieline, DimMark, PaperSurface } from '../core/types'
-import { elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imageMaskSVG, imageDrawAttrs, imageCoverRect, maskId, panelsBBox, fillImageRect, shapeVertices, isPolyShape, dashArray, textInnerSVG, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type ImageEl, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
+import { decosInRect, rotatedSelectionBounds, type SelectionTransform, elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imageMaskSVG, imageDrawAttrs, imageCoverRect, maskId, panelsBBox, fillImageRect, shapeVertices, isPolyShape, dashArray, textInnerSVG, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type ImageEl, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
 import type { Guides } from '../core/guides'
 import { dimTextSize } from '../core/templates/shared'
@@ -403,6 +403,8 @@ type Grab =
   | { mode: 'anchor'; id: string; idx: number } // ลากจุด anchor ของ path
   | { mode: 'handle'; id: string; idx: number; which: 'o' | 'i'; alt: boolean } // ลากแขน bezier
   | { mode: 'crop'; id: string; sx: number; sy: number; cx0: number; cy0: number; cz0: number; ovx: number; ovy: number; rot: number } // เลื่อนรูปในกรอบครอป
+  | { mode: 'gscale'; ax: number; ay: number; gx: number; gy: number } // ย่อขยายทั้งชุดที่เลือก: มุมตรึง a, มุมที่จับตอนเริ่ม g
+  | { mode: 'grot'; cx: number; cy: number; a0: number } // หมุนทั้งชุดรอบจุดกลางกรอบรวม (a0 = มุมเมาส์ตอนเริ่ม)
 
 // ป้ายเตือนรูปความละเอียดต่ำ (มุมซ้ายบนของรูป ในพิกัดแผ่นคลี่ มม.) — ไม่รับคลิก ไม่ไปถึงไฟล์ส่งออก
 // fs = ขนาดตัวอักษรเป็น มม. ที่คำนวณจากซูมปัจจุบัน ให้ป้ายสูงคงที่บนจอ (ไม่เล็กจนอ่านไม่ออกตอนดูทั้งแผ่น)
@@ -428,6 +430,9 @@ export const DielineSVG = memo(function DielineSVG({
   fillImage,
   selectedIds = [],
   onSelect,
+  onSelectMany,
+  onGroupTransform,
+  multiSelect = false,
   onMove,
   onRotate,
   onResize,
@@ -464,6 +469,10 @@ export const DielineSVG = memo(function DielineSVG({
   fillImage?: FillImage | null
   selectedIds?: string[]
   onSelect?: (id: string | null, additive?: boolean) => void
+  onSelectMany?: (ids: string[], additive: boolean) => void // ลากเมาส์คลุมพื้นที่ว่าง = เลือกทุกชิ้นที่กรอบแตะ
+  // ย่อขยาย/หมุนทั้งชุดที่เลือก (≥ 2 ชิ้น) — ค่าเทียบกับตอนเริ่มลากเสมอ; null = ปล่อยมือ
+  onGroupTransform?: (op: SelectionTransform | null) => void
+  multiSelect?: boolean // โหมดเลือกหลายรายการ (ทัช/iPad): แตะชิ้น = เพิ่ม/เอาออก, แตะที่ว่างไม่ยกเลิกการเลือก
   onMove?: (id: string, x: number, y: number) => void
   onRotate?: (id: string, deg: number) => void
   // anchor = มุมที่ตรึงไว้ (เครื่องหมายจากกึ่งกลาง) ให้ผู้รับวางชิ้นใหม่ได้เมื่อขนาดจริงไม่เท่ากรอบที่ขอ
@@ -555,6 +564,9 @@ export const DielineSVG = memo(function DielineSVG({
     setHoverGuide(null)
   }
   const pan = useRef<{ sx: number; sy: number; cx: number; cy: number; moved: boolean; over: boolean } | null>(null)
+  // ลากเมาส์คลุมพื้นที่ว่างเพื่อเลือกหลายชิ้น (พิกัดแผ่นคลี่) — ทัชยังเป็นการเลื่อนหน้าจอ
+  const marq = useRef<{ x0: number; y0: number; x1: number; y1: number; cx: number; cy: number; additive: boolean; moved: boolean } | null>(null)
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   // กด space ค้าง = โหมดจับลากเลื่อน blueprint ได้ทุกระดับซูม (รวม 100% พอดีจอ) แบบ overscroll
   const [spacePan, setSpacePan] = useState(false)
   // พินช์สองนิ้ว (ทัช/iPad) → ซูมเข้า-ออกที่จุดกึ่งกลางสองนิ้ว (เดสก์ท็อปใช้ Ctrl+ล้อ)
@@ -621,7 +633,7 @@ export const DielineSVG = memo(function DielineSVG({
     editCandidate.current =
       d.type === 'text' && selectedIds.length === 1 && selectedIds[0] === d.id ? d.id : null
     if (editing && editing !== d.id) setEditing(null)
-    const additive = e.shiftKey || e.ctrlKey || e.metaKey
+    const additive = e.shiftKey || e.ctrlKey || e.metaKey || multiSelect
     if (additive) {
       onSelect?.(d.id, true) // Shift/Ctrl คลิก = สลับเข้า/ออกชุดเลือก (ไม่เริ่มลาก)
       e.preventDefault()
@@ -648,6 +660,35 @@ export const DielineSVG = memo(function DielineSVG({
   const startRotate = (e: React.PointerEvent, d: Deco) => {
     if (!editable) return
     grab.current = { mode: 'rotate', id: d.id }
+    setActive(true)
+    capture(e)
+    e.stopPropagation()
+    e.preventDefault()
+  }
+
+  // กรอบรวมของชุดที่เลือก (รวมการหมุน) — มือจับย่อขยาย/หมุนทั้งชุด; ซ่อนเมื่อมีชิ้นล็อกในชุด
+  const groupBox =
+    editable && onGroupTransform && selectedIds.length > 1 && !cropId && !decos.some((d) => selectedIds.includes(d.id) && d.locked)
+      ? rotatedSelectionBounds(decos.filter((d) => !d.hidden), selectedIds)
+      : null
+  const startGroupScale = (e: React.PointerEvent, corner: 'nw' | 'ne' | 'sw' | 'se') => {
+    if (!groupBox) return
+    const b = groupBox
+    const gx = corner === 'nw' || corner === 'sw' ? b.x0 : b.x1
+    const gy = corner === 'nw' || corner === 'ne' ? b.y0 : b.y1
+    grab.current = { mode: 'gscale', ax: b.x0 + b.x1 - gx, ay: b.y0 + b.y1 - gy, gx, gy }
+    setActive(true)
+    capture(e)
+    e.stopPropagation()
+    e.preventDefault()
+  }
+  const startGroupRotate = (e: React.PointerEvent) => {
+    if (!groupBox) return
+    const p = toSheet(e.clientX, e.clientY)
+    if (!p) return
+    const cx = (groupBox.x0 + groupBox.x1) / 2
+    const cy = (groupBox.y0 + groupBox.y1) / 2
+    grab.current = { mode: 'grot', cx, cy, a0: Math.atan2(p.y - cy, p.x - cx) }
     setActive(true)
     capture(e)
     e.stopPropagation()
@@ -892,6 +933,16 @@ export const DielineSVG = memo(function DielineSVG({
       setGuideLines((gs) => gs.map((g) => (g.id === gd.id ? { ...g, pos: gd.axis === 'x' ? p.x : p.y } : g)))
       return
     }
+    if (marq.current) {
+      const m = marq.current
+      const p = toSheet(e.clientX, e.clientY)
+      if (!p) return
+      if (Math.abs(e.clientX - m.cx) + Math.abs(e.clientY - m.cy) > 3) m.moved = true
+      m.x1 = p.x
+      m.y1 = p.y
+      if (m.moved) setMarquee({ x0: Math.min(m.x0, p.x), y0: Math.min(m.y0, p.y), x1: Math.max(m.x0, p.x), y1: Math.max(m.y0, p.y) })
+      return
+    }
     if (pan.current) {
       const dxS = e.clientX - pan.current.sx
       const dyS = e.clientY - pan.current.sy
@@ -909,6 +960,20 @@ export const DielineSVG = memo(function DielineSVG({
     if (!g) return
     const p = toSheet(e.clientX, e.clientY)
     if (!p) return
+    if (g.mode === 'gscale') {
+      // ตัวคูณเดียวทั้งชุด = ระยะเมาส์จากมุมตรึง ฉายลงแนวทแยงเดิม (ลากเลยมุมตรึง = ไม่กลับด้าน)
+      const vx = g.gx - g.ax
+      const vy = g.gy - g.ay
+      const k = Math.max(0.1, ((p.x - g.ax) * vx + (p.y - g.ay) * vy) / (vx * vx + vy * vy || 1))
+      onGroupTransform?.({ kind: 'scale', k, ax: g.ax, ay: g.ay })
+      return
+    }
+    if (g.mode === 'grot') {
+      let deg = ((Math.atan2(p.y - g.cy, p.x - g.cx) - g.a0) * 180) / Math.PI
+      if (e.shiftKey) deg = Math.round(deg / 15) * 15 // Shift = ทีละ 15°
+      onGroupTransform?.({ kind: 'rotate', deg: Math.round(deg), cx: g.cx, cy: g.cy })
+      return
+    }
     const d = decos.find((x) => x.id === g.id)
     if (!d) return
     if (g.mode === 'crop') {
@@ -1044,11 +1109,23 @@ export const DielineSVG = memo(function DielineSVG({
       if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
       return
     }
+    if (marq.current) {
+      const m = marq.current
+      marq.current = null
+      setMarquee(null)
+      if (m.moved) {
+        const r = { x0: Math.min(m.x0, m.x1), y0: Math.min(m.y0, m.y1), x1: Math.max(m.x0, m.x1), y1: Math.max(m.y0, m.y1) }
+        onSelectMany?.(decosInRect(decos, r), m.additive)
+      } else if (!m.additive) onSelect?.(null) // คลิกที่ว่างเฉย ๆ = ยกเลิกการเลือก
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+      return
+    }
     if (pan.current) {
-      // ลากพื้นที่ว่างแบบไม่ขยับ = คลิกที่ว่าง → ยกเลิกการเลือก
-      if (!pan.current.moved) onSelect?.(null)
+      // ลากพื้นที่ว่างแบบไม่ขยับ = คลิกที่ว่าง → ยกเลิกการเลือก (โหมดเลือกหลายรายการ: คงชุดเดิมไว้ กันแตะพลาด)
+      if (!pan.current.moved && !multiSelect) onSelect?.(null)
       pan.current = null
     }
+    if (grab.current?.mode === 'gscale' || grab.current?.mode === 'grot') onGroupTransform?.(null)
     // ส่งตำแหน่งสุดท้ายของการลากย้ายให้ App ครั้งเดียว (คืน transform เดิมก่อน — App re-render ทันทีใน
     // event เดียวกันก่อนวาดจอ จึงไม่กะพริบกลับ)
     const pv = dragPreview.current
@@ -1073,12 +1150,29 @@ export const DielineSVG = memo(function DielineSVG({
     if (!viewControls || grab.current || pinch.current) return
     if (editing) setEditing(null) // คลิกพื้นที่ว่าง = ออกจากโหมดแก้ข้อความ
     if (cropId) setCropId(null) // คลิกพื้นที่ว่าง = ออกจากโหมดครอป
+    // เมาส์ปุ่มซ้าย = ลากคลุมเลือกหลายชิ้น (เลื่อนหน้าจอด้วย Space+ลาก / ปุ่มกลาง / ล้อเลื่อน); ทัช/ปากกา = เลื่อนหน้าจอเหมือนเดิม
+    if (e.pointerType === 'mouse' && e.button === 0 && editable && onSelectMany && !spacePan) {
+      const p = toSheet(e.clientX, e.clientY)
+      if (p) {
+        marq.current = { x0: p.x, y0: p.y, x1: p.x, y1: p.y, cx: e.clientX, cy: e.clientY, additive: e.shiftKey || e.ctrlKey || e.metaKey || multiSelect, moved: false }
+        capture(e)
+        return
+      }
+    }
     pan.current = { sx: e.clientX, sy: e.clientY, cx: viewCx, cy: viewCy, moved: false, over: spacePan }
     capture(e)
   }
 
   // กด space ค้างแล้วลาก = จับเลื่อนมุมมองได้จากทุกที่ (แม้บนลาย) — ดัก capture phase เพื่อกันไม่ให้ไปลากลาย
   const onDownCapture = (e: React.PointerEvent) => {
+    // ปุ่มกลางเมาส์ = จับเลื่อนมุมมองจากทุกที่ (แทนการลากซ้ายที่ตอนนี้เป็นลากคลุมเลือก)
+    if (e.pointerType === 'mouse' && e.button === 1 && viewControls && !penMode && !grab.current) {
+      e.stopPropagation()
+      e.preventDefault()
+      pan.current = { sx: e.clientX, sy: e.clientY, cx: viewCx, cy: viewCy, moved: true, over: true }
+      capture(e)
+      return
+    }
     if (spacePan && editable && !penMode && !pinch.current && !grab.current) {
       e.stopPropagation()
       if (editing) setEditing(null)
@@ -1114,6 +1208,14 @@ export const DielineSVG = memo(function DielineSVG({
   const hpx = (n: number) => (pxPerMm > 0 ? n / pxPerMm : n * 0.6)
   const viewCx = center?.x ?? dieline.width / 2
   const viewCy = center?.y ?? dieline.height / 2
+  // เลื่อนมุมมองด้วยล้อเมาส์ (ฟังก์ชันล่าสุดผ่าน ref ให้ตัวดักล้อที่ผูกครั้งเดียวเห็นซูม/กึ่งกลางปัจจุบัน) — คืน true เมื่อเลื่อนจริง
+  const wheelPan = useRef<(dx: number, dy: number) => boolean>(() => false)
+  wheelPan.current = (dx, dy) => {
+    if (zoom <= 1) return false
+    const scale = svgRef.current?.getScreenCTM()?.a || 1
+    setCenter((c) => clampCenter((c?.x ?? viewCx) + dx / scale, (c?.y ?? viewCy) + dy / scale))
+    return true
+  }
   const clampCenter = (x: number, y: number) => ({
     x: Math.min(Math.max(x, -pad), dieline.width + pad),
     y: Math.min(Math.max(y, -pad), dieline.height + pad),
@@ -1208,7 +1310,12 @@ export const DielineSVG = memo(function DielineSVG({
           return
         }
       }
-      if (!e.ctrlKey && !e.metaKey) return // สกอลล์เฉยๆ ไม่ซูม
+      if (!e.ctrlKey && !e.metaKey) {
+        // สกอลล์เฉย ๆ = เลื่อนมุมมองตอนซูมเข้า (Shift = แนวนอน); พอดีจอไม่มีอะไรให้เลื่อน
+        const horiz = e.shiftKey && !e.deltaX
+        if (wheelPan.current(horiz ? e.deltaY : e.deltaX, horiz ? 0 : e.deltaY)) e.preventDefault()
+        return
+      }
       e.preventDefault()
       const f = toSheet(e.clientX, e.clientY)
       if (f) zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, f.x, f.y)
@@ -1734,6 +1841,32 @@ export const DielineSVG = memo(function DielineSVG({
         )
       })()}
 
+      {groupBox && (
+        <g className="group-box">
+          <rect x={groupBox.x0} y={groupBox.y0} width={groupBox.x1 - groupBox.x0} height={groupBox.y1 - groupBox.y0} fill="none" stroke={SEL_COLOR} strokeWidth={1.2} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+          <g className="rot-handle" onPointerDown={startGroupRotate}>
+            <line x1={(groupBox.x0 + groupBox.x1) / 2} y1={groupBox.y0} x2={(groupBox.x0 + groupBox.x1) / 2} y2={groupBox.y0 - hpx(ROT_GAP_PX)} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <circle cx={(groupBox.x0 + groupBox.x1) / 2} cy={groupBox.y0 - hpx(ROT_GAP_PX)} r={hpx(HANDLE_HIT_PX)} fill="transparent" />
+            <circle cx={(groupBox.x0 + groupBox.x1) / 2} cy={groupBox.y0 - hpx(ROT_GAP_PX)} r={hpx(ROT_R_PX)} fill={HANDLE_FILL} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          </g>
+          {(
+            [
+              ['nw', groupBox.x0, groupBox.y0],
+              ['ne', groupBox.x1, groupBox.y0],
+              ['sw', groupBox.x0, groupBox.y1],
+              ['se', groupBox.x1, groupBox.y1],
+            ] as const
+          ).map(([corner, hx, hy]) => (
+            <g key={corner} className="group-handle" style={{ cursor: corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize' }} onPointerDown={(e) => startGroupScale(e, corner)}>
+              <rect x={hx - hpx(HANDLE_HIT_PX)} y={hy - hpx(HANDLE_HIT_PX)} width={hpx(HANDLE_HIT_PX * 2)} height={hpx(HANDLE_HIT_PX * 2)} fill="transparent" />
+              <rect className="resize-handle" x={hx - hpx(HANDLE_PX)} y={hy - hpx(HANDLE_PX)} width={hpx(HANDLE_PX * 2)} height={hpx(HANDLE_PX * 2)} fill={HANDLE_FILL} stroke={SEL_COLOR} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            </g>
+          ))}
+        </g>
+      )}
+      {marquee && (
+        <rect className="marquee" x={marquee.x0} y={marquee.y0} width={marquee.x1 - marquee.x0} height={marquee.y1 - marquee.y0} fill="rgba(31, 135, 120, 0.08)" stroke={SEL_COLOR} strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+      )}
       {active && (snap.vx !== null || snap.vy !== null) && (
         <g className="snap-lines" pointerEvents="none">
           {snap.vx !== null && (

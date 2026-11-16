@@ -47,6 +47,9 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   จัดใหม่เมื่อทรงเปลี่ยนหรือระยะต่าง ≥ `REFIT_RATIO` 18% (กฎเดียวกับ FitCamera) — ปรับขนาดเล็กน้อยไม่ดึงมุมที่ผู้ใช้หมุนไว้;
   มุมเริ่มต่อรูปทรงอยู่ใน `vesselCameraFit`/`pouchCameraFit` (ถุงตั้ง/ก้น K หน้าตรง) ตั้งที่นั่นที่เดียว
 - `src/components/DielineSVG.tsx` — blueprint preview + เส้นบอกขนาด (toggle ได้) + ลาก/หมุน/ลบ artwork; การลากมี snap; ซูม/แพน (Ctrl+ล้อ), กริด, ไม้บรรทัด, เส้นไกด์ลากเอง (state ใน component; guideLines ≠ prop `guides` ที่เป็น bleed/safe); เส้นไกด์เข้า snapTargets ตอนลาก
+- เลือกหลายชิ้น/กลุ่ม (`groupId`): เมาส์ลากพื้นที่ว่าง = ลากคลุมเลือก (`decosInRect` แตะกรอบหลังหมุน; Shift = เพิ่ม) — เลื่อนมุมมองด้วย Space+ลาก/ปุ่มกลาง/ล้อเลื่อน (ตอนซูม), ทัชยังลากเลื่อนจอ;
+  เลือก ≥ 2 ชิ้นมีกรอบรวม (`rotatedSelectionBounds`) ย่อขยาย/หมุนทั้งชุดผ่าน `transformSelection` เทียบลายตอนเริ่มลากเสมอ (`groupBase` ใน App); Ctrl+G สลับจัด/แยกกลุ่ม (`isWholeGroup`);
+  เลเยอร์แสดงหัวกลุ่ม + สมาชิกย่อหน้า (`layerRows`); V2 มีโหมดเลือกหลายรายการ (`multiMode` → prop `multiSelect`: แตะ = เพิ่ม/เอาออก, แตะที่ว่างไม่ล้างชุด) แถบคำสั่ง ลบ/ทำสำเนา/จัดแนว/ล็อก + ยกเลิก/ยืนยัน (ยืนยัน = จัดกลุ่มแล้วออก)
 - เอฟเฟกต์ข้อความ `TextEl.fx` (`src/core/textFx.ts`, pure): drop/background/hollow/splice/double/echo/glow/long — `textFxPlan` แปลงเป็นชั้น
   (กล่องพื้นหลัง → ชั้นใต้ตัวอักษร เยื้อง/เบลอ/ทึบ → ตัวอักษร) แล้วตัววาดทุกทางวาดตามรายการเดียว: `textInnerSVG` (artwork.ts)
   ใช้ทั้ง blueprint (DielineSVG ผ่าน innerHTML) และไฟล์ SVG; `drawText2D` (canvas → 3D/PDF/ไดคัทตามรูป/หมึกขาว) เบลอด้วยเงา canvas

@@ -1163,6 +1163,138 @@ export function selectionBounds(
   return n ? { x0, x1, y0, y1 } : null
 }
 
+// มุมทั้งสี่ของชิ้นหลังหมุน (พิกัดแผ่นคลี่) — ใช้หากรอบรวมที่ครอบชิ้นเอียงได้จริง
+export function decoCorners(e: Deco): Vec2[] {
+  const w = elW(e)
+  const h = elH(e)
+  const c = elCenter(e)
+  const r = (e.rot * Math.PI) / 180
+  const cos = Math.cos(r)
+  const sin = Math.sin(r)
+  return [
+    [-w / 2, -h / 2],
+    [w / 2, -h / 2],
+    [w / 2, h / 2],
+    [-w / 2, h / 2],
+  ].map(([dx, dy]) => ({ x: c.x + dx * cos - dy * sin, y: c.y + dx * sin + dy * cos }))
+}
+
+// กรอบรวมแนวแกนของชิ้นที่เลือก "รวมการหมุน" (กรอบปรับทั้งกลุ่ม/ลากคลุมเลือก) — null ถ้าไม่มี
+export function rotatedSelectionBounds(
+  decos: Deco[],
+  ids: Iterable<string>,
+): { x0: number; x1: number; y0: number; y1: number } | null {
+  const sel = new Set(ids)
+  let x0 = Infinity
+  let x1 = -Infinity
+  let y0 = Infinity
+  let y1 = -Infinity
+  for (const e of decos) {
+    if (!sel.has(e.id)) continue
+    for (const p of decoCorners(e)) {
+      x0 = Math.min(x0, p.x)
+      x1 = Math.max(x1, p.x)
+      y0 = Math.min(y0, p.y)
+      y1 = Math.max(y1, p.y)
+    }
+  }
+  return Number.isFinite(x0) ? { x0, x1, y0, y1 } : null
+}
+
+// ชิ้นที่กรอบลากคลุม (สี่เหลี่ยมแนวแกนบนแผ่นคลี่) "แตะ" — วัดจากกรอบรวมของชิ้นหลังหมุน; ข้ามชิ้นที่ซ่อน
+export function decosInRect(decos: Deco[], r: { x0: number; x1: number; y0: number; y1: number }): string[] {
+  return decos
+    .filter((e) => {
+      if (e.hidden) return false
+      const b = rotatedSelectionBounds([e], [e.id])
+      return !!b && b.x0 <= r.x1 && b.x1 >= r.x0 && b.y0 <= r.y1 && b.y1 >= r.y0
+    })
+    .map((e) => e.id)
+}
+
+// ย่อ/ขยายหรือหมุน "ทั้งชุดที่เลือก" เป็นก้อนเดียว
+// scale: ทุกชิ้นย่อขยายด้วยตัวคูณ k รอบจุดตรึง (ax, ay) — ขนาด/ตัวอักษร/เส้นขอบ/มุมโค้ง/กล่องข้อความคูณ k, มุมหมุนเดิม
+// rotate: จุดกึ่งกลางของแต่ละชิ้นหมุนรอบ (cx, cy) และมุมของชิ้นบวกเพิ่มเท่ากัน
+export type SelectionTransform =
+  | { kind: 'scale'; k: number; ax: number; ay: number }
+  | { kind: 'rotate'; deg: number; cx: number; cy: number }
+
+function scaleOne(e: Deco, k: number): Deco {
+  switch (e.type) {
+    case 'image':
+      return { ...e, w: e.w * k, h: e.h * k, ...(e.radius !== undefined ? { radius: e.radius * k } : {}) }
+    case 'text':
+      return {
+        ...e,
+        size: e.size * k,
+        w: e.w * k,
+        ...(e.strokeW !== undefined ? { strokeW: e.strokeW * k } : {}),
+        ...(e.boxW !== undefined ? { boxW: e.boxW * k } : {}),
+      }
+    case 'shape':
+    case 'path':
+      return { ...e, w: e.w * k, h: e.h * k, strokeW: e.strokeW * k }
+    case 'nutrition':
+      return { ...e, w: e.w * k }
+  }
+}
+
+const r2 = (v: number) => Math.round(v * 100) / 100
+
+export function transformSelection(decos: Deco[], ids: Iterable<string>, op: SelectionTransform): Deco[] {
+  const sel = new Set(ids)
+  return decos.map((e) => {
+    if (!sel.has(e.id)) return e
+    const c = elCenter(e)
+    if (op.kind === 'scale') {
+      const next = scaleOne(e, op.k)
+      const nc = { x: op.ax + (c.x - op.ax) * op.k, y: op.ay + (c.y - op.ay) * op.k }
+      return { ...next, x: r2(nc.x - elW(next) / 2), y: r2(nc.y - elH(next) / 2) }
+    }
+    const r = (op.deg * Math.PI) / 180
+    const dx = c.x - op.cx
+    const dy = c.y - op.cy
+    const nc = { x: op.cx + dx * Math.cos(r) - dy * Math.sin(r), y: op.cy + dx * Math.sin(r) + dy * Math.cos(r) }
+    const rot = Math.round((((e.rot + op.deg) % 360) + 540) % 360 - 180)
+    return { ...e, rot, x: r2(nc.x - elW(e) / 2), y: r2(nc.y - elH(e) / 2) }
+  })
+}
+
+// แถวในแผงเลเยอร์ (บนสุด = หน้าสุด): กลุ่มที่มี ≥ 2 ชิ้นได้แถวหัวกลุ่ม ณ ตำแหน่งชิ้นบนสุดของกลุ่ม แล้วตามด้วยสมาชิกทั้งหมด
+// (ย่อหน้า) เรียงตามลำดับวาด — สมาชิกที่ไม่ได้อยู่ติดกันใน array ก็ถูกรวบมาไว้ใต้หัวกลุ่มเดียว
+export type LayerRow = { kind: 'head'; groupId: string; members: Deco[] } | { kind: 'item'; d: Deco; inGroup: boolean }
+export function layerRows(decos: Deco[]): LayerRow[] {
+  const rev = [...decos].reverse()
+  const seen = new Set<string>()
+  const rows: LayerRow[] = []
+  for (const d of rev) {
+    const gid = d.groupId
+    if (!gid) {
+      rows.push({ kind: 'item', d, inGroup: false })
+      continue
+    }
+    if (seen.has(gid)) continue
+    seen.add(gid)
+    const members = rev.filter((x) => x.groupId === gid)
+    if (members.length < 2) {
+      rows.push({ kind: 'item', d, inGroup: false })
+      continue
+    }
+    rows.push({ kind: 'head', groupId: gid, members })
+    for (const m of members) rows.push({ kind: 'item', d: m, inGroup: true })
+  }
+  return rows
+}
+
+// Ctrl+G: ชุดที่เลือกเป็น "กลุ่มเดียวครบทั้งกลุ่ม" อยู่แล้ว = แยกกลุ่ม; ไม่งั้นรวมเป็นกลุ่มใหม่ (≥ 2 ชิ้น)
+export function isWholeGroup(decos: Deco[], ids: string[]): boolean {
+  if (ids.length < 2) return false
+  const sel = decos.filter((d) => ids.includes(d.id))
+  const gid = sel[0]?.groupId
+  if (!gid || sel.length !== ids.length || sel.some((d) => d.groupId !== gid)) return false
+  return decos.filter((d) => d.groupId === gid).length === ids.length
+}
+
 // จัดแนวชิ้นที่เลือกเทียบ "กรอบรวมของสิ่งที่เลือก" (Illustrator align-to-selection)
 export function alignInSelection(decos: Deco[], ids: Iterable<string>, mode: AlignMode): Deco[] {
   const b = selectionBounds(decos, ids)
