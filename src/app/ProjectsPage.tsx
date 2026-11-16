@@ -1,14 +1,15 @@
 // /app/projects — รายการงานแบบแบ่งหน้า (1-A3) ห้าม import Editor/core engine/three/exporter
 // ใช้ summary + ภาพย่อตาม contract b-phase0-r1: หน้าละ 24, cursor opaque, batch ภาพย่อ ≤ 24 จับคู่ด้วย projectId
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router'
 import { ArrowRight, ArrowUpRight, Box, Check, FileText, Layers3, Plus, RefreshCw, ShieldCheck } from 'lucide-react'
 import { StudioShell } from './StudioShell'
 import { ProjectOptions } from './ProjectOptions'
+import { ProjectDeleteDialog } from './ProjectDeleteDialog'
 import type { ProjectPage, ProjectSummary, ThumbnailKind } from '../../shared/contracts/projects'
 import { marketplaceSuppliersEnabled } from '../config'
-import { deleteProjectConfirmText, designLicenseKnowledge } from '../core/designLicense'
+import { designLicenseKnowledge } from '../core/designLicense'
 import { thumbNeedsFetch } from '../core/thumbnail'
 import { hasLegacyMigrationSource } from '../features/projects/legacyStorage'
 import { getEntitlements } from '../services/api/billing'
@@ -29,6 +30,7 @@ const THUMB_BATCH = 24
 const LegacyMigrationFlow = lazy(() => import('../features/projects/LegacyMigrationFlow')
   .then((module) => ({ default: module.LegacyMigrationFlow })))
 const projectsKey = (appUserId: string, workspaceId: string) => ['cloud', appUserId, workspaceId, 'projects', { limit: PROJECT_PAGE_SIZE }] as const
+type DeleteTarget = { item: ProjectSummary; actorId: string }
 
 export function ProjectsPage() {
   const session = useCloudSession()
@@ -77,6 +79,14 @@ export function ProjectsPage() {
   const pending = useLocalPending(appUserId, workspaceId, canCreate)
   const offlineDrafts = online ? [] : pending.localDrafts.filter((draft) => !items.some((item) => item.id === draft.id))
   const mutationStore = useMemo(() => new IndexedDbProjectMutationStore(), [])
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
+  const confirmation = canCreate && deleteTarget?.actorId === appUserId && deleteTarget.item.workspaceId === workspaceId ? deleteTarget : null
+  const deleteEntitlements = useQuery({
+    queryKey: ['cloud', appUserId, workspaceId, 'project-delete-entitlements'],
+    queryFn: ({ signal }) => getEntitlements(session.apiBaseUrl, session.getAccessToken(), workspaceId, signal),
+    enabled: confirmation !== null && online,
+    retry: false,
+  })
   const deleteContext = useRef({ appUserId, workspaceId, canCreate, pending, mounted: false })
   Object.assign(deleteContext.current, { appUserId, workspaceId, canCreate, pending })
   useEffect(() => {
@@ -86,18 +96,11 @@ export function ProjectsPage() {
   }, [])
 
   const deletion = useMutation({
-    mutationFn: async ({ item, actorId }: { item: ProjectSummary; actorId: string }) => {
-      const allowed = () => {
-        const current = deleteContext.current
-        return current.mounted && current.appUserId === actorId && current.workspaceId === item.workspaceId
-          && current.canCreate && !current.pending.projectIds.has(item.id) && navigator.onLine
-      }
-      if (!allowed()) return false
+    mutationFn: async ({ item, actorId }: DeleteTarget) => {
+      const current = deleteContext.current
+      if (!current.mounted || current.appUserId !== actorId || current.workspaceId !== item.workspaceId
+        || !current.canCreate || current.pending.projectIds.has(item.id) || !navigator.onLine) return false
       const { apiBaseUrl, getAccessToken } = session
-      const entitlements = await getEntitlements(apiBaseUrl, getAccessToken(), item.workspaceId).catch(() => null)
-      if (!allowed()) return false
-      const license = designLicenseKnowledge(item.id, new Set(entitlements?.licensedProjectIds), true, entitlements !== null)
-      if (!window.confirm(deleteProjectConfirmText(item.name, license, (thai) => thai))) return false
 
       const scope = { appUserId: actorId, workspaceId: item.workspaceId }
       const receipt = await executeDurableDelete({
@@ -133,6 +136,7 @@ export function ProjectsPage() {
   const changeWorkspace = (next: string) => {
     if (next === workspaceId) return
     setMigrationOpen(false)
+    setDeleteTarget(null)
     // คำขอของ workspace เดิมที่ค้างอยู่ถูกยกเลิก; ผลที่มาช้าลง key เดิม ไม่ปนกับรายการใหม่
     void queryClient.cancelQueries({ queryKey: ['cloud', appUserId, workspaceId] })
     session.setWorkspaceId(next)
@@ -255,7 +259,7 @@ export function ProjectsPage() {
                       {awaitingSave && <span className="project-badge">รอส่ง</span>}
                     </button>
                     {canCreate && <ProjectOptions name={item.name} disabled={Boolean(deleteDisabledReason)} disabledReason={deleteDisabledReason}
-                      onDelete={() => deletion.mutate({ item, actorId: appUserId })} />}
+                      onDelete={() => setDeleteTarget({ item, actorId: appUserId })} />}
                     {showQuoteRequests && <button
                       className="project-quote-action"
                       type="button"
@@ -287,6 +291,18 @@ export function ProjectsPage() {
         <section className="projects-process"><span className="studio-eyebrow">FROM IDEA TO PRODUCTION</span><h3>ทุกขั้นตอน เชื่อมถึงกัน</h3><ol><li><span><Check size={12} /></span><div><strong>ออกแบบบรรจุภัณฑ์</strong><small>กำหนดรูปทรง ขนาด และลวดลาย</small></div></li><li><span>2</span><div><strong>เตรียมคำขอราคา</strong><small>สร้างฉบับสเปกจากงานที่บันทึกแล้ว</small></div></li><li><span>3</span><div><strong>เลือกผู้รับผลิต</strong><small>ส่งสเปกให้กิจการที่ผ่านการอนุมัติ</small></div></li></ol><p>ฉบับสเปกที่ส่งแล้วเก็บข้อมูล ณ เวลานั้น เพื่อให้ทุกฝ่ายอ้างอิงตรงกัน</p></section>
       </aside>
       </div>
+      {confirmation && (
+        <ProjectDeleteDialog
+          name={confirmation.item.name}
+          license={designLicenseKnowledge(confirmation.item.id, new Set(deleteEntitlements.data?.licensedProjectIds), true, deleteEntitlements.isSuccess)}
+          disabled={!online || deleteEntitlements.isFetching || pending.projectIds.has(confirmation.item.id)}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            setDeleteTarget(null)
+            deletion.mutate(confirmation)
+          }}
+        />
+      )}
       {canMigrate && migrationOpen && (
         <Suspense fallback={<div className="projects-banner" role="status">กำลังเปิดเครื่องมือย้ายงาน…</div>}>
           <LegacyMigrationFlow

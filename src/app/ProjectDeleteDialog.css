@@ -1,0 +1,65 @@
+.project-delete-dialog {
+  width: min(460px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 24px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-solid);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.project-delete-dialog::backdrop {
+  background: rgb(24 25 40 / 45%);
+}
+
+.project-delete-dialog h2 {
+  margin: 0 0 10px;
+  font-size: 20px;
+}
+
+.project-delete-dialog p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.project-delete-dialog .project-delete-warning {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.project-delete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.project-delete-dialog .project-delete-actions button {
+  width: auto;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.project-delete-dialog .project-delete-actions .project-delete-confirm {
+  border-color: #a62f3a;
+  background: #a62f3a;
+  color: white;
+}
+
+.project-delete-dialog .project-delete-actions .project-delete-confirm:hover:not(:disabled) {
+  border-color: #89252f;
+  background: #89252f;
+}
