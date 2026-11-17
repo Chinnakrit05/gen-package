@@ -177,6 +177,7 @@
 .v2-multi-spacer { flex: 1 1 0; min-width: 0; }
 .editor-v2 .v2-toolbar .v2-multi-act { flex: 0 0 auto; width: auto; height: 34px; gap: 6px; padding: 0 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
 .editor-v2 .v2-toolbar .v2-multi-act img { width: 18px; height: 18px; }
+.v2-multi-glyph { font-size: 18px; line-height: 1; font-weight: 400; color: var(--v2-ink); }
 .editor-v2 .v2-toolbar .v2-multi-cancel, .editor-v2 .v2-toolbar .v2-multi-confirm { flex: 0 0 auto; width: auto; height: 34px; padding: 0 16px; border-radius: 10px; font-size: 13px; font-weight: 600; }
 .editor-v2 .v2-toolbar .v2-multi-cancel { border: 1px solid var(--border); background: var(--v2-paper); }
 .editor-v2 .v2-toolbar .v2-multi-confirm { background: var(--accent); color: #fff; }

@@ -20,6 +20,9 @@ interface Props {
   onMultiConfirm: () => void
   onMultiCancel: () => void
   onAlign: (mode: AlignMode) => void
+  grouped: boolean // ชุดที่เลือกเป็นกลุ่มเดียวครบอยู่แล้ว → ปุ่มกลายเป็น "แยกกลุ่ม" (iPad ไม่มีคีย์ลัด)
+  onGroup: () => void
+  onUngroup: () => void
 }
 
 const ALIGN_MODES: { mode: AlignMode; th: string; en: string }[] = [
@@ -31,7 +34,7 @@ const ALIGN_MODES: { mode: AlignMode; th: string; en: string }[] = [
   { mode: 'bottom', th: 'ชิดล่าง', en: 'Bottom' },
 ]
 
-export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced, onPatch, onDuplicate, onLock, onDelete, onLayers, multiMode, onMultiMode, onMultiConfirm, onMultiCancel, onAlign }: Props) {
+export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced, onPatch, onDuplicate, onLock, onDelete, onLayers, multiMode, onMultiMode, onMultiConfirm, onMultiCancel, onAlign, grouped, onGroup, onUngroup }: Props) {
   const t = useT()
   const [popover, setPopover] = useState<'opacity' | 'align' | 'multiAlign' | null>(null)
   const root = useRef<HTMLDivElement>(null)
@@ -51,6 +54,11 @@ export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced,
         <span className="v2-multi-title">{t('เลือกหลายรายการ', 'Multi-select')} · <b>{t(`${count} ชิ้น`, `${count} items`)}</b></span>
         <span className="v2-multi-hint">{t('แตะชิ้นเพื่อเพิ่ม/เอาออก', 'Tap items to add or remove')}</span>
         <span className="v2-toolbar-divider" />
+        {grouped ? (
+          <button type="button" className="v2-multi-act" aria-label={t('แยกกลุ่ม', 'Ungroup')} title={t('แยกกลุ่ม', 'Ungroup')} disabled={disabled} onClick={onUngroup}><b className="v2-multi-glyph" aria-hidden="true">⊟</b><span>{t('แยกกลุ่ม', 'Ungroup')}</span></button>
+        ) : (
+          <button type="button" className="v2-multi-act" aria-label={t('จัดกลุ่ม', 'Group')} title={t('จัดกลุ่ม', 'Group')} disabled={few} onClick={onGroup}><b className="v2-multi-glyph" aria-hidden="true">⊞</b><span>{t('จัดกลุ่ม', 'Group')}</span></button>
+        )}
         <button type="button" className="v2-multi-act" aria-label={t('ลบที่เลือก', 'Delete selection')} title={t('ลบ', 'Delete')} disabled={few} onClick={onDelete}><img src={assets.imgSectionToolbarIconTrashStateNormal} alt="" /><span>{t('ลบ', 'Delete')}</span></button>
         <button type="button" className="v2-multi-act" aria-label={t('ทำสำเนา', 'Duplicate')} title={t('ทำสำเนา', 'Duplicate')} disabled={few} onClick={onDuplicate}><img src={assets.imgSectionToolbarIconCopyStateNormal} alt="" /><span>{t('ทำสำเนา', 'Duplicate')}</span></button>
         <button type="button" className="v2-multi-act" aria-label={t('จัดแนว', 'Align')} title={t('จัดแนว', 'Align')} aria-expanded={popover === 'multiAlign'} disabled={few} onClick={() => setPopover(popover === 'multiAlign' ? null : 'multiAlign')}><img src={assets.imgSectionToolbarIconLeftAlignStateNormal} alt="" /><span>{t('จัดแนว', 'Align')}</span></button>

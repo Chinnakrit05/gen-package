@@ -7391,7 +7391,7 @@ export default function App({
             ) : (
             <>
             {/* host แถบเครื่องมือ (Canva) — ลอยทับบน dieline (portal มาลงที่นี่เมื่อเลือกชิ้น) */}
-            {!readOnly && isV2 && sideTab === 'artwork' && <EditorToolbar selected={selected ?? undefined} count={selectedIds.length} disabled={aiBusy || projectBusy} advanced={v2Advanced} onAdvanced={() => { setV2Advanced(v => !v); if (!selectedIds.length) chooseV2Tool('layers') }} onPatch={patchSelected} onDuplicate={duplicateSelected} onLock={toggleLockedSelected} onDelete={removeSelected} onLayers={() => chooseV2Tool('layers')} multiMode={multiMode} onMultiMode={() => setMultiMode(true)} onMultiConfirm={confirmMultiMode} onMultiCancel={() => setMultiMode(false)} onAlign={alignSelected} />}
+            {!readOnly && isV2 && sideTab === 'artwork' && <EditorToolbar selected={selected ?? undefined} count={selectedIds.length} disabled={aiBusy || projectBusy} advanced={v2Advanced} onAdvanced={() => { setV2Advanced(v => !v); if (!selectedIds.length) chooseV2Tool('layers') }} onPatch={patchSelected} onDuplicate={duplicateSelected} onLock={toggleLockedSelected} onDelete={removeSelected} onLayers={() => chooseV2Tool('layers')} multiMode={multiMode} onMultiMode={() => setMultiMode(true)} onMultiConfirm={confirmMultiMode} onMultiCancel={() => setMultiMode(false)} onAlign={alignSelected} grouped={isWholeGroup(decos, selectedIds)} onGroup={groupSelected} onUngroup={ungroupSelected} />}
             <div className="deco-topbar-host" ref={setDecoBar} />
             <div className="blueprint card">
               <DielineSVG
