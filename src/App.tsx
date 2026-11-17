@@ -3392,15 +3392,12 @@ export default function App({
     setDecos((ds) => ds.map((d) => (sel.has(d.id) ? { ...d, groupId: undefined } : d)))
   }
   // โหมดเลือกหลายรายการ (สำหรับทัช/iPad แต่เปิดทุกอุปกรณ์): แตะชิ้น = เพิ่ม/เอาออก, แตะที่ว่างไม่ล้างชุด;
-  // ยืนยัน = จัดกลุ่มชิ้นที่เลือก (≥ 2 และยังไม่เป็นกลุ่มเดียว) แล้วออก, ยกเลิก = ออกโดยคงการเลือกไว้
+  // ยืนยัน/ยกเลิก = ออกจากโหมดโดยคงการเลือกไว้ (ไม่จัดกลุ่มให้เอง — จัดกลุ่มได้จากแถบคำสั่ง/Ctrl+G)
   const [multiMode, setMultiMode] = useState(false)
   useEffect(() => {
     if (multiMode && (!isV2 || sideTab !== 'artwork' || readOnly)) setMultiMode(false)
   }, [multiMode, isV2, sideTab, readOnly])
-  const confirmMultiMode = () => {
-    if (selectedIds.length > 1 && !isWholeGroup(decos, selectedIds)) groupSelected()
-    setMultiMode(false)
-  }
+  const confirmMultiMode = () => setMultiMode(false)
 
   // สลับ ซ่อน/ล็อก ให้ทุกชิ้นที่เลือก (อิงค่าของชิ้นแรกเป็นตัวตั้ง)
   const toggleHiddenSelected = () => {

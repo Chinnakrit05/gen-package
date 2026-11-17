@@ -14,7 +14,7 @@ interface Props {
   onLock: () => void
   onDelete: () => void
   onLayers: () => void
-  // โหมดเลือกหลายรายการ: แตะชิ้นเพื่อเพิ่ม/เอาออก แล้วสั่งกับทั้งชุด; ยืนยัน = จัดกลุ่มแล้วออก, ยกเลิก = ออกเฉย ๆ
+  // โหมดเลือกหลายรายการ: แตะชิ้นเพื่อเพิ่ม/เอาออก แล้วสั่งกับทั้งชุด; ยืนยัน/ยกเลิก = ออกจากโหมด (คงการเลือก)
   multiMode: boolean
   onMultiMode: () => void
   onMultiConfirm: () => void
@@ -57,7 +57,7 @@ export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced,
         <button type="button" className="v2-multi-act" aria-label={t('ล็อก/ปลดล็อก', 'Lock / unlock')} title={t('ล็อก/ปลดล็อก', 'Lock / unlock')} aria-pressed={!!selected?.locked} disabled={few} onClick={onLock}><img src={assets.imgSectionToolbarIconUnlockStateNormal} alt="" /><span>{t('ล็อก', 'Lock')}</span></button>
         <span className="v2-multi-spacer" />
         <button type="button" className="v2-multi-cancel" onClick={onMultiCancel}>{t('ยกเลิก', 'Cancel')}</button>
-        <button type="button" className="v2-multi-confirm" title={t('จัดกลุ่มชิ้นที่เลือกแล้วออกจากโหมด', 'Group the selection and finish')} onClick={onMultiConfirm}>{t('ยืนยัน', 'Confirm')}</button>
+        <button type="button" className="v2-multi-confirm" title={t('ออกจากโหมดเลือกหลายรายการ', 'Finish multi-select')} onClick={onMultiConfirm}>{t('ยืนยัน', 'Confirm')}</button>
         {popover === 'multiAlign' && (
           <div className="v2-toolbar-popover v2-multi-align">
             {ALIGN_MODES.map((a) => <button key={a.mode} type="button" onClick={() => { onAlign(a.mode); setPopover(null) }}>{t(a.th, a.en)}</button>)}
