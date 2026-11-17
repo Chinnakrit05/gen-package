@@ -8,6 +8,15 @@ import type { Panel, Vec2 } from '../types'
 // FEFCO 0215 = ปีกกาว|หลัง|ข้างซ้าย|หน้า|ข้างขวา + ฝาบนเสียบ + ก้นล็อก 1-2-3
 // ตรวจตำแหน่ง 3D หลังพับเสร็จ: ชั้นวัสดุของก้น, ลิ้นปลายลงช่องบาก, ขอของลิ้นข้างกดลิ้นปลาย
 const tp = getTemplate('fefco-0215')
+const inPoly = (pt: Vec2, poly: Vec2[]) => {
+  let c = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]
+    const b = poly[j]
+    if (a.y > pt.y !== b.y > pt.y && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x) c = !c
+  }
+  return c
+}
 
 for (const [mid, box] of [
   ['carton-300', { W: 90, D: 60, H: 150, handle: false }],
@@ -34,7 +43,7 @@ for (const [mid, box] of [
       }
     })
 
-    it('ลิ้นก้นนอนราบที่พื้น เรียงชั้นจากนอกเข้าใน: หน้า → ลิ้นข้าง → หลัง (พับ หลัง 1 → ข้าง 2 → หน้า 3) ลิ้นหน้าชิ้นเดียว', () => {
+    it('ลิ้นก้นนอนราบที่พื้น เรียงชั้นจากนอกเข้าใน: หน้า → ลิ้นข้าง → หลัง → ปลายลิ้นหน้าที่สอดลงร่อง', () => {
       const lift = (id: string) => {
         const ys = panel(id).outline.map((q) => w3(id, q).y - floor)
         expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(0.01) // ราบ
@@ -49,9 +58,40 @@ for (const [mid, box] of [
       expect(r).toBeCloseTo(l, 6)
       expect(b).toBeGreaterThan(l)
       expect(b).toBeLessThan(3 * (t + 0.05) + 0.01)
-      expect(d.panels.filter((p) => p.parentId === 'base-front')).toEqual([]) // ลิ้นปลายไม่แยกแผง
-      const stage = (id: string) => panel(id).stage
-      expect([stage('base-back'), stage('base-left'), stage('base-right'), stage('base-front')]).toEqual([1, 2, 2, 3])
+      // ลิ้นปลายงอจากคอ (บานพับ = ขอบลิ้นหน้า ต่อเนื่องไม่มีขั้น) ปลายพักเหนือผิวในลิ้นหลัง
+      const tab = panel('base-tab')
+      expect(tab.parentId).toBe('base-front')
+      const neckY = tab.outline.slice(0, 1).concat(tab.outline.slice(-1)).map((q) => w3('base-tab', q).y - floor)
+      for (const y of neckY) expect(y).toBeCloseTo(f, 6)
+      const tipY = Math.max(...tab.outline.map((q) => w3('base-tab', q).y - floor))
+      expect(tipY).toBeGreaterThan(b + (t + 0.05) * 0.5)
+    })
+
+    it('จังหวะก้น: 1 พับเลยระนาบ → 2 พับเลยระนาบ → 1,2 คืนระนาบ → 3 ปิดท้าย; ระหว่างเลย ลิ้นข้างอยู่ใต้ลิ้นหลัง', () => {
+      const st = (id: string) => panel(id).stage
+      expect(st('base-back')).toBeLessThan(st('base-left'))
+      expect(st('base-left')).toBe(st('base-right'))
+      expect(panel('base-back').refold!.stage).toBe(panel('base-left').refold!.stage)
+      expect(panel('base-left').refold!.stage).toBeGreaterThan(st('base-left'))
+      expect(st('base-front')).toBeGreaterThan(panel('base-left').refold!.stage)
+      expect(-90 - panel('base-left').foldAngle!).toBeCloseTo(30, 6)
+      expect(-90 - panel('base-back').foldAngle!).toBeGreaterThanOrEqual(30)
+      // ปากบนพับหลังก้นเสร็จ
+      expect(st('dust-tl')).toBeGreaterThan(st('base-front'))
+      // หลังลิ้นข้างพับเลยเสร็จ (ก่อนคืน): ทุกจุดของลิ้นข้างที่ตกในพื้นที่ลิ้นหลังอยู่ด้านนอก (ใต้) ลิ้นหลัง
+      const all = computeMatrices(d.panels, 0.47) // WINDOWS_7: ข้างจบ 0.5, คืนเริ่ม 0.46 → ตรวจหลายจุด
+      for (const f of [0.4, 0.44, 0.47, 0.5, 0.55, 0.6]) {
+        const M2 = computeMatrices(d.panels, f)
+        const inv = M2.get('base-back')!.clone().invert()
+        for (const id of ['base-left', 'base-right']) {
+          for (const q of panel(id).outline) {
+            const l = to3D(q).applyMatrix4(M2.get(id)!).applyMatrix4(inv)
+            const inBack = inPoly({ x: l.x, y: -l.y }, panel('base-back').outline)
+            if (inBack) expect(l.z).toBeLessThan(0.01)
+          }
+        }
+      }
+      expect(all.size).toBeGreaterThan(0)
     })
 
     // ช่องบากลิ้นหลัง: จุดขอบในช่องบาก (u = Dp/2) สองมุม ในพิกัด 3D
@@ -65,19 +105,14 @@ for (const [mid, box] of [
       return { pts, w: Math.abs(pts[0].x - pts[1].x), depth: deep - top }
     }
     // ลิ้นปลายของลิ้นหน้า = ส่วนที่เลยคอ (จุดลึกเกินครึ่งความลึกก้น)
-    const tabOf = () => {
-      const f = panel('base-front').outline
-      const maxY = Math.max(...f.map((q) => q.y))
-      const n = notch()
-      return f.filter((q) => q.y > maxY - n.depth - 1e-6)
-    }
+    const tabOf = () => panel('base-tab').outline
 
     it('คอลิ้นหน้าตรงขอบในช่องบากลิ้นหลัง (กลางก้น) และลิ้นปลายแคบกว่าช่องบาก', () => {
       const n = notch()
       const notchMid = w3('base-back', center(n.pts))
       const tab = tabOf()
       const neck = [tab[0], tab[tab.length - 1]]
-      const neckMid = w3('base-front', center(neck))
+      const neckMid = w3('base-tab', center(neck))
       expect(Math.hypot(neckMid.x - notchMid.x, neckMid.z - notchMid.z)).toBeLessThan(0.01)
       const tabW = Math.max(...tab.map((q) => q.x)) - Math.min(...tab.map((q) => q.x))
       expect(tabW).toBeLessThan(n.w)
@@ -119,7 +154,7 @@ for (const [mid, box] of [
 
     it('ปลายลิ้นก้นทั้ง 4 จบแนวเดียวกัน (สัดส่วนกล่องทั่วไป)', () => {
       const depth = (id: string) => Math.max(...panel(id).outline.map((q) => q.y)) - botY
-      const ds = ['base-back', 'base-left', 'base-front', 'base-right'].map(depth)
+      const ds = ['base-back', 'base-left', 'base-tab', 'base-right'].map(depth)
       if (box.D <= box.W) for (const v of ds) expect(v).toBeCloseTo(ds[0], 6)
       else expect(depth('base-left')).toBeLessThanOrEqual(depth('base-back') + 1e-6) // ลึกกว่ากว้าง: ลิ้นข้างยาวเกินกลางก้นไม่ได้
     })

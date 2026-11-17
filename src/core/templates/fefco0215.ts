@@ -12,13 +12,26 @@ import { P, TONGUE_IN, arcPts, fmt, rect, tongueDepth, tongueFlap, tuckSlit } fr
 //      ชั้นวัสดุจากนอกเข้าใน: ลิ้นหน้า → ลิ้นข้าง → ลิ้นหลัง (แผงแข็งทั้งชิ้น — 3D ไม่จำลองการงอฟัน/ลิ้นปลายสอดผ่านช่อง)
 //      ปลายลิ้นก้นทั้ง 4 จบแนวเดียวกันเมื่อสัดส่วนกล่องเอื้อ (ดู tabL/sd)
 // W,D,H = ขนาดด้านใน (+2t ต่อแกน)
-// จังหวะพับก้นแบบ Pacdora: ทั้งสี่ลิ้นพับไปพร้อมกัน ลิ้นหลัง (1) นำ ลิ้นข้าง (2) ตาม ลิ้นหน้า (3) ปิดท้าย (ชั้นวัสดุตอนจบเรียงตามลำดับนี้)
-// แผ่นแข็งพับพร้อมกันจะเฉียดทะลุกันช่วงกลางทางใกล้มุม (ของจริงกระดาษงอหลบ) — ผู้ใช้เลือกความเหมือนแบบอ้างอิงมากกว่า
-// (17 พ.ย. 2026; foldOrder.test อนุญาตคู่ base-* ของ 0215); พับทีละชิ้นจริงคาบได้แค่ ~0.06 ของแถบพับ
-// within เทียบหน้าต่าง stage ของ WINDOWS_4 (1 = 0.42–0.68, 2 = 0.62–0.86, 3 = 0.82–1): หลัง 0.42–0.78, ข้าง 0.46–0.94, หน้า 0.50–1
-const BACK_WIN: [number, number] = [0, (0.78 - 0.42) / 0.26]
-const SIDE_WIN: [number, number] = [(0.46 - 0.62) / 0.24, (0.94 - 0.62) / 0.24]
-const FRONT_WIN: [number, number] = [(0.5 - 0.82) / 0.18, 1]
+// จังหวะพับ (WINDOWS_7) แบบประกอบจริง ก้นก่อนแล้วค่อยปากบน — ลำดับก้นตามที่ผู้ใช้กำหนด (17 พ.ย. 2026):
+//   1 ลิ้นหลังพับเลยระนาบก้นเข้าในกล่อง ~30° → 2 ลิ้นข้างพับเลยระนาบตาม → 3 ทั้งคู่คืนกลับมาระนาบก้น (ขอเกี่ยวช่องบาก)
+//   → 4 ลิ้นหน้าพับปิดสุดท้าย ลิ้นปลายงอขึ้นสอดลงร่องไปทับด้านในลิ้นหลัง → 5 ลิ้นกันฝุ่น + ฝา → 6 ลิ้นเสียบ
+// ตอนพับเลยระนาบ ลิ้นข้างต้องอยู่ใต้ (นอก) ลิ้นหลังตลอด: ที่ตำแหน่งบนพื้น (u จากหลัง, v จากผนังข้าง) ลิ้นข้างสูง v·tanαs
+// ลิ้นหลังสูง u·tanαb และเนื้อลิ้นข้างอยู่ที่ u ≥ v·Dp/2 ÷ vDiag → ลิ้นหลังพับเลยมากกว่าเมื่อกล่องกว้างกว่าลึก (ดู overBack)
+const ST_BACK = 1
+const ST_SIDES = 2
+const ST_RETURN = 3
+const ST_FRONT = 4
+const ST_TOP = 5 // ลิ้นกันฝุ่น (ต้นช่วง) + ฝา (within)
+const ST_TONGUE = 6
+// ช่วงเวลา (แถบพับ 0..1) ใน WINDOWS_7: 1=0.22–0.38, 2=0.34–0.50, 3=0.46–0.62, 4=0.58–0.70, 5=0.68–0.90, 6=0.90–1
+//   ลิ้นข้างพับเลยให้เสร็จก่อนเริ่มคืน (0.34–0.46) — คืนพร้อมกันด้วยสัดส่วนมุมคงที่ต้องเริ่มจากมุมเลยเต็ม
+//   ลิ้นหน้าเริ่มหลังคืนเสร็จ (0.62–0.77) ลิ้นปลายงอช่วงท้าย (0.70–0.77); ปากบน ลิ้นกันฝุ่น 0.75–0.83 → ฝา 0.79–0.90 → ลิ้นเสียบ
+const SIDE_WIN: [number, number] = [0, 0.75]
+const FRONT_WIN: [number, number] = [(0.62 - 0.58) / 0.12, (0.77 - 0.58) / 0.12]
+const TAB_WIN: [number, number] = [(0.7 - 0.58) / 0.12, (0.77 - 0.58) / 0.12]
+const DUST_WIN: [number, number] = [0.3, 0.7]
+const LID_WIN: [number, number] = [0.5, 1]
+const OVER_SIDE = 30 // องศาที่ลิ้นข้างพับเลยระนาบก้น (กล่องกว้างกว่าลึกมากลดลง ดู overSide)
 
 export function generateFefco0215(box: BoxParams, mat: Material): Dieline {
   const { W, D, H } = box
@@ -105,6 +118,9 @@ export function generateFefco0215(box: BoxParams, mat: Material): Dieline {
     P(tR, yn),
   ]
   const frontFlap: Vec2[] = [P(front.x0, bot), ...tabPts, P(front.x1, bot)]
+  const frontBody: Vec2[] = [P(front.x0, bot), P(tL, yn), P(tR, yn), P(front.x1, bot)]
+  // ลิ้นปลายงอจนปลายสูงกว่าผิวในลิ้นหลัง (ชั้น 3·layer) อีกหนึ่งชั้น
+  const tabBend = (Math.asin(Math.min(0.9, (4 * layer) / tabL)) * 180) / Math.PI
   // ลิ้นข้าง: xb = ปลายฝั่งผนังหลัง, dir = ทิศจากหลังไปหน้าบนแผ่นคลี่
   const sideFlap = (xb: number, dir: 1 | -1): Vec2[] => {
     const at = (u: number, v: number) => P(xb + dir * u, bot + v)
@@ -121,6 +137,14 @@ export function generateFefco0215(box: BoxParams, mat: Material): Dieline {
     return dir === 1 ? pts : pts.reverse()
   }
   const flapL = sideFlap(sideL.x0, 1)
+  // ลิ้นหลังพับเลยระนาบมากพอให้อยู่เหนือลิ้นข้างทุกจุดที่ซ้อนกัน: ลิ้นข้างสูง v·tanαs, ลิ้นหลังสูง u·tanαb
+  // → tanαb > tanαs · max(v/u) ของจุดลิ้นข้างในพื้นที่ลิ้นหลัง (ขอที่งอนไปทางหลังให้ v/u สูงสุด) เผื่อ 25% ไม่เกิน 70°
+  const steep = Math.max(1, ...flapL.map((q) => ({ u: q.x - sideL.x0, v: q.y - bot })).filter((q) => q.u > 0.5 && q.u <= backDepth).map((q) => q.v / q.u))
+  // กล่องกว้างกว่าลึกมาก (ขอชัน): ลดมุมเลยของลิ้นข้างลงให้ลิ้นหลังไม่ต้องเกิน 70°
+  const deg = (r: number) => (r * 180) / Math.PI
+  const rad = (a: number) => (a * Math.PI) / 180
+  const overSide = Math.min(OVER_SIDE, deg(Math.atan(Math.tan(rad(70)) / (steep * 1.25))))
+  const overBack = Math.min(70, Math.max(overSide, deg(Math.atan(Math.tan(rad(overSide)) * steep * 1.25))))
   const flapR = sideFlap(sideR.x1, -1)
 
   // ---------- ปากบน ----------
@@ -159,39 +183,49 @@ export function generateFefco0215(box: BoxParams, mat: Material): Dieline {
       id: 'side-right', parentId: 'front', outline: rect(sideR.x0, top, sideR.x1, bot),
       hingeA: P(front.x1, top), hingeB: P(front.x1, bot), foldAngle: 90, stage: 0,
     },
-    // --- ปากบน: ลิ้นกันฝุ่น → ฝา → ลิ้นเสียบ ---
+    // --- ปากบน (หลังก้นเสร็จ): ลิ้นกันฝุ่น → ฝา → ลิ้นเสียบ ---
     {
       id: 'dust-tl', parentId: 'side-left', outline: dustL,
-      hingeA: P(sideL.x0, top), hingeB: P(sideL.x1, top), foldAngle: 90, stage: 1, zOffset: layer,
+      hingeA: P(sideL.x0, top), hingeB: P(sideL.x1, top), foldAngle: 90, stage: ST_TOP, within: DUST_WIN, zOffset: layer,
     },
     {
       id: 'dust-tr', parentId: 'side-right', outline: dustR,
-      hingeA: P(sideR.x0, top), hingeB: P(sideR.x1, top), foldAngle: 90, stage: 1, zOffset: layer,
+      hingeA: P(sideR.x0, top), hingeB: P(sideR.x1, top), foldAngle: 90, stage: ST_TOP, within: DUST_WIN, zOffset: layer,
     },
     {
       id: 'tuck-top', parentId: 'back', outline: rect(lidL, tiTop, lidR, top),
-      hingeA: P(back.x0, top), hingeB: P(back.x1, top), foldAngle: 90, stage: 2,
+      hingeA: P(back.x0, top), hingeB: P(back.x1, top), foldAngle: 90, stage: ST_TOP, within: LID_WIN,
     },
     {
       id: 'tongue-top', parentId: 'tuck-top', outline: tg.pts,
-      hingeA: P(lidL, tiTop), hingeB: P(lidR, tiTop), foldAngle: 90, stage: 3, zOffset: layer, tuck: true,
+      hingeA: P(lidL, tiTop), hingeB: P(lidR, tiTop), foldAngle: 90, stage: ST_TONGUE, zOffset: layer, tuck: true,
     },
     // --- ก้นล็อก 1-2-3: ลิ้นหลัง (1) → ลิ้นข้าง (2) ขอคร่อมขอบช่องบาก → ลิ้นหน้า (3) ชิ้นเดียว ลิ้นปลายลงแนวช่องบาก ---
+    // พับเลยระนาบ (foldAngle −90 − เกิน) แล้ว refold คืน +เกิน ที่จังหวะ ST_RETURN พร้อมกัน (สัดส่วนมุมคงที่ ลิ้นข้างจึงอยู่ใต้ลิ้นหลังตลอด)
     {
       id: 'base-left', parentId: 'side-left', outline: flapL,
-      hingeA: P(sideL.x0, bot), hingeB: P(sideL.x1, bot), foldAngle: -90, stage: 2, within: SIDE_WIN, zOffset: 2 * layer,
+      hingeA: P(sideL.x0, bot), hingeB: P(sideL.x1, bot), foldAngle: -90 - overSide, stage: ST_SIDES, within: SIDE_WIN,
+      refold: { angle: overSide, stage: ST_RETURN }, zOffset: 2 * layer,
     },
     {
       id: 'base-right', parentId: 'side-right', outline: flapR,
-      hingeA: P(sideR.x0, bot), hingeB: P(sideR.x1, bot), foldAngle: -90, stage: 2, within: SIDE_WIN, zOffset: 2 * layer,
+      hingeA: P(sideR.x0, bot), hingeB: P(sideR.x1, bot), foldAngle: -90 - overSide, stage: ST_SIDES, within: SIDE_WIN,
+      refold: { angle: overSide, stage: ST_RETURN }, zOffset: 2 * layer,
     },
     {
       id: 'base-back', parentId: 'back', outline: backFlap,
-      hingeA: P(back.x0, bot), hingeB: P(back.x1, bot), foldAngle: -90, stage: 1, within: BACK_WIN, zOffset: 3 * layer,
+      hingeA: P(back.x0, bot), hingeB: P(back.x1, bot), foldAngle: -90 - overBack, stage: ST_BACK,
+      refold: { angle: overBack, stage: ST_RETURN }, zOffset: 3 * layer,
     },
     {
-      id: 'base-front', parentId: 'front', outline: frontFlap,
-      hingeA: P(front.x0, bot), hingeB: P(front.x1, bot), foldAngle: -90, stage: 3, within: FRONT_WIN,
+      id: 'base-front', parentId: 'front', outline: frontBody,
+      hingeA: P(front.x0, bot), hingeB: P(front.x1, bot), foldAngle: -90, stage: ST_FRONT, within: FRONT_WIN,
+    },
+    // ลิ้นปลาย: เนื้อเดียวกับลิ้นหน้า (บานพับที่คอ ไม่มีรอยพับบนแผ่นคลี่ — viewer ไม่วาดเส้นตามบานพับ จึงดูเป็นชิ้นเดียวงอ)
+    // งอขึ้นท้ายจังหวะ ให้ปลายลอดร่องขึ้นไปพักบนผิวในลิ้นหลัง = สอดลงร่อง
+    {
+      id: 'base-tab', parentId: 'base-front', outline: tabPts,
+      hingeA: P(tL, yn), hingeB: P(tR, yn), foldAngle: -tabBend, stage: ST_FRONT, within: TAB_WIN,
     },
   ]
 
