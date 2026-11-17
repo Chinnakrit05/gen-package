@@ -1,5 +1,5 @@
 import type { BoxParams, Dieline, DimMark, Material, Panel, Segment, Vec2 } from '../types'
-import { P, TONGUE_IN, dustFlap, fmt, obroundPath, obroundPts, tongueDepth, tongueFlap, tuckSlit } from './shared'
+import { P, TONGUE_IN, dustFlap, fmt, obroundPath, obroundPts, roundedRectPath, roundedRectPts, tongueDepth, tongueFlap, tuckSlit } from './shared'
 
 // กล่องฝาเสียบ — สองผัง ใช้ตัวสร้างชุดเดียว:
 // · straight tuck (tuck-end): ปีกทากาว | ข้างซ้าย | หน้า | ข้างขวา | หลัง — ฝาเสียบบน+ล่างอยู่ที่แผงหลังทั้งคู่
@@ -9,16 +9,33 @@ import { P, TONGUE_IN, dustFlap, fmt, obroundPath, obroundPts, tongueDepth, tong
 // W,D,H ที่รับเข้ามาคือขนาด "ด้านใน" — แปลงเป็นระยะ score โดยบวก 2t ต่อแกน
 // เพื่อให้ปริมาตรภายในหลังพับ (ผนังหนา t ทุกด้าน) เท่ากับ W×D×H พอดี
 export function generateTuckEndBox(box: BoxParams, mat: Material): Dieline {
-  return buildTuckBox(box, mat, false)
+  return buildTuckBox(box, mat, 'straight')
 }
 
 export function generateReverseTuckBox(box: BoxParams, mat: Material): Dieline {
-  return buildTuckBox(box, mat, true)
+  return buildTuckBox(box, mat, 'reverse')
+}
+
+// กล่องหน้าต่าง (display-box): ผังเดียวกับ reverse tuck แต่ฝาบนและฝาล่างอยู่ที่แผงหน้าทั้งคู่ + เจาะหน้าต่างมุมมนกลางแผงหน้า
+// (ลิ้นเสียบสอดลงแนบผนังหลังทั้งสองปลาย — ไหล่ล็อกของลิ้นกันฝุ่นจึงอยู่ฝั่งที่ติดผนังหลัง)
+export function generateWindowTuckBox(box: BoxParams, mat: Material): Dieline {
+  return buildTuckBox(box, mat, 'window')
 }
 
 type Col = { x0: number; x1: number }
+type TuckLayout = 'straight' | 'reverse' | 'window'
 
-function buildTuckBox(box: BoxParams, mat: Material, reverse: boolean): Dieline {
+// หน้าต่างบนแผงหน้า (มม. จากขอบแผง): ข้างละ ~13% ของกว้าง บน/ล่าง ~11% ของสูง มุมมน — ตามผังกล่องหน้าต่างมาตรฐาน
+export function windowRect(Wp: number, Hp: number) {
+  const mx = Math.max(6, 0.13 * Wp)
+  const my = Math.max(8, 0.11 * Hp)
+  const r = Math.min(5, (Wp - 2 * mx) / 4, (Hp - 2 * my) / 4)
+  return { mx, my, r }
+}
+
+function buildTuckBox(box: BoxParams, mat: Material, layout: TuckLayout): Dieline {
+  const reverse = layout !== 'straight'
+  const windowed = layout === 'window'
   const { W, D, H } = box
   const t = mat.thickness
 
@@ -58,15 +75,18 @@ function buildTuckBox(box: BoxParams, mat: Material, reverse: boolean): Dieline 
   const front = col['front']
   const sideL = col['side-left']
   const sideR = col['side-right']
-  const topHost = back // ฝาบนอยู่แผงหลังทั้งสองผัง (เปิดฝาจากด้านหน้า)
+  const topHost = windowed ? front : back // ฝาบนอยู่แผงหลัง (เปิดฝาจากด้านหน้า); กล่องหน้าต่าง = แผงหน้า
+  const topHostId = windowed ? 'front' : 'back'
   const botHost = reverse ? front : back
   const botHostId = reverse ? 'front' : 'back'
   // ลิ้นเสียบสอดลงแนบผนังฝั่งตรงข้ามบานพับฝา: ฝาบน (ที่แผงหลัง) → ผนังหน้า; ฝาล่าง → ผนังหน้า (straight) / ผนังหลัง (reverse)
   // ไหล่ล็อกของลิ้นกันฝุ่นจึงอยู่ปลายที่ติดผนังนั้น ('a' = ปลายซ้ายบนแผ่นคลี่)
   // ผนังข้างขวาของผัง reverse ติดผนังหลังผ่านปีกกาว (ขอบขวาสุด) → ปลาย 'b'
-  const lockTop: Record<'side-left' | 'side-right', 'a' | 'b'> = { 'side-left': 'b', 'side-right': 'a' }
-  const lockBot: Record<'side-left' | 'side-right', 'a' | 'b'> = reverse
+  const lockTop: Record<'side-left' | 'side-right', 'a' | 'b'> = windowed
     ? { 'side-left': 'a', 'side-right': 'b' }
+    : { 'side-left': 'b', 'side-right': 'a' }
+  const lockBot: Record<'side-left' | 'side-right', 'a' | 'b'> = reverse
+    ? { 'side-left': 'a', 'side-right': 'b' } // ฝาล่างที่แผงหน้า → ลิ้นแนบผนังหลัง
     : { 'side-left': 'b', 'side-right': 'a' }
 
   // รูหิ้วเจาะ (die-cut handle) บนฝาเสียบบน — เจาะจริงทั้งใน 3D และ blueprint
@@ -78,6 +98,10 @@ function buildTuckBox(box: BoxParams, mat: Material, reverse: boolean): Dieline 
 
   const tiTop = top - cover
   const tiBot = bot + cover
+
+  // หน้าต่างมุมมนกลางแผงหน้า (กล่องหน้าต่าง)
+  const win = windowed ? windowRect(front.x1 - front.x0, bot - top) : null
+  const winBox = win ? { x0: front.x0 + win.mx, y0: top + win.my, x1: front.x1 - win.mx, y1: bot - win.my, r: win.r } : null
 
   const rect = (xa: number, ya: number, xb: number, yb: number): Vec2[] => [P(xa, ya), P(xb, ya), P(xb, yb), P(xa, yb)]
   const up = P(0, -1)
@@ -96,7 +120,30 @@ function buildTuckBox(box: BoxParams, mat: Material, reverse: boolean): Dieline 
   const tgBot = tongueOf(botHost, tiBot, 1)
 
   // --- panels สำหรับ 3D (มุมโค้งถูกแตกเป็นเส้นตรงสั้นๆ) ---
-  const body: Panel[] = reverse
+  const frontHoles = winBox ? [roundedRectPts(winBox.x0, winBox.y0, winBox.x1, winBox.y1, winBox.r)] : undefined
+  // กล่องหน้าต่าง: viewer หันแผงตรงข้ามรากเข้ากล้อง → ใช้แผงหลังเป็นราก ให้แผงหน้า (หน้าต่าง) หันหากล้อง
+  const body: Panel[] = windowed
+    ? [
+        { id: 'back', parentId: null, outline: rect(back.x0, top, back.x1, bot), stage: 0 },
+        {
+          id: 'glue', parentId: 'back',
+          outline: [P(x1, top), P(0, top + taper), P(0, bot - taper), P(x1, bot)],
+          hingeA: P(x1, top), hingeB: P(x1, bot), foldAngle: -90, stage: 0, zOffset: layer,
+        },
+        {
+          id: 'side-left', parentId: 'back', outline: rect(sideL.x0, top, sideL.x1, bot),
+          hingeA: P(back.x1, top), hingeB: P(back.x1, bot), foldAngle: 90, stage: 0,
+        },
+        {
+          id: 'front', parentId: 'side-left', outline: rect(front.x0, top, front.x1, bot), holes: frontHoles,
+          hingeA: P(sideL.x1, top), hingeB: P(sideL.x1, bot), foldAngle: 90, stage: 0,
+        },
+        {
+          id: 'side-right', parentId: 'front', outline: rect(sideR.x0, top, sideR.x1, bot),
+          hingeA: P(front.x1, top), hingeB: P(front.x1, bot), foldAngle: 90, stage: 0,
+        },
+      ]
+    : reverse
     ? [
         { id: 'front', parentId: null, outline: rect(front.x0, top, front.x1, bot), stage: 0 },
         {
@@ -157,7 +204,7 @@ function buildTuckBox(box: BoxParams, mat: Material, reverse: boolean): Dieline 
       hingeA: P(sideR.x0, bot), hingeB: P(sideR.x1, bot), foldAngle: -90, stage: 1, zOffset: layer,
     },
     {
-      id: 'tuck-top', parentId: 'back', outline: rect(topHost.x0 + tuckIn, tiTop, topHost.x1 - tuckIn, top),
+      id: 'tuck-top', parentId: topHostId, outline: rect(topHost.x0 + tuckIn, tiTop, topHost.x1 - tuckIn, top),
       holes: hasHandle ? [obroundPts(holeCx, holeCy, holeLen, holeThick)] : undefined,
       hingeA: P(topHost.x0, top), hingeB: P(topHost.x1, top), foldAngle: 90, stage: 2,
     },
@@ -205,7 +252,7 @@ function buildTuckBox(box: BoxParams, mat: Material, reverse: boolean): Dieline 
   }
 
   // ขอบบน/ล่างของผนังที่ไม่มีฝา = เส้นตัดตรง
-  const plainTop = [front]
+  const plainTop = windowed ? [back] : [front]
   const plainBot = reverse ? [back] : [front]
 
   const segments: Segment[] = [
@@ -231,6 +278,7 @@ function buildTuckBox(box: BoxParams, mat: Material, reverse: boolean): Dieline 
     tongueCrease(botHost, tiBot),
   ]
   if (hasHandle) segments.push(cut(obroundPath(holeCx, holeCy, holeLen, holeThick)))
+  if (winBox) segments.push(cut(roundedRectPath(winBox.x0, winBox.y0, winBox.x1, winBox.y1, winBox.r)))
 
   // เส้นบอก W ใต้ผนังกว้างที่ไม่มีฝาล่าง (straight = หน้า, reverse = หลัง)
   const wCol = plainBot[0]

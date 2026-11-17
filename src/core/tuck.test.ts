@@ -18,6 +18,8 @@ const cases: [string, string, Partial<BoxParams>][] = [
   ['reverse-tuck', 'carton-300', { W: 60, D: 120, H: 80 }],
   ['reverse-tuck', 'corrugated-e', { W: 40, D: 30, H: 120 }],
   ['fefco-0215', 'corrugated-e', {}],
+  ['display-box', 'carton-300', {}],
+  ['display-box', 'corrugated-e', { W: 60, D: 120, H: 80 }],
   ['mailer', 'corrugated-e', {}],
   ['fefco-0427', 'corrugated-e', {}],
   ['rollover-mailer', 'corrugated-e', {}],

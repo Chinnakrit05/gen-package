@@ -187,12 +187,12 @@ export const TEMPLATES: BoxTemplate[] = [
   // },
   {
     id: 'display-box',
-    nameTh: 'กล่องฝาข้าง/หน้าต่าง (display)',
+    nameTh: 'กล่องหน้าต่าง (display)',
     detail: 'ของโชว์หน้าร้าน · ฟิกเกอร์/ของสะสม · ของขวัญโชว์สินค้า',
-    defaults: { W: 140, D: 90, H: 140 },
-    tilt: -Math.PI / 2,
+    defaults: { W: 120, D: 60, H: 180 },
+    tilt: 0,
     supportsHandle: false,
-    foldDepth: (b, m) => b.H + m.thickness,
+    foldDepth: (b, m) => b.D + 2 * m.thickness,
     generate: generateDisplayBox,
   },
   {
