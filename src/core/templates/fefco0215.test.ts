@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { Vector3 } from 'three'
 import { computeMatrices, to3D } from '../fold'
 import { getTemplate } from './index'
 import { getMaterial } from '../materials'
@@ -30,12 +29,12 @@ for (const [mid, box] of [
     it('ผังเรียง ปีกกาว | หลัง | ข้างซ้าย | หน้า | ข้างขวา และมีลิ้นก้นครบ', () => {
       const order = ['glue', 'back', 'side-left', 'front', 'side-right'].map((id) => Math.min(...xs(panel(id))))
       expect([...order].sort((a, b) => a - b)).toEqual(order)
-      for (const id of ['base-left', 'base-right', 'base-back', 'base-front', 'base-tab', 'tuck-top', 'tongue-top', 'dust-tl', 'dust-tr']) {
+      for (const id of ['base-left', 'base-right', 'base-back', 'base-front', 'tuck-top', 'tongue-top', 'dust-tl', 'dust-tr']) {
         expect(panel(id)).toBeTruthy()
       }
     })
 
-    it('ลิ้นก้นนอนราบที่พื้น เรียงชั้นจากนอกเข้าใน: หน้า → ลิ้นข้าง → หลัง → ลิ้นปลาย (พับ หลัง 1 → ข้าง 2 → หน้า 3)', () => {
+    it('ลิ้นก้นนอนราบที่พื้น เรียงชั้นจากนอกเข้าใน: หน้า → ลิ้นข้าง → หลัง (พับ หลัง 1 → ข้าง 2 → หน้า 3) ลิ้นหน้าชิ้นเดียว', () => {
       const lift = (id: string) => {
         const ys = panel(id).outline.map((q) => w3(id, q).y - floor)
         expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(0.01) // ราบ
@@ -43,50 +42,64 @@ for (const [mid, box] of [
       }
       const f = lift('base-front')
       const b = lift('base-back')
-      const tab = lift('base-tab')
       const l = lift('base-left')
       const r = lift('base-right')
       expect(f).toBeGreaterThanOrEqual(-0.01)
       expect(l).toBeGreaterThan(f)
       expect(r).toBeCloseTo(l, 6)
       expect(b).toBeGreaterThan(l)
-      expect(tab).toBeGreaterThan(b)
-      expect(tab).toBeLessThan(4 * (t + 0.05) + 0.01)
+      expect(b).toBeLessThan(3 * (t + 0.05) + 0.01)
+      expect(d.panels.filter((p) => p.parentId === 'base-front')).toEqual([]) // ลิ้นปลายไม่แยกแผง
       const stage = (id: string) => panel(id).stage
       expect([stage('base-back'), stage('base-left'), stage('base-right'), stage('base-front')]).toEqual([1, 2, 2, 3])
     })
 
-    it('คอลิ้นหน้าตรงขอบในช่องบากลิ้นหลัง (กลางก้น) และลิ้นปลายแคบกว่าช่องบาก', () => {
+    // ช่องบากลิ้นหลัง: จุดขอบในช่องบาก (u = Dp/2) สองมุม ในพิกัด 3D
+    const notch = () => {
       const back = panel('base-back').outline
-      const notchTop = Math.min(...back.filter((q) => q.x > Math.min(...back.map((p) => p.x)) + 1 && q.x < Math.max(...back.map((p) => p.x)) - 1).map((q) => q.y))
-      const notchPts = back.filter((q) => Math.abs(q.y - notchTop) < 1e-6)
-      const notchW = Math.abs(notchPts[0].x - notchPts[1].x)
-      const notchMid = w3('base-back', center(notchPts))
-      const tab = panel('base-tab').outline
+      const bx = back.map((q) => q.x)
+      const inner = back.filter((q) => q.x > Math.min(...bx) + 1 && q.x < Math.max(...bx) - 1)
+      const top = Math.min(...inner.map((q) => q.y))
+      const pts = back.filter((q) => Math.abs(q.y - top) < 1e-6)
+      const deep = Math.max(...back.map((q) => q.y))
+      return { pts, w: Math.abs(pts[0].x - pts[1].x), depth: deep - top }
+    }
+    // ลิ้นปลายของลิ้นหน้า = ส่วนที่เลยคอ (จุดลึกเกินครึ่งความลึกก้น)
+    const tabOf = () => {
+      const f = panel('base-front').outline
+      const maxY = Math.max(...f.map((q) => q.y))
+      const n = notch()
+      return f.filter((q) => q.y > maxY - n.depth - 1e-6)
+    }
+
+    it('คอลิ้นหน้าตรงขอบในช่องบากลิ้นหลัง (กลางก้น) และลิ้นปลายแคบกว่าช่องบาก', () => {
+      const n = notch()
+      const notchMid = w3('base-back', center(n.pts))
+      const tab = tabOf()
       const neck = [tab[0], tab[tab.length - 1]]
-      const neckMid = w3('base-tab', center(neck))
+      const neckMid = w3('base-front', center(neck))
       expect(Math.hypot(neckMid.x - notchMid.x, neckMid.z - notchMid.z)).toBeLessThan(0.01)
       const tabW = Math.max(...tab.map((q) => q.x)) - Math.min(...tab.map((q) => q.x))
-      expect(tabW).toBeLessThan(notchW)
-      // ลิ้นปลายยื่นไปทางหลัง (อยู่เหนือเนื้อลิ้นหลัง ไม่ใช่ในช่องบาก)
-      const tabC = w3('base-tab', center(tab))
-      const backHinge = w3('back', { x: (Math.min(...xs(panel('back'))) + Math.max(...xs(panel('back')))) / 2, y: botY })
-      expect(Math.abs(tabC.z - backHinge.z)).toBeLessThan(Math.abs(neckMid.z - backHinge.z))
+      expect(tabW).toBeLessThan(n.w)
     })
 
-    it('ขอของลิ้นข้างทั้งสองซ้อนแถบลิ้นปลาย และลิ้นข้างไม่ชนกันกลางก้น', () => {
-      const tab = panel('base-tab').outline
-      const tabW = tab.map((q) => w3('base-tab', q))
-      const inTab = (v: Vector3) => {
-        const xs3 = tabW.map((q) => q.x)
-        const zs3 = tabW.map((q) => q.z)
-        return v.x > Math.min(...xs3) && v.x < Math.max(...xs3) && v.z > Math.min(...zs3) && v.z < Math.max(...zs3)
-      }
+    it('ร่องขอของลิ้นข้างทั้งสองคร่อมมุมในช่องบากลิ้นหลังพอดี ฟันอยู่ในช่องบากและงอนเลยขอบใน; ลิ้นข้างไม่ชนกันกลางก้น', () => {
+      const n = notch()
+      const corners = n.pts.map((q) => w3('base-back', q))
+      const nz = corners[0].z // แนวขอบในช่องบาก
+      const nx = corners.map((v) => v.x).sort((a, b) => a - b)
+      const backZ = w3('back', { x: Math.min(...xs(panel('back'))), y: botY }).z
+      const towardBack = Math.sign(backZ - nz)
       for (const id of ['base-left', 'base-right']) {
         const pts = panel(id).outline.map((q) => w3(id, q))
-        expect(pts.some(inTab)).toBe(true)
+        // ปลายขอบเฉียง (จุดที่ 2 ของลิ้นข้างฝั่งผนังหลัง) = มุมในช่องบาก
+        const apex = pts.reduce((best, v) => (Math.abs(v.z - nz) < 1e-6 && Math.min(...nx.map((x) => Math.abs(v.x - x))) < Math.min(...nx.map((x) => Math.abs(best.x - x))) ? v : best), pts[0])
+        expect(Math.min(...nx.map((x) => Math.abs(apex.x - x)))).toBeLessThan(0.01)
+        expect(Math.abs(apex.z - nz)).toBeLessThan(0.01)
+        // ฟัน: จุดที่งอนไปทางหลังเลยขอบใน อยู่ในแถบช่องบาก (ระหว่างขอบช่องบากสองข้าง)
+        const tooth = pts.filter((v) => (v.z - nz) * towardBack > 0.5 && v.x > nx[0] && v.x < nx[1])
+        expect(tooth.length).toBeGreaterThan(0)
       }
-      // ปลายลิ้นข้างสองฝั่งเว้นช่องกลาง
       const reach = (id: string) => panel(id).outline.map((q) => w3(id, q).x)
       const l = reach('base-left')
       const r = reach('base-right')
@@ -106,7 +119,7 @@ for (const [mid, box] of [
 
     it('ปลายลิ้นก้นทั้ง 4 จบแนวเดียวกัน (สัดส่วนกล่องทั่วไป)', () => {
       const depth = (id: string) => Math.max(...panel(id).outline.map((q) => q.y)) - botY
-      const ds = ['base-back', 'base-left', 'base-tab', 'base-right'].map(depth) // ลิ้นหน้า = ตัวคางหมู + ลิ้นปลาย
+      const ds = ['base-back', 'base-left', 'base-front', 'base-right'].map(depth)
       if (box.D <= box.W) for (const v of ds) expect(v).toBeCloseTo(ds[0], 6)
       else expect(depth('base-left')).toBeLessThanOrEqual(depth('base-back') + 1e-6) // ลึกกว่ากว้าง: ลิ้นข้างยาวเกินกลางก้นไม่ได้
     })
