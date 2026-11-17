@@ -5,12 +5,13 @@ import { P, TONGUE_IN, arcPts, fmt, rect, tongueDepth, tongueFlap, tuckSlit } fr
 //   ปีกกาว | หลัง | ข้างซ้าย | หน้า | ข้างขวา   (ปีกกาวต่อแผงหลัง ทากาวด้านในผนังข้างขวา — ผังเดียวกับ reverse-tuck)
 // ปากบน: ฝาเสียบที่แผงหลัง ลิ้นสอดลงแนบผนังหน้า; ลิ้นกันฝุ่นที่ผนังข้าง ขอบฝั่งหลังตรง ขอบฝั่งหน้าเฉียงหลบลิ้นเสียบ
 // ก้น (ล็อกเองไม่ต้องทากาว) — พิกัดบนพื้นกล่อง: u = ระยะจากผนังหลังไปหน้า (0..Dp), v = ระยะตามแนวกว้าง
-//   1) ลิ้นข้างสองชิ้น (จากผนังข้าง) พับก่อน อยู่ในสุด: ขอบเฉียงจากมุมหลังถึงกลางก้น (u = Dp/2, v = Wp/3)
+//   1) ลิ้นหลัง พับก่อน อยู่ในสุด: สี่เหลี่ยมลึก Dp/2 + tabL มีช่องบากกลางกว้าง ~Wp/3 ลึก tabL (ช่วง u = Dp/2..Dp/2+tabL)
+//   2) ลิ้นข้างสองชิ้น (จากผนังข้าง) ทับนอกลิ้นหลัง: ขอบเฉียงจากมุมหลังถึงกลางก้น (u = Dp/2, v = Wp/3)
 //      แล้วบากเป็น "ขอ" ย้อนไปทางหลัง เต็มลึกฝั่งหน้า
-//   2) ลิ้นหลัง: สี่เหลี่ยมลึก Dp/2 + tabL มีช่องบากกลางกว้าง ~Wp/3 ลึก tabL (ช่วง u = Dp/2..Dp/2+tabL)
 //   3) ลิ้นหน้า (พับสุดท้าย อยู่นอกสุด): คางหมูเฉียงจากมุมเข้าหาคอกว้าง Wp/3 ที่กลางก้น + ลิ้นปลาย tabL
-//      ลิ้นปลายสอดผ่านช่องบากของลิ้นหลังขึ้นไปทับด้านในลิ้นหลัง และถูกขอของลิ้นข้างกดไว้ = ล็อก
-//      ชั้นวัสดุจากนอกเข้าใน: ลิ้นหน้า → ลิ้นหลัง → ลิ้นปลาย → ลิ้นข้าง
+//      ลิ้นปลายสอดผ่านช่องบากของลิ้นหลังขึ้นไปทับด้านในลิ้นหลัง (ขอของลิ้นข้างอยู่ใต้แถบลิ้นปลาย) = ล็อก
+//      ชั้นวัสดุจากนอกเข้าใน: ลิ้นหน้า → ลิ้นข้าง → ลิ้นหลัง → ลิ้นปลาย
+//      ปลายลิ้นก้นทั้ง 4 จบแนวเดียวกันเมื่อสัดส่วนกล่องเอื้อ (ดู tabL/sd)
 // W,D,H = ขนาดด้านใน (+2t ต่อแกน)
 export function generateFefco0215(box: BoxParams, mat: Material): Dieline {
   const { W, D, H } = box
@@ -34,15 +35,19 @@ export function generateFefco0215(box: BoxParams, mat: Material): Dieline {
 
   // ก้นล็อก 1-2-3
   const half = Dp / 2
-  const tabL = Math.min(25, Math.max(5, 0.11 * Dp)) // ลิ้นปลาย = ความลึกช่องบาก
+  // ลิ้นข้างลึกได้เกือบถึงกลางก้น (เว้นช่องกลางไม่ให้สองฝั่งชนกัน)
+  const sdMax = Wp / 2 - Math.max(2, 2 * t + 1, Math.min(4, Wp * 0.05))
+  // ปลายลิ้นก้นทั้ง 4 จบแนวเดียวกัน (แบบมาตรฐาน — ลิ้นหลัง/หน้าลึก Dp/2 + tabL): เลือก tabL ให้เท่าความลึกลิ้นข้าง
+  // ในช่วงที่ลิ้นปลายยังสมส่วน; เกินช่วง (กล่องลึกกว่ากว้างมาก) ลิ้นข้างสั้นกว่าเพราะยาวเกินกลางก้นไม่ได้
+  const tabL = Math.min(Math.min(25, 0.2 * Dp), Math.max(Math.max(5, 0.08 * Dp), sdMax - half)) // = ความลึกช่องบาก
   const neckW = Wp / 3 // คอ/ลิ้นปลายของลิ้นหน้า
   const clear = Math.max(0.5, t / 2) // ช่องบากกว้างกว่าลิ้นปลายข้างละเท่านี้
   const notchW = neckW + 2 * clear
   const rr = Math.min(4, tabL * 0.3) // มุมมนปลายลิ้น/ขอบช่องบาก
   const barb = Math.min(tabL * 0.3, Dp * 0.05) // ขอของลิ้นข้างย้อนไปทางหลัง
   const sideIn = Math.max(0.5, t) // ลิ้นหลัง/ลิ้นข้างร่นจากผนังที่ตั้งฉากกัน กันชนผนังหลังพับ
-  // ความลึกลิ้นข้าง: เกือบถึงกลางก้น เว้นช่องกลางไม่ให้สองฝั่งชนกัน; ขอยาวตามลิ้นปลายแต่ไม่เกินพื้นที่ที่เหลือ (กล่องแคบ)
-  const sd = Wp / 2 - Math.max(2, 2 * t + 1, Math.min(4, Wp * 0.05))
+  // ความลึกลิ้นข้าง: ตัดให้เสมอแนวลิ้นหลัง/หน้า แต่ยังต้องยาวถึงแถบลิ้นปลาย (v ≥ Wp/3 + tabL) ให้ขอทับลิ้นปลายได้ (กล่องกว้างกว่าลึกมาก)
+  const sd = Math.max(Math.min(sdMax, half + tabL), Math.min(sdMax, Wp / 3 + tabL))
   const vDiag = Math.min(Wp / 3, sd - 1.5) // ปลายขอบเฉียง (กล่องเล็กวัสดุหนา ระยะ Wp/3 อาจเกินความลึกลิ้น)
   const hookV = vDiag + Math.min(1.2 * tabL, 0.6 * (sd - vDiag))
   const hr = Math.min(rr, sd - hookV)
@@ -163,25 +168,25 @@ export function generateFefco0215(box: BoxParams, mat: Material): Dieline {
       id: 'tongue-top', parentId: 'tuck-top', outline: tg.pts,
       hingeA: P(lidL, tiTop), hingeB: P(lidR, tiTop), foldAngle: 90, stage: 3, zOffset: layer, tuck: true,
     },
-    // --- ก้นล็อก 1-2-3: ลิ้นข้าง (1) → ลิ้นหลัง (2) → ลิ้นหน้า + ลิ้นปลายสอดช่องบาก (3) ---
+    // --- ก้นล็อก 1-2-3: ลิ้นหลัง (1) → ลิ้นข้าง (2) → ลิ้นหน้า + ลิ้นปลายสอดช่องบาก (3) ---
     {
       id: 'base-left', parentId: 'side-left', outline: flapL,
-      hingeA: P(sideL.x0, bot), hingeB: P(sideL.x1, bot), foldAngle: -90, stage: 1, zOffset: 3 * layer,
+      hingeA: P(sideL.x0, bot), hingeB: P(sideL.x1, bot), foldAngle: -90, stage: 2, zOffset: 2 * layer,
     },
     {
       id: 'base-right', parentId: 'side-right', outline: flapR,
-      hingeA: P(sideR.x0, bot), hingeB: P(sideR.x1, bot), foldAngle: -90, stage: 1, zOffset: 3 * layer,
+      hingeA: P(sideR.x0, bot), hingeB: P(sideR.x1, bot), foldAngle: -90, stage: 2, zOffset: 2 * layer,
     },
     {
       id: 'base-back', parentId: 'back', outline: backFlap,
-      hingeA: P(back.x0, bot), hingeB: P(back.x1, bot), foldAngle: -90, stage: 2, zOffset: layer,
+      hingeA: P(back.x0, bot), hingeB: P(back.x1, bot), foldAngle: -90, stage: 1, zOffset: 3 * layer,
     },
     {
       id: 'base-front', parentId: 'front', outline: frontBody,
       hingeA: P(front.x0, bot), hingeB: P(front.x1, bot), foldAngle: -90, stage: 3,
     },
-    // ลิ้นปลายไม่มีรอยพับ — เนื้อเดียวกับลิ้นหน้า แต่ยกขึ้นสองชั้นไปอยู่เหนือลิ้นหลัง (สอดผ่านช่องบาก)
-    { id: 'base-tab', parentId: 'base-front', outline: tabPts, stage: 3, zOffset: 2 * layer },
+    // ลิ้นปลายไม่มีรอยพับ — เนื้อเดียวกับลิ้นหน้า แต่ยกขึ้นไปอยู่เหนือลิ้นหลัง (สอดผ่านช่องบาก)
+    { id: 'base-tab', parentId: 'base-front', outline: tabPts, stage: 3, zOffset: 4 * layer },
   ]
 
   // ---------- เส้น blueprint ----------

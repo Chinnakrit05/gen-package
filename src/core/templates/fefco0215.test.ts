@@ -35,7 +35,7 @@ for (const [mid, box] of [
       }
     })
 
-    it('ลิ้นก้นนอนราบที่พื้น เรียงชั้นจากนอกเข้าใน: หน้า → หลัง → ลิ้นปลาย → ลิ้นข้าง', () => {
+    it('ลิ้นก้นนอนราบที่พื้น เรียงชั้นจากนอกเข้าใน: หน้า → ลิ้นข้าง → หลัง → ลิ้นปลาย (พับ หลัง 1 → ข้าง 2 → หน้า 3)', () => {
       const lift = (id: string) => {
         const ys = panel(id).outline.map((q) => w3(id, q).y - floor)
         expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(0.01) // ราบ
@@ -47,11 +47,13 @@ for (const [mid, box] of [
       const l = lift('base-left')
       const r = lift('base-right')
       expect(f).toBeGreaterThanOrEqual(-0.01)
-      expect(b).toBeGreaterThan(f)
-      expect(tab).toBeGreaterThan(b)
-      expect(l).toBeGreaterThan(tab)
+      expect(l).toBeGreaterThan(f)
       expect(r).toBeCloseTo(l, 6)
-      expect(l).toBeLessThan(4 * (t + 0.05) + 0.01)
+      expect(b).toBeGreaterThan(l)
+      expect(tab).toBeGreaterThan(b)
+      expect(tab).toBeLessThan(4 * (t + 0.05) + 0.01)
+      const stage = (id: string) => panel(id).stage
+      expect([stage('base-back'), stage('base-left'), stage('base-right'), stage('base-front')]).toEqual([1, 2, 2, 3])
     })
 
     it('คอลิ้นหน้าตรงขอบในช่องบากลิ้นหลัง (กลางก้น) และลิ้นปลายแคบกว่าช่องบาก', () => {
@@ -72,7 +74,7 @@ for (const [mid, box] of [
       expect(Math.abs(tabC.z - backHinge.z)).toBeLessThan(Math.abs(neckMid.z - backHinge.z))
     })
 
-    it('ขอของลิ้นข้างทั้งสองอยู่เหนือลิ้นปลาย (กดล็อก) และลิ้นข้างไม่ชนกันกลางก้น', () => {
+    it('ขอของลิ้นข้างทั้งสองซ้อนแถบลิ้นปลาย และลิ้นข้างไม่ชนกันกลางก้น', () => {
       const tab = panel('base-tab').outline
       const tabW = tab.map((q) => w3('base-tab', q))
       const inTab = (v: Vector3) => {
@@ -100,6 +102,13 @@ for (const [mid, box] of [
         expect(nearFront).toBeGreaterThan(0) // ไม่ล้ำผนังหน้า
         expect(nearFront).toBeLessThan(t + 1)
       }
+    })
+
+    it('ปลายลิ้นก้นทั้ง 4 จบแนวเดียวกัน (สัดส่วนกล่องทั่วไป)', () => {
+      const depth = (id: string) => Math.max(...panel(id).outline.map((q) => q.y)) - botY
+      const ds = ['base-back', 'base-left', 'base-tab', 'base-right'].map(depth) // ลิ้นหน้า = ตัวคางหมู + ลิ้นปลาย
+      if (box.D <= box.W) for (const v of ds) expect(v).toBeCloseTo(ds[0], 6)
+      else expect(depth('base-left')).toBeLessThanOrEqual(depth('base-back') + 1e-6) // ลึกกว่ากว้าง: ลิ้นข้างยาวเกินกลางก้นไม่ได้
     })
 
     it('matrices finite + DXF ไม่มี NaN', () => {
