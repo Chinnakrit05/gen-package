@@ -113,3 +113,16 @@ for (const [mid, box] of [
     })
   })
 }
+
+describe('fefco-0215: ลึก D ได้ถึง 200 (template อื่น/ภาชนะ 150)', () => {
+  it('templateMaxD + parseSpec ตัดตาม template', async () => {
+    const { templateMaxD } = await import('./index')
+    const { parseSpec } = await import('../project')
+    expect(templateMaxD('fefco-0215', true)).toBe(200)
+    expect(templateMaxD('tuck-end', true)).toBe(150)
+    expect(templateMaxD('fefco-0215', false)).toBe(150) // วัสดุภาชนะ/ถุง
+    expect(parseSpec({ template: 'fefco-0215', materialId: 'corrugated-e', W: 250, D: 200, H: 210 })?.D).toBe(200)
+    expect(parseSpec({ template: 'fefco-0215', materialId: 'corrugated-e', W: 250, D: 260, H: 210 })?.D).toBe(200)
+    expect(parseSpec({ template: 'tuck-end', materialId: 'carton-300', W: 80, D: 200, H: 120 })?.D).toBe(150)
+  })
+})

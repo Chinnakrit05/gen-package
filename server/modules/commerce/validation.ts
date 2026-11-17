@@ -18,7 +18,7 @@ export const productionOrderSchema = z.object({
  payments:z.array(z.object({id:uuid,amountMinor:z.number().int().positive(),reference:z.string(),fileId:uuid.nullable(),reportedAt:z.string(),confirmedAt:z.string().nullable()})),
 })
 export const productionOrderPageSchema=z.object({items:z.array(productionOrderSchema),nextCursor:uuid.nullable()})
-export const requestSpecSchema=z.object({template:z.string().min(1).max(120),materialId:z.string().min(1).max(120),W:z.number().min(10).max(250),D:z.number().min(20).max(150),H:z.number().min(10).max(300),handle:z.boolean()}).strict()
+export const requestSpecSchema=z.object({template:z.string().min(1).max(120),materialId:z.string().min(1).max(120),W:z.number().min(10).max(250),D:z.number().min(20).max(200),H:z.number().min(10).max(300),handle:z.boolean()}).strict()
 export const requestRevisionSchema=z.object({id:uuid,revision:z.number().int().positive(),title:z.string(),quantity:z.number().int().positive(),notes:z.string(),spec:requestSpecSchema,createdAt:z.string()})
 export const requestTradingSchema=z.object({status:z.enum(['open','closed','selection_pending','awarded']),acceptingUntil:z.string(),currentRevision:requestRevisionSchema,revisions:z.array(requestRevisionSchema),revisionsNextCursor:z.number().int().nullable().default(null)})
 export const reviseRequestSchema=z.object({operationId:uuid,expectedRevisionId:uuid,title:z.string().trim().min(1).max(100),quantity:z.number().int().min(1).max(1_000_000),notes:z.string().max(1000),spec:requestSpecSchema,acceptingUntil:z.string().datetime({offset:true})}).strict()

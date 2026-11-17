@@ -30,6 +30,7 @@ export interface BoxTemplate {
   spin?: number
   supportsHandle: boolean
   supportsVents?: boolean // รองรับรูระบายอากาศ (กล่องทรงปิด/ถาดที่มีผนังตั้ง)
+  maxD?: number // ลึก D สูงสุด (มม.) เมื่อไม่ใช่ D_MAX ทั่วไป
   foldDepth: (box: BoxParams, mat: Material) => number
   generate: (box: BoxParams, mat: Material) => Dieline
 }
@@ -95,6 +96,7 @@ export const TEMPLATES: BoxTemplate[] = [
     nameTh: 'กล่องฝาบนก้นล็อก (FEFCO 0215)',
     detail: 'สินค้ารีเทลวางชั้น · เครื่องสำอาง · ขนม/อาหารแห้ง',
     defaults: { W: 90, D: 60, H: 150 },
+    maxD: 200,
     tilt: 0,
     supportsHandle: false,
     foldDepth: (b, m) => b.D + 2 * m.thickness,
@@ -256,6 +258,14 @@ export const TEMPLATES: BoxTemplate[] = [
     generate: (box) => generateSticker(box),
   },
 ]
+
+// ลึก D สูงสุดทั่วไป — template กล่องตั้ง maxD เองได้ (เช่น FEFCO 0215 ถึง 200); ภาชนะ/ถุง (ไม่พับ) ใช้ค่าทั่วไปเสมอ
+export const D_MAX = 150
+export const D_MAX_ANY = 200 // เพดานรวมทุก template — schema cloud/ตัวตรวจคำขอใช้ค่านี้ แล้วตัวแปลงฝั่ง client ตัดตาม template อีกชั้น
+export function templateMaxD(templateId: string, foldable: boolean): number {
+  if (!foldable) return D_MAX
+  return TEMPLATES.find((t) => t.id === templateId)?.maxD ?? D_MAX
+}
 
 export function getTemplate(id: string): BoxTemplate {
   return TEMPLATES.find((t) => t.id === id) ?? TEMPLATES[0]

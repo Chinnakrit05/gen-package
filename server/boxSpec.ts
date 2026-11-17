@@ -10,7 +10,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { isLegacyAiRouteEnabled } from './http/legacyAiGuard'
 import { readRequestApiKey } from './modules/ai/requestApiKey'
 import { CARD_STOCK_IDS, DEFAULT_CARD_MAT, MATERIALS } from '../src/core/materials'
-import { TEMPLATES } from '../src/core/templates'
+import { TEMPLATES, templateMaxD } from '../src/core/templates'
 import { DEFAULT_AI_MODEL } from './config'
 
 const execFileP = promisify(execFile)
@@ -39,6 +39,11 @@ export interface BoxSpecResult {
 
 const LIMITS = { W: [30, 250], D: [20, 150], H: [30, 300] } as const
 const TEMPLATE_IDS = TEMPLATES.map((t) => t.id)
+// ลึก D สูงสุดตาม template (FEFCO 0215 ถึง 200; ภาชนะ/ถุงใช้ค่าทั่วไป)
+const dLimit = (template: string, materialId: string): readonly [number, number] => [
+  LIMITS.D[0],
+  templateMaxD(template, MATERIALS.find((m) => m.id === materialId)?.foldable ?? true),
+]
 
 const clamp = (v: number, [lo, hi]: readonly [number, number]) =>
   Math.min(hi, Math.max(lo, Math.round(v * 2) / 2))
@@ -114,11 +119,11 @@ ${COMMON_ITEMS.map((i) => `- ${i.label}${i.fragile ? ' (เปราะ)' : ''}`
 2. จัด layout แถว × คอลัมน์: W = คอลัมน์×กว้างชิ้น + ช่องไฟ, D = แถว×ลึกชิ้น + ช่องไฟ
 3. ช่องไฟระหว่างชิ้นและขอบ 3-5 มม. ของเปราะ (แก้ว เซรามิก ขวดแก้ว) เผื่อ 5-8 มม. ต่อด้านสำหรับวัสดุกันกระแทก
 4. H = ความสูงชิ้น + 4-6 มม. (tuck-end/sleeve) — สำหรับ mailer ของมักวางนอน H = ความหนาชิ้น + เผื่อ
-5. ขอบเขต: W 30-250, D 20-150, H 30-300 — ถ้าเกินให้จัด layout ใหม่ (เพิ่มแถว) จนอยู่ในช่วง
+5. ขอบเขต: W 30-250, D 20-150 (fefco-0215 ได้ถึง 200), H 30-300 — ถ้าเกินให้จัด layout ใหม่ (เพิ่มแถว) จนอยู่ในช่วง
 
 ## เช็คให้ผ่านก่อนส่งคำตอบทุกครั้ง (fit check)
 1. คำนวณพื้นที่ที่ของต้องใช้จริง (รวมช่องไฟ/กันกระแทก) เทียบกับ W×D×H ที่จะตอบ — ถ้าใส่ไม่ได้จริง ห้ามเขียน assumptions/layoutNote/${why} เหมือนใส่ได้
-2. ถ้าของหรือจำนวนที่ขอเกินลิมิตระบบ (ต้องใช้ W>250 / D>150 / H>300): ให้ assumptions ข้อแรกขึ้นต้นด้วย "ข้อจำกัด:" บอกตรงๆ ว่าใส่ไม่ได้ทั้งหมด ใส่ได้จริงกี่ชิ้น/ขนาดไหน พร้อมทางเลือก (แยกหลายกล่อง, ซ้อนหลายชั้น, ตัดจำนวน) — แล้วตั้ง W/D/H เป็นค่าที่ดีที่สุดเท่าที่ทำได้
+2. ถ้าของหรือจำนวนที่ขอเกินลิมิตระบบ (ต้องใช้ W>250 / D>150 (fefco-0215: D>200) / H>300): ให้ assumptions ข้อแรกขึ้นต้นด้วย "ข้อจำกัด:" บอกตรงๆ ว่าใส่ไม่ได้ทั้งหมด ใส่ได้จริงกี่ชิ้น/ขนาดไหน พร้อมทางเลือก (แยกหลายกล่อง, ซ้อนหลายชั้น, ตัดจำนวน) — แล้วตั้ง W/D/H เป็นค่าที่ดีที่สุดเท่าที่ทำได้
 3. prompt กำกวมระหว่าง "ผลิตภาชนะเอง" (ขวด/กระป๋อง/โหล) กับ "กล่องใส่มัน" → ประกาศการตีความที่เลือกไว้ใน assumptions ข้อแรก
 4. handle=true กับของหนัก (เซรามิก/แก้ว/ขวดหลายชิ้น รวม >2 กก.) → เตือนใน assumptions ว่ารูหิ้วกระดาษรับน้ำหนักจำกัด ควรยกประคองก้นกล่อง
 
@@ -182,7 +187,7 @@ function sanitize(raw: Record<string, unknown>, mock: boolean): BoxSpecResult {
     template,
     materialId,
     W: clamp(Number(raw.W) || 80, LIMITS.W),
-    D: clamp(Number(raw.D) || 50, LIMITS.D),
+    D: clamp(Number(raw.D) || 50, dLimit(template, materialId)),
     H: clamp(Number(raw.H) || 120, LIMITS.H),
     handle: raw.handle === true && template !== 'sleeve',
     assumptions: Array.isArray(raw.assumptions)
@@ -210,7 +215,7 @@ export function parseCurrent(v: unknown): CurrentSpec | undefined {
     template,
     materialId,
     W: clamp(W, LIMITS.W),
-    D: clamp(D, LIMITS.D),
+    D: clamp(D, dLimit(template, materialId)),
     H: clamp(H, LIMITS.H),
     handle: o.handle === true,
   }

@@ -1,5 +1,5 @@
 import { MATERIALS } from './materials'
-import { TEMPLATES } from './templates'
+import { TEMPLATES, templateMaxD } from './templates'
 import { parseDecos, parseFillImage, type Deco, type FillImage } from './artwork'
 import { CAP_STYLES, LABEL_STYLES, SHOULDER_STYLES, type CapStyle, type LabelBox, type LabelStyle, type ShoulderStyle } from './vessel'
 import { POUCH_STYLES, ZIP_AT_MAX, type PouchStyle, type PouchAddons } from './pouch'
@@ -90,7 +90,7 @@ export function parseSpec(s: unknown): CurrentSpec | null {
     materialId,
     // สติกเกอร์เล็กได้ถึง 10 มม. (แผ่นหลายดวง) — กล่อง/งานอื่นขั้นต่ำ 30
     W: clamp(W, template === 'sticker' ? 10 : 30, 250),
-    D: clamp(D, 20, 150),
+    D: clamp(D, 20, templateMaxD(template, MATERIALS.find((m) => m.id === materialId)!.foldable)),
     H: clamp(H, template === 'sticker' ? 10 : 30, 300),
     handle: o.handle === true,
   }

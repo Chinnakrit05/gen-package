@@ -18,7 +18,7 @@ import './components/editor-v2/model-workspace.css'
 const TopBarCtx = createContext(false)
 import { LangCtx, loadLang, LANG_KEY, useT, type Lang } from './i18n'
 import { CARD_STOCK_IDS, DEFAULT_CARD_MAT, MATERIALS, getMaterial, isCardMat, packKind } from './core/materials'
-import { TEMPLATES, getTemplate } from './core/templates'
+import { TEMPLATES, getTemplate, templateMaxD } from './core/templates'
 import { TAPERED_LID_BOX_ID, taperedLidWidth } from './core/templates/taperedLidBox'
 import type { BoxParams, Dieline, Vec2 } from './core/types'
 import { ART_SAFE_MM, panelBoxes } from './core/aiArtwork'
@@ -1943,6 +1943,11 @@ export default function App({
 
   const template = getTemplate(templateId)
   const mat = getMaterial(materialId)
+  // ลึก D สูงสุดตาม template (FEFCO 0215 ถึง 200) — สลับไป template/วัสดุที่เพดานต่ำกว่า ตัด D ลงให้อยู่ในช่วง
+  const dMax = templateMaxD(templateId, mat.foldable)
+  useEffect(() => {
+    if (D > dMax) setD(dMax)
+  }, [D, dMax])
   const kind = packKind(mat) // 'box' | 'vessel' | 'pouch' — เลือก path dieline/3D
   // นามบัตรใช้กลไก box (การ์ดแบน) แต่นำเสนอเป็น "ประเภทงาน" แยกใน UI
   const isCard = kind === 'box' && templateId === 'card'
@@ -2315,7 +2320,7 @@ export default function App({
     setMaterialId(spec.materialId)
     const minWH = spec.template === 'sticker' ? STICKER_MIN_SIZE : 30
     setW(clamp(spec.W, minWH, 250))
-    setD(clamp(spec.D, 20, 150))
+    setD(clamp(spec.D, 20, templateMaxD(spec.template, getMaterial(spec.materialId).foldable)))
     setH(clamp(spec.H, minWH, 300))
     setHandle(spec.handle && getTemplate(spec.template).supportsHandle)
   }
@@ -2522,7 +2527,7 @@ export default function App({
       template: spec.template,
       materialId: spec.materialId,
       W: clamp(spec.W, spec.template === 'sticker' ? STICKER_MIN_SIZE : 30, 250),
-      D: clamp(spec.D, 20, 150),
+      D: clamp(spec.D, 20, templateMaxD(spec.template, getMaterial(spec.materialId).foldable)),
       H: clamp(spec.H, spec.template === 'sticker' ? STICKER_MIN_SIZE : 30, 300),
       handle: spec.handle && getTemplate(spec.template).supportsHandle,
     }
@@ -5208,7 +5213,7 @@ export default function App({
                 }
                 value={D}
                 min={20}
-                max={150}
+                max={dMax}
                 disabled={aiBusy}
                 onChange={(value) => changeDimension('D', value)}
                 onEditBoundary={sizeEditBoundary}

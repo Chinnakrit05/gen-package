@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { MATERIALS } from '../../../src/core/materials'
-import { TEMPLATES } from '../../../src/core/templates'
+import { D_MAX_ANY, TEMPLATES } from '../../../src/core/templates'
 import { FINISHES, type FinishKind } from '../../../src/core/finish'
 import { LETTER_SPACING_RANGE, TEXT_FX_KINDS, TEXT_FX_RANGE, TEXT_STRETCH_RANGE, type TextFxKind } from '../../../src/core/textFx'
 import {
@@ -192,7 +192,7 @@ const currentSpecSchema = z.object({
   materialId: z.string().refine((value) => MATERIALS.some((material) => material.id === value), 'unknown material'),
   // สติกเกอร์เล็กได้ถึง 10 มม. (แผ่นหลายดวง) — งานอื่นขั้นต่ำ 30 (ตรงกับ parseSpec ฝั่ง client)
   W: finite.min(10).max(250),
-  D: finite.min(20).max(150),
+  D: finite.min(20).max(D_MAX_ANY),
   H: finite.min(10).max(300),
   handle: z.boolean(),
 }).strict().superRefine((spec, context) => {
