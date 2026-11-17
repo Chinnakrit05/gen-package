@@ -12,6 +12,14 @@ import { P, TONGUE_IN, arcPts, fmt, rect, tongueDepth, tongueFlap, tuckSlit } fr
 //      ชั้นวัสดุจากนอกเข้าใน: ลิ้นหน้า → ลิ้นข้าง → ลิ้นหลัง (แผงแข็งทั้งชิ้น — 3D ไม่จำลองการงอฟัน/ลิ้นปลายสอดผ่านช่อง)
 //      ปลายลิ้นก้นทั้ง 4 จบแนวเดียวกันเมื่อสัดส่วนกล่องเอื้อ (ดู tabL/sd)
 // W,D,H = ขนาดด้านใน (+2t ต่อแกน)
+// จังหวะพับก้นแบบ Pacdora: ทั้งสี่ลิ้นพับไปพร้อมกัน ลิ้นหลัง (1) นำ ลิ้นข้าง (2) ตาม ลิ้นหน้า (3) ปิดท้าย (ชั้นวัสดุตอนจบเรียงตามลำดับนี้)
+// แผ่นแข็งพับพร้อมกันจะเฉียดทะลุกันช่วงกลางทางใกล้มุม (ของจริงกระดาษงอหลบ) — ผู้ใช้เลือกความเหมือนแบบอ้างอิงมากกว่า
+// (17 พ.ย. 2026; foldOrder.test อนุญาตคู่ base-* ของ 0215); พับทีละชิ้นจริงคาบได้แค่ ~0.06 ของแถบพับ
+// within เทียบหน้าต่าง stage ของ WINDOWS_4 (1 = 0.42–0.68, 2 = 0.62–0.86, 3 = 0.82–1): หลัง 0.42–0.78, ข้าง 0.46–0.94, หน้า 0.50–1
+const BACK_WIN: [number, number] = [0, (0.78 - 0.42) / 0.26]
+const SIDE_WIN: [number, number] = [(0.46 - 0.62) / 0.24, (0.94 - 0.62) / 0.24]
+const FRONT_WIN: [number, number] = [(0.5 - 0.82) / 0.18, 1]
+
 export function generateFefco0215(box: BoxParams, mat: Material): Dieline {
   const { W, D, H } = box
   const t = mat.thickness
@@ -171,19 +179,19 @@ export function generateFefco0215(box: BoxParams, mat: Material): Dieline {
     // --- ก้นล็อก 1-2-3: ลิ้นหลัง (1) → ลิ้นข้าง (2) ขอคร่อมขอบช่องบาก → ลิ้นหน้า (3) ชิ้นเดียว ลิ้นปลายลงแนวช่องบาก ---
     {
       id: 'base-left', parentId: 'side-left', outline: flapL,
-      hingeA: P(sideL.x0, bot), hingeB: P(sideL.x1, bot), foldAngle: -90, stage: 2, zOffset: 2 * layer,
+      hingeA: P(sideL.x0, bot), hingeB: P(sideL.x1, bot), foldAngle: -90, stage: 2, within: SIDE_WIN, zOffset: 2 * layer,
     },
     {
       id: 'base-right', parentId: 'side-right', outline: flapR,
-      hingeA: P(sideR.x0, bot), hingeB: P(sideR.x1, bot), foldAngle: -90, stage: 2, zOffset: 2 * layer,
+      hingeA: P(sideR.x0, bot), hingeB: P(sideR.x1, bot), foldAngle: -90, stage: 2, within: SIDE_WIN, zOffset: 2 * layer,
     },
     {
       id: 'base-back', parentId: 'back', outline: backFlap,
-      hingeA: P(back.x0, bot), hingeB: P(back.x1, bot), foldAngle: -90, stage: 1, zOffset: 3 * layer,
+      hingeA: P(back.x0, bot), hingeB: P(back.x1, bot), foldAngle: -90, stage: 1, within: BACK_WIN, zOffset: 3 * layer,
     },
     {
       id: 'base-front', parentId: 'front', outline: frontFlap,
-      hingeA: P(front.x0, bot), hingeB: P(front.x1, bot), foldAngle: -90, stage: 3,
+      hingeA: P(front.x0, bot), hingeB: P(front.x1, bot), foldAngle: -90, stage: 3, within: FRONT_WIN,
     },
   ]
 

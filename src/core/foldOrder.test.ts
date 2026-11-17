@@ -11,6 +11,9 @@ import type { Panel, Vec2 } from './types'
 // ข้อยกเว้นต้องมีเหตุผลทางกายภาพกำกับ
 
 const ALLOWED = new Set([
+  // FEFCO 0215 ก้นล็อก 1-2-3 พับสี่ลิ้นพร้อมกันแบบ Pacdora (ผู้ใช้เลือก 17 พ.ย. 2026): ขอบหน้าลิ้นข้างทับแนวพับลิ้นหน้า
+  // แผ่นแข็งจึงเฉียดกันช่วงท้าย — ของจริงกระดาษงอหลบ; ตอนจบชั้นถูกต้อง (fefco0215.test)
+  'fefco-0215:base-left→base-front', 'fefco-0215:base-right→base-front',
   // ลิ้นยาวเต็มความลึก: ปลายลิ้นหน้าแตะแนวบานพับลิ้นหลังพอดี (เฉียดขอบ ไม่ผ่านเนื้อแผง)
   'fefco-0202:flap-t-back→flap-t-front', 'fefco-0202:flap-b-back→flap-b-front',
 ])
