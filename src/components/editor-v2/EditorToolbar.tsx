@@ -5,6 +5,8 @@ import * as assets from './assets'
 
 interface Props {
   selected: Deco | undefined
+  backgroundColor: string | null
+  onColor(target: 'background' | 'fill' | 'stroke'): void
   count: number
   disabled: boolean
   advanced: boolean
@@ -34,7 +36,7 @@ const ALIGN_MODES: { mode: AlignMode; th: string; en: string }[] = [
   { mode: 'bottom', th: 'ชิดล่าง', en: 'Bottom' },
 ]
 
-export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced, onPatch, onDuplicate, onLock, onDelete, onLayers, multiMode, onMultiMode, onMultiConfirm, onMultiCancel, onAlign, grouped, onGroup, onUngroup }: Props) {
+export function EditorToolbar({ selected, backgroundColor, onColor, count, disabled, advanced, onAdvanced, onPatch, onDuplicate, onLock, onDelete, onLayers, multiMode, onMultiMode, onMultiConfirm, onMultiCancel, onAlign, grouped, onGroup, onUngroup }: Props) {
   const t = useT()
   const [popover, setPopover] = useState<'opacity' | 'align' | 'multiAlign' | null>(null)
   const root = useRef<HTMLDivElement>(null)
@@ -74,14 +76,24 @@ export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced,
       </div>
     )
   }
+  if (!count) return (
+    <div className="v2-selection-tools">
+      <button type="button" className="v2-layers-start" onClick={onLayers}>{t('เลเยอร์', 'Layers')}</button>
+      <button type="button" className="v2-multi-start" disabled={disabled} onClick={onMultiMode}
+        aria-label={t('เลือกหลายรายการ', 'Multi-select')} title={t('เลือกหลายรายการ', 'Multi-select')}>
+        <span aria-hidden="true">⊞</span>
+      </button>
+    </div>
+  )
   const text = selected?.type === 'text' ? selected : null
   const blocked = disabled || !selected || !!selected.locked
   const color = selected?.type === 'text' ? selected.color : selected?.type === 'shape' && selected.shape === 'line' ? selected.stroke : selected?.type === 'shape' || selected?.type === 'path' ? selected.fill : undefined
+  const stroke = selected?.type === 'text' ? selected.strokeColor : selected?.type === 'shape' || selected?.type === 'path' ? selected.stroke : undefined
   const patchText = (patch: Partial<TextEl>) => !blocked && onPatch(d => d.type === 'text' ? withTextW({ ...d, ...patch }) : d)
   const changeSize = (size: number) => { if (Number.isFinite(size)) patchText({ size: Math.max(1, Math.min(400, size)) }) }
   return (
-    <div ref={root} className={`v2-toolbar${advanced ? ' expanded' : ''}`} role="toolbar" aria-label={t('ปรับแต่งองค์ประกอบ', 'Element formatting')}>
-      {(text || !count) && <>
+    <div ref={root} className={`v2-toolbar${!text ? ' v2-shape-toolbar' : ''}${advanced ? ' expanded' : ''}`} role="toolbar" aria-label={t('ปรับแต่งองค์ประกอบ', 'Element formatting')}>
+      {text && <>
         <select aria-label={t('ฟอนต์', 'Font')} value={text?.font ?? 'noto'} disabled={blocked} onChange={e => patchText({ font: e.target.value })}>
           {!text ? <option value="noto">Font.</option> : FONTS.map(f => <option key={f.id} value={f.id}>{f.nameTh}</option>)}
         </select>
@@ -92,12 +104,22 @@ export function EditorToolbar({ selected, count, disabled, advanced, onAdvanced,
         </div><span className="v2-toolbar-divider" />
       </>}
       {count > 1 && <span className="v2-selection-count">{t(`${count} ชิ้น`, `${count} items`)}</span>}
-      <label className="v2-color" title={t('สีองค์ประกอบ', 'Element color')} style={{ background: color && color !== 'none' ? color : '#00a896' }}>
-        <input type="color" aria-label={t('สีองค์ประกอบ', 'Element color')} value={color && color !== 'none' ? color : '#00a896'} disabled={blocked || color === undefined}
-          onChange={e => { const value = e.target.value; onPatch(d => d.type === 'text' ? { ...d, color: value, grad: undefined } : d.type === 'shape' && d.shape === 'line' ? { ...d, stroke: value, grad: undefined } : d.type === 'shape' || d.type === 'path' ? { ...d, fill: value, grad: undefined } : d) }} />
-      </label>
+      <button type="button" className="v2-color v2-package-color" title={t('สีพื้นบรรจุภัณฑ์', 'Package base color')}
+        aria-label={t('สีพื้นบรรจุภัณฑ์', 'Package base color')} disabled={disabled}
+        style={{ background: backgroundColor ?? '#154049' }} onClick={() => onColor('background')} />
+      <button type="button" className="v2-color" title={t('สีองค์ประกอบ', 'Element color')}
+        aria-label={t('สีองค์ประกอบ', 'Element color')} disabled={blocked || color === undefined}
+        style={{ background: selected && 'grad' in selected && selected.grad
+          ? selected.grad.radial ? `radial-gradient(${selected.grad.from}, ${selected.grad.to})`
+            : `linear-gradient(${selected.grad.angle}deg, ${selected.grad.from}, ${selected.grad.to})`
+          : color && color !== 'none' ? color : '#00a896' }} onClick={() => onColor('fill')} />
+      {(selected?.type === 'text' || selected?.type === 'shape' || selected?.type === 'path') && (
+        <button type="button" className="v2-color v2-stroke-color" title={t('สีเส้นขอบ', 'Stroke color')}
+          aria-label={t('สีเส้นขอบ', 'Stroke color')} disabled={blocked}
+          style={{ borderColor: stroke && stroke !== 'none' ? stroke : '#154049' }} onClick={() => onColor('stroke')} />
+      )}
       <button type="button" className="v2-opacity" title={t('ความทึบ', 'Opacity')} aria-label={t('ความทึบ', 'Opacity')} aria-expanded={popover === 'opacity'} disabled={blocked} onClick={() => setPopover(popover === 'opacity' ? null : 'opacity')} />
-      {(text || !count) && <>
+      {text && <>
         <button type="button" title={t('จัดชิดข้อความ', 'Text alignment')} aria-label={t('จัดชิดข้อความ', 'Text alignment')} aria-expanded={popover === 'align'} disabled={blocked} onClick={() => setPopover(popover === 'align' ? null : 'align')}><img src={assets.imgSectionToolbarIconLeftAlignStateNormal} alt="" /></button>
         <button type="button" title={t('ตัวหนา', 'Bold')} aria-label={t('ตัวหนา', 'Bold')} aria-pressed={text?.weight === 700} disabled={blocked} onClick={() => patchText({ weight: text?.weight === 700 ? 400 : 700 })}><img src={assets.imgSectionToolbarIconBoldStateNormal} alt="" /></button>
         <button type="button" className="v2-toolbar-secondary" title={t('ตัวเอียง', 'Italic')} aria-label={t('ตัวเอียง', 'Italic')} aria-pressed={!!text?.italic} disabled={blocked} onClick={() => patchText({ italic: !text?.italic || undefined })}><img src={assets.imgSectionToolbarIconItalicStateNormal} alt="" /></button>

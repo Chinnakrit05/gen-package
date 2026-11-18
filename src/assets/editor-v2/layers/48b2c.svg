@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="Icon.Button">
+<g id="Vector">
+<use xlink:href="#stroke0_0_1073" stroke="#154049"/>
+<use xlink:href="#stroke0_0_1073" stroke="#5D848C"/>
+</g>
+</g>
+<defs>
+<path id="stroke0_0_1073" d="M17 15L17 17C17 18.3261 16.4732 19.5979 15.5355 20.5355C14.5979 21.4732 13.3261 22 12 22C10.6739 22 9.40215 21.4732 8.46447 20.5355C7.52678 19.5979 7 18.3261 7 17L7 15M7 9L7 7C7 5.67392 7.52678 4.40215 8.46447 3.46447C9.40215 2.52678 10.6739 2 12 2C13.3261 2 14.5979 2.52678 15.5355 3.46447C16.4732 4.40215 17 5.67392 17 7L17 9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</defs>
+</svg>

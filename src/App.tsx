@@ -7,6 +7,8 @@ import { Link2, LogOut } from 'lucide-react'
 import { EditorVersionSwitch, EDITOR_VERSION_KEY, loadEditorVersion, type EditorVersion } from './components/editor-v2/EditorVersionSwitch'
 import { EditorRail, ElementLibrary, type EditorTool } from './components/editor-v2/EditorSidebar'
 import { EditorToolbar } from './components/editor-v2/EditorToolbar'
+import { EditorLayersPanel } from './components/editor-v2/EditorLayersPanel'
+import { EditorColorPanel } from './components/editor-v2/EditorColorPanel'
 import { ModelPanel, ModelTile, type ModelOption, type ModelTab } from './components/editor-v2/ModelPanel'
 import { modelMaterialAssets, modelSizeAssets, modelTypeAssets, modelViewerAssets } from './components/editor-v2/modelAssets'
 import * as studioAssets from './components/editor-v2/assets'
@@ -1888,6 +1890,7 @@ export default function App({
   const [modelLightsOpen, setModelLightsOpen] = useState(false)
   const v2Model = isV2 && !readOnly && sideTab === 'design'
   const [v2Advanced, setV2Advanced] = useState(false)
+  const [v2ColorTarget, setV2ColorTarget] = useState<'fill' | 'stroke'>('fill')
   const [v2PanelClosed, setV2PanelClosed] = useState(false)
   const changeEditorVersion = (version: EditorVersion) => {
     if (version === editorVersion) return
@@ -1909,6 +1912,14 @@ export default function App({
     setSideTab(tool === 'model' ? 'design' : tool === 'export' ? 'export' : 'artwork')
     if (tool === 'layers') setGroups(g => ({ ...g, layers: true }))
     if (tool === 'templates') setGroups(g => ({ ...g, lib: true }))
+  }
+  const openV2Color = (target: 'background' | 'fill' | 'stroke') => {
+    setV2Advanced(false)
+    if (target === 'background') chooseV2Tool('background')
+    else {
+      setV2ColorTarget(target)
+      chooseV2Tool('color')
+    }
   }
   const asideRef = useRef<HTMLElement>(null)
   const headerRef = useRef<HTMLElement>(null)
@@ -4470,6 +4481,35 @@ export default function App({
     </div>
   )
 
+  const selectedPaint = selected?.type === 'text' || selected?.type === 'shape' || selected?.type === 'path' ? selected : undefined
+  const paintBlocked = aiBusy || projectBusy || !selectedPaint || !!selectedPaint.locked
+  const paintIsStroke = v2ColorTarget === 'stroke' || selectedPaint?.type === 'shape' && selectedPaint.shape === 'line'
+  const paintValue = selectedPaint?.type === 'text'
+    ? paintIsStroke ? selectedPaint.strokeColor ?? null : selectedPaint.color
+    : selectedPaint ? paintIsStroke ? selectedPaint.stroke : selectedPaint.fill : null
+  const changePaint = (hex: string) => {
+    if (paintBlocked) return
+    patchSelected((deco) => {
+      if (deco.type === 'text') return paintIsStroke
+        ? { ...deco, strokeColor: hex, strokeW: deco.strokeW || .25 }
+        : { ...deco, color: hex, grad: undefined }
+      if (deco.type === 'shape' || deco.type === 'path') return paintIsStroke
+        ? { ...deco, stroke: hex, strokeW: deco.strokeW || .25, ...(deco.type === 'shape' && deco.shape === 'line' ? { h: deco.strokeW || .25 } : {}) }
+        : { ...deco, fill: hex, grad: undefined }
+      return deco
+    })
+  }
+  const clearPaint = () => {
+    if (paintBlocked) return
+    patchSelected((deco) => {
+      if (deco.type === 'text') return paintIsStroke ? { ...deco, strokeColor: undefined, strokeW: undefined } : deco
+      if (deco.type === 'shape' || deco.type === 'path') return paintIsStroke
+        ? { ...deco, stroke: 'none', strokeW: 0 }
+        : { ...deco, fill: 'none', grad: undefined }
+      return deco
+    })
+  }
+
   return (
     <LangCtx.Provider value={lang}>
     <div className={`app${isV2 ? ' editor-v2' : ''}${v2Model ? ' v2-model-workspace' : ''}${isV2 && v2PanelClosed && !readOnly ? ' v2-panel-closed' : ''}${readOnly ? ' editor-readonly' : ''}`} data-editor-version={editorVersion}>
@@ -4553,6 +4593,12 @@ export default function App({
           </div>
         )}
         {cloud && (entitlementsStatus === 'ready' ? (
+          isV2 ? <button type="button" className="v2-credit-chip"
+            aria-label={t(`เครดิต AI คงเหลือ ${gateCredits} · แพ็กเกจและเครดิต`, `${gateCredits} AI credits · Plan & credits`)}
+            title={t('แพ็กเกจและเครดิต AI', 'Plan & AI credits')} onClick={() => setPricingOpen(true)}>
+            <span className="v2-credit-balance"><span className="v2-credit-coin"><img src={studioAssets.imgCreditCoin} alt="" /></span><b>{gateCredits}</b></span>
+            <span className="v2-credit-upgrade">{gatePlan === 'pro' ? t('แพ็กเกจ', 'Plan') : purchasesEnabled ? 'Upgrade' : t('ดูแพ็กเกจ', 'See plans')}</span>
+          </button> : (
           /* ชิปแพ็กเกจ: Freemium / Pro ถึงวันที่ + เครดิต AI คงเหลือ — กดเปิดหน้าแพ็กเกจ */
           <button
             type="button"
@@ -4577,6 +4623,7 @@ export default function App({
               </span>
             )}
           </button>
+          )
         ) : entitlementsStatus === 'error' ? (
           /* โหลดสิทธิ์ไม่ได้ (รวมเปิดแบบออฟไลน์) — กดลองใหม่; AI/ดาวน์โหลดยังให้ server ตัดสินตามปกติ */
           <button
@@ -4670,6 +4717,7 @@ export default function App({
           )}
           {isV2 && !readOnly && sideTab === 'artwork' && <>
             {v2Tool === 'elements' && <ElementLibrary disabled={aiBusy || projectBusy} onShape={addShape} onNutrition={addNutrition} onNext={() => chooseV2Tool('export')}
+              backgroundColor={fillColor} onBackground={() => openV2Color('background')}
               onFreeShape={kind => { const deco = makeLibraryShape(dieline, kind); if (deco) { setDecos(ds => [...ds, deco]); setSelectedIds([deco.id]) } }} />}
             {v2Tool === 'text' && <div className="v2-insertion-panel">
               <h2>{t('ตัวอักษร', 'Text')}</h2><p className="hint">{t('เพิ่มข้อความ แล้วคลิกบนแบบเพื่อพิมพ์', 'Add text, then click it on the canvas to edit.')}</p>
@@ -4681,7 +4729,38 @@ export default function App({
               <button type="button" className="v2-panel-link" onClick={() => chooseV2Tool('background')}>{t('สีและรูปพื้นหลังแพ็กเกจ', 'Package background')}</button>
               <div className="v2-image-library">{decos.filter(d => d.type === 'image').map(d => d.type === 'image' && <button type="button" key={d.id} aria-label={t('เลือกรูปบนแบบ', 'Select image on canvas')} onClick={() => setSelectedIds([d.id])}><img src={d.src} alt="" /></button>)}</div>
             </div>}
-            {v2Tool === 'background' && <div ref={setBgFloatEl} className="v2-background-host" />}
+            {v2Tool === 'background' && <div className="v2-background-host">
+              <EditorColorPanel title={t('สีพื้นบรรจุภัณฑ์', 'Package base color')} value={fillColor}
+                onChange={setFillColor} palette={palette} onSave={saveSwatch} onClear={() => setFillColor(null)}
+                disabled={aiBusy || projectBusy} />
+              <div ref={setBgFloatEl} />
+            </div>}
+            {v2Tool === 'color' && <EditorColorPanel key={`${selectedPaint?.id ?? 'none'}-${paintIsStroke}`}
+              title={paintIsStroke ? t('สีเส้นขอบ', 'Stroke color') : t('สีพื้น', 'Fill color')}
+              value={paintValue === 'none' ? null : paintValue} onChange={changePaint} palette={palette} onSave={saveSwatch}
+              disabled={paintBlocked} opacity={selectedPaint?.opacity ?? 1}
+              onOpacityChange={(opacity) => { if (!paintBlocked) patchSelected((deco) => ({ ...deco, opacity })) }}
+              onClear={paintIsStroke || selectedPaint?.type !== 'text' ? clearPaint : undefined}
+              gradient={!paintIsStroke ? selectedPaint?.grad : undefined}
+              onGradientChange={!paintIsStroke && selectedPaint ? (gradient) => {
+                if (!paintBlocked) patchSelected((deco) => deco.type === 'text' || deco.type === 'shape' || deco.type === 'path'
+                  ? { ...deco, grad: gradient } : deco)
+              } : undefined}>
+              {paintIsStroke && selectedPaint && <DimField label={t('ความหนาเส้นขอบ', 'Stroke width')} value={selectedPaint.strokeW ?? 0}
+                min={0} max={20} step={.1} unit="mm" disabled={paintBlocked}
+                onChange={(strokeW) => {
+                  if (paintBlocked) return
+                  patchSelected((deco) => deco.type === 'text' ? { ...deco, strokeW }
+                    : deco.type === 'shape' ? { ...deco, strokeW, ...(deco.shape === 'line' ? { h: strokeW } : {}) }
+                    : deco.type === 'path' ? { ...deco, strokeW } : deco)
+                }} />}
+              {!selectedPaint && <p className="hint">{t('เลือกข้อความหรือรูปทรงบนแบบเพื่อปรับสี', 'Select text or a shape to edit its color')}</p>}
+            </EditorColorPanel>}
+            {v2Tool === 'layers' && <EditorLayersPanel decos={decos} selectedIds={selectedIds} disabled={aiBusy || projectBusy}
+              lockAspect={lockAspect} onLockAspect={setLockAspect} onSelect={selectDeco}
+              onToggleHidden={toggleHidden} onToggleLocked={toggleLocked} onRename={renameDeco}
+              onEdit={editDecos} onPatch={patchSelected} onAlign={alignSelected} onRestack={restackSelected}
+              onAdvanced={() => setV2Advanced(true)} />}
             {v2Tool === 'account' && <div className="v2-insertion-panel"><h2>{t('พื้นที่ทำงาน', 'Workspace')}</h2><p>{cloud ? t('พื้นที่ทำงานบนคลาวด์', 'Cloud workspace') : t('ทำงานบนเครื่องนี้', 'On this device')}</p><p className="hint">{cloud ? cloudSaveLabel(cloud.saveState, cloud.saveError) : t('งานบันทึกอัตโนมัติในเบราว์เซอร์นี้ สำรองงานได้ในเมนูส่งออก', 'Projects are saved in this browser. Back up your work from Export & files.')}</p>{cloud && <button type="button" onClick={() => setPricingOpen(true)}>{t('แพ็กเกจและเครดิต', 'Plan & credits')}</button>}<button type="button" onClick={() => chooseV2Tool('export')}>{t('สำรองและส่งออกงาน', 'Back up & export')}</button></div>}
           </>}
 
@@ -5591,8 +5670,8 @@ export default function App({
           {!readOnly && sideTab === 'artwork' && (
           <>
               {bgFloatEl && createPortal(
-              <Group title={t('พื้นหลังแพ็กเกจ', 'Package background')} open={groups.bg} onToggle={() => toggleGroup('bg')}>
-                <div className="fill-color-row">
+              <Group title={isV2 ? t('รูปพื้นหลัง', 'Background image') : t('พื้นหลังแพ็กเกจ', 'Package background')} open={groups.bg} onToggle={() => toggleGroup('bg')}>
+                <div className="fill-color-row" hidden={isV2}>
                   <ColorField
                     value={fillColor ?? '#2f8a99'}
                     onChange={setFillColor}
@@ -5831,7 +5910,7 @@ export default function App({
                 </div>
               </Group>}
 
-              {(!isV2 || v2Tool === 'layers') && <Group title={t('เลเยอร์', 'Layers')} open={groups.layers} onToggle={() => toggleGroup('layers')} badge={decos.length}>
+              {!isV2 && <Group title={t('เลเยอร์', 'Layers')} open={groups.layers} onToggle={() => toggleGroup('layers')} badge={decos.length}>
                 {decos.length === 0 && <p className="hint">ยังไม่มีองค์ประกอบ — เพิ่มได้จากกลุ่มด้านบน</p>}
                 {decos.length > 0 && (
                   <ul className="deco-list">
@@ -6117,6 +6196,19 @@ export default function App({
 
                 {selected && (
                   <div className="deco-edit">
+                    {isV2 && (
+                      <label className="finish-pick">
+                        <span>{t('งานพิมพ์พิเศษ', 'Print finish')}</span>
+                        <select value={selected.finish ?? ''} disabled={aiBusy || projectBusy || !!selected.locked}
+                          onChange={(event) => {
+                            const finish = event.target.value as FinishKind | ''
+                            patchSelected((deco) => ({ ...deco, finish: finish || undefined }))
+                          }}>
+                          <option value="">{t('ไม่มี (พิมพ์สีปกติ)', 'None (regular print)')}</option>
+                          {FINISHES.map((finish) => <option key={finish.id} value={finish.id}>{t(finish.nameTh, finish.nameEn)}</option>)}
+                        </select>
+                      </label>
+                    )}
                     {selected.type === 'text' && (
                       <>
                         {/* แก้ข้อความด้วยการคลิกที่ข้อความบน blueprint แล้วพิมพ์ได้เลย (เลิกใช้กล่องในแถบ) */}
@@ -7396,7 +7488,8 @@ export default function App({
             ) : (
             <>
             {/* host แถบเครื่องมือ (Canva) — ลอยทับบน dieline (portal มาลงที่นี่เมื่อเลือกชิ้น) */}
-            {!readOnly && isV2 && sideTab === 'artwork' && <EditorToolbar selected={selected ?? undefined} count={selectedIds.length} disabled={aiBusy || projectBusy} advanced={v2Advanced} onAdvanced={() => { setV2Advanced(v => !v); if (!selectedIds.length) chooseV2Tool('layers') }} onPatch={patchSelected} onDuplicate={duplicateSelected} onLock={toggleLockedSelected} onDelete={removeSelected} onLayers={() => chooseV2Tool('layers')} multiMode={multiMode} onMultiMode={() => setMultiMode(true)} onMultiConfirm={confirmMultiMode} onMultiCancel={() => setMultiMode(false)} onAlign={alignSelected} grouped={isWholeGroup(decos, selectedIds)} onGroup={groupSelected} onUngroup={ungroupSelected} />}
+            {!readOnly && isV2 && sideTab === 'artwork' && <EditorToolbar backgroundColor={fillColor} onColor={openV2Color} selected={selected ?? undefined} count={selectedIds.length} disabled={aiBusy || projectBusy} advanced={v2Advanced} onAdvanced={() => { setV2Advanced(v => !v); if (!selectedIds.length) chooseV2Tool('layers') }} onPatch={patchSelected} onDuplicate={duplicateSelected} onLock={toggleLockedSelected} onDelete={removeSelected} onLayers={() => chooseV2Tool('layers')} multiMode={multiMode} onMultiMode={() => setMultiMode(true)} onMultiConfirm={confirmMultiMode} onMultiCancel={() => setMultiMode(false)} onAlign={alignSelected} grouped={isWholeGroup(decos, selectedIds)} onGroup={groupSelected} onUngroup={ungroupSelected} />}
+            {isV2 && sideTab === 'artwork' && softProof && <span className="v2-print-mode" role="status">{t('โหมดสีพิมพ์ CMYK', 'Print Mode · CMYK')}</span>}
             <div className="deco-topbar-host" ref={setDecoBar} />
             <div className="blueprint card">
               <DielineSVG

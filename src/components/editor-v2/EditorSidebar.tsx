@@ -1,10 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import { useT } from '../../i18n'
 import type { ShapeKind } from '../../core/artwork'
 import * as assets from './assets'
 
-export type EditorTool = 'model' | 'elements' | 'text' | 'images' | 'templates' | 'layers' | 'background' | 'account' | 'export'
-export type FreeShape = 'heart' | 'cross' | 'arrow'
+export type EditorTool = 'model' | 'elements' | 'text' | 'images' | 'templates' | 'layers' | 'background' | 'color' | 'account' | 'export'
+export type FreeShape = 'heart' | 'cross' | 'arrow' | 'ribbon'
 
 export function EditorRail({ active, onSelect }: { active: EditorTool; onSelect: (tool: EditorTool) => void }) {
   const t = useT()
@@ -35,8 +35,10 @@ function ElementGroup({ title, children }: { title: string; children: ReactNode 
   return <details className="v2-element-group" open><summary>{title}<img src={assets.imgSectionDefaultIconDropdownStateNormal} alt="" /></summary><div>{children}</div></details>
 }
 
-export function ElementLibrary({ disabled, onShape, onFreeShape, onNutrition, onNext }: {
+export function ElementLibrary({ disabled, onShape, onFreeShape, onNutrition, onNext, backgroundColor, onBackground }: {
   disabled: boolean; onShape: (kind: ShapeKind) => void; onFreeShape: (kind: FreeShape) => void; onNutrition: () => void; onNext: () => void
+  backgroundColor: string | null
+  onBackground(): void
 }) {
   const t = useT()
   const [query, setQuery] = useState('')
@@ -53,9 +55,14 @@ export function ElementLibrary({ disabled, onShape, onFreeShape, onNutrition, on
   const hasGeometry = geometry && [...shapes.map(s => matches(s[1], s[2])), matches('ดาว', 'Star'), matches('หกเหลี่ยม หลายเหลี่ยม', 'Hexagon polygon')].some(Boolean)
   const hasFree = free && freeShapes.some(s => matches(s[1], s[2]))
   const hasTable = table && matches('ตาราง โภชนาการ', 'Table nutrition')
+  const hasRibbon = category === 'all' && matches('ริบบิ้น', 'Ribbon banner')
   return (
     <div className="v2-library">
       <div className="v2-library-head">
+        <button type="button" className="v2-background-trigger" onClick={onBackground} disabled={disabled}>
+          {t('สีพื้นบรรจุภัณฑ์', 'Package base color')}
+          <span className="v2-background-swatch" style={{ '--swatch-color': backgroundColor ?? '#ffffff' } as CSSProperties} />
+        </button>
         <label className="v2-search"><input value={query} onChange={e => setQuery(e.target.value)} placeholder={t('ค้นหาองค์ประกอบ', 'Search elements')} aria-label={t('ค้นหาองค์ประกอบ', 'Search elements')} /><img src={assets.imgIconButton12} alt="" /></label>
         <div className="v2-categories" role="group" aria-label={t('หมวดองค์ประกอบ', 'Element categories')}>
           {[
@@ -75,7 +82,8 @@ export function ElementLibrary({ disabled, onShape, onFreeShape, onNutrition, on
         </ElementGroup>}
         {hasFree && <ElementGroup title={t('รูปร่างอิสระ', 'Free shapes')}><div className="v2-free-shapes">{freeShapes.filter(s => matches(s[1], s[2])).map(([id, th, en, src]) => <button key={id} type="button" title={t(th, en)} aria-label={t(`เพิ่ม${th}`, `Add ${en.toLowerCase()}`)} disabled={disabled} onClick={() => onFreeShape(id)}><img src={src} alt="" /></button>)}</div></ElementGroup>}
         {hasTable && <ElementGroup title={t('ตาราง', 'Tables')}><button type="button" className="v2-table-shape" title={t('ตารางโภชนาการ', 'Nutrition facts')} aria-label={t('เพิ่มตารางโภชนาการ', 'Add nutrition facts')} disabled={disabled} onClick={onNutrition}><img src={assets.imgIconButton16} alt="" /></button></ElementGroup>}
-        {!hasGeometry && !hasFree && !hasTable && <p className="hint">{t('ไม่พบองค์ประกอบ ลองค้นหาคำอื่น', 'No elements found. Try another search.')}</p>}
+        {hasRibbon && <ElementGroup title={t('ริบบิ้น', 'Ribbons')}><button type="button" className="v2-ribbon-shape" title={t('ริบบิ้น', 'Ribbon')} aria-label={t('เพิ่มริบบิ้น', 'Add ribbon')} disabled={disabled} onClick={() => onFreeShape('ribbon')}><img src={assets.imgRibbon} alt="" /></button></ElementGroup>}
+        {!hasGeometry && !hasFree && !hasTable && !hasRibbon && <p className="hint">{t('ไม่พบองค์ประกอบ ลองค้นหาคำอื่น', 'No elements found. Try another search.')}</p>}
       </div>
       <button type="button" className="v2-next" onClick={onNext}>{t('ต่อไป', 'Next')}</button>
     </div>

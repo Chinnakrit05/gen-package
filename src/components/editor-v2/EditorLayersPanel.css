@@ -1,0 +1,147 @@
+.v2-layers-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  color: var(--v2-ink, #154049);
+  font: 14px/1.5 'Noto Sans Thai', sans-serif;
+}
+
+.v2-layers-panel button {font: inherit; color: inherit}
+.v2-layers-panel button:focus-visible,
+.v2-layers-panel input:focus-visible {outline: 2px solid #00a896; outline-offset: 2px}
+.v2-layers-panel button:disabled {opacity: .4; cursor: default}
+.v2-layers-panel button img {display: block; flex-shrink: 0; max-width: none}
+.v2-layers-panel input:disabled {opacity: .45}
+
+.v2-layers-tabs {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: #f6f6f6;
+}
+
+.v2-layers-tabs [role='tab'] {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 3px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.v2-layers-tabs [aria-selected='true'] {background: #02c39a; color: white; font-weight: 700}
+.v2-layers-content {display: flex; flex-direction: column; gap: 12px; min-width: 0}
+.v2-layers-content h3 {margin: 0; padding: 4px 0; font: 700 16px/1.5 'Noto Sans Thai', sans-serif; color: inherit}
+.v2-layers-hint {margin: 0; color: var(--v2-muted, #78939b); font-size: 12px; overflow-wrap: anywhere}
+.v2-layers-list {display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none}
+
+.v2-layer-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 90px;
+  padding: 4px 12px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: #f6f6f6;
+}
+
+.v2-layer-card.is-selected {background: #00a89633; border-color: #02c39a; box-shadow: 0 4px 7px #02c39a40}
+.v2-layer-card.in-group {margin-inline-start: 10px}
+.v2-layer-card.is-hidden .v2-layer-preview {opacity: .35}
+.v2-layer-card.is-drop-target {outline: 2px solid #02c39a; outline-offset: 2px}
+.v2-layers-panel .v2-layer-name,
+.v2-layers-panel .v2-layer-name-edit {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 29px;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  text-align: start;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+}
+
+.v2-layer-name {white-space: nowrap; overflow: hidden; text-overflow: ellipsis}
+.v2-layer-card.is-selected .v2-layer-name {font-weight: 700}
+.v2-layers-panel .v2-layer-name-edit {background: white; font: inherit; outline: 1px solid #02c39a}
+.v2-layer-card-tools {display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0}
+.v2-layers-panel .v2-layer-grip,
+.v2-layers-panel .v2-layer-toggles button,
+.v2-layers-panel .v2-layer-preview {
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  border-radius: 5px;
+}
+
+.v2-layers-panel .v2-layer-grip {width: 32px; min-height: 32px; cursor: grab}
+.v2-layers-panel .v2-layer-grip:active {cursor: grabbing}
+.v2-layers-panel .v2-layer-preview {flex: 0 1 75px; min-width: 0; min-height: 40px; padding: 0}
+.v2-layer-preview canvas {display: block; width: 40px; height: 40px; pointer-events: none}
+.v2-layer-text-preview {display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px}
+.v2-layer-toggles {display: flex; align-items: center; gap: 4px; flex: none}
+.v2-layers-panel .v2-layer-toggles button {width: 24px; min-height: 28px}
+.v2-layer-toggles button:hover {background: #1540490b}
+.v2-layer-group {display: flex; justify-content: space-between; align-items: center; gap: 4px}
+.v2-layers-panel .v2-layer-group button {display: flex; align-items: center; min-height: 32px; width: auto; border: 0; background: transparent; padding: 4px; text-align: start}
+.v2-layers-panel .v2-layer-group button:first-child {font-size: 12px; flex: 1; min-width: 0; white-space: nowrap}
+.v2-layers-panel .v2-layer-group button:last-child {flex: none; justify-content: center; width: 32px}
+.v2-layer-group button[aria-pressed='true'] {font-weight: 700}
+
+.v2-layer-alignment {display: flex; justify-content: space-between; align-items: center; gap: 8px}
+.v2-layer-alignment > div {display: flex; flex-direction: column; gap: 12px}
+.v2-layer-segment {display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: #f6f6f6}
+.v2-layer-segment button {display: grid; place-items: center; width: 32px; min-height: 32px; padding: 4px; background: transparent; border: 0; border-radius: 5px}
+.v2-layer-segment button:hover:not(:disabled), .v2-layer-segment button[aria-pressed='true'] {background: #00a89620}
+.v2-layer-coordinates {display: flex; gap: 12px}
+.v2-layer-coordinates label {display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; padding-inline: 6px}
+.v2-layers-panel input[type='number'] {min-width: 0; width: 76px; max-width: 100%; height: 30px; padding: 4px 7px; border: 0; border-radius: 7px; background: #f3f4f7; color: inherit; font: 14px/1.4 'Noto Sans Thai', sans-serif; text-align: center; appearance: textfield}
+.v2-layers-panel input[type='number']::-webkit-inner-spin-button,
+.v2-layers-panel input[type='number']::-webkit-outer-spin-button {margin: 0; -webkit-appearance: none}
+.v2-layer-coordinates input[type='number'] {width: 100%; flex: 1}
+.v2-layer-stack {display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 5px}
+.v2-layer-stack button {display: flex; align-items: center; gap: 4px; min-width: 0; padding: 7px 4px; background: transparent; border: 1px solid #f6f6f6; border-radius: 12px; text-align: start}
+.v2-layer-stack button span {font-size: 12px; line-height: 1.4; overflow-wrap: anywhere}
+.v2-layer-stack button:hover:not(:disabled) {background: #f6f6f6}
+.v2-layer-size-heading {display: flex; align-items: center; justify-content: space-between; gap: 8px}
+.v2-layer-size-heading > span {font-size: 12px}
+.v2-layer-dimensions {display: flex; align-items: center; gap: 4px}
+.v2-layer-dimensions > div {display: grid; flex: 1; gap: 12px; min-width: 0}
+.v2-layer-dimension {display: grid; grid-template-columns: minmax(66px, 1fr) minmax(30px, 73px) 42px; align-items: center; gap: 4px}
+.v2-layer-dimension input[type='number'] {width: 42px; height: 24px; padding: 3px 2px; font-size: 12px; border-radius: 4px}
+.v2-layer-dimension input[type='range'] {width: 100%; min-width: 0; height: 20px; margin: 0; padding: 0; accent-color: #005968; cursor: pointer; background: transparent; appearance: none}
+.v2-layer-dimension input[type='range']::-webkit-slider-runnable-track {height: 4px; background: #ddd; border-radius: 4px}
+.v2-layer-dimension input[type='range']::-webkit-slider-thumb {appearance: none; width: 10px; height: 10px; margin-top: -3px; border: 0; border-radius: 50%; background: #005968}
+.v2-layer-dimension input[type='range']::-moz-range-track {height: 4px; background: #ddd; border-radius: 4px}
+.v2-layer-dimension input[type='range']::-moz-range-thumb {width: 10px; height: 10px; border: 0; border-radius: 50%; background: #005968}
+.v2-layer-dimension input[type='range']:disabled {cursor: default}
+.v2-layers-panel .v2-layer-aspect {display: grid; place-items: center; width: 28px; min-height: 36px; padding: 2px; background: transparent; border: 0; border-radius: 5px}
+.v2-layer-aspect[aria-pressed='false'] {opacity: .5}
+.v2-layer-property {display: flex; align-items: center; justify-content: space-between; gap: 8px}
+.v2-layers-panel .v2-layer-advanced {align-self: flex-start; margin-top: 4px; padding: 3px 0; border: 0; background: transparent; color: #52717a; font-size: 12px; text-decoration: underline; text-underline-offset: 3px}
+
+[data-theme='dark'] .v2-layers-panel {color: var(--v2-ink, #d8e9ed)}
+[data-theme='dark'] .v2-layers-panel :is(.v2-layers-tabs, .v2-layer-card, .v2-layer-segment) {background: #20383e}
+[data-theme='dark'] .v2-layer-card.is-selected {background: #00a89633}
+[data-theme='dark'] .v2-layers-panel input[type='number'] {background: #20383e}
+[data-theme='dark'] .v2-layers-panel button img {filter: brightness(0) invert(.9)}
+[data-theme='dark'] .v2-layer-stack button {border-color: #2c4b52}
+
+@media (pointer: coarse) {
+  .v2-layers-panel .v2-layer-toggles button {width: 32px; min-height: 36px}
+  .v2-layer-card {padding-inline: 8px}
+  .v2-layer-card-tools {gap: 4px}
+}
