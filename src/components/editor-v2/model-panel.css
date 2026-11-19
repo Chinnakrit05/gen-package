@@ -296,6 +296,10 @@
   flex: none;
 }
 
+.v2-model-tile img.v2-model-tile-flip {
+  transform: scaleY(-1);
+}
+
 .v2-model-tiles--wide .v2-model-tile {
   gap: 4px;
   min-height: 0;

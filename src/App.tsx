@@ -4464,7 +4464,7 @@ export default function App({
                 ['slope', t('ลาดตรง', 'Sloped'), modelSizeAssets.straightShoulder],
                 ['round', t('โค้งมน', 'Rounded'), modelSizeAssets.roundShoulder],
               ] as const).map(([id, title, image]) => (
-                <ModelTile key={id} title={title} image={image} selected={shoulderStyle === id} disabled={modelBusy} onClick={() => changeShoulderStyle(id)} />
+                <ModelTile key={id} title={title} image={image} flipImage selected={shoulderStyle === id} disabled={modelBusy} onClick={() => changeShoulderStyle(id)} />
               ))}
             </div>
             <DimField compact lengthUnit={unit} label={t('ความสูงไหล่', 'Shoulder height')} value={shoulderEff} min={SHOULDER_MIN}

@@ -167,12 +167,14 @@ interface ModelTileProps {
   selected: boolean
   onClick(): void
   disabled?: boolean
+  // ภาพจาก Figma ที่วาดกลับหัว (ทรงไหล่: คอขวดอยู่ล่าง) — พลิกแนวตั้งตอนแสดง ไม่แก้ไฟล์ asset
+  flipImage?: boolean
 }
 
-export function ModelTile({ title, image, selected, onClick, disabled }: ModelTileProps) {
+export function ModelTile({ title, image, selected, onClick, disabled, flipImage }: ModelTileProps) {
   return (
     <button type="button" className="v2-model-tile" aria-pressed={selected} onClick={onClick} disabled={disabled}>
-      {image && <img src={image} alt="" />}
+      {image && <img src={image} alt="" className={flipImage ? 'v2-model-tile-flip' : undefined} />}
       <span>{title}</span>
     </button>
   )
