@@ -2,6 +2,7 @@ import type { Dieline, Vec2 } from './types'
 import { pathToPolylines } from './dxf'
 import type { Guides } from './guides'
 import { dimTextSize } from './templates/shared'
+import { hexToCmyk } from './designColors'
 
 // Export dieline เป็น PDF สเกล 1:1 สำหรับพิมพ์ตรวจและส่งโรงงาน
 //
@@ -26,14 +27,8 @@ const n = (v: number) => (Math.abs(v) < 1e-6 ? 0 : v).toFixed(3)
 // (ไม่มี ICC profile) พอสำหรับสีเส้น die-line/สีพื้นเวกเตอร์; โรงพิมพ์ที่ต้องการสีแม่นมาก
 // ค่อยแปลงซ้ำด้วยโปรไฟล์ของตัวเอง ส่วนภาพลาย (raster) ยังเป็น RGB (canvas พ่น CMYK JPEG ไม่ได้)
 // ใช้คู่กับ operator K (เส้น) / k (เติม) แทน RG / rg
-const cmyk = (hex: string) => {
-  const r = parseInt(hex.slice(1, 3), 16) / 255
-  const g = parseInt(hex.slice(3, 5), 16) / 255
-  const b = parseInt(hex.slice(5, 7), 16) / 255
-  const k = 1 - Math.max(r, g, b)
-  const f = (v: number) => (k >= 1 ? 0 : (1 - v - k) / (1 - k))
-  return [f(r), f(g), f(b), k].map((v) => v.toFixed(3)).join(' ')
-}
+// สูตรเดียวกับตารางสีในใบสเปก (designColors.hexToCmyk) — ค่า CMYK ที่โรงพิมพ์เห็นในใบสเปกตรงกับไฟล์ผลิต
+const cmyk = (hex: string) => hexToCmyk(hex).map((v) => v.toFixed(3)).join(' ')
 
 const CUT = '#e30613'
 const CREASE = '#009640'

@@ -19,7 +19,7 @@ import './components/editor-v2/model-workspace.css'
 // true เมื่อ DimField อยู่ในแถบปรับแต่งด้านบน (Canva-style) → เปลี่ยนสไลเดอร์เป็นปุ่ม+dropdown อัตโนมัติ
 const TopBarCtx = createContext(false)
 import { LangCtx, loadLang, LANG_KEY, useT, type Lang } from './i18n'
-import { CARD_STOCK_IDS, DEFAULT_CARD_MAT, MATERIALS, getMaterial, isCardMat, packKind } from './core/materials'
+import { CARD_STOCK_IDS, DEFAULT_CARD_MAT, MATERIALS, getMaterial, isCardMat, isTubeMat, packKind } from './core/materials'
 import { TEMPLATES, getTemplate, templateMaxD } from './core/templates'
 import { TAPERED_LID_BOX_ID, taperedLidWidth } from './core/templates/taperedLidBox'
 import type { BoxParams, Dieline, Vec2 } from './core/types'
@@ -40,6 +40,7 @@ import { dimTextSize } from './core/templates/shared'
 import { dielinePDFBytes, type PdfSpotPlate } from './core/pdf'
 import { renderDimTextMasks } from './core/pdfDimText'
 import { specSheetPDFBytes } from './core/specSheet'
+import { designPalette } from './core/designColors'
 import { layerRows, isWholeGroup, transformSelection, type SelectionTransform,
   loadImageFile,
   makeImageEl,
@@ -3055,7 +3056,7 @@ export default function App({
 
   const activeName = projects.find((p) => p.id === activeId)?.name ?? 'งาน'
 
-  // ใบสรุปสเปก 1 หน้า สำหรับส่งโรงงานขอราคา — รวมจำนวน + สิ่งที่ AI สันนิษฐาน
+  // ใบสรุปสเปกสำหรับส่งโรงงานขอราคา — รวมจำนวน + สิ่งที่ AI สันนิษฐาน + หน้าตารางรหัสสีที่ใช้ในงาน (ทุกชนิดงาน)
   const downloadSpecSheet = async () => {
     if (!dieline) return
     const bytes = await specSheetPDFBytes({
@@ -3064,7 +3065,7 @@ export default function App({
         kind === 'box'
           ? template.nameTh
           : kind === 'pouch'
-            ? `ถุงตั้งได้ (doypack) — ${mat.nameTh}`
+            ? `${POUCH_STYLES.find((s) => s.id === pouchStyle)?.nameTh ?? 'ถุงฟิล์ม'} — ${mat.nameTh}`
             : `ภาชนะ ${mat.nameTh} + ฉลากพันรอบ`,
       materialNameTh: mat.nameTh,
       materialThickness: mat.thickness,
@@ -3082,6 +3083,13 @@ export default function App({
       fillColor,
       fillImage,
       finishes: finishGroups(decos).map((g) => `${g.def.nameTh} (${g.items.length} ชิ้น) · เพลต ${g.def.spot}`),
+      palette: designPalette({
+        decos,
+        fillColor,
+        fillImage,
+        // ฝาภาชนะ (ภาพ 3D) — หลอดครีมใช้ capStyle เป็นทรงฝาและมีฝาเสมอ
+        capColor: kind === 'vessel' && (capStyle !== 'none' || isTubeMat(mat)) ? (capColor ?? defaultCapColor(capStyle)) : null,
+      }),
     })
     saveFile(bytes, 'application/pdf', 'spec.pdf')
   }
