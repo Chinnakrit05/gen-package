@@ -141,7 +141,7 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   (สีพื้น · ข้อความ ตัว/ขอบ/ไล่สี/เอฟเฟกต์ผ่าน `resolveTextFx` · รูปทรง · เส้นวาดเอง · ตารางโภชนาการ · `presetColor` · สีใน SVG data URL
   ของลาย/รูปที่ AI วาด · สีฝาภาชนะ) → HEX/RGB/CMYK + ใช้ที่ไหน; ชิ้นฟอยล์แยกเป็นรายการ (ไม่พิมพ์หมึก), รูป raster นับจำนวน;
   `hexToCmyk` = สูตรเดียวที่ `pdf.ts` ใช้ทำไฟล์ผลิต (import จากที่นี่); `specSheetPDFBytes` prop `palette` → หน้า 2+ ตารางรหัสสี
-  (`assemblePDF` หลายหน้า), `wrap` ตัดบรรทัดที่ขอบคำด้วย Intl.Segmenter — เพิ่มชนิดลาย/ช่องสีใหม่ต้องเพิ่มใน `designPalette` ด้วย
+  เฉพาะช่องสี/HEX/RGB/CMYK ไม่มีคำอธิบายหรือ "ใช้ที่" (ผู้ใช้ขอ 24 พ.ย. 2026 — `uses`/ฟอยล์/รูปยังอยู่ใน palette แต่ไม่พิมพ์) (`assemblePDF` หลายหน้า), `wrap` ตัดบรรทัดที่ขอบคำด้วย Intl.Segmenter — เพิ่มชนิดลาย/ช่องสีใหม่ต้องเพิ่มใน `designPalette` ด้วย
 - `src/core/imposition.ts` — คำนวณ yield ต่อแผ่น (pure): `computeImposition` วางกริด step&repeat เทียบชิ้นตั้ง/หมุน 90° เลือกจำนวนมากสุด + `sheetsNeeded` (ปัดขึ้น) + `SHEET_PRESETS` แผ่นมาตรฐานไทย; UI อยู่แท็บ "ส่งออก" ผูกกับช่องจำนวน (state ephemeral ไม่เก็บลง project)
 - `src/core/snap.ts` — logic ดูด artwork เข้าแนวขณะลาก (pure): `snapTargets` สร้างเส้นเป้าหมายจากกึ่งกลางแผ่น/ขอบ-กึ่งกลางแผง/ขอบ-กึ่งกลางชิ้นอื่น, `applySnap` ดูดขอบ-กึ่งกลางชิ้นเข้าเส้นใกล้สุดในระยะ threshold (แปลงจาก 6px ตามซูม); กด Alt ค้างระหว่างลาก = ปิด snap
 - `src/components/PromptBar.tsx` + `src/core/ai.ts` — AI layer ฝั่ง client; แนบรูปอ้างอิงได้ (ย่อเป็น JPEG ≤1024px ฝั่ง client → base64; backend api ส่งเป็น image block, backend cli เขียนไฟล์ tmp ให้ Claude เปิดอ่านเองแล้วลบทิ้ง)

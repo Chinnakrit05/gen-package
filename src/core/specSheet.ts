@@ -201,7 +201,7 @@ function renderCanvas(input: SpecSheetInput, imgs: Map<string, HTMLImageElement>
     ...(input.finishes?.length ? ([['งานพิมพ์พิเศษ', input.finishes.join(' · ')]] as [string, string][]) : []),
     ['จำนวนสั่งผลิต', `${input.qty.toLocaleString('th-TH')} ใบ`],
     ...(hasPalette(input.palette)
-      ? ([['ชุดสีในงาน', `${input.palette!.colors.length} สี — ดูรหัสสีหน้า 2`]] as [string, string][])
+      ? ([['ชุดสีในงาน', `${input.palette!.colors.length} สี (หน้า 2)`]] as [string, string][])
       : []),
   ]
   const labelX = M
@@ -280,17 +280,16 @@ function renderCanvas(input: SpecSheetInput, imgs: Map<string, HTMLImageElement>
   return canvas
 }
 
-const hasPalette = (p?: DesignPalette) => !!p && (p.colors.length > 0 || p.foils.length > 0 || p.rasterImages > 0)
+const hasPalette = (p?: DesignPalette) => !!p && p.colors.length > 0
 
-// หน้าตารางรหัสสี: ทุกสีที่พิมพ์ในงาน (ช่องสี · HEX · RGB · CMYK · ใช้ที่) + ฟอยล์ + หมายเหตุรูปภาพ
+// หน้าตารางรหัสสี: เฉพาะสีกับรหัส (ช่องสี · HEX · RGB · CMYK) ไม่มีคำอธิบาย — ผู้ใช้ขอให้เหลือแค่นี้ (24 พ.ย. 2026)
 // แถวเกินหน้า → ขึ้นหน้าใหม่ (คืน canvas หลายหน้า)
 function renderPaletteCanvases(input: SpecSheetInput, p: DesignPalette): HTMLCanvasElement[] {
   const font = (px: number, weight = '400') => `${weight} ${px}px 'Noto Sans Thai', sans-serif`
   const pages: HTMLCanvasElement[] = []
   let ctx!: CanvasRenderingContext2D
   let y = 0
-  const col = { sw: M, hex: M + 96, rgb: M + 250, cmyk: M + 430, use: M + 640 }
-  const useW = CW - M - col.use
+  const col = { sw: M, hex: M + 120, rgb: M + 360, cmyk: M + 620 }
   const rule = (lw = 1) => {
     ctx.strokeStyle = RULE
     ctx.lineWidth = lw
@@ -318,42 +317,21 @@ function renderPaletteCanvases(input: SpecSheetInput, p: DesignPalette): HTMLCan
     ctx.font = font(18)
     ctx.fillText(input.projectName, CW - M, y + 24)
     ctx.textAlign = 'left'
-    y += 60
-    if (pages.length === 1) {
-      ctx.fillStyle = SUB
-      ctx.font = font(18)
-      const intro =
-        'รวมทุกสีที่พิมพ์บนงาน ทั้งที่ผู้ใช้ตั้งเองและที่ AI ออกแบบ — CMYK แปลงจาก RGB แบบตรงด้วยสูตรเดียวกับไฟล์ผลิต .pdf ' +
-        '(ไม่ผ่าน ICC profile) โรงพิมพ์ที่ต้องการสีแม่นควรเทียบด้วยโปรไฟล์ของตน หรือกำหนดสี spot เช่น Pantone เพิ่ม'
-      for (const line of wrap(ctx, intro, CW - M * 2)) {
-        ctx.fillText(line, M, y + 18)
-        y += 28
-      }
-      y += 44
-    }
+    y += 84
     ctx.fillStyle = SUB
     ctx.font = font(18, '600')
     ctx.fillText('สี', col.sw, y)
     ctx.fillText('HEX', col.hex, y)
     ctx.fillText('RGB', col.rgb, y)
     ctx.fillText('CMYK (%)', col.cmyk, y)
-    ctx.fillText('ใช้ที่', col.use, y)
     y += 14
     rule(1.5)
     y += 12
   }
   newPage()
 
-  if (p.colors.length === 0) {
-    ctx.fillStyle = SUB
-    ctx.font = font(19)
-    ctx.fillText('— ไม่มีสีเวกเตอร์ในงาน', M, y + 20)
-    y += 44
-  }
   for (const c of p.colors) {
-    ctx.font = font(18)
-    const uses = wrap(ctx, c.uses.join(' · '), useW)
-    const rowH = Math.max(52, uses.length * 28 + 18)
+    const rowH = 52
     if (y + rowH > CH - M - 40) newPage()
     // ช่องสี (ขอบบางให้สีขาว/อ่อนมองเห็น)
     ctx.fillStyle = c.hex
@@ -367,36 +345,11 @@ function renderPaletteCanvases(input: SpecSheetInput, p: DesignPalette): HTMLCan
     ctx.font = font(19)
     ctx.fillText(c.rgb.join(', '), col.rgb, y + 31)
     ctx.fillText(c.cmyk.join(' / '), col.cmyk, y + 31)
-    ctx.fillStyle = SUB
-    ctx.font = font(18)
-    uses.forEach((line, i) => ctx.fillText(line, col.use, y + 28 + i * 28))
     y += rowH
     rule()
     y += 10
   }
 
-  const notes: string[] = []
-  for (const f of p.foils) notes.push(`${f.name} ${f.count} ชิ้น — ฟอยล์แทนหมึก ไม่พิมพ์ CMYK (เพลต ${f.spot})`)
-  if (p.rasterImages > 0) notes.push(`รูปภาพ ${p.rasterImages} รูป — สีตามไฟล์รูป (RGB) ไม่ได้แจกแจงในตารางนี้`)
-  if (notes.length) {
-    if (y + 70 + notes.length * 34 > CH - M - 40) newPage()
-    y += 20
-    ctx.fillStyle = ACCENT
-    ctx.font = font(21, '700')
-    ctx.fillText('หมายเหตุ', M, y + 21)
-    y += 40
-    ctx.font = font(19)
-    for (const n of notes) {
-      ctx.fillStyle = ACCENT
-      ctx.fillText('•', M + 4, y + 19)
-      ctx.fillStyle = INK
-      for (const line of wrap(ctx, n, CW - M * 2 - 28)) {
-        ctx.fillText(line, M + 28, y + 19)
-        y += 30
-      }
-      y += 4
-    }
-  }
   pages.forEach((page, i) => {
     const c = page.getContext('2d')!
     c.fillStyle = SUB
