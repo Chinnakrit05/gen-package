@@ -1,8 +1,8 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Dieline, DimMark, PaperSurface } from '../core/types'
-import { decosInRect, rotatedSelectionBounds, type SelectionTransform, elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imageMaskSVG, imageDrawAttrs, imageCoverRect, maskId, panelsBBox, fillImageRect, shapeVertices, isPolyShape, dashArray, textInnerSVG, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type ImageEl, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
+import { decosInRect, rotatedSelectionBounds, type SelectionTransform, elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imageMaskSVG, imageDrawAttrs, imageCoverRect, maskId, panelsBBox, fillImageRect, bleedCoverRect, shapeVertices, isPolyShape, dashArray, textInnerSVG, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type ImageEl, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
-import type { Guides } from '../core/guides'
+import { bleedFillPolys, type Guides } from '../core/guides'
 import { dimTextSize } from '../core/templates/shared'
 import { WATERMARK_ALPHA, watermarkTiles } from '../core/watermark'
 import { useT } from '../i18n'
@@ -428,6 +428,7 @@ export const DielineSVG = memo(function DielineSVG({
   guides,
   fillColor,
   fillImage,
+  bleed = 0,
   selectedIds = [],
   onSelect,
   onSelectMany,
@@ -467,6 +468,8 @@ export const DielineSVG = memo(function DielineSVG({
   guides?: Guides | null
   fillColor?: string | null
   fillImage?: FillImage | null
+  // ระยะตัดตก (มม.) ที่ให้สีพื้น/รูปพื้นเลยเส้นตัดขอบนอก — App ส่งเมื่อเปิดเส้นไกด์ (พรีวิวตรงกับไฟล์ผลิต); 0 = เฉพาะแผง
+  bleed?: number
   selectedIds?: string[]
   onSelect?: (id: string | null, additive?: boolean) => void
   onSelectMany?: (ids: string[], additive: boolean) => void // ลากเมาส์คลุมพื้นที่ว่าง = เลือกทุกชิ้นที่กรอบแตะ
@@ -501,6 +504,8 @@ export const DielineSVG = memo(function DielineSVG({
   const [showRuler, setShowRuler] = useState(false)
   const t = useT()
   const pad = showDims || showRuler ? 26 : 12
+  // พื้นที่สีพื้น/รูปพื้น: ทุกแผง (+ แถบตัดตกเมื่อ bleed > 0)
+  const fillPolys = useMemo(() => bleedFillPolys(dieline, bleed), [dieline, bleed])
   const svgRef = useRef<SVGSVGElement>(null)
   // ขนาด SVG บนจอ (px) — ใช้แปลงพิกเซลเป็น มม. ของ viewBox ปัจจุบันให้มือจับคงขนาดทุกระดับซูม
   const [svgPx, setSvgPx] = useState({ w: 0, h: 0 })
@@ -1487,14 +1492,14 @@ export const DielineSVG = memo(function DielineSVG({
         <g className="fill" pointerEvents="none" opacity={fillImage.opacity ?? 1}>
           <defs>
             <clipPath id="bp-fillclip" clipPathUnits="userSpaceOnUse">
-              {dieline.panels.map((p, i) => (
-                <polygon key={i} points={p.outline.map((q) => `${q.x},${q.y}`).join(' ')} />
+              {fillPolys.map((poly, i) => (
+                <polygon key={i} points={poly.map((q) => `${q.x},${q.y}`).join(' ')} />
               ))}
             </clipPath>
           </defs>
           {(() => {
             const box = panelsBBox(dieline)
-            const r = fillImageRect(box, fillImage)
+            const r = bleedCoverRect(fillImageRect(box, fillImage), box, fillImage, bleed)
             const cx = (box.x0 + box.x1) / 2
             const cy = (box.y0 + box.y1) / 2
             return (
@@ -1516,8 +1521,8 @@ export const DielineSVG = memo(function DielineSVG({
       ) : (
         fillColor && (
           <g className="fill" pointerEvents="none">
-            {dieline.panels.map((p, i) => (
-              <polygon key={i} points={p.outline.map((q) => `${q.x},${q.y}`).join(' ')} fill={fillColor} />
+            {fillPolys.map((poly, i) => (
+              <polygon key={i} points={poly.map((q) => `${q.x},${q.y}`).join(' ')} fill={fillColor} />
             ))}
           </g>
         )

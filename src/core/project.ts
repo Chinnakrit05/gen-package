@@ -5,6 +5,7 @@ import { CAP_STYLES, LABEL_STYLES, SHOULDER_STYLES, type CapStyle, type LabelBox
 import { POUCH_STYLES, ZIP_AT_MAX, type PouchStyle, type PouchAddons } from './pouch'
 import { parseVents, type VentConfig } from './vents'
 import { parseStickerCut, type StickerCut } from './stickerContour'
+import { BLEED_MM, clampBleed } from './guides'
 import type { CurrentSpec } from './ai'
 
 // โมเดลข้อมูลของ "งาน" หนึ่งชิ้น + ตัว parse ที่ตรวจ/ซ่อมข้อมูลจาก localStorage หรือไฟล์ที่นำเข้า
@@ -59,6 +60,7 @@ export interface Project {
   labelBox?: LabelBox // ฉลากกำหนดเอง (ขอบล่าง/สูง/ยาวรอบตัว มม., หมุนองศา) — เก็บเฉพาะคีย์ที่ตั้ง
   capStyle?: CapStyle // ฝาขวด (3D) — ไม่ใส่ = 'none'
   capColor?: string // สีฝา #rrggbb — ไม่ใส่ = ขาวมาตรฐาน
+  bleed?: number // ระยะตัดตก มม. (3–10, ครึ่งมม.) — ไม่ใส่ = BLEED_MM 3; ไฟล์ผลิตขยายสีพื้น/รูปพื้นเลยเส้นตัดเท่านี้
   pouchStyle?: PouchStyle // รูปแบบถุง (เฉพาะโหมดถุง) — ไม่ใส่ = 'stand'
   zipper?: boolean // ซิปล็อก + รอยฉีก (เฉพาะโหมดถุง) — เก็บเฉพาะเมื่อ true
   pouchAddons?: PouchAddons // ออปชันเสริมถุง (รูแขวน/วาล์ว/tin-tie) — เก็บเฉพาะที่เปิด + ตำแหน่งซิป/รอยบากที่ตั้งเอง
@@ -182,6 +184,7 @@ export function parseProject(v: unknown, idx: number): Project | null {
     capStyle:
       o.capStyle === 'oval' || CAP_STYLES.some((s) => s.id === o.capStyle && s.id !== 'none') ? (o.capStyle as CapStyle) : undefined,
     capColor: typeof o.capColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.capColor) ? o.capColor : undefined,
+    bleed: o.bleed !== undefined && clampBleed(o.bleed) !== BLEED_MM ? clampBleed(o.bleed) : undefined,
     shoulderStyle: SHOULDER_STYLES.some((s) => s.id === o.shoulderStyle && s.id !== 'round') ? (o.shoulderStyle as ShoulderStyle) : undefined,
     pouchStyle: POUCH_STYLES.some((s) => s.id === o.pouchStyle) ? (o.pouchStyle as PouchStyle) : undefined,
     zipper: o.zipper === true ? true : undefined,

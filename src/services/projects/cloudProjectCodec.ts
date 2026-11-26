@@ -184,6 +184,7 @@ export async function dehydrateProject(input: DehydrateProjectInput): Promise<De
     ...(project.labelBox && Object.keys(project.labelBox).length ? { labelBox: { ...project.labelBox } } : {}),
     ...(project.capStyle && project.capStyle !== 'none' ? { capStyle: project.capStyle } : {}),
     ...(project.capColor ? { capColor: project.capColor } : {}),
+    ...(project.bleed !== undefined ? { bleed: project.bleed } : {}),
     ...(project.stickerCut ? { stickerCut: structuredClone(project.stickerCut) as unknown as Record<string, unknown> } : {}),
     ...(project.pouchStyle ? { pouchStyle: project.pouchStyle } : {}),
     ...(project.zipper !== undefined ? { zipper: project.zipper } : {}),

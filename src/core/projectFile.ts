@@ -4,7 +4,7 @@ import { parseProject, type Project } from './project'
 // นำเข้า/ส่งออก "งาน" หนึ่งชิ้นเป็นไฟล์ .genpkg.json — เพื่อสำรอง ย้ายเครื่อง หรือส่งให้ลูกค้า/โรงงานเปิดต่อ
 // ไฟล์เป็นข้อมูลล้วน (parse ด้วย JSON.parse) ไม่ execute อะไร; นำเข้าแล้วสร้าง id ใหม่เสมอ กันชนกับงานที่มีอยู่
 
-export const PROJECT_FILE_VERSION = 28 // 28: ขวดหกเหลี่ยม vesselPolygon · 27: กล่องข้อความกว้างคงที่ TextEl.boxW · 26: ยืด/บีบข้อความ TextEl.sx · 25: text italic/underline · 17: เอฟเฟกต์ข้อความ TextEl.fx · 18: ระยะห่างตัวอักษร ls + ไล่สีตัวอักษร grad · 19: งานพิมพ์พิเศษ finish · 20: ระยะห่างระหว่างดวงสติกเกอร์ sheetGap · 21: รูปแบบถุงตั้งก้น K pouchStyle 'kseal' · 22: ขวดเหลี่ยม rectDepth · 23: ตำแหน่งจุกมุม pouchAddons.spoutAt · 24: รอยฉีกแยกจากซิป pouchAddons.tear
+export const PROJECT_FILE_VERSION = 29 // 29: ระยะตัดตก bleed · 28: ขวดหกเหลี่ยม vesselPolygon · 27: กล่องข้อความกว้างคงที่ TextEl.boxW · 26: ยืด/บีบข้อความ TextEl.sx · 25: text italic/underline · 17: เอฟเฟกต์ข้อความ TextEl.fx · 18: ระยะห่างตัวอักษร ls + ไล่สีตัวอักษร grad · 19: งานพิมพ์พิเศษ finish · 20: ระยะห่างระหว่างดวงสติกเกอร์ sheetGap · 21: รูปแบบถุงตั้งก้น K pouchStyle 'kseal' · 22: ขวดเหลี่ยม rectDepth · 23: ตำแหน่งจุกมุม pouchAddons.spoutAt · 24: รอยฉีกแยกจากซิป pouchAddons.tear
 const APP_TAG = 'gen-package'
 
 // รูปแบบไฟล์: ห่อ project ไว้ใน envelope มี app/schemaVersion เพื่อ migrate ได้ในอนาคต
@@ -27,6 +27,7 @@ interface ProjectFile {
     labelBox?: Project['labelBox']
     capStyle?: Project['capStyle']
     capColor?: Project['capColor']
+    bleed?: Project['bleed']
     pouchStyle?: Project['pouchStyle']
     zipper?: Project['zipper']
     pouchAddons?: Project['pouchAddons']
@@ -66,6 +67,7 @@ export function serializeProject(p: Project): string {
       ...(p.labelBox && Object.keys(p.labelBox).length ? { labelBox: p.labelBox } : {}),
       ...(p.capStyle && p.capStyle !== 'none' ? { capStyle: p.capStyle } : {}),
       ...(p.capColor ? { capColor: p.capColor } : {}),
+      ...(p.bleed !== undefined ? { bleed: p.bleed } : {}),
       ...(p.pouchStyle && p.pouchStyle !== 'stand' ? { pouchStyle: p.pouchStyle } : {}),
       ...(p.zipper ? { zipper: true } : {}),
       ...(p.pouchAddons && Object.keys(p.pouchAddons).length ? { pouchAddons: p.pouchAddons } : {}),

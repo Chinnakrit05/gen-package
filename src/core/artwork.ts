@@ -2,6 +2,7 @@ import type { Dieline, Vec2 } from './types'
 import { LETTER_SPACING_RANGE, TEXT_STRETCH_RANGE, TEXT_GRAD_PAINT, parseTextFx, textFxPlan, type TextFx, type TextPaint } from './textFx'
 export { TEXT_STROKE_MUL } from './textFx'
 import { finishDef, isFinishKind, printsCmyk, type FinishKind } from './finish'
+import { bleedFillPolys } from './guides'
 
 export interface ArtworkPanelAnchor {
   panelId: string
@@ -1390,31 +1391,56 @@ const xmlEsc = (s: string) =>
 
 // สีพื้นทั้งแผ่น (flood color) = เติมสีลงพื้นที่ของทุกแผงจริง (ไม่ใช่ทั้งสี่เหลี่ยม)
 // เพราะช่องว่างระหว่างแฟลปไม่ใช่กระดาษ ไม่ควรมีสี — แผงต่อกันสนิทจึงคลุมทั้งชิ้นพอดี
-export function fillSVGLayer(dieline: Dieline, color: string | null): string {
+// bleed > 0 = สีเลยเส้นตัดขอบนอกออกไปเท่าระยะตัดตก (bleedFillPolys) — ไฟล์ผลิต/blueprint
+export function fillSVGLayer(dieline: Dieline, color: string | null, bleed = 0): string {
   if (!color) return ''
-  const polys = dieline.panels
-    .map(
-      (p) =>
-        `    <polygon points="${p.outline.map((q) => `${q.x},${q.y}`).join(' ')}" fill="${color}"/>`,
-    )
+  const polys = bleedFillPolys(dieline, bleed)
+    .map((poly) => `    <polygon points="${poly.map((q) => `${q.x},${q.y}`).join(' ')}" fill="${color}"/>`)
     .join('\n')
   return `  <g id="fill" inkscape:groupmode="layer" inkscape:label="fill">\n${polys}\n  </g>\n`
 }
 
 // วาดพื้นสีลง canvas (พิกัดแผ่นคลี่ × s) — ใช้ทั้ง texture 3D และ export PDF
+// bleed > 0 = เติมเลยเส้นตัดขอบนอกออกไปเท่าระยะตัดตก (ไฟล์ผลิต) — texture 3D ไม่ส่ง (เห็นแค่แผงจริง)
 export function drawFill(
   ctx: CanvasRenderingContext2D,
   dieline: Dieline,
   color: string,
   s: number,
+  bleed = 0,
 ) {
   ctx.fillStyle = color
-  for (const p of dieline.panels) {
+  for (const poly of bleedFillPolys(dieline, bleed)) {
     ctx.beginPath()
-    p.outline.forEach((q, i) => (i ? ctx.lineTo(q.x * s, q.y * s) : ctx.moveTo(q.x * s, q.y * s)))
+    poly.forEach((q, i) => (i ? ctx.lineTo(q.x * s, q.y * s) : ctx.moveTo(q.x * s, q.y * s)))
     ctx.closePath()
     ctx.fill()
   }
+}
+
+// รูปพื้นที่ตั้งใจคลุมทั้งแผ่น (cover/stretch ที่คลุมกรอบแผงอยู่แล้ว) ต้องคลุมแถบตัดตกด้วย: ขยายรอบจุดกึ่งกลาง
+// เท่าที่จำเป็นจนคลุมกรอบแผง + ระยะตัดตก (contain = ตั้งใจเว้นขอบ → ไม่ขยาย) — ใช้ร่วม blueprint/SVG/PDF
+export function bleedCoverRect(
+  r: { x: number; y: number; w: number; h: number },
+  box: { x0: number; y0: number; x1: number; y1: number },
+  fi: FillImage,
+  bleed: number,
+): { x: number; y: number; w: number; h: number } {
+  if (!(bleed > 0) || (fi.fit ?? 'cover') === 'contain' || fi.rot) return r
+  const EPS = 0.01
+  const covers = r.x <= box.x0 + EPS && r.y <= box.y0 + EPS && r.x + r.w >= box.x1 - EPS && r.y + r.h >= box.y1 - EPS
+  if (!covers) return r
+  const cx = r.x + r.w / 2
+  const cy = r.y + r.h / 2
+  const need = (dist: number, half: number) => (half > 0 ? dist / half : 1)
+  const k = Math.max(
+    1,
+    need(cx - (box.x0 - bleed), r.w / 2),
+    need(box.x1 + bleed - cx, r.w / 2),
+    need(cy - (box.y0 - bleed), r.h / 2),
+    need(box.y1 + bleed - cy, r.h / 2),
+  )
+  return { x: cx - (r.w * k) / 2, y: cy - (r.h * k) / 2, w: r.w * k, h: r.h * k }
 }
 
 // กรอบครอบทุกแผงจริง (พิกัดแผ่นคลี่ มม.) — พื้นที่ที่รูปพื้นต้องคลุม
@@ -1465,11 +1491,11 @@ export function fillImageRect(
 }
 
 // เลเยอร์รูปพื้นสำหรับ SVG export — clipPath = ทุกแผงจริง, <image> วางตาม fillImageRect
-export function fillImageSVGLayer(dieline: Dieline, fi: FillImage): string {
+export function fillImageSVGLayer(dieline: Dieline, fi: FillImage, bleed = 0): string {
   const box = panelsBBox(dieline)
-  const r = fillImageRect(box, fi)
-  const clip = dieline.panels
-    .map((p) => `<polygon points="${p.outline.map((q) => `${q.x},${q.y}`).join(' ')}"/>`)
+  const r = bleedCoverRect(fillImageRect(box, fi), box, fi, bleed)
+  const clip = bleedFillPolys(dieline, bleed)
+    .map((poly) => `<polygon points="${poly.map((q) => `${q.x},${q.y}`).join(' ')}"/>`)
     .join('')
   const href = xmlEsc(fi.src)
   // หมุนรอบจุดกึ่งกลางกรอบ (clip อยู่บน <g> ชั้นนอกจึงไม่หมุนตาม), ความทึบบนเลเยอร์
@@ -1496,13 +1522,15 @@ export function drawFillImage(
   img: CanvasImageSource,
   fi: FillImage,
   s: number,
+  bleed = 0,
 ) {
   const box = panelsBBox(dieline)
-  const r = fillImageRect(box, fi)
+  const r = bleedCoverRect(fillImageRect(box, fi), box, fi, bleed)
   ctx.save()
   ctx.beginPath()
-  for (const p of dieline.panels) {
-    p.outline.forEach((q, i) => (i ? ctx.lineTo(q.x * s, q.y * s) : ctx.moveTo(q.x * s, q.y * s)))
+  // ทุกรูปหันทิศเดียวกัน → clip nonzero = พื้นที่รวม (แผง ∪ แถบตัดตก)
+  for (const poly of bleedFillPolys(dieline, bleed)) {
+    poly.forEach((q, i) => (i ? ctx.lineTo(q.x * s, q.y * s) : ctx.moveTo(q.x * s, q.y * s)))
     ctx.closePath()
   }
   ctx.clip() // clip อยู่ในพิกัดตอนนี้ ไม่หมุนตาม transform ที่ตามมา
@@ -2024,10 +2052,13 @@ export async function renderArtworkCanvas(
   dpi: number,
   // พื้นใต้ลาย: รูปพื้น (fillImage) หรือสีพื้น (fillColor) ครอปตามแผงจริง — ภาพลายใน PDF เป็น JPEG ทึบ
   // จึงต้อง bake สีพื้นลงภาพด้วย ไม่งั้นพื้นขาวของภาพทับเลเยอร์สีพื้นเวกเตอร์ที่อยู่ข้างใต้จนมองไม่เห็น
-  base?: { dieline: Dieline; fillImage?: FillImage | null; fillColor?: string | null } | null,
+  // bleed = ระยะตัดตก: สีพื้น/รูปพื้นเลยเส้นตัดขอบนอกออกไปเท่านี้
+  base?: { dieline: Dieline; fillImage?: FillImage | null; fillColor?: string | null; bleed?: number } | null,
   // 'print' = เพลต CMYK สำหรับไฟล์ผลิต (ชิ้นฟอยล์ไม่พิมพ์หมึก → ข้าม; ฟอยล์ไปอยู่เพลต spot แยก)
   // 'preview' = ภาพดูดีไซน์ (ใบสเปก/ภาพย่อ) — ฟอยล์วาดเป็นสีโลหะ
   mode: 'print' | 'preview' = 'preview',
+  // ขอบเพิ่มรอบแผ่นทุกด้าน (มม.) ให้ภาพครอบแถบตัดตกที่ยื่นเลยกรอบแผ่น — ภาพเริ่มที่ (−margin, −margin)
+  margin = 0,
 ): Promise<HTMLCanvasElement | null> {
   const visible = decos.filter((d) => !d.hidden && (mode === 'preview' || printsCmyk(d)))
   // ไม่มีทั้งลายและรูปพื้น → ไม่ต้อง raster (สีพื้นทึบล้วนวาดเป็น vector ใน PDF เอง)
@@ -2035,12 +2066,13 @@ export async function renderArtworkCanvas(
   await ensureThaiFont(visible) // ให้ตัวอักษรที่ฝังลง PDF ตรงกับที่เห็นบนจอ
   const s = dpi / 25.4
   const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, Math.round(sheetW * s))
-  canvas.height = Math.max(1, Math.round(sheetH * s))
+  canvas.width = Math.max(1, Math.round((sheetW + margin * 2) * s))
+  canvas.height = Math.max(1, Math.round((sheetH + margin * 2) * s))
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
+  if (margin) ctx.translate(margin * s, margin * s)
   const srcs = [...new Set(visible.filter((d) => d.type === 'image').map((d) => (d as { src: string }).src))]
   if (base?.fillImage) srcs.push(base.fillImage.src)
   const imgs = new Map<string, HTMLImageElement>()
@@ -2059,22 +2091,10 @@ export async function renderArtworkCanvas(
     ),
   )
   // สีพื้น/รูปพื้นเป็นชั้นล่างสุด (ครอปตามแผงจริง) แล้วค่อยลายทับ
-  if (base?.fillColor && !base.fillImage) {
-    ctx.save()
-    ctx.fillStyle = base.fillColor
-    ctx.beginPath()
-    for (const p of base.dieline.panels) {
-      if (p.outline.length < 3) continue
-      ctx.moveTo(p.outline[0].x * s, p.outline[0].y * s)
-      for (const q of p.outline.slice(1)) ctx.lineTo(q.x * s, q.y * s)
-      ctx.closePath()
-    }
-    ctx.fill()
-    ctx.restore()
-  }
+  if (base?.fillColor && !base.fillImage) drawFill(ctx, base.dieline, base.fillColor, s, base.bleed ?? 0)
   if (base?.fillImage) {
     const img = imgs.get(base.fillImage.src)
-    if (img) drawFillImage(ctx, base.dieline, img, base.fillImage, s)
+    if (img) drawFillImage(ctx, base.dieline, img, base.fillImage, s, base.bleed ?? 0)
   }
   for (const e of visible) drawDecoPreview(ctx, e, s, (src) => imgs.get(src))
   return canvas

@@ -4426,3 +4426,7 @@ aside .art-actions .file-pick:only-child {
 .deco-row.group-head .group-ico { color: var(--accent); }
 .deco-row.in-group { padding-left: 18px; position: relative; }
 .deco-row.in-group::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; border-left: 2px solid var(--accent-weak); }
+
+/* ระยะตัดตก (Bleed) ท้ายโมดูลพื้นหลังแพ็กเกจ */
+.bleed-field { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.bleed-field .hint { margin-top: 6px; }

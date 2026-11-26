@@ -244,6 +244,7 @@ export const cloudProjectDocumentSchema = z.object({
   }).strict().optional(),
   capStyle: z.enum(['none', 'screw', 'flip', 'pump', 'cork', 'foil', 'crown', 'oval']).optional(),
   capColor: color.optional(),
+  bleed: finite.min(3).max(10).optional(), // ระยะตัดตก มม.
   pouchStyle: z.enum(['stand', 'kseal', 'flat', 'gusset', 'box', 'pillow', 'spout']).optional(),
   zipper: z.boolean().optional(),
   pouchAddons: z.object({

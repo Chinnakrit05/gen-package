@@ -83,7 +83,7 @@ import { layerRows, isWholeGroup, transformSelection, type SelectionTransform,
   type NutriRow,
 } from './core/artwork'
 import { TEXT_FX_KINDS, TEXT_FX_RANGE, LETTER_SPACING_RANGE, MIN_PRINT_LINE_MM, lightenHex, resolveTextFx, textFxAutoColor, textFxReach, type TextFx, type TextFxKind } from './core/textFx'
-import { computeGuides, guidesSVGLayer, type Guides } from './core/guides'
+import { BLEED_MAX, BLEED_MIN, BLEED_MM, clampBleed, computeGuides, guidesSVGLayer, type Guides } from './core/guides'
 import {
   DEFAULT_STICKER_CUT,
   NO_BORDER_INSET,
@@ -1028,6 +1028,8 @@ function dielineSVGString(
   sheet: { piece: Dieline; layout: SheetLayout } | null = null,
   white: Vec2[][] | null = null,
   finishes: FinishPlate[] = [],
+  // ระยะตัดตก (มม.): สีพื้น/รูปพื้นเลยเส้นตัดขอบนอกเท่านี้ + ขอบไฟล์กว้างพอ (แผ่นหลายดวงไม่ใช้ — คลิปต่อดวงเอง)
+  bleed = 0,
 ): string {
   const pathsOf = (kind: 'cut' | 'crease') =>
     d.segments
@@ -1068,7 +1070,8 @@ function dielineSVGString(
 
   // สีพื้นอยู่ล่างสุด แล้วลาย แล้วเส้น cut/crease โชว์ทับเป็นไกด์ — ตรงกับที่เห็นบนจอ
   // รูปพื้น (ถ้ามี) มาก่อนสีพื้น — ครอปตามแผงจริงเหมือนกัน
-  let fillLayer = fillImage ? fillImageSVGLayer(d, fillImage) : fillSVGLayer(d, fillColor)
+  let fillLayer = fillImage ? fillImageSVGLayer(d, fillImage, bleed) : fillSVGLayer(d, fillColor, bleed)
+  pad = Math.max(pad, bleed > 0 ? bleed + 3 : 0)
   // ชิ้นฟอยล์ไม่พิมพ์หมึก CMYK — อยู่ในเลเยอร์ Foil_* แทน
   decos = decos.filter((e) => printsCmyk(e))
   let artLayer = svgArtworkLayer(decos)
@@ -1183,6 +1186,7 @@ interface EditSnapshot {
   labelBox: LabelBox | undefined
   capStyle: CapStyle
   capColor: string | null
+  bleed: number
   pouchStyle: PouchStyle
   zipper: boolean
   pouchAddons: PouchAddons
@@ -1216,6 +1220,7 @@ const sameSnap = (a: EditSnapshot, b: EditSnapshot) =>
   sameLabelBox(a.labelBox, b.labelBox) &&
   a.capStyle === b.capStyle &&
   a.capColor === b.capColor &&
+  a.bleed === b.bleed &&
   a.pouchStyle === b.pouchStyle &&
   a.zipper === b.zipper &&
   a.pouchAddons === b.pouchAddons &&
@@ -1548,6 +1553,8 @@ export default function App({
   // ฝาขวด (ภาพ 3D) — ไม่มีฝาเป็นค่าเริ่มต้น; สี null = ขาวมาตรฐาน
   const [capStyle, setCapStyle] = useState<CapStyle>(initialActive.capStyle ?? 'none')
   const [capColor, setCapColor] = useState<string | null>(initialActive.capColor ?? null)
+  // ระยะตัดตก (มม.) — เส้นไกด์ bleed + สีพื้น/รูปพื้นในไฟล์ผลิตเลยเส้นตัดขอบนอกเท่านี้
+  const [bleed, setBleed] = useState<number>(initialActive.bleed ?? BLEED_MM)
   const [pouchStyle, setPouchStyle] = useState<PouchStyle>(initialActive.pouchStyle ?? 'stand')
   const [zipper, setZipper] = useState<boolean>(initialActive.zipper ?? false)
   const [pouchAddons, setPouchAddons] = useState<PouchAddons>(initialActive.pouchAddons ?? {})
@@ -2049,8 +2056,8 @@ export default function App({
   }
   // ไดคัทตามรูปไม่ใช้เส้นเผื่อตัด 3 มม. แบบกล่อง — สติกเกอร์ใช้กติกาเผื่อสี/ระยะห่างของตัวเอง (ตรวจด้านล่าง)
   const guides = useMemo(
-    () => (showGuides && dieline && !(isSticker && stickerLoops) ? computeGuides(dieline) : null),
-    [showGuides, dieline, isSticker, stickerLoops],
+    () => (showGuides && dieline && !(isSticker && stickerLoops) ? computeGuides(dieline, bleed) : null),
+    [showGuides, dieline, isSticker, stickerLoops, bleed],
   )
   // ตรวจไฟล์สติกเกอร์ตามข้อจำกัดการผลิตไดคัท (ระยะจากเส้นตัด/เผื่อสี/ระยะห่าง/ช่องเจาะ/มุมแหลม)
   const stickerIssues = useMemo<PreflightIssue[]>(
@@ -2228,6 +2235,7 @@ export default function App({
               && sameLabelBox(p.labelBox, labelBox)
               && (p.capStyle ?? 'none') === capStyle
               && (p.capColor ?? null) === capColor
+          && (p.bleed ?? BLEED_MM) === bleed
               && (p.pouchStyle ?? 'stand') === pouchStyle
               && Boolean(p.zipper) === zipper
               && samePouchAddons(p.pouchAddons, pouchAddons)
@@ -2251,7 +2259,7 @@ export default function App({
                     shoulderStyle,
                     labelBox,
                     capStyle,
-                    capColor: capColor ?? undefined,
+                    capColor: capColor ?? undefined, bleed: bleed !== BLEED_MM ? bleed : undefined,
                     pouchStyle,
                     zipper,
                     pouchAddons,
@@ -2267,7 +2275,7 @@ export default function App({
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, vesselPolygon, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
+  }, [history, histIdx, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, vesselPolygon, shoulderStyle, labelBox, capStyle, capColor, bleed, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos, activeId])
 
   // local demo เขียน localStorage; cloud ส่ง active project เข้า durable IndexedDB/save queue
   useEffect(() => {
@@ -2357,6 +2365,7 @@ export default function App({
     labelBox,
     capStyle,
     capColor,
+    bleed,
     pouchStyle,
     zipper,
     pouchAddons,
@@ -2475,7 +2484,7 @@ export default function App({
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, vesselPolygon, shoulderStyle, labelBox, capStyle, capColor, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
+  }, [activeId, templateId, materialId, W, D, H, handle, qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, vesselPolygon, shoulderStyle, labelBox, capStyle, capColor, bleed, pouchStyle, zipper, pouchAddons, vents, stickerCut, decos])
 
   const applySnapshot = (s: EditSnapshot) => {
     endSizeEdit()
@@ -2498,6 +2507,7 @@ export default function App({
     setLabelBox(s.labelBox)
     setCapStyle(s.capStyle ?? 'none')
     setCapColor(s.capColor ?? null)
+    setBleed(s.bleed ?? BLEED_MM)
     setPouchStyle(s.pouchStyle ?? 'stand')
     setZipper(s.zipper ?? false)
     setPouchAddons(s.pouchAddons ?? {})
@@ -2609,6 +2619,7 @@ export default function App({
           && sameLabelBox(p.labelBox, labelBox)
           && (p.capStyle ?? 'none') === capStyle
           && (p.capColor ?? null) === capColor
+          && (p.bleed ?? BLEED_MM) === bleed
           && (p.pouchStyle ?? 'stand') === pouchStyle
           && Boolean(p.zipper) === zipper
           && samePouchAddons(p.pouchAddons, pouchAddons)
@@ -2618,7 +2629,7 @@ export default function App({
           && p.history === history
           && p.histIdx === histIdx
             ? p
-            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, vesselPolygon: vesselPolygon || undefined, shoulderStyle, labelBox, capStyle, capColor: capColor ?? undefined, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
+            : { ...p, live: liveSpec(), qty, fillColor, fillImage, labelStyle, neckH, shoulderH, rectDepth, vesselPolygon: vesselPolygon || undefined, shoulderStyle, labelBox, capStyle, capColor: capColor ?? undefined, bleed: bleed !== BLEED_MM ? bleed : undefined, pouchStyle, zipper, pouchAddons, vents, stickerCut: storedStickerCut(stickerCut), decos, history, histIdx, updatedAt: Date.now() }
         : p,
     )
 
@@ -2644,6 +2655,7 @@ export default function App({
     setLabelBox(p.labelBox)
     setCapStyle(p.capStyle ?? 'none')
     setCapColor(p.capColor ?? null)
+    setBleed(p.bleed ?? BLEED_MM)
     setPouchStyle(p.pouchStyle ?? 'stand')
     setZipper(p.zipper ?? false)
     setPouchAddons(p.pouchAddons ?? {})
@@ -2948,7 +2960,7 @@ export default function App({
     const white = await whiteInkForExport()
     // แผ่นหลายดวง: ไม่ใส่เส้นเผื่อตัด 3 มม. ของดวงเดียว (ดวงเรียงชิดกันตามกติกาเว้น 2 มม. อยู่แล้ว)
     saveFile(
-      dielineSVGString(exportDieline, showDims, decos, sheetOut ? null : guides, fillColor, fillImage, sheetOut, white, await finishPlatesForExport()),
+      dielineSVGString(exportDieline, showDims, decos, sheetOut ? null : guides, fillColor, fillImage, sheetOut, white, await finishPlatesForExport(), sheetOut ? 0 : bleed),
       'image/svg+xml',
       'svg',
     )
@@ -2969,9 +2981,11 @@ export default function App({
     let art
     // รูปพื้น/สีพื้น baked เข้า raster เป็นชั้นล่างสุด — ภาพลายเป็น JPEG ทึบ ถ้าไม่ bake สีพื้นลงไป
     // พื้นขาวของภาพจะทับเลเยอร์สีพื้นเวกเตอร์ข้างใต้จนสีพื้นหายจาก PDF
-    const base = fillImage ? { dieline, fillImage } : fillColor ? { dieline, fillColor } : null
+    // ระยะตัดตก: สีพื้น/รูปพื้นเลยเส้นตัดขอบนอก และภาพลายครอบเกินกรอบแผ่นทุกด้านเท่านี้ (แผ่นหลายดวงไม่ใช้)
+    const pdfBleed = sheetOut ? 0 : bleed
+    const base = fillImage ? { dieline, fillImage, bleed: pdfBleed } : fillColor ? { dieline, fillColor, bleed: pdfBleed } : null
     // 'print' = เพลต CMYK: ชิ้นฟอยล์ไม่อยู่ในภาพลาย (ไปอยู่เพลต spot ของตัวเอง)
-    let canvas = await renderArtworkCanvas(decos, dieline.width, dieline.height, 300, base, 'print')
+    let canvas = await renderArtworkCanvas(decos, dieline.width, dieline.height, 300, base, 'print', pdfBleed)
     if (canvas && sheetOut) {
       // แผ่นหลายดวง: วางภาพลายดวงเดียวซ้ำตามตำแหน่ง (หมุนตามแผน) คลิปกรอบเส้นตัด + เผื่อสี
       const sc = 300 / 25.4
@@ -3003,7 +3017,7 @@ export default function App({
       const bin = atob(b64)
       const jpeg = new Uint8Array(bin.length)
       for (let i = 0; i < bin.length; i++) jpeg[i] = bin.charCodeAt(i)
-      art = { jpeg, w: canvas.width, h: canvas.height }
+      art = { jpeg, w: canvas.width, h: canvas.height, margin: sheetOut ? 0 : pdfBleed }
     }
     saveFile(
       dielinePDFBytes(
@@ -3018,6 +3032,7 @@ export default function App({
           ? await renderDimTextMasks(exportDieline.dims.map((m) => m.label), dimTextSize(exportDieline.width, exportDieline.height))
           : null,
         pdfSpots(await finishPlatesForExport()),
+        pdfBleed,
       ),
       'application/pdf',
       ext,
@@ -5812,6 +5827,27 @@ export default function App({
                         ? 'ถมสีพื้นถุงทั้งแผ่น เข้าไฟล์ .svg/.pdf จริง; “ไม่มีสี” = ฟิล์มพื้นขาว · หรือใส่รูปเป็นพื้นก็ได้'
                         : 'ถมสีพื้นฉลากทั้งแผ่น เข้าไฟล์ .svg/.pdf จริง; “ไม่มีสี” = ฉลากพื้นขาว · หรือใส่รูปเป็นพื้นก็ได้'}
                 </p>
+                <div className="bleed-field">
+                  <DimField
+                    label={t('ระยะตัดตก (Bleed)', 'Bleed')}
+                    value={bleed}
+                    min={BLEED_MIN}
+                    max={BLEED_MAX}
+                    step={0.5}
+                    disabled={aiBusy}
+                    lengthUnit={unit}
+                    onChange={(v) => {
+                      setBleed(clampBleed(v))
+                      setShowGuides(true) // ให้เห็นเส้นตัดตกทันทีที่ปรับ
+                    }}
+                  />
+                  <p className="hint">
+                    {t(
+                      `สีพื้น/รูปพื้นในไฟล์ .pdf/.svg จะเลยเส้นตัดขอบนอกออกไปเท่านี้ กันขอบขาวเวลาตัดเหลื่อม (${BLEED_MIN}–${BLEED_MAX} มม.) · ลายที่ชิดขอบให้ลากเลยเส้นตัดถึงเส้นสีม่วง`,
+                      `Background colour/image in .pdf/.svg extends past the outer cut by this much so a slightly-off cut leaves no white edge (${BLEED_MIN}–${BLEED_MAX} mm) · drag edge artwork out to the purple line`,
+                    )}
+                  </p>
+                </div>
               </Group>,
                 bgFloatEl,
               )}
@@ -7508,6 +7544,7 @@ export default function App({
                 guides={guides}
                 fillColor={proofed.fillColor}
                 fillImage={proofed.fillImage}
+                bleed={guides ? bleed : 0}
                 previewControls={readOnly}
                 {...(!readOnly && {
                   selectedIds,

@@ -3,6 +3,7 @@ import { pathToPolylines } from './dxf'
 import type { Guides } from './guides'
 import { dimTextSize } from './templates/shared'
 import { hexToCmyk } from './designColors'
+import { bleedFillPolys } from './guides'
 
 // Export dieline เป็น PDF สเกล 1:1 สำหรับพิมพ์ตรวจและส่งโรงงาน
 //
@@ -95,6 +96,8 @@ export interface PdfArtwork {
   jpeg: Uint8Array
   w: number
   h: number
+  // ภาพครอบเกินกรอบแผ่นทุกด้านเท่านี้ (มม.) — ภาพลายที่ render พร้อมแถบตัดตก (renderArtworkCanvas margin)
+  margin?: number
 }
 
 // เพลตสี spot หนึ่งชนิด: ชื่อ = ชื่อ Separation และชื่อเลเยอร์ (OCG); alt = สีสำรอง CMYK ตอนแสดงผล
@@ -116,8 +119,10 @@ export function dielinePDFBytes(
   dimMasks?: (PdfTextMask | null)[] | null,
   // เพลตงานพิมพ์พิเศษ (ฟอยล์/Spot UV/ปั๊ม): สี spot ต่อชนิด ทึบ 100% ตั้ง overprint (ไม่ลบหมึก CMYK ข้างใต้)
   spots?: PdfSpotPlate[] | null,
+  // ระยะตัดตก (มม.): สีพื้นเวกเตอร์เลยเส้นตัดขอบนอกออกไปเท่านี้ และหน้ากระดาษกว้างพอให้แถบตัดตกไม่ถูกตัดขอบ
+  bleed = 0,
 ): Uint8Array {
-  const pad = withDims ? 26 : 5
+  const pad = Math.max(withDims ? 26 : 5, bleed > 0 ? bleed + 3 : 0)
   const pageW = (d.width + pad * 2) * K
   const pageH = (d.height + pad * 2) * K
 
@@ -226,13 +231,11 @@ export function dielinePDFBytes(
   // เลเยอร์สีพื้น: เติมสีลง polygon ของทุกแผงจริง (ล่างสุด) — vector
   let fillBody = ''
   if (hasFill && fillColor) {
+    // ทุกรูปหันทิศเดียวกัน (bleedFillPolys) → เติม nonzero ได้พื้นที่รวม แผง ∪ แถบตัดตก
     const parts: string[] = [`${cmyk(fillColor)} k`]
-    for (const p of d.panels) {
-      if (p.outline.length < 3) continue
-      parts.push(`${n(tx(p.outline[0].x))} ${n(ty(p.outline[0].y))} m`)
-      for (let i = 1; i < p.outline.length; i++) {
-        parts.push(`${n(tx(p.outline[i].x))} ${n(ty(p.outline[i].y))} l`)
-      }
+    for (const poly of bleedFillPolys(d, bleed)) {
+      parts.push(`${n(tx(poly[0].x))} ${n(ty(poly[0].y))} m`)
+      for (let i = 1; i < poly.length; i++) parts.push(`${n(tx(poly[i].x))} ${n(ty(poly[i].y))} l`)
       parts.push('h')
     }
     parts.push('f')
@@ -296,8 +299,9 @@ export function dielinePDFBytes(
 
   // เลเยอร์ artwork วาดก่อน (ล่างสุด) ให้เส้น cut/crease โชว์ทับเป็นไกด์
   // ภาพครอบพื้นที่แผ่น [pad, pad+width] × [pad, pad+height] ในหน่วย มม. (อยู่ใน K space)
+  const am = artwork?.margin ?? 0
   const artBody = artwork
-    ? `q\n/OC /OCa BDC\n${n(d.width)} 0 0 ${n(d.height)} ${n(pad)} ${n(pad)} cm\n/Im0 Do\nEMC\nQ\n`
+    ? `q\n/OC /OCa BDC\n${n(d.width + am * 2)} 0 0 ${n(d.height + am * 2)} ${n(pad - am)} ${n(pad - am)} cm\n/Im0 Do\nEMC\nQ\n`
     : ''
 
   // ทั้งหน้าอยู่ในระบบ มม. โดยสเกลครั้งเดียวที่นี่ ตัวเลขในสตรีมจึงอ่านเป็น มม. ตรง ๆ

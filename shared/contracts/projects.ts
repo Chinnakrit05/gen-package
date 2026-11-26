@@ -21,6 +21,7 @@ export interface CloudProjectDocumentV1 {
   labelBox?: Record<string, number>
   capStyle?: string
   capColor?: string
+  bleed?: number
   pouchStyle?: string
   zipper?: boolean
   pouchAddons?: Record<string, boolean | number | string>
