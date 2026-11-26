@@ -1,12 +1,14 @@
 import type { Dieline, Panel, Vec2 } from './types'
 import { pathToPolylines } from './dxf'
 
-// เส้นไกด์งานพิมพ์: safe area (ระยะปลอดภัย) + bleed (เผื่อตัด)
+// เส้นไกด์งานพิมพ์: safe area (ระยะปลอดภัยต่อแผง) + ระยะตัดตก
 // safe = ขยับขอบแผงเข้า SAFE มม. — เก็บลาย/ข้อความไว้ในกรอบนี้ ไม่โดนตัดหรือพับทับ
-// bleed = ขยับ "เส้นตัดขอบนอก" ออก BLEED มม. — พื้นลายต้องเลยเส้นตัดถึงตรงนี้ กันขอบขาว
+// ระยะตัดตก (bleed) = เส้นรอบชั้นใน ร่นจาก "เส้นรอบนอกของแผ่น" (เส้นตัดขอบนอก) เข้ามา bleed มม. ทุกด้าน —
+// เขตระหว่างเส้นนี้กับเส้นตัดคือที่ที่เครื่องตัดอาจตัดโดน ไม่ควรวางกราฟิก/ข้อมูลสำคัญ (นิยามตามผู้ใช้ 26 พ.ย. 2026;
+// ไม่ขยายขนาดแผ่นหรือไฟล์ และไม่ขยายสีพื้นออกนอกเส้นตัด)
 export const SAFE_MM = 3
 export const BLEED_MM = 3 // ค่าเริ่มต้นของระยะตัดตก
-// ระยะตัดตกที่ผู้ใช้ตั้งได้ (Project.bleed) — โรงพิมพ์ทั่วไป 3 มม., งานลูกฟูก/ไดคัทใหญ่บางที่ขอถึง 5–10
+// ระยะตัดตกที่ผู้ใช้ตั้งได้ (Project.bleed)
 export const BLEED_MIN = 3
 export const BLEED_MAX = 10
 export const clampBleed = (v: unknown): number => {
@@ -21,7 +23,7 @@ const MITER_LIMIT = 3 // มุมแหลมกว่านี้ ระยะ
 
 export interface Guides {
   safe: Vec2[][] // polygon ปิด (ระยะปลอดภัยต่อแผง)
-  bleed: Vec2[][] // polyline ตามเส้นตัดขอบนอกที่ขยับออก (โค้งตามเส้นตัดจริง ต่อเนื่องข้ามแผง)
+  bleed: Vec2[][] // เส้นตัดตก: polyline ร่นจากเส้นตัดขอบนอกเข้าเนื้อวัสดุ (โค้งตามเส้นตัดจริง ต่อเนื่องข้ามแผง)
 }
 
 const signedArea = (p: Vec2[]) => {
@@ -114,18 +116,13 @@ const bbox = (pts: Vec2[]) => {
 // bleed จากเส้นตัดจริง: แยกเส้นตัดเป็นขอบย่อย ดูว่าฝั่งไหนเป็นเนื้อวัสดุ เก็บเฉพาะขอบนอก
 // (เนื้ออยู่ฝั่งเดียว — ร่องผ่าระหว่างแผงมีเนื้อทั้งสองฝั่งจึงตกไป) หันทุกช่วงให้ด้านนอกอยู่ซ้าย
 // ต่อช่วงที่ปลายชนกันเป็นเส้นยาว แล้ว offset ออกทีเดียว — มุมระหว่าง segment คนละเส้นจึงต่อกันสนิท
-// ขอบนอกของแผ่น (เส้นตัดที่มีเนื้อวัสดุฝั่งเดียว) ต่อกันเป็นเส้นยาว หันด้านนอกไปทางซ้ายของทิศเดิน
-// — ใช้ทั้งเส้นไกด์ bleed และแถบสีพื้น/รูปพื้นที่เลยเส้นตัดออกไป (bleedFillPolys)
-export function outerCutChains(d: Pick<Dieline, 'panels' | 'segments'>): Vec2[][] {
-  return outerChains(d).chains
-}
-
+// เส้นรอบชั้นใน: ขอบนอกของแผ่น (หันด้านนอกไปซ้ายของทิศเดิน) เลื่อนไปทางขวา = เข้าเนื้อวัสดุ bleed มม.
 function bleedFromCuts(d: Pick<Dieline, 'panels' | 'segments'>, bleed: number): Vec2[][] {
   const { chains, runs } = outerChains(d)
   const EPS = 0.05
   const offsets = chains.map((c) => {
     const closed = c.length > 2 && same(c[0], c[c.length - 1], EPS)
-    return offsetPolyline(c, bleed, closed)
+    return offsetPolyline(c, -bleed, closed)
   })
   return trimBleed(offsets, runs, d.panels, bleed)
 }
@@ -215,17 +212,16 @@ function distToSeg(p: Vec2, a: Vec2, b: Vec2): number {
   return Math.hypot(a.x + t * dx - p.x, a.y + t * dy - p.y)
 }
 
-// เส้น offset ของแต่ละช่วงไม่รู้จักกัน: ในร่องแคบ/มุมเว้า เส้นของสองฝั่งมุดเข้าไปไขว้กัน
-// และช่วงที่ยื่นข้ามแผงอื่นก็ทับเนื้อวัสดุ — เก็บเฉพาะส่วนที่ห่างขอบนอก "ทุกเส้น" อย่างน้อย BLEED
-// และไม่อยู่บนเนื้อ = เส้น offset ของรูปรวมทั้งแผ่น (แบบที่โรงพิมพ์ใช้) ตัดจุดเปลี่ยนด้วย bisection
-// ให้ปลายเส้นสองฝั่งมาบรรจบกันพอดี
+// เส้น offset ของแต่ละช่วงไม่รู้จักกัน: ที่มุม/แผงแคบ เส้นของสองฝั่งไขว้กันหรือหลุดออกนอกเนื้อ —
+// เก็บเฉพาะส่วนที่ห่างขอบนอก "ทุกเส้น" อย่างน้อย bleed และอยู่บนเนื้อวัสดุ = เส้นร่นเข้าของรูปรวมทั้งแผ่น
+// ตัดจุดเปลี่ยนด้วย bisection ให้ปลายเส้นสองฝั่งมาบรรจบกันพอดี (ลิ้น/แผงที่แคบกว่า 2·bleed จึงไม่มีเส้น)
 function trimBleed(lines: Vec2[][], boundary: Vec2[][], panels: Panel[], bleed: number): Vec2[][] {
   const segs: [Vec2, Vec2][] = []
   for (const r of boundary) for (let i = 0; i < r.length - 1; i++) segs.push([r[i], r[i + 1]])
   const TOL = 0.1
   const ok = (p: Vec2) => {
     for (const [a, b] of segs) if (distToSeg(p, a, b) < bleed - TOL) return false
-    return !inMaterial(p, panels)
+    return inMaterial(p, panels)
   }
   const lerp = (a: Vec2, b: Vec2, t: number): Vec2 => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t })
   // หาจุดเปลี่ยนสถานะบนขอบ a(okA)→b ด้วย bisection
@@ -310,39 +306,6 @@ export function guidesSVGLayer(g: Guides): string {
     )
     .join('\n')
   return `  <g id="guides" inkscape:groupmode="layer" inkscape:label="guides">\n${safe}\n${bleed}\n  </g>\n`
-}
-
-// พื้นที่ที่สีพื้น/รูปพื้นต้องคลุมเมื่อมีระยะตัดตก = ทุกแผง ∪ แถบกว้าง bleed รอบขอบนอก
-// (สี่เหลี่ยมตามแต่ละช่วงขอบ + วงกลมที่จุดต่อ = เส้นขอบหนา 2·bleed ปลายมน) — ทุกรูปหันทิศเดียวกัน (พื้นที่บวก)
-// จึงเติม/คลิปแบบ nonzero ได้เป็นพื้นที่รวมโดยไม่เกิดรูตรงที่ซ้อนกัน; bleed 0 = เฉพาะแผง (เหมือนเดิม)
-export function bleedFillPolys(d: Pick<Dieline, 'panels' | 'segments'>, bleed: number): Vec2[][] {
-  const pos = (poly: Vec2[]) => (signedArea(poly) < 0 ? [...poly].reverse() : poly)
-  const out: Vec2[][] = d.panels.filter((p) => p.outline.length >= 3).map((p) => pos(p.outline))
-  if (!(bleed > 0)) return out
-  const CIRCLE = 16
-  const circle = (c: Vec2): Vec2[] =>
-    Array.from({ length: CIRCLE }, (_, i) => {
-      const a = (i / CIRCLE) * Math.PI * 2
-      return { x: c.x + Math.cos(a) * bleed, y: c.y + Math.sin(a) * bleed }
-    })
-  for (const chain of outerCutChains(d)) {
-    for (let i = 0; i < chain.length - 1; i++) {
-      const a = chain[i]
-      const b = chain[i + 1]
-      if (same(a, b)) continue
-      const nl = leftNormal(a, b)
-      out.push(
-        pos([
-          { x: a.x + nl.x * bleed, y: a.y + nl.y * bleed },
-          { x: b.x + nl.x * bleed, y: b.y + nl.y * bleed },
-          { x: b.x - nl.x * bleed, y: b.y - nl.y * bleed },
-          { x: a.x - nl.x * bleed, y: a.y - nl.y * bleed },
-        ]),
-      )
-    }
-    for (const p of chain) out.push(pos(circle(p)))
-  }
-  return out
 }
 
 export function computeGuides(d: Pick<Dieline, 'panels' | 'segments'>, bleed = BLEED_MM): Guides {

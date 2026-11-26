@@ -1028,8 +1028,6 @@ function dielineSVGString(
   sheet: { piece: Dieline; layout: SheetLayout } | null = null,
   white: Vec2[][] | null = null,
   finishes: FinishPlate[] = [],
-  // ระยะตัดตก (มม.): สีพื้น/รูปพื้นเลยเส้นตัดขอบนอกเท่านี้ + ขอบไฟล์กว้างพอ (แผ่นหลายดวงไม่ใช้ — คลิปต่อดวงเอง)
-  bleed = 0,
 ): string {
   const pathsOf = (kind: 'cut' | 'crease') =>
     d.segments
@@ -1070,8 +1068,7 @@ function dielineSVGString(
 
   // สีพื้นอยู่ล่างสุด แล้วลาย แล้วเส้น cut/crease โชว์ทับเป็นไกด์ — ตรงกับที่เห็นบนจอ
   // รูปพื้น (ถ้ามี) มาก่อนสีพื้น — ครอปตามแผงจริงเหมือนกัน
-  let fillLayer = fillImage ? fillImageSVGLayer(d, fillImage, bleed) : fillSVGLayer(d, fillColor, bleed)
-  pad = Math.max(pad, bleed > 0 ? bleed + 3 : 0)
+  let fillLayer = fillImage ? fillImageSVGLayer(d, fillImage) : fillSVGLayer(d, fillColor)
   // ชิ้นฟอยล์ไม่พิมพ์หมึก CMYK — อยู่ในเลเยอร์ Foil_* แทน
   decos = decos.filter((e) => printsCmyk(e))
   let artLayer = svgArtworkLayer(decos)
@@ -1553,7 +1550,7 @@ export default function App({
   // ฝาขวด (ภาพ 3D) — ไม่มีฝาเป็นค่าเริ่มต้น; สี null = ขาวมาตรฐาน
   const [capStyle, setCapStyle] = useState<CapStyle>(initialActive.capStyle ?? 'none')
   const [capColor, setCapColor] = useState<string | null>(initialActive.capColor ?? null)
-  // ระยะตัดตก (มม.) — เส้นไกด์ bleed + สีพื้น/รูปพื้นในไฟล์ผลิตเลยเส้นตัดขอบนอกเท่านี้
+  // ระยะตัดตก (มม.) — เส้นรอบชั้นในร่นจากเส้นรอบนอกของแผ่นเข้ามาเท่านี้ทุกด้าน (เขตที่ไม่ควรวางกราฟิก/ข้อมูลสำคัญ)
   const [bleed, setBleed] = useState<number>(initialActive.bleed ?? BLEED_MM)
   const [pouchStyle, setPouchStyle] = useState<PouchStyle>(initialActive.pouchStyle ?? 'stand')
   const [zipper, setZipper] = useState<boolean>(initialActive.zipper ?? false)
@@ -2960,7 +2957,7 @@ export default function App({
     const white = await whiteInkForExport()
     // แผ่นหลายดวง: ไม่ใส่เส้นเผื่อตัด 3 มม. ของดวงเดียว (ดวงเรียงชิดกันตามกติกาเว้น 2 มม. อยู่แล้ว)
     saveFile(
-      dielineSVGString(exportDieline, showDims, decos, sheetOut ? null : guides, fillColor, fillImage, sheetOut, white, await finishPlatesForExport(), sheetOut ? 0 : bleed),
+      dielineSVGString(exportDieline, showDims, decos, sheetOut ? null : guides, fillColor, fillImage, sheetOut, white, await finishPlatesForExport()),
       'image/svg+xml',
       'svg',
     )
@@ -2981,11 +2978,9 @@ export default function App({
     let art
     // รูปพื้น/สีพื้น baked เข้า raster เป็นชั้นล่างสุด — ภาพลายเป็น JPEG ทึบ ถ้าไม่ bake สีพื้นลงไป
     // พื้นขาวของภาพจะทับเลเยอร์สีพื้นเวกเตอร์ข้างใต้จนสีพื้นหายจาก PDF
-    // ระยะตัดตก: สีพื้น/รูปพื้นเลยเส้นตัดขอบนอก และภาพลายครอบเกินกรอบแผ่นทุกด้านเท่านี้ (แผ่นหลายดวงไม่ใช้)
-    const pdfBleed = sheetOut ? 0 : bleed
-    const base = fillImage ? { dieline, fillImage, bleed: pdfBleed } : fillColor ? { dieline, fillColor, bleed: pdfBleed } : null
+    const base = fillImage ? { dieline, fillImage } : fillColor ? { dieline, fillColor } : null
     // 'print' = เพลต CMYK: ชิ้นฟอยล์ไม่อยู่ในภาพลาย (ไปอยู่เพลต spot ของตัวเอง)
-    let canvas = await renderArtworkCanvas(decos, dieline.width, dieline.height, 300, base, 'print', pdfBleed)
+    let canvas = await renderArtworkCanvas(decos, dieline.width, dieline.height, 300, base, 'print')
     if (canvas && sheetOut) {
       // แผ่นหลายดวง: วางภาพลายดวงเดียวซ้ำตามตำแหน่ง (หมุนตามแผน) คลิปกรอบเส้นตัด + เผื่อสี
       const sc = 300 / 25.4
@@ -3017,7 +3012,7 @@ export default function App({
       const bin = atob(b64)
       const jpeg = new Uint8Array(bin.length)
       for (let i = 0; i < bin.length; i++) jpeg[i] = bin.charCodeAt(i)
-      art = { jpeg, w: canvas.width, h: canvas.height, margin: sheetOut ? 0 : pdfBleed }
+      art = { jpeg, w: canvas.width, h: canvas.height }
     }
     saveFile(
       dielinePDFBytes(
@@ -3032,7 +3027,6 @@ export default function App({
           ? await renderDimTextMasks(exportDieline.dims.map((m) => m.label), dimTextSize(exportDieline.width, exportDieline.height))
           : null,
         pdfSpots(await finishPlatesForExport()),
-        pdfBleed,
       ),
       'application/pdf',
       ext,
@@ -5843,8 +5837,8 @@ export default function App({
                   />
                   <p className="hint">
                     {t(
-                      `สีพื้น/รูปพื้นในไฟล์ .pdf/.svg จะเลยเส้นตัดขอบนอกออกไปเท่านี้ กันขอบขาวเวลาตัดเหลื่อม (${BLEED_MIN}–${BLEED_MAX} มม.) · ลายที่ชิดขอบให้ลากเลยเส้นตัดถึงเส้นสีม่วง`,
-                      `Background colour/image in .pdf/.svg extends past the outer cut by this much so a slightly-off cut leaves no white edge (${BLEED_MIN}–${BLEED_MAX} mm) · drag edge artwork out to the purple line`,
+                      `เส้นสีม่วงร่นเข้ามาจากเส้นรอบนอกของแผ่นทุกด้านเท่านี้ (${BLEED_MIN}–${BLEED_MAX} มม.) — อย่าวางกราฟิกหรือข้อมูลสำคัญเลยเส้นนี้ออกไป เครื่องตัดอาจตัดโดน`,
+                      `The purple line sits this far inside the outer edge on every side (${BLEED_MIN}–${BLEED_MAX} mm) — keep graphics and key information inside it; the cutter may clip anything beyond`,
                     )}
                   </p>
                 </div>
@@ -7544,7 +7538,6 @@ export default function App({
                 guides={guides}
                 fillColor={proofed.fillColor}
                 fillImage={proofed.fillImage}
-                bleed={guides ? bleed : 0}
                 previewControls={readOnly}
                 {...(!readOnly && {
                   selectedIds,

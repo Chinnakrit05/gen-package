@@ -57,9 +57,9 @@ describe('computeGuides: ขอบร่วมสองแผง = รอยพ�
     expect(shared).toHaveLength(0)
   })
 
-  it('ขอบนอกซ้ายมีเส้น bleed ที่ x=-3', () => {
+  it('ขอบนอกซ้ายมีเส้นตัดตกร่นเข้าที่ x=3', () => {
     const left = segs.filter(
-      ([a, b]) => Math.abs(a.x - b.x) < 0.01 && Math.abs((a.x + b.x) / 2 - -BLEED_MM) < 0.5,
+      ([a, b]) => Math.abs(a.x - b.x) < 0.01 && Math.abs((a.x + b.x) / 2 - BLEED_MM) < 0.5,
     )
     expect(left.length).toBeGreaterThanOrEqual(1)
   })
