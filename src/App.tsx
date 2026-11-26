@@ -1265,6 +1265,8 @@ const sameVents = (a: VentConfig | undefined, b: VentConfig | undefined) => {
 export const STORAGE_KEY = 'gen-package-projects-v1'
 export const LEGACY_KEY = 'gen-package-design-v1'
 
+const SHOW_GUIDES_KEY = 'packit-show-guides'
+
 export interface ProjectStoreSnapshot {
   projects: Project[]
   activeId: string
@@ -1885,7 +1887,22 @@ export default function App({
   }, [selectedIds.length])
   const [fold, setFold] = useState(1)
   const [showDims, setShowDims] = useState(initialStore.showDims)
-  const [showGuides, setShowGuides] = useState(false)
+  // เส้นไกด์ระยะตัดตก/ปลอดภัย — เปิดเป็นค่าเริ่มต้นทุกบรรจุภัณฑ์ (ระยะตัดตก 3 มม. ต้องเห็นโดยไม่ต้องไปปรับก่อน);
+  // ปิดแล้วจำไว้ในเบราว์เซอร์ (ค่าของผู้ใช้ ไม่ใช่ของงาน)
+  const [showGuides, setShowGuides] = useState(() => {
+    try {
+      return localStorage.getItem(SHOW_GUIDES_KEY) !== '0'
+    } catch {
+      return true
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem(SHOW_GUIDES_KEY, showGuides ? '1' : '0')
+    } catch {
+      // storage ถูกปิด — ใช้ค่าในหน่วยความจำต่อ
+    }
+  }, [showGuides])
   const [nameModal, setNameModal] = useState<{ title: string; value: string; onOk: (n: string) => void } | null>(null)
   const [editorVersion, setEditorVersion] = useState(loadEditorVersion)
   const isV2 = editorVersion === 'v2'
