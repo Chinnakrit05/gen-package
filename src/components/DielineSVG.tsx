@@ -544,11 +544,7 @@ export const DielineSVG = memo(function DielineSVG({
   // ซ่อนป้ายของแผ่นที่มี captions = ดูลายโล่ง ๆ: ซ่อนเส้นประ (รอยพับ/เขตห้ามพิมพ์ + เส้นอ้างอิงประ) และเส้นบอกขนาดไปด้วย
   // (เฉพาะพรีวิว; แผ่นกล่องที่ไม่มี captions ไม่กระทบ — ปุ่มนั้นคุมป้ายกลางแผงอย่างเดียว)
   const sheetMarks = !hasCaptions || showCaptions
-  // ไม้บรรทัด: มีเส้นบอกขนาด → ตัวเลขอยู่นอกเส้นบอกขนาด (ขอบ pad); ไม่มี → ชิดแผ่น
   const dimsShown = showDims && sheetMarks
-  const rulerY = dimsShown ? dieline.height + pad - 2 : dieline.height + 7
-  const rulerX = dimsShown ? -pad + 3 : -2
-  const rulerAnchor = dimsShown ? 'start' : 'end'
   const [cropId, setCropId] = useState<string | null>(null) // รูปที่กำลังอยู่โหมดครอป (ลากเลื่อนในกรอบ)
   const cropZoomRef = useRef(1) // ซูมครอปปัจจุบัน (กัน stale ตอนสกอลล์/พินช์รัว ๆ ก่อน re-render)
   // เส้นไกด์ที่ผู้ใช้ลากวางเอง — axis 'x' = เส้นตั้ง (คงค่า x), 'y' = เส้นนอน (คงค่า y)
@@ -1248,6 +1244,11 @@ export const DielineSVG = memo(function DielineSVG({
   // ป้ายเส้นบอกขนาดบน blueprint = 14px บนจอทุกระดับซูม (ไฟล์ SVG/PDF ยังใช้ dimTextSize ตามขนาดแผ่น)
   const DIM_TEXT_PX = 14
   const dimFs = pxPerMm > 0 ? hpx(DIM_TEXT_PX) : dimTextSize(dieline.width, dieline.height)
+  // ไม้บรรทัด: ตัวเลข 14px บนจอเท่าป้ายขนาด; มีเส้นบอกขนาด → อยู่นอกเส้นบอกขนาด (ขอบ pad); ไม่มี → ชิดแผ่น
+  const rulerFs = pxPerMm > 0 ? hpx(DIM_TEXT_PX) : 6
+  const rulerY = dimsShown ? dieline.height + pad - 2 : dieline.height + hpx(4) + rulerFs * 0.8
+  const rulerX = dimsShown ? -pad + 3 : -hpx(6)
+  const rulerAnchor = dimsShown ? 'start' : 'end'
   // เลื่อนมุมมองด้วยล้อเมาส์ (ฟังก์ชันล่าสุดผ่าน ref ให้ตัวดักล้อที่ผูกครั้งเดียวเห็นซูม/กึ่งกลางปัจจุบัน) — คืน true เมื่อเลื่อนจริง
   const wheelPan = useRef<(dx: number, dy: number) => boolean>(() => false)
   wheelPan.current = (dx, dy) => {
@@ -2002,20 +2003,20 @@ export const DielineSVG = memo(function DielineSVG({
           เปิดเส้นบอกขนาด = ตัวเลขอยู่นอกเส้นบอกขนาด (~10 มม. จากแผ่น) ไม่ทับกัน; ปิด = ชิดแผ่น */}
       {showRuler && (
         <g className="ruler" pointerEvents="none">
-          <text x={rulerX} y={rulerY} textAnchor={rulerAnchor} fontSize={6} fill="#8a8474" stroke="none">
+          <text x={rulerX} y={rulerY} textAnchor={rulerAnchor} fontSize={rulerFs} fill="#8a8474" stroke="none">
             0
           </text>
           {gridTicks(dieline.width)
             .filter((x) => x % 50 === 0 && x > 0)
             .map((x) => (
-              <text key={`rx${x}`} x={x} y={rulerY} textAnchor="middle" fontSize={6} fill="#8a8474" stroke="none">
+              <text key={`rx${x}`} x={x} y={rulerY} textAnchor="middle" fontSize={rulerFs} fill="#8a8474" stroke="none">
                 {x}
               </text>
             ))}
           {gridTicks(dieline.height)
             .filter((v) => v % 50 === 0 && v > 0)
             .map((v) => (
-              <text key={`ry${v}`} x={rulerX} y={dieline.height - v} textAnchor={rulerAnchor} dominantBaseline="central" fontSize={6} fill="#8a8474" stroke="none">
+              <text key={`ry${v}`} x={rulerX} y={dieline.height - v} textAnchor={rulerAnchor} dominantBaseline="central" fontSize={rulerFs} fill="#8a8474" stroke="none">
                 {v}
               </text>
             ))}
