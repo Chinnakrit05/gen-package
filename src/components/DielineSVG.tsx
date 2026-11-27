@@ -1928,19 +1928,23 @@ export const DielineSVG = memo(function DielineSVG({
         </g>
       )}
 
-      {/* ไม้บรรทัด: ตัวเลข มม. ตามขอบบน/ซ้าย (ในพิกัดแผ่น จึงซูม/แพนตาม) — 0 อยู่มุมซ้ายล่างของแผ่น:
-          แนวนอนนับจากซ้ายไปขวา แนวตั้งนับจากล่างขึ้นบน */}
+      {/* ไม้บรรทัด: ตัวเลข มม. ตามขอบล่าง/ซ้าย (ในพิกัดแผ่น จึงซูม/แพนตาม) — 0 อยู่มุมซ้ายล่างของแผ่น:
+          แนวนอนนับจากซ้ายไปขวาใต้แผ่น แนวตั้งนับจากล่างขึ้นบน ใช้ 0 ตัวเดียวที่มุม;
+          แถวล่างอยู่ไกลกว่าเส้นบอกขนาด (~10 มม. จากแผ่น) จึงไม่ทับกัน */}
       {showRuler && (
         <g className="ruler" pointerEvents="none">
+          <text x={-pad + 3} y={dieline.height + pad - 2} textAnchor="start" fontSize={6} fill="#8a8474" stroke="none">
+            0
+          </text>
           {gridTicks(dieline.width)
-            .filter((x) => x % 50 === 0)
+            .filter((x) => x % 50 === 0 && x > 0)
             .map((x) => (
-              <text key={`rx${x}`} x={x} y={-pad + 8} textAnchor="middle" fontSize={6} fill="#8a8474" stroke="none">
+              <text key={`rx${x}`} x={x} y={dieline.height + pad - 2} textAnchor="middle" fontSize={6} fill="#8a8474" stroke="none">
                 {x}
               </text>
             ))}
           {gridTicks(dieline.height)
-            .filter((v) => v % 50 === 0)
+            .filter((v) => v % 50 === 0 && v > 0)
             .map((v) => (
               <text key={`ry${v}`} x={-pad + 3} y={dieline.height - v} textAnchor="start" dominantBaseline="central" fontSize={6} fill="#8a8474" stroke="none">
                 {v}
@@ -1963,7 +1967,7 @@ export const DielineSVG = memo(function DielineSVG({
             <line x1={g.pos} y1={-pad} x2={g.pos} y2={dieline.height + pad} stroke={GUIDE_COLOR} strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
             <line x1={g.pos} y1={-pad} x2={g.pos} y2={dieline.height + pad} stroke="transparent" strokeWidth={10} vectorEffect="non-scaling-stroke" style={{ cursor: 'ew-resize' }} />
             {guideDrag.current?.id === g.id && (
-              <text x={g.pos + 2} y={-pad + 8} fontSize={6} fill={GUIDE_COLOR} stroke="none">
+              <text x={g.pos + 2} y={dieline.height + pad - 2} fontSize={6} fill={GUIDE_COLOR} stroke="none">
                 {Math.round(g.pos)}
               </text>
             )}
