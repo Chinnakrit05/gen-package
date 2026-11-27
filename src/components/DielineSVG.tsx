@@ -1524,7 +1524,7 @@ export const DielineSVG = memo(function DielineSVG({
       )}
       {showGrid && (
         <g className="grid" pointerEvents="none">
-          {/* เส้นกริดทุก 10 มม. เน้นทุก 50 มม. (พิกัดแผ่นคลี่ อ้างมุมกล่อง 0,0) */}
+          {/* เส้นกริดทุก 10 มม. เน้นทุก 50 มม. นับจากมุมซ้ายล่างของแผ่น (ตรงกับไม้บรรทัด) */}
           {gridTicks(dieline.width).map((x) => (
             <line
               key={`gx${x}`}
@@ -1537,15 +1537,15 @@ export const DielineSVG = memo(function DielineSVG({
               vectorEffect="non-scaling-stroke"
             />
           ))}
-          {gridTicks(dieline.height).map((y) => (
+          {gridTicks(dieline.height).map((v) => (
             <line
-              key={`gy${y}`}
+              key={`gy${v}`}
               x1={0}
-              y1={y}
+              y1={dieline.height - v}
               x2={dieline.width}
-              y2={y}
-              stroke={y % 50 === 0 ? '#c0b9a4' : '#e4dfd1'}
-              strokeWidth={y % 50 === 0 ? 0.7 : 0.4}
+              y2={dieline.height - v}
+              stroke={v % 50 === 0 ? '#c0b9a4' : '#e4dfd1'}
+              strokeWidth={v % 50 === 0 ? 0.7 : 0.4}
               vectorEffect="non-scaling-stroke"
             />
           ))}
@@ -1928,7 +1928,8 @@ export const DielineSVG = memo(function DielineSVG({
         </g>
       )}
 
-      {/* ไม้บรรทัด: ตัวเลข มม. ตามขอบบน/ซ้าย (ในพิกัดแผ่น จึงซูม/แพนตาม) */}
+      {/* ไม้บรรทัด: ตัวเลข มม. ตามขอบบน/ซ้าย (ในพิกัดแผ่น จึงซูม/แพนตาม) — 0 อยู่มุมซ้ายล่างของแผ่น:
+          แนวนอนนับจากซ้ายไปขวา แนวตั้งนับจากล่างขึ้นบน */}
       {showRuler && (
         <g className="ruler" pointerEvents="none">
           {gridTicks(dieline.width)
@@ -1939,10 +1940,10 @@ export const DielineSVG = memo(function DielineSVG({
               </text>
             ))}
           {gridTicks(dieline.height)
-            .filter((y) => y % 50 === 0 && y > 0)
-            .map((y) => (
-              <text key={`ry${y}`} x={-pad + 3} y={y} textAnchor="start" dominantBaseline="central" fontSize={6} fill="#8a8474" stroke="none">
-                {y}
+            .filter((v) => v % 50 === 0)
+            .map((v) => (
+              <text key={`ry${v}`} x={-pad + 3} y={dieline.height - v} textAnchor="start" dominantBaseline="central" fontSize={6} fill="#8a8474" stroke="none">
+                {v}
               </text>
             ))}
         </g>
@@ -1980,7 +1981,7 @@ export const DielineSVG = memo(function DielineSVG({
             <line x1={-pad} y1={g.pos} x2={dieline.width + pad} y2={g.pos} stroke="transparent" strokeWidth={10} vectorEffect="non-scaling-stroke" style={{ cursor: 'ns-resize' }} />
             {guideDrag.current?.id === g.id && (
               <text x={-pad + 3} y={g.pos - 2} fontSize={6} fill={GUIDE_COLOR} stroke="none">
-                {Math.round(g.pos)}
+                {Math.round(dieline.height - g.pos)}
               </text>
             )}
           </g>
