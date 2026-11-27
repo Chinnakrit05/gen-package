@@ -543,6 +543,11 @@ export const DielineSVG = memo(function DielineSVG({
   // ซ่อนป้ายของแผ่นที่มี captions = ดูลายโล่ง ๆ: ซ่อนเส้นประ (รอยพับ/เขตห้ามพิมพ์ + เส้นอ้างอิงประ) และเส้นบอกขนาดไปด้วย
   // (เฉพาะพรีวิว; แผ่นกล่องที่ไม่มี captions ไม่กระทบ — ปุ่มนั้นคุมป้ายกลางแผงอย่างเดียว)
   const sheetMarks = !hasCaptions || showCaptions
+  // ไม้บรรทัด: มีเส้นบอกขนาด → ตัวเลขอยู่นอกเส้นบอกขนาด (ขอบ pad); ไม่มี → ชิดแผ่น
+  const dimsShown = showDims && sheetMarks
+  const rulerY = dimsShown ? dieline.height + pad - 2 : dieline.height + 7
+  const rulerX = dimsShown ? -pad + 3 : -2
+  const rulerAnchor = dimsShown ? 'start' : 'end'
   const [cropId, setCropId] = useState<string | null>(null) // รูปที่กำลังอยู่โหมดครอป (ลากเลื่อนในกรอบ)
   const cropZoomRef = useRef(1) // ซูมครอปปัจจุบัน (กัน stale ตอนสกอลล์/พินช์รัว ๆ ก่อน re-render)
   // เส้นไกด์ที่ผู้ใช้ลากวางเอง — axis 'x' = เส้นตั้ง (คงค่า x), 'y' = เส้นนอน (คงค่า y)
@@ -1930,23 +1935,23 @@ export const DielineSVG = memo(function DielineSVG({
 
       {/* ไม้บรรทัด: ตัวเลข มม. ตามขอบล่าง/ซ้าย (ในพิกัดแผ่น จึงซูม/แพนตาม) — 0 อยู่มุมซ้ายล่างของแผ่น:
           แนวนอนนับจากซ้ายไปขวาใต้แผ่น แนวตั้งนับจากล่างขึ้นบน ใช้ 0 ตัวเดียวที่มุม;
-          แถวล่างอยู่ไกลกว่าเส้นบอกขนาด (~10 มม. จากแผ่น) จึงไม่ทับกัน */}
+          เปิดเส้นบอกขนาด = ตัวเลขอยู่นอกเส้นบอกขนาด (~10 มม. จากแผ่น) ไม่ทับกัน; ปิด = ชิดแผ่น */}
       {showRuler && (
         <g className="ruler" pointerEvents="none">
-          <text x={-pad + 3} y={dieline.height + pad - 2} textAnchor="start" fontSize={6} fill="#8a8474" stroke="none">
+          <text x={rulerX} y={rulerY} textAnchor={rulerAnchor} fontSize={6} fill="#8a8474" stroke="none">
             0
           </text>
           {gridTicks(dieline.width)
             .filter((x) => x % 50 === 0 && x > 0)
             .map((x) => (
-              <text key={`rx${x}`} x={x} y={dieline.height + pad - 2} textAnchor="middle" fontSize={6} fill="#8a8474" stroke="none">
+              <text key={`rx${x}`} x={x} y={rulerY} textAnchor="middle" fontSize={6} fill="#8a8474" stroke="none">
                 {x}
               </text>
             ))}
           {gridTicks(dieline.height)
             .filter((v) => v % 50 === 0 && v > 0)
             .map((v) => (
-              <text key={`ry${v}`} x={-pad + 3} y={dieline.height - v} textAnchor="start" dominantBaseline="central" fontSize={6} fill="#8a8474" stroke="none">
+              <text key={`ry${v}`} x={rulerX} y={dieline.height - v} textAnchor={rulerAnchor} dominantBaseline="central" fontSize={6} fill="#8a8474" stroke="none">
                 {v}
               </text>
             ))}
@@ -1967,7 +1972,7 @@ export const DielineSVG = memo(function DielineSVG({
             <line x1={g.pos} y1={-pad} x2={g.pos} y2={dieline.height + pad} stroke={GUIDE_COLOR} strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
             <line x1={g.pos} y1={-pad} x2={g.pos} y2={dieline.height + pad} stroke="transparent" strokeWidth={10} vectorEffect="non-scaling-stroke" style={{ cursor: 'ew-resize' }} />
             {guideDrag.current?.id === g.id && (
-              <text x={g.pos + 2} y={dieline.height + pad - 2} fontSize={6} fill={GUIDE_COLOR} stroke="none">
+              <text x={g.pos + 2} y={rulerY} fontSize={6} fill={GUIDE_COLOR} stroke="none">
                 {Math.round(g.pos)}
               </text>
             )}
