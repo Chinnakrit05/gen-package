@@ -1241,10 +1241,10 @@ export const DielineSVG = memo(function DielineSVG({
   })()
   // ตัวเลขระยะของเส้นไกด์: ขนาดคงที่บนจอเมื่อซูมเข้า และดันเข้าขอบจอให้เห็นเสมอ (ปกติอยู่แถวไม้บรรทัด)
   const guideFs = Math.min(6, hpx(16))
-  // ป้ายเส้นบอกขนาดบน blueprint = 12px บนจอทุกระดับซูม (ไฟล์ SVG/PDF ยังใช้ dimTextSize ตามขนาดแผ่น)
-  const DIM_TEXT_PX = 12
+  // ป้ายเส้นบอกขนาดบน blueprint = 14px บนจอทุกระดับซูม (ไฟล์ SVG/PDF ยังใช้ dimTextSize ตามขนาดแผ่น)
+  const DIM_TEXT_PX = 14
   const dimFs = pxPerMm > 0 ? hpx(DIM_TEXT_PX) : dimTextSize(dieline.width, dieline.height)
-  // ไม้บรรทัด: ตัวเลข 12px บนจอเท่าป้ายขนาด; มีเส้นบอกขนาด → อยู่นอกเส้นบอกขนาด (ขอบ pad); ไม่มี → ชิดแผ่น
+  // ไม้บรรทัด: ตัวเลข 14px บนจอเท่าป้ายขนาด; มีเส้นบอกขนาด → อยู่นอกเส้นบอกขนาด (ขอบ pad); ไม่มี → ชิดแผ่น
   const rulerFs = pxPerMm > 0 ? hpx(DIM_TEXT_PX) : 6
   const rulerY = dimsShown ? dieline.height + pad - 2 : dieline.height + hpx(4) + rulerFs * 0.8
   const rulerX = dimsShown ? -pad + 3 : -hpx(6)
