@@ -271,7 +271,8 @@ Web app สร้างบรรจุภัณฑ์แบบ parametric: ผ�
   `renderDimTextMasks` (src/core/pdfDimText.ts, canvas 600 dpi + Noto Sans Thai) → ImageMask + RunLengthDecode ในเลเยอร์ dims
   (ไม่ส่ง = ตัดอักษรนอก ASCII ทิ้ง ไม่ขึ้น ?); ภาพลายใน PDF เป็น JPEG ทึบ → สีพื้นต้อง bake ลง raster ด้วย
   (`renderArtworkCanvas` base.fillColor) ไม่งั้นพื้นขาวของภาพทับเลเยอร์สีพื้นเวกเตอร์จนหาย
-- ขนาดตัวอักษรป้ายบอกขนาด = `dimTextSize` (ตามขนาดแผ่น 3.5–6 มม.) ใช้ร่วม blueprint/SVG/PDF — อย่าใส่ fontSize ตายตัว (แผ่นเล็กตัวเลขล้น)
+- ขนาดตัวอักษรป้ายบอกขนาด = `dimTextSize` (ตามขนาดแผ่น 3.5–6 มม.) ใช้ร่วม SVG/PDF — อย่าใส่ fontSize ตายตัวในไฟล์ (แผ่นเล็กตัวเลขล้น);
+  blueprint บนจอใช้ 14px คงที่ทุกระดับซูมแทน (`DIM_TEXT_PX` ใน DielineSVG ผู้ใช้ขอ 27 พ.ย. 2026)
 - ตัวเลขบน blueprint คือระยะ score จริง (บวกเผื่อความหนาแล้ว) จึงใหญ่กว่าค่าที่ผู้ใช้ตั้งเล็กน้อย — ตั้งใจ ไม่ใช่บั๊ก
 - แผนเฟสเดิม (FEFCO 0427, sleeve, export PDF/DXF, โลโก้/ข้อความ, ขวด revolve + ฉลาก) เสร็จครบแล้ว
 - ชนิดงาน (packKind ใน materials.ts) แยก 3 path จากวัสดุ: `box` (foldable) / `vessel` (revolve) /

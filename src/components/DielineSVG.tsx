@@ -1245,6 +1245,9 @@ export const DielineSVG = memo(function DielineSVG({
   })()
   // ตัวเลขระยะของเส้นไกด์: ขนาดคงที่บนจอเมื่อซูมเข้า และดันเข้าขอบจอให้เห็นเสมอ (ปกติอยู่แถวไม้บรรทัด)
   const guideFs = Math.min(6, hpx(16))
+  // ป้ายเส้นบอกขนาดบน blueprint = 14px บนจอทุกระดับซูม (ไฟล์ SVG/PDF ยังใช้ dimTextSize ตามขนาดแผ่น)
+  const DIM_TEXT_PX = 14
+  const dimFs = pxPerMm > 0 ? hpx(DIM_TEXT_PX) : dimTextSize(dieline.width, dieline.height)
   // เลื่อนมุมมองด้วยล้อเมาส์ (ฟังก์ชันล่าสุดผ่าน ref ให้ตัวดักล้อที่ผูกครั้งเดียวเห็นซูม/กึ่งกลางปัจจุบัน) — คืน true เมื่อเลื่อนจริง
   const wheelPan = useRef<(dx: number, dy: number) => boolean>(() => false)
   wheelPan.current = (dx, dy) => {
@@ -2073,7 +2076,7 @@ export const DielineSVG = memo(function DielineSVG({
       {showDims &&
         sheetMarks &&
         dieline.dims.map((d, i) => (
-          <Dim key={i} d={d} lengthUnit={lengthUnit} fs={dimTextSize(dieline.width, dieline.height)} />
+          <Dim key={i} d={d} lengthUnit={lengthUnit} fs={dimFs} />
         ))}
 
       {/* ภาพอ้างอิง (เช่น ฝา/ไหล่หลอด ลอนซีล) — พรีวิวเท่านั้น ไม่รับคลิก ไม่เข้าไฟล์ผลิต */}
