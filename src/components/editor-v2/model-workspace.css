@@ -114,8 +114,9 @@
 .v2-model-light-options {
   position: absolute;
   top: calc(100% + 8px);
-  right: 0;
+  left: 50%;
   display: flex;
+  transform: translateX(-50%);
   gap: 4px;
   padding: 4px;
   border-radius: 12px;
