@@ -1218,6 +1218,27 @@ export const DielineSVG = memo(function DielineSVG({
   const hpx = (n: number) => (pxPerMm > 0 ? n / pxPerMm : n * 0.6)
   const viewCx = center?.x ?? dieline.width / 2
   const viewCy = center?.y ?? dieline.height / 2
+  // ส่วนของแผ่นที่เห็นบนจอจริง (พิกัดแผ่น มม.) — meet ทำให้ด้านที่เหลือกว้างกว่า viewBox; หมุนมุมมองแล้วแปลงกลับรอบกึ่งกลางแผ่น
+  const visRect = (() => {
+    const hw = (pxPerMm > 0 ? svgPx.w / pxPerMm : vw) / 2
+    const hh = (pxPerMm > 0 ? svgPx.h / pxPerMm : vh) / 2
+    const cx = dieline.width / 2
+    const cy = dieline.height / 2
+    const a = (-rot * Math.PI) / 180
+    const cos = Math.round(Math.cos(a))
+    const sin = Math.round(Math.sin(a))
+    const xs: number[] = []
+    const ys: number[] = []
+    for (const [dx, dy] of [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]) {
+      const ox = viewCx + dx - cx
+      const oy = viewCy + dy - cy
+      xs.push(cx + ox * cos - oy * sin)
+      ys.push(cy + ox * sin + oy * cos)
+    }
+    return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) }
+  })()
+  // ตัวเลขระยะของเส้นไกด์: ขนาดคงที่บนจอเมื่อซูมเข้า และดันเข้าขอบจอให้เห็นเสมอ (ปกติอยู่แถวไม้บรรทัด)
+  const guideFs = Math.min(6, hpx(16))
   // เลื่อนมุมมองด้วยล้อเมาส์ (ฟังก์ชันล่าสุดผ่าน ref ให้ตัวดักล้อที่ผูกครั้งเดียวเห็นซูม/กึ่งกลางปัจจุบัน) — คืน true เมื่อเลื่อนจริง
   const wheelPan = useRef<(dx: number, dy: number) => boolean>(() => false)
   wheelPan.current = (dx, dy) => {
@@ -1972,7 +1993,13 @@ export const DielineSVG = memo(function DielineSVG({
             <line x1={g.pos} y1={-pad} x2={g.pos} y2={dieline.height + pad} stroke={GUIDE_COLOR} strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
             <line x1={g.pos} y1={-pad} x2={g.pos} y2={dieline.height + pad} stroke="transparent" strokeWidth={10} vectorEffect="non-scaling-stroke" style={{ cursor: 'ew-resize' }} />
             {guideDrag.current?.id === g.id && (
-              <text x={g.pos + 2} y={rulerY} fontSize={6} fill={GUIDE_COLOR} stroke="none">
+              <text
+                x={g.pos + hpx(4)}
+                y={Math.max(visRect.y0 + guideFs, Math.min(rulerY, visRect.y1 - hpx(44)))}
+                fontSize={guideFs}
+                fill={GUIDE_COLOR}
+                stroke="none"
+              >
                 {Math.round(g.pos)}
               </text>
             )}
@@ -1989,7 +2016,13 @@ export const DielineSVG = memo(function DielineSVG({
             <line x1={-pad} y1={g.pos} x2={dieline.width + pad} y2={g.pos} stroke={GUIDE_COLOR} strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
             <line x1={-pad} y1={g.pos} x2={dieline.width + pad} y2={g.pos} stroke="transparent" strokeWidth={10} vectorEffect="non-scaling-stroke" style={{ cursor: 'ns-resize' }} />
             {guideDrag.current?.id === g.id && (
-              <text x={-pad + 3} y={g.pos - 2} fontSize={6} fill={GUIDE_COLOR} stroke="none">
+              <text
+                x={Math.min(Math.max(-pad + 3, visRect.x0 + hpx(6)), visRect.x1 - guideFs * 2.5)}
+                y={g.pos - hpx(4)}
+                fontSize={guideFs}
+                fill={GUIDE_COLOR}
+                stroke="none"
+              >
                 {Math.round(dieline.height - g.pos)}
               </text>
             )}
