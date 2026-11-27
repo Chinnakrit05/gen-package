@@ -190,7 +190,20 @@
 .v2-view-tools { position: absolute; right: 0; top: 0; z-index: 21; }
 .v2-view-tools summary { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; list-style: none; border: 1px solid #b4c4c9; border-radius: 20px; background: var(--v2-paper); cursor: pointer; }
 .v2-view-tools summary img { transform: rotate(90deg); }
-.v2-view-tools > div { position: absolute; right: 0; top: 58px; display: flex; gap: 6px; padding: 10px; background: var(--v2-paper); border: 1px solid var(--border); box-shadow: var(--v2-shadow); border-radius: 14px; white-space: nowrap; }
+/* เปิดแล้วเป็นแท่งแนวตั้ง: ปุ่มเปิดวงกลมสีเขียวด้านบน ตามด้วยเครื่องมือทีละกลุ่ม คั่นด้วยเส้น และสวิตช์เส้นไกด์ท้ายสุด */
+.v2-view-tools[open] { top: -4px; right: -4px; padding: 4px; border: 1px solid var(--border); border-radius: 28px; background: var(--v2-paper); box-shadow: var(--v2-shadow); }
+.v2-view-tools[open] summary { border-color: var(--accent); border-radius: 50%; background: var(--accent); }
+.v2-view-tools-list { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0 6px; }
+.editor-v2 .v2-view-tools-list button { width: 40px; height: 40px; padding: 0; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 12px; background: none; color: var(--v2-ink); box-shadow: none; cursor: pointer; }
+.editor-v2 .v2-view-tools-list button svg { width: 20px; height: 20px; stroke-width: 1.75; }
+.editor-v2 .v2-view-tools-list button:hover, .editor-v2 .v2-view-tools-list button[aria-pressed='true'] { background: var(--accent-weak); }
+.v2-view-tools-sep { width: 24px; height: 1px; margin: 2px 0; background: var(--border); }
+.editor-v2 .v2-view-tools-list .v2-view-tools-switch { width: 40px; height: 28px; margin-top: 4px; }
+.v2-view-tools-switch span { position: relative; width: 28px; height: 16px; border-radius: 8px; background: #b4c4c9; transition: background .15s; }
+.v2-view-tools-switch span::after { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform .15s; content: ''; }
+.v2-view-tools-switch[aria-checked='true'] span { background: var(--accent); }
+.v2-view-tools-switch[aria-checked='true'] span::after { transform: translateX(12px); }
+.editor-v2 .v2-view-tools-list .v2-view-tools-switch:hover { background: none; }
 .editor-v2 .deco-topbar { position: absolute; top: 64px; left: 190px; right: 0; margin: 0; max-height: calc(100% - 130px); overflow-y: auto; padding: 12px 40px 12px 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--v2-paper); z-index: 22; }
 .editor-v2 .deco-topbar .deco-edit { flex-wrap: wrap; overflow: visible; gap: 8px; }
 .editor-v2 .viewer-pip:not(.expanded) { width: 212px; height: 202px; right: 0; bottom: 52px; opacity: 1; border: 0; border-radius: 20px; background: var(--v2-paper); box-shadow: var(--v2-shadow); }

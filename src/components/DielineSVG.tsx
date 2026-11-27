@@ -1,4 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Captions, Grid3x3, PanelBottomDashed, PanelLeftDashed, RotateCcwSquare, Ruler } from 'lucide-react'
 import type { Dieline, DimMark, PaperSurface } from '../core/types'
 import { decosInRect, rotatedSelectionBounds, type SelectionTransform, elW, elH, elCenter, flipTransform, fontCss, gradientId, gradientSVGString, imageMaskSVG, imageDrawAttrs, imageCoverRect, maskId, panelsBBox, fillImageRect, shapeVertices, isPolyShape, dashArray, textInnerSVG, nutritionInnerSVG, pathSVG, type Deco, type FillImage, type ImageEl, type RawAnchor, type PathAnchor, type PathEl } from '../core/artwork'
 import { snapTargets, applySnap, type SnapTargets } from '../core/snap'
@@ -552,6 +553,9 @@ export const DielineSVG = memo(function DielineSVG({
   const cropZoomRef = useRef(1) // ซูมครอปปัจจุบัน (กัน stale ตอนสกอลล์/พินช์รัว ๆ ก่อน re-render)
   // เส้นไกด์ที่ผู้ใช้ลากวางเอง — axis 'x' = เส้นตั้ง (คงค่า x), 'y' = เส้นนอน (คงค่า y)
   const [guideLines, setGuideLines] = useState<{ id: string; axis: 'x' | 'y'; pos: number }[]>([])
+  // สวิตช์ซ่อน/แสดงเส้นไกด์ที่ลากเอง (แถบเครื่องมือมุมมอง V2) — ซ่อนแล้วไม่ดูดเข้าเส้นด้วย
+  const [guidesVisible, setGuidesVisible] = useState(true)
+  const shownGuides = guidesVisible ? guideLines : []
   const [hoverGuide, setHoverGuide] = useState<string | null>(null) // เส้นไกด์ที่กำลังโฟกัส (โชว์ถังขยะที่ขอบ)
   const guideDrag = useRef<{ id: string; axis: 'x' | 'y' } | null>(null)
   // สะพานหน่วงเวลา: ออกจากเส้นแล้วหน่วงก่อนซ่อนถังขยะ เผื่อผู้ใช้เลื่อนเมาส์ไปที่ถังขยะที่ขอบทัน
@@ -655,7 +659,7 @@ export const DielineSVG = memo(function DielineSVG({
     grab.current = { mode: 'move', id: d.id, dx: p.x - d.x, dy: p.y - d.y }
     // เส้นเป้าหมายคงที่ตลอดการลาก (แผงนิ่ง, ชิ้นอื่นนิ่ง) — คิดครั้งเดียวตอนเริ่ม + รวมเส้นไกด์ที่ผู้ใช้วาง
     const t = snapTargets(dieline.panels, decos, d.id, dieline.width, dieline.height)
-    for (const gu of guideLines) (gu.axis === 'x' ? t.xs : t.ys).push(gu.pos)
+    for (const gu of shownGuides) (gu.axis === 'x' ? t.xs : t.ys).push(gu.pos)
     snapT.current = t
     setActive(true)
     capture(e)
@@ -1194,8 +1198,10 @@ export const DielineSVG = memo(function DielineSVG({
   }
 
   // เพิ่มเส้นไกด์ตรงกลางมุมมองปัจจุบัน
-  const addGuide = (axis: 'x' | 'y') =>
+  const addGuide = (axis: 'x' | 'y') => {
+    setGuidesVisible(true)
     setGuideLines((gs) => [...gs, { id: `gd${guideSeq++}`, axis, pos: Math.round(axis === 'x' ? viewCx : viewCy) }])
+  }
 
   const startGuideDrag = (e: React.PointerEvent, g: { id: string; axis: 'x' | 'y' }) => {
     guideDrag.current = { id: g.id, axis: g.axis }
@@ -1474,7 +1480,41 @@ export const DielineSVG = memo(function DielineSVG({
           <button type="button" title={t('ทำซ้ำ', 'Redo')} aria-label={t('ทำซ้ำ', 'Redo')} disabled={!canRedo} onClick={onRedo}><img src={studioAssets.imgIconButton18} alt="" /></button>
         </div>}{toolsExtra}
       </div>
-      <details className="v2-view-tools"><summary title={t('เครื่องมือมุมมอง', 'View tools')} aria-label={t('เครื่องมือมุมมอง', 'View tools')}><img src={studioAssets.imgIconButton} alt="" /></summary><div>{canvasTools}<button type="button" className="bp-tool" aria-label={t('เปิด-ปิดกริด', 'Toggle grid')} aria-pressed={showGrid} onClick={() => setShowGrid(g => !g)}>▦ {t('กริด', 'Grid')}</button></div></details>
+      <details className="v2-view-tools">
+        <summary title={t('เครื่องมือมุมมอง', 'View tools')} aria-label={t('เครื่องมือมุมมอง', 'View tools')}><img src={studioAssets.imgIconButton} alt="" /></summary>
+        <div className="v2-view-tools-list">
+          <button type="button" aria-pressed={labelsOn} title={labelsOn ? t('ซ่อนป้ายด้าน','Hide face labels') : t('แสดงป้ายด้าน (หน้า/ข้าง/หลัง)','Show face labels (front/side/back)')}
+            aria-label={t('เปิด-ปิดป้ายกำกับด้าน','Toggle face labels')} onClick={() => (hasCaptions ? setShowCaptions((v) => !v) : setShowFaces((v) => !v))}>
+            <Captions aria-hidden />
+          </button>
+          <button type="button" title={t('หมุนมุมมอง 90°','Rotate view 90°')} aria-label={t('หมุนมุมมองบลูพรินต์ 90 องศา','Rotate blueprint 90 degrees')}
+            onClick={() => setRot((r) => (r + 90) % 360)}>
+            <RotateCcwSquare aria-hidden />
+          </button>
+          <span className="v2-view-tools-sep" />
+          <button type="button" aria-pressed={showGrid} title={t('กริด','Grid')} aria-label={t('เปิด-ปิดกริด', 'Toggle grid')} onClick={() => setShowGrid((g) => !g)}>
+            <Grid3x3 aria-hidden />
+          </button>
+          <button type="button" aria-pressed={showRuler} title={showRuler ? t('ซ่อนไม้บรรทัด','Hide ruler') : t('แสดงไม้บรรทัด','Show ruler')}
+            aria-label={t('เปิด-ปิดไม้บรรทัด','Toggle ruler')} onClick={() => setShowRuler((r) => !r)}>
+            <Ruler aria-hidden />
+          </button>
+          {editable && <>
+            <span className="v2-view-tools-sep" />
+            <button type="button" title={t('เพิ่มเส้นไกด์ตั้ง','Add vertical guide')} aria-label={t('เพิ่มเส้นไกด์ตั้ง','Add vertical guide')} onClick={() => addGuide('x')}>
+              <PanelLeftDashed aria-hidden />
+            </button>
+            <button type="button" title={t('เพิ่มเส้นไกด์นอน','Add horizontal guide')} aria-label={t('เพิ่มเส้นไกด์นอน','Add horizontal guide')} onClick={() => addGuide('y')}>
+              <PanelBottomDashed aria-hidden />
+            </button>
+            <button type="button" role="switch" className="v2-view-tools-switch" aria-checked={guidesVisible}
+              title={guidesVisible ? t('ซ่อนเส้นไกด์','Hide guides') : t('แสดงเส้นไกด์','Show guides')}
+              aria-label={t('แสดงเส้นไกด์','Show guides')} onClick={() => setGuidesVisible((v) => !v)}>
+              <span aria-hidden />
+            </button>
+          </>}
+        </div>
+      </details>
     </>}
     <svg
       ref={svgRef}
@@ -1980,7 +2020,7 @@ export const DielineSVG = memo(function DielineSVG({
       )}
 
       {/* เส้นไกด์ลากเอง (สีฟ้า) — ชี้/ลากแล้วถังขยะจะโผล่ที่ขอบ (ขวา=เส้นตั้ง, ล่าง=เส้นนอน) */}
-      {guideLines.map((g) =>
+      {shownGuides.map((g) =>
         g.axis === 'x' ? (
           <g
             key={g.id}
